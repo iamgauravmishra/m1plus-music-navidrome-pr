@@ -61,7 +61,7 @@ def run(ctx):
 
     # 2. The built tables: the stock entries untouched, our keys added, in all 16, sorted for the binary search.
     for loc in ALL:
-        want = pod_i18n.add_to_tables({loc: stock[loc]})[loc]
+        want = pod_i18n.coex_tables(pod_i18n.add_to_tables({loc: stock[loc]}))[loc]
         expect(built[loc] == want, f'{loc}: the stock entries plus exactly our {len(pod_i18n.TEXT)} keys')
         have = dict(built[loc])
         keys = [k.encode() for k, _ in built[loc]]
@@ -72,10 +72,14 @@ def run(ctx):
     expect(all(en[k] == k for k in pod_i18n.TEXT), 'en_US: our keys are their own English text')
     for loc in LOC:
         have = dict(built[loc])
-        expect(all(have.get(k) for k in pod_i18n.STOCK) and all(dict(stock['en_US'])[k] == v for k, v in pod_i18n.STOCK.items()),
+        expect(all(have.get(k) for k in pod_i18n.STOCK) and all(en[k] == v for k, v in pod_i18n.STOCK.items()),
                f'{loc}: the stock keys we use are there and en_US reads as pod_i18n.STOCK says')
         same = {k for k in pod_i18n.TEXT if have[k] == k}
         expect(loc == 'en_US' or same <= SAME_AS_ENGLISH, f'{loc}: only the words that stay English by design are untranslated ({sorted(same - SAME_AS_ENGLISH)})')
+    expect(len(pod_i18n.COEX_TEXT) == 13 and all(dict(built[loc])[k] == pod_i18n.COEX_TEXT[loc] != dict(stock[loc])[k] for loc in LOC for k in pod_i18n.COEX_KEYS)
+           and all(dict(built['en_US'])[k] == 'Bluetooth audio may stutter while Wi-Fi is on.' for k in pod_i18n.COEX_KEYS)
+           and all('Wi-Fi' in t and 'Bluetooth' in t or loc in ('zh_CN', 'zh_HK') for loc, t in pod_i18n.COEX_TEXT.items()),
+           'msg_wifi_open and msg_bt_open read as the one Wi-Fi + Bluetooth warning in all 13 languages (replacing stock\'s question)')
     for stub, twin in pod_i18n.TWINS.items():
         expect(all(dict(built[stub])[k] == dict(built[twin])[k] for k in pod_i18n.TEXT), f'{stub} holds {twin}\'s language')
     for k, by in pod_i18n.TEXT.items():
@@ -293,7 +297,7 @@ def run(ctx):
         return lines
     for key, what in (('Rebuild all covers? This may take a few minutes.', 'Rebuild Covers'), ('Take a screenshot?', 'Screenshot'), ('Take a screenshot in:', 'Screenshot delay'),
                       ('Cancel the screenshot?', 'Cancel Screenshot'), ('Delete all cached covers? They will be made again on Home.', 'Clear Cover Cache'), ('Delete all measured track durations? They will be measured again on Home.', 'Clear Track Durations'), ('Reset all settings to their defaults?', 'Reset All Settings'), ('Delete this settings file?', 'Delete Settings File'), ('Delete all unsupported files?', 'Delete Unsupported Files'), ('Delete this unsupported file?', 'Delete Unsupported File'),('Delete folder and everything in it?', 'Delete folder'), ('Download %s (55 MB)? It replaces update.bin on the card.', 'Software Update'),
-                      ('msg_bt_open', 'stock: Bluetooth is off'), ('msg_wifi_open', 'stock: Wi-Fi is off')):
+                      ('msg_bt_open', 'Bluetooth switch-on warning'), ('msg_wifi_open', 'Wi-Fi switch-on warning')):
         lines = {loc: wrapped((dict(built[loc]).get(key, dict(built['en_US'])[key]) if key.startswith('msg_') else tr_text(loc, key)).replace('%s', '10.0.1'), wrap_px, wrap_w) for loc in LOC}
         expect(wrap_px == 20 and max(lines.values()) <= 3, f'the {what} confirm wraps to at most 3 lines of {wrap_w} px at {wrap_px} px in all languages ({lines})')
         expect(key.startswith('msg_') or all(len(pod_i18n.TEXT[key][loc].encode()) < 0x1ff for loc in LOC), 'and fits the dialog context\'s 0x200 byte text')

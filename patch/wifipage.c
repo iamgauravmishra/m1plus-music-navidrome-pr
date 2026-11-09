@@ -1236,20 +1236,12 @@ static void ws_open(void) {
     widget_on(ws.sv, EVT_SCROLL_END, ws_on_scroll, (void *)0);
 }
 
-/* The switch row: stock's sequence. Turning Wi-Fi on while Bluetooth is on asks first (msg_wifi_open) and switches Bluetooth off the way stock does. */
+/* The switch row: stock's sequence. Turning Wi-Fi on while Bluetooth is on shows the coex warning (msg_wifi_open, docs/modules/overlays.md) and leaves Bluetooth on. */
 static int wp_on_switch(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (wp.modal) return RET_OK;
-    if (!wp_wifi_on() && *(volatile unsigned char *)BT_FLAG) {
-        int i;
-        if (!wp_yes(TR("Bluetooth is on. Turn it off before using Wi-Fi?"))) return RET_OK;
-        *(volatile unsigned char *)BT_EXIT_INIT = 1;
-        for (i = 20; i > 0 && *(volatile int *)BT_INITSTATUS; i--) usleep(200000);
-        if (*(volatile unsigned char *)BT_FLAG) switchBluetooth(1, 0);
-        *(volatile int *)BT_INITSTATUS = 0;
-        *(volatile unsigned char *)BT_EXIT_INIT = 0;
-    }
+    if (!wp_wifi_on() && *(volatile unsigned char *)BT_FLAG && !wp_yes(TR("msg_wifi_open"))) return RET_OK;
     wifi_switch(1);
     wp.on = wp_wifi_on();
     wp.alive = 0, wp.caps = 0, wp.nscan = 0, wp.nknown = 0, wp.n = 0, wp.nsec = 0;

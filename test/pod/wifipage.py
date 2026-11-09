@@ -490,8 +490,6 @@ class SM(Lib):
             self.u.mem_write(a1, data); self.sock.append(('recv', a0, a2, len(data))); self.pending = None; ret = len(data)
         elif name == 'getpid':
             ret = PID
-        elif name == 'usleep':
-            self.sock.append(('usleep', a0)); ret = 0
         elif name == 'close' and a0 == SOCK_FD:
             self.sock.append(('close', a0)); ret = 0
         elif name == 'unlink' and self.read_cstr(a0).startswith('/tmp/m1plus-wc-'):
@@ -500,8 +498,6 @@ class SM(Lib):
             on = self.u.mem_read(pod.DATA['WIFI_FLAG'][0], 1)[0]
             self.sock.append(('wifi_switch', a0, on)); self.u.mem_write(pod.DATA['WIFI_FLAG'][0], bytes([0 if on else 1])); ret = 0
             if not on: self.supp.alive = True
-        elif name == 'switchBluetooth':
-            self.sock.append(('switchBluetooth', a0, a1)); self.u.mem_write(pod.DATA['BT_FLAG'][0], b'\0'); ret = 0
         elif name == 'navigator_to' and self.read_cstr(a0).startswith('dialog/kb'):
             self.sock.append(('dialog', self.read_cstr(a0))); ret = 1
         if ret is None: return super()._hook(u, address, size, _)
@@ -1692,23 +1688,16 @@ def switch_tests(ctx):
            'on: the stock switch, NETWORKS and Other..., the networks when the supplicant answers')
     m.tick(4)
     expect(len(m.rows()) == 8 and 'SCAN' in m.cmds(), 'and they come')
-    # on with Bluetooth on: asked first
+    # on with Bluetooth on: the coex warning first, Bluetooth stays on
     m = page(wifi=False, bt=True); opened(m); m.sock = []
     m.confirm_yes = False
     m.tap('wf_row_sw')
-    expect(m.asked('Bluetooth is on. Turn it off before using Wi-Fi?') and not [x for x in m.sock if x[0] in ('wifi_switch', 'switchBluetooth')] and m.image('wf_sw_img') == 'sset_off',
-           'Bluetooth is on: the question; No leaves everything as it was')
+    expect(m.asked('msg_wifi_open') and not [x for x in m.sock if x[0] in ('wifi_switch', 'switchBluetooth')] and m.image('wf_sw_img') == 'sset_off',
+           'Bluetooth is on: the warning; No leaves everything as it was')
     m.confirm_yes = True
-    m.u.mem_write(pod.DATA['BT_INITSTATUS'][0], struct.pack('<I', 1))
     m.tap('wf_row_sw')
     seq = [x[0] for x in m.sock if x[0] in ('wifi_switch', 'switchBluetooth', 'usleep')]
-    expect(seq == ['usleep'] * 20 + ['switchBluetooth', 'wifi_switch'] and ('switchBluetooth', 1, 0) in m.sock and m.sock[-1][0] != 'x' and m.image('wf_sw_img') == 'sset_on',
-           f'Yes: stock\'s wait for the Bluetooth start (20 x 200 ms), Bluetooth off, then Wi-Fi on: {seq}')
-    expect(m.u.mem_read(pod.DATA['BT_INITSTATUS'][0], 4) == bytes(4) and m.u.mem_read(pod.DATA['BT_EXIT_INIT'][0], 1) == b'\0', 'stock\'s two Bluetooth words are left cleared')
-    m = page(wifi=False, bt=True); opened(m); m.sock = []
-    m.tap('wf_row_sw')
-    seq = [x[0] for x in m.sock if x[0] in ('wifi_switch', 'switchBluetooth', 'usleep')]
-    expect(seq == ['switchBluetooth', 'wifi_switch'], f'no wait when Bluetooth is not starting: {seq}')
+    expect(seq == ['wifi_switch'] and m.image('wf_sw_img') == 'sset_on', f'Yes: Wi-Fi on, Bluetooth left on: {seq}')
     # turned off elsewhere
     m = page(); opened(m)
     m.u.mem_write(WIFI_FLAG, b'\0')

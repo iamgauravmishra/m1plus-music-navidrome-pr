@@ -271,7 +271,7 @@ AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All 
 | `get_equalizer_preset_name(i, buf)` | `0x49daec` | prologue `(0x3c1c0056, 0x279c63e4, 0x0399e021)`; `sltiu v1, a0, 12`; copies the tr key of `equalizer preset i` (table `0x97c7a0`: 1..3 `eq_custom1..3`, `eq_pop`, `eq_rock`, `eq_dance`, `eq_blues`, `eq_metal`, `eq_vocal`, `eq_classical`, `eq_jazz`) |
 | the EQ switch handler | `0x49d750` | flips `equalizer_flag` and saves `[PLAYSET] EQFLAG` |
 | `wififlag` / `bluetoothflag` / `equalizer_flag` / `equalizer_mode` / `language` (data, dynsym) | `0x97caf8` / `0xa05ac0` / `0xa05ac2` / `0x97cb00` / `0xa05ab8` | `wifi_switch` `0x507a8c` clears `wififlag` and saves `[SYSSET] WIFI`; the language index is `switch_language`'s (0 zh_CN .. 12 uk_UK), its names the `lan_*` keys |
-| the Wi-Fi page's stock calls and words ([wifi](wifi.md)) | `wifi_switch(1)` `0x507a8c` (toggles: on starts `wifi_connect.sh &` through `networkStart`, off `killall -9 wpa_supplicant`; flips `wififlag`, saves `[SYSSET] WIFI`), `switchBluetooth(1, 0)` `0x4d516c`, `bt_initstatus` `0xa038a4` (int) and `bt_exit_init` `0xa038a8` (byte) | read from the stock row handler `0x4b0a88` (`systemset_wifi_page_init` `0x4b104c`): the confirm `msg_wifi_open`, then `bt_exit_init = 1`, up to 20 x `usleep(200000)` while `bt_initstatus` is non-zero, `switchBluetooth(1, 0)` while `bluetoothflag`, both words cleared, then `wifi_switch(1)`. No hook: the page calls them from a tap. |
+| the Wi-Fi page's stock calls and words ([wifi](wifi.md)) | `wifi_switch(1)` `0x507a8c` (toggles: on starts `wifi_connect.sh &` through `networkStart`, off `killall -9 wpa_supplicant`; flips `wififlag`, saves `[SYSSET] WIFI`) | read from the stock row handler `0x4b0a88` (`systemset_wifi_page_init` `0x4b104c`); the page asks `msg_wifi_open` (the coex warning) while `bluetoothflag` is set, then `wifi_switch(1)` with Bluetooth left on. No hook: the page calls them from a tap. |
 | the play mode (Shuffle hooks, `SHUFFLE_PINS`; [shuffle](shuffle.md)) | `mclSetPlayMode` `0x5d278c` (mode word `0xa0abe0`, gapless state `0xa0abd0`), `mclLoadPlayList` `0x5d1f28` (position `0xa0abdc`), `mclSetPlayPos` `0x5d42d8`; raw mode readers `0x5d58fc` (`mclNextSong`), `0x5d5748` (`mclPrevSong`), `0x5d0edc` | the display sites `MODE_SITES` (19 `jalr mclGetPlayMode`, loaded by `lw t9 0x8f99aab0`) become `jal sh_display_mode` |
 | the play mode's keys | `0x47a454`, `0x47a4d4`, `0x47a4e8`, `0x47a500` | the stock More dialog sets `playmode_listplay`, `playmode_repeattrack`, `playmode_shuffle`, `playmode_repeatall` for `mclGetPlayMode` 0..3 |
 
@@ -282,6 +282,13 @@ AOSP's PinyinIME (`ime_pinyin::*`, `0x5bf9b0`..`0x5ceb40`) over one global. All 
 | theme flag (data, dynsym-less) | `0xa05a98` | read by `awtk_configinit` `0x4ccb88` (`widget_set_theme(wm, flag ? "theme1" : "default")`), set by `config_init` `0x4e63f4`, by the theme page `0x4ae6ac`; `[SYSSET] THEME` `0x748b8c`, `"theme1"` `0x748b84` |
 | `config_init` clamp | `0x4e63d8` / `0x4e63dc` | `sltiu v1, v0, 2` (now `, 1`) / `movz v0, zero, v1` after `atoi` |
 | System page row table / count | `0x97c8c0` (16 words) / `0x4adb1c` | read only by `systemset_sysset_page_init` (`0x4adb0c`) and the click handler `0x4ad7f0`; jump table `0x748ae0` (index 10 -> `0x4ad9f4`, `systemset/theme_page`), labels `0x97c988` (index 10 `sset_theme`) |
+
+## Wi-Fi and Bluetooth together (`tools/coex.py` `EDITS`, `PINS`; docs/modules/overlays.md)
+
+| What | Address | Evidence |
+|---|---|---|
+| `msg_bt_open` / `msg_wifi_open` strings | `0x7445a8` / `0x7445dc` | passed to `getFormatString` before `navigator_to_with_context("dialog/confirminfo_dialog")` at `0x474d6c`, `0x4a3b38` / `0x474fb0`, `0x4b0b74` |
+| Patched words | `0x474d98`, `0x4a3b64` (`beqz v0` -> `b`); `0x474fd8`, `0x4b0b9c` (`lw` of the `bt_exit_init` GOT slot -> `b` to `0x475028` / `0x4b0c00`, the `lw t9` of `wifi_switch`) | the other radio's flag (`wififlag` `0x97caf8`, `bluetoothflag` `0xa05ac0`) after the dialog returned 10; Wi-Fi side: the cancellation preamble `bt_exit_init` (byte `0xa038a8`) = 1, wait up to 20 x `usleep(200000)` on `bt_initstatus` (word `0xa038a4`), `switchBluetooth(1, 0)`, both cleared, is skipped; the skipped calls are `wifi_switch` `0x507a8c` and `switchBluetooth` `0x4d516c`; stock handlers: Control Center Wi-Fi tile `0x474ec8`, Wi-Fi row `0x4b0a88` |
 
 ## Automatic time (`tools/autotime.py` `EDITS`; docs/modules/autotime.md)
 

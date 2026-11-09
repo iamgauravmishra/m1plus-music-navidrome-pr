@@ -26,7 +26,7 @@ Usage: pod.py WORKDIR
 import argparse, concurrent.futures, hashlib, io, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-import autotime, palette, pcregion, pod_pages, pod_ui, textgamma, themeoff, timezones
+import autotime, coex, palette, pcregion, pod_pages, pod_ui, textgamma, themeoff, timezones
 from build import TAG, VERSION, REPO, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -401,9 +401,8 @@ FUNCTIONS.update({
     'getDiskMemoryInfo':       ('int', 'const char *, float *, float *', 0x5b30e0),
     'networkGetConnectStatus': ('int', 'void', 0x5d7cac),
     'networkGetIPAddr':        ('int', 'int, char *', 0x5d753c),
-    # The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): stock's own switch (wifi_switch(1) toggles Wi-Fi: on starts wifi_connect.sh, off kills the supplicant) and the Bluetooth switch-off its confirmation runs first
+    # The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): stock's own switch (wifi_switch(1) toggles Wi-Fi: on starts wifi_connect.sh, off kills the supplicant)
     'wifi_switch':             ('int', 'int', 0x507a8c),
-    'switchBluetooth':         ('int', 'int, int', 0x4d516c),
 })
 WIFIHUB_SITE = 0x4b1460   # the Wi-Fi row of the All System Settings hub: its jalr navigator_to("systemset/wifi_page") becomes jal wifi_hub_open (patch/wifipage.c, docs/modules/payload.md hook 21)
 SETTINGS_PINS = (   # (address, stock word, what it proves)
@@ -880,9 +879,6 @@ DATA = {
     # status bar and pull-down read the same words): wififlag (1 on; wifi_switch clears it and saves [SYSSET] WIFI), bluetoothflag, equalizer_flag (the byte on_eqswitch_onclick flips and saves as [PLAYSET] EQFLAG),
     # equalizer_mode (the preset, 1..11) and language (the language menu's index, 0 zh_CN .. 12 uk_UK, as switch_language numbers them)
     'WIFI_FLAG':          (0x97caf8, 'wififlag'),
-    # The Wi-Fi page (patch/wifipage.c): the Bluetooth switch-off waits on bt_initstatus (an int) with bt_exit_init (a byte) set
-    'BT_INITSTATUS':      (0xa038a4, 'bt_initstatus'),
-    'BT_EXIT_INIT':       (0xa038a8, 'bt_exit_init'),
     'BT_FLAG':            (0xa05ac0, 'bluetoothflag'),
     'EQ_FLAG':            (0xa05ac2, 'equalizer_flag'),
     'EQ_MODE':            (0x97cb00, 'equalizer_mode'),
@@ -945,7 +941,7 @@ LIBC = {
     '_setjmp': ('int', 'void *'),
     # The Wi-Fi page (patch/wifictl.c): the control socket, as stock's wpa_ctrl client makes it (AF_UNIX datagram, bind to a private path, connect to the interface's socket, send, select, recv; demo imports all of them)
     'socket': ('int', 'int, int, int'), 'bind': ('int', 'int, const void *, unsigned'), 'connect': ('int', 'int, const void *, unsigned'), 'send': ('int', 'int, const void *, unsigned, int'),
-    'recv': ('int', 'int, void *, unsigned, int'), 'select': ('int', 'int, void *, void *, void *, void *'), 'getpid': ('int', 'void'), 'usleep': ('int', 'unsigned'),
+    'recv': ('int', 'int, void *, unsigned, int'), 'select': ('int', 'int, void *, void *, void *, void *'), 'getpid': ('int', 'void'),
     'rmdir': ('int', 'const char *'),   # Podcasts unsubscribe (patch/podcasts.c): the show folder left empty
     # Internet Radio (patch/radio.c, docs/modules/radio.md): the parsers' string calls; demo imports all of them
     'strlen': ('unsigned', 'const char *'), 'strstr': ('char *', 'const char *, const char *'), 'strchr': ('char *', 'const char *, int'), 'strrchr': ('char *', 'const char *, int'),
@@ -1708,6 +1704,7 @@ def patch_demo(raw, payload, ps, demo_path):
         struct.pack_into('<I', patched, fileoff(patched, a), jal(ps['sh_display_mode'], a))
     struct.pack_into('<I', patched, fileoff(patched, UPDATE_SITE), UPDATE_NEW)   # (the pins above checked the site's word and its neighbours)
     autotime.apply(patched, fileoff)   # two pinned string literals: hwclock -su / -wu, the RTC as UTC (docs/modules/autotime.md)
+    coex.apply(patched, fileoff)   # Wi-Fi and Bluetooth together: four pinned beqz -> b (docs/modules/overlays.md)
     themeoff.apply(patched, fileoff)   # stock theme1 off: the config_init clamp and the System page's row table and count (docs/modules/theme.md)
     # Light Mode (the pins above checked the words after each prologue, the gradient call and image_manager_add's callers): the two PIC prologue hooks and the gradient leaf
     check(all(BASE <= ps[n] < BASE + len(payload) for n in ('m1plus_style_color', 'm1plus_style_gradient', 'm1plus_image_add')), 'Light Mode hook symbol outside payload')

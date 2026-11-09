@@ -50,9 +50,10 @@ STOCK = {
     'msg_nottf': 'No TF Card Found',
     'msg_nototg': 'No OTG Found',
     'msg_notfile': 'File Not Found',
-    # the Wi-Fi page's two confirmations: stock's own texts (patch/wifipage.c)
+    # the Wi-Fi page's three confirmations: stock's own texts (patch/wifipage.c); msg_wifi_open holds the coex warning (COEX_TEXT)
     'msg_wifidisconnect': 'Disconnect Now?',
     'msg_wificancelsave': 'Delete Record?',
+    'msg_wifi_open': 'Bluetooth audio may stutter while Wi-Fi is on.',
     'powerm_sleep': 'Sleep Timer',   # Now Playing's More sheet row that opens the stock Power page: the same text as that page's own Sleep Timer row (patch/playmore.c)
 }
 
@@ -236,10 +237,6 @@ TEXT = dict([
     _t('WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3', 'WPA3'),
     _t('Enterprise', '企业级', '企業級', 'エンタープライズ', '엔터프라이즈', 'Entreprise', 'Enterprise',
        'Empresarial', 'Enterprise', 'องค์กร', 'Enterprise', 'Корпоративная', 'Корпоративна'),
-    _t('Bluetooth is on. Turn it off before using Wi-Fi?', '蓝牙已开启，使用 Wi-Fi 前要关闭蓝牙吗？', '藍牙已開啟，使用 Wi-Fi 前要關閉藍牙嗎？', 'Bluetooth がオンです。Wi-Fi を使う前にオフにしますか？', '블루투스가 켜져 있습니다. Wi-Fi를 사용하기 전에 끌까요?',
-       'Bluetooth est activé. Le désactiver avant d’utiliser le Wi-Fi ?', 'Bluetooth ist an. Vor der WLAN-Nutzung ausschalten?',
-       'Bluetooth está activado. ¿Desactivarlo antes de usar Wi-Fi?', 'Il Bluetooth è attivo. Disattivarlo prima di usare il Wi-Fi?', 'Bluetooth เปิดอยู่ ปิดก่อนใช้ Wi-Fi หรือไม่', 'Bluetooth jest włączony. Wyłączyć go przed użyciem Wi-Fi?',
-       'Bluetooth включён. Отключить его перед использованием Wi-Fi?', 'Bluetooth увімкнено. Вимкнути його перед використанням Wi-Fi?'),
     _t('Off: the device starts on Shanling Home', '关闭：设备启动后进入山灵主页', '關閉：裝置啟動後進入山靈主頁', 'オフ：Shanling ホームで起動', '끔: Shanling 홈으로 시작', "Désactivé : démarre sur l'accueil Shanling", 'Aus: Start im Shanling-Start',
        'Desactivado: inicia en Inicio Shanling', 'Disattivo: avvio da Home Shanling', 'ปิด: เริ่มที่หน้าหลัก Shanling', 'Wył.: start z ekranu Shanling', 'Выкл.: запуск с экрана Shanling', 'Вимк.: запуск з екрана Shanling'),
     _t('Show, hide and reorder the menu', '显示、隐藏和排序菜单项', '顯示、隱藏及排序選單項目', 'メニュー項目の表示・非表示・並べ替え', '메뉴 항목 표시, 숨기기, 순서 변경', 'Afficher, masquer, réordonner le menu', 'Menü ein-, ausblenden, anordnen',
@@ -1316,6 +1313,31 @@ def shown_english(w):
 def table_for(locale):
     """The language a table file holds: a stub table holds its twin's."""
     return TWINS.get(locale, locale)
+
+
+# Wi-Fi and Bluetooth together (tools/coex.py, docs/modules/overlays.md "Wi-Fi and Bluetooth together"): stock's two switch-on questions (msg_wifi_open, msg_bt_open: "turn the other radio off first?") become one warning,
+# the same text under both keys, shown before the requested radio is switched on with the other left on. Replaces the stock value in the 13 tables the language menu reaches.
+COEX_KEYS = ('msg_wifi_open', 'msg_bt_open')
+COEX_TEXT = {
+    'en_US': 'Bluetooth audio may stutter while Wi-Fi is on.',
+    'zh_CN': '同时使用 Wi-Fi 和蓝牙时，蓝牙音频可能断续。',
+    'zh_HK': '同時使用 Wi-Fi 和藍牙時，藍牙音訊可能斷續。',
+    'ja_JP': 'Wi-Fi がオンの間、Bluetooth の音声が途切れることがあります。',
+    'ko_KR': 'Wi-Fi가 켜져 있으면 Bluetooth 오디오가 끊길 수 있습니다.',
+    'fr_FR': "L'audio Bluetooth peut saccader lorsque le Wi-Fi est activé.",
+    'ge_DE': 'Die Bluetooth-Wiedergabe kann bei aktivem Wi-Fi stottern.',
+    'sp_ES': 'El audio Bluetooth puede entrecortarse con el Wi-Fi activado.',
+    'it_IT': "L'audio Bluetooth può interrompersi mentre il Wi-Fi è attivo.",
+    'th_TH': 'เสียง Bluetooth อาจสะดุดขณะเปิด Wi-Fi',
+    'po_PL': 'Dźwięk Bluetooth może się zacinać, gdy Wi-Fi jest włączone.',
+    'ru_RU': 'Звук Bluetooth может прерываться, пока включён Wi-Fi.',
+    'uk_UK': 'Звук Bluetooth може уривчастися, поки ввімкнено Wi-Fi.',
+}
+
+
+def coex_tables(tables):
+    """tables: {locale: [(key, value), ...]} -> the same with the shared warning under both stock keys (a stub table has neither key and is unchanged)."""
+    return {loc: [(k, COEX_TEXT[table_for(loc)] if k in COEX_KEYS else v) for k, v in items] for loc, items in tables.items()}
 
 
 def tr(locale, key, stock=None):
