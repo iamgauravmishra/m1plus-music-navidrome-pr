@@ -2606,10 +2606,10 @@ def build_songinfo_page(page):
 # The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): the Settings pages' grouped cards (tools/pod_settings.py numbers: 52 px rows, cards 10..310, #1C1C1C, 12 px corners, hairlines, the
 # stock switch) under our navbar, in the stock list. The payload shows and hides rows and sets each shown row's picture piece (single / top / mid / bottom) and text, so no widget is made at run
 # time. The children are in display order, so the stock list_view layouter (which stacks the visible children and ignores y) and the payload's own widget_move agree: a top spacer, the switch
-# row, the connected network's row (the first group's second row), the MY NETWORKS header and its rows, the NETWORKS header (a spinner after its text while scanning), its rows and Other..., a bottom spacer.
+# row, the connected network's row (the first group's second row), the My Networks header and its rows, the Networks header (a spinner after its text while scanning), its rows and Other..., a bottom spacer.
 # A network row is a stock list_item holding the check or spinner (left), the name, the lock, the Wi-Fi fan signal and the info glyph (right); every child is insensitive: the row takes the tap
 # (a tap right of WF_INFO_X is the info glyph's). Pool sizes: patch/wifictl.h WF_MAX scanned networks, patch/wifipage.c WP_MY saved ones.
-WF_CUR, WF_MY, WF_OTH = 1, 16, 32   # the row pools: the connected network, MY NETWORKS, NETWORKS (patch/wifipage.c WP_CUR, WP_MY, WP_OTH)
+WF_CUR, WF_MY, WF_OTH = 1, 16, 32   # the row pools: the connected network, My Networks, Networks (patch/wifipage.c WP_CUR, WP_MY, WP_OTH)
 WF_ROWS = WF_CUR + WF_MY + WF_OTH
 WF_CHK_X, WF_NAME_X, WF_NAME_W, WF_LOCK_X, WF_SIG_X, WF_INFO_X, WF_INFO_PX = 24, 54, 156, 216, 242, 274, 22   # row relative: the check column, the name's box (its ink starts at 56), the glyphs' left edges
 WF_SIG_W, WF_SIG_H, WF_LOCK_PX, WF_CHK_PX, WF_SPIN_PX = 20, 16, 16, 20, 14   # the signal fan (mod_icons.WIFI_SIG_W x H): 16 px tall like the lock
@@ -2689,9 +2689,9 @@ def build_wifi_page(page):
     sv.children.append(cards_spacer('pod_top', ST.CM))
     sv.children.append(sw)
     sv.children += [wf_net_row(k) for k in range(WF_CUR)]
-    sv.children.append(wf_header('wf_hdr_my', 'MY NETWORKS'))
+    sv.children.append(wf_header('wf_hdr_my', 'My Networks'))
     sv.children += [wf_net_row(k) for k in range(WF_CUR, WF_CUR + WF_MY)]
-    sv.children.append(wf_header('wf_hdr_net', 'NETWORKS', True))
+    sv.children.append(wf_header('wf_hdr_net', 'Networks', True))
     sv.children += [wf_net_row(k) for k in range(WF_CUR + WF_MY, WF_ROWS)]
     other = hidden(wf_row('wf_row_other', 'bot'))
     other.children = [wf_label('wf_other_label', WF_NAME_X, WF_NAME_W + 40, 'Other…')]

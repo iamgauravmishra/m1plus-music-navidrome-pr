@@ -2,8 +2,8 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
- * ui/m1plus_wifi.bin (tools/pod_ui.py build_wifi_page) has the Settings pages' grouped cards under our navbar: the Wi-Fi switch row (with the connected network's row under it in the same card), the MY NETWORKS
- * header and card (saved networks), the NETWORKS header (a small spinner after its text while a scan runs) and card (the other networks, then Other...). A network row holds the name, a lock (secured networks), a
+ * ui/m1plus_wifi.bin (tools/pod_ui.py build_wifi_page) has the Settings pages' grouped cards under our navbar: the Wi-Fi switch row (with the connected network's row under it in the same card), the My Networks
+ * header and card (saved networks), the Networks header (a small spinner after its text while a scan runs) and card (the other networks, then Other...). A network row holds the name, a lock (secured networks), a
  * Wi-Fi fan signal and an info glyph; the connected network has a check at the left, a spinner in its place while it joins. Every row is a pooled widget (WP_CUR / WP_MY / WP_OTH of them) in display order; the
  * payload shows the ones it needs, moves them (widget_move; virtual_h) and gives each its picture piece (single, top, mid, bottom of its card), so no widget is made at run time.
  *
@@ -33,7 +33,7 @@
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define WP_CUR \
-    1 /* the asset's row pools (tools/pod_ui.py WF_CUR, WF_MY, WF_OTH): the connected network, MY NETWORKS, NETWORKS */
+    1 /* the asset's row pools (tools/pod_ui.py WF_CUR, WF_MY, WF_OTH): the connected network, My Networks, Networks */
 #define WP_MY 16
 #define WP_OTH WF_MAX
 #define WP_ROWS (WP_CUR + WP_MY + WP_OTH)
@@ -42,7 +42,7 @@
 #define WP_TOP 10
 #define WP_END 10
 #define WP_HDR_X 24 /* the header's label; its text starts 2 px in */
-#define WP_HDR_TW 76 /* the width of the NETWORKS header's text when it cannot be measured */
+#define WP_HDR_TW 76 /* the width of the Networks header's text when it cannot be measured */
 #define WP_INFO_X 264 /* a tap right of this on a network row is its info glyph's (the signal ends at 262) */
 #define WP_TICK_MS 250
 #define WP_POLL 4 /* ticks between two STATUS / LIST_NETWORKS */
@@ -1344,7 +1344,7 @@ static int wp_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The NETWORKS header's spinner goes after the header's text (measured, so it follows the language; 76 px when it cannot be measured). */
+/* The Networks header's spinner goes after the header's text (measured, so it follows the language; 76 px when it cannot be measured). */
 static void wp_spin_place(void) {
     void *lab = widget_lookup(wp.win, "wf_hdr_net_t", 1);
     const unsigned *t = lab ? widget_get_text(lab) : (const unsigned *)0;

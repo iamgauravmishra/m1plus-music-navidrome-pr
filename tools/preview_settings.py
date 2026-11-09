@@ -205,7 +205,7 @@ def draw_lockinfo(s):
 
 def draw_wifi(s, on=True, nets=(), scanning=True, joining=False, scroll=0):
     """Settings > Wi-Fi (patch/wifipage.c, docs/modules/wifi.md): the widgets of ui/m1plus_wifi.bin as the payload lays them out. nets: (name, level 0..4, secured, saved, connected) in the page's order (the
-    connected one first). The first group is the switch row (and the connected network under it), MY NETWORKS the saved ones, NETWORKS the others and Other...; a row's picture piece, hairline and glyphs are
+    connected one first). The first group is the switch row (and the connected network under it), My Networks the saved ones, Networks the others and Other...; a row's picture piece, hairline and glyphs are
     the payload's (wp_layout). joining: the connected row shows a spinner frame instead of the check. scroll: pixels the list is scrolled."""
     root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_wifi.bin'), 'rb').read())
     by = {w.name: w for w in root.walk() if w.name}

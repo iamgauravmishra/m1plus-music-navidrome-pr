@@ -564,7 +564,7 @@ def asset_tests(ctx):
     # the children of the scroll view are in display order (the stock layouter stacks them in that order; the payload moves them to the same places)
     names = [c.name for c in ms.children]
     expect(names == ['pod_top', 'wf_row_sw', 'wf_row0', 'wf_hdr_my'] + [f'wf_row{i}' for i in range(1, 1 + WP_MY)] + ['wf_hdr_net'] + [f'wf_row{i}' for i in range(1 + WP_MY, WP_ROWS)] + ['wf_row_other', 'pod_end'],
-           f'display order: top spacer, switch row, connected row, MY NETWORKS, its rows, NETWORKS, its rows, Other..., bottom spacer: {names[:5]}')
+           f'display order: top spacer, switch row, connected row, My Networks, its rows, Networks, its rows, Other..., bottom spacer: {names[:5]}')
     def box(n): return geo(by[n])
     expect(box('pod_top')[3] == ST.CM and box('pod_end')[3] == ST.END_H and by['pod_top'].get('sensitive') == 'false' and by['pod_end'].get('sensitive') == 'false', 'the spacers are the Settings pages\'')
     ax, ay, aw, ah = ST.accessory('switch')
@@ -598,7 +598,7 @@ def asset_tests(ctx):
     lit_n = [sum(lit(p) for p in opaque(f'wf_sig{n}')) for n in range(4)]
     expect(lit_n[0] == 0 and 0 < lit_n[1] < lit_n[2] < lit_n[3] and all(dim(p) for p in opaque('wf_sig0')) and all(any(dim(p) for p in opaque(f'wf_sig{n}')) for n in (1, 2)) and all(png(f'wf_sig{n}').getchannel('A').getbbox() == png('wf_sig3').getchannel('A').getbbox() for n in range(4)),
            f'wf_sig0..3: the Wi-Fi fan, all dim at 0, the lit arcs white and more of them per level, the same canvas at every level: {lit_n}')
-    expect([by[n].get('tr_text') for n in ('wf_sw_label', 'wf_hdr_my_t', 'wf_hdr_net_t', 'wf_other_label')] == [pod_i18n.key_for(t) for t in ('Wi-Fi', 'MY NETWORKS', 'NETWORKS', 'Other…')], 'the texts, in every language (tools/pod_i18n.py)')
+    expect([by[n].get('tr_text') for n in ('wf_sw_label', 'wf_hdr_my_t', 'wf_hdr_net_t', 'wf_other_label')] == [pod_i18n.key_for(t) for t in ('Wi-Fi', 'My Networks', 'Networks', 'Other…')], 'the texts, in every language (tools/pod_i18n.py)')
     # touch: the row takes every tap
     rows = [f'wf_row{k}' for k in range(WP_ROWS)] + ['wf_row_sw', 'wf_row_other']
     kids = [w for r in rows for w in by[r].children]
@@ -621,7 +621,7 @@ def asset_tests(ctx):
     for loc in pod_i18n.LOCALES:
         w = lambda t, px: StbText(font, px).layout(t)[1]
         tx = lambda k: pod_i18n.TEXT[k][pod_i18n.table_for(loc)]
-        too = [k for k in ('MY NETWORKS', 'NETWORKS') if w(tx(k), 15) > 240] + [k for k in ('Other…',) if w(tx(k), 21) > 190]
+        too = [k for k in ('My Networks', 'Networks') if w(tx(k), 15) > 240] + [k for k in ('Other…',) if w(tx(k), 21) > 190]
         expect(not too, f'{loc}: the headers (15 px, room for the spinner after them) and Other... (21 px, 190 px) fit: {too}')
 
 
@@ -773,9 +773,9 @@ def layout_tests(ctx):
            f'Wi-Fi fan signal glyphs from the four levels, a lock for the networks that need a key (Open and Enhanced Open have none), no check: {[g[2:4] for g in got]}')
     expect([g[4] for g in got] == ['pod_cd_single', 'pod_cd_top'] + ['pod_cd_mid'] * 6 and m.piece('wf_row_sw') == 'pod_cd_single' and m.piece('wf_row_other') == 'pod_cd_bot'
            and m.props[(m.widgets['wf_row_sw'], 'style:pressed:bg_image')] == 'pod_cd_single_down' and m.props[(m.widgets[f'wf_row{got[1][6]}'], 'style:pressed:bg_image')] == 'pod_cd_top_down',
-           f'card pieces: the switch row alone, MY NETWORKS one row, NETWORKS from top down to Other...: {[g[4] for g in got]}')
+           f'card pieces: the switch row alone, My Networks one row, Networks from top down to Other...: {[g[4] for g in got]}')
     expect([g[5] for g in got] == [102] + [194 + 52 * i for i in range(7)] and m.y('wf_row_sw') == 10 and m.y('wf_hdr_my') == 62 and m.y('wf_hdr_net') == 154 and m.y('wf_row_other') == 194 + 52 * 7,
-           f'52 px rows from y 10: switch (10), MY NETWORKS header (62), Home (102), NETWORKS header (154), the networks, Other...: {[g[5] for g in got]}')
+           f'52 px rows from y 10: switch (10), My Networks header (62), Home (102), Networks header (154), the networks, Other...: {[g[5] for g in got]}')
     expect(m.props[(m.widgets['wifi_scrollview'], 'virtual_h')] == 194 + 52 * 8 + 10, 'the scroll view is as long as its rows and the bottom spacer')
     hair = lambda n: m.visible(n)
     expect(not hair('wf_hair_sw') and not hair(f'wf_hair{got[0][6]}') and all(hair(f'wf_hair{g[6]}') for g in got[1:]), 'hairlines under every row of a card but its last (Other... has none)')
@@ -794,7 +794,7 @@ def layout_tests(ctx):
     got = m.rows()
     expect([g[0] for g in got] == L(ORDER) and got[0][1] == 'wf_check' and got[0][4] == 'pod_cd_bot' and got[0][5] == 62 and got[0][6] == 0 and not any(g[1] for g in got[1:]) and m.piece('wf_row_sw') == 'pod_cd_top' and m.visible('wf_hair_sw')
            and not m.visible('wf_hair0'), f'connected: Home under the switch in the same card with a check: {[(g[0], g[1], g[4], g[5]) for g in got[:2]]}')
-    expect(not m.visible('wf_hdr_my') and m.y('wf_hdr_net') == 114 and [g[5] for g in got[1:]] == [154 + 52 * i for i in range(7)] and m.y('wf_row_other') == 154 + 52 * 7, 'no saved network left: no MY NETWORKS, the others follow the connected row')
+    expect(not m.visible('wf_hdr_my') and m.y('wf_hdr_net') == 114 and [g[5] for g in got[1:]] == [154 + 52 * i for i in range(7)] and m.y('wf_row_other') == 154 + 52 * 7, 'no saved network left: no My Networks, the others follow the connected row')
     # joining: the spinner takes the check's place
     supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'ASSOCIATING', 0, None
     m = page(supp); opened(m)
@@ -810,7 +810,7 @@ def layout_tests(ctx):
     m = page(supp); opened(m)
     got = m.rows()
     expect([g[0] for g in got][:3] == ['Home', 'Cafe Open', 'Far'] and [g[4] for g in got][:3] == ['pod_cd_top', 'pod_cd_mid', 'pod_cd_bot'] and got[2][2] == 'wf_sig0' and got[2][3] == 0 and m.y('wf_hdr_net') == 258
-           and [g[5] for g in got][:3] == [102, 154, 206], f'MY NETWORKS: saved networks in range, then the ones out of range with all bars dim: {[(g[0], g[2], g[4], g[5]) for g in got[:3]]}')
+           and [g[5] for g in got][:3] == [102, 154, 206], f'My Networks: saved networks in range, then the ones out of range with all bars dim: {[(g[0], g[2], g[4], g[5]) for g in got[:3]]}')
     # Wi-Fi off: only the switch row
     m = page(wifi=False)
     expect(opened(m) == 0 and m.cmds() == [] and m.image('wf_sw_img') == 'sset_off' and m.visible('wf_row_sw') and m.piece('wf_row_sw') == 'pod_cd_single' and not m.visible('wf_hdr_my') and not m.visible('wf_hdr_net')
@@ -820,7 +820,7 @@ def layout_tests(ctx):
     # no supplicant yet (just switched on): the page waits and fills in when it answers
     supp = Supp(scan=SCAN, known=KNOWN); supp.alive = False
     m = page(supp)
-    expect(opened(m) == 0 and m.rows() == [] and m.visible('wf_hdr_net') and m.visible('wf_row_other') and not m.visible('wf_hdr_my') and m.piece('wf_row_other') == 'pod_cd_single', 'no supplicant: NETWORKS with Other... alone, no network')
+    expect(opened(m) == 0 and m.rows() == [] and m.visible('wf_hdr_net') and m.visible('wf_row_other') and not m.visible('wf_hdr_my') and m.piece('wf_row_other') == 'pod_cd_single', 'no supplicant: Networks with Other... alone, no network')
     m.tick(8)
     expect(m.rows() == [] and not any(c[0] == 'toast' for c in m.hist), 'it keeps asking, quietly')
     supp.alive = True
@@ -860,7 +860,7 @@ def action_tests(ctx):
     m.tap('wf_row0')
     expect('DISCONNECT' in m.cmds()[n_log:], 'Yes disconnects')
     m.tick(4)
-    expect(m.rows()[0][1] is None and m.rows()[0][6] != 0 and m.piece('wf_row_sw') == 'pod_cd_single', 'and the row is a saved network again, in MY NETWORKS')
+    expect(m.rows()[0][1] is None and m.rows()[0][6] != 0 and m.piece('wf_row_sw') == 'pod_cd_single', 'and the row is a saved network again, in My Networks')
 
     # the escape bug: a name with a typographic apostrophe is sent as its bytes (hex), and saved as the supplicant writes it
     m = page(); opened(m); m.supp.log = []
@@ -967,11 +967,11 @@ def action_tests(ctx):
     m = page(); opened(m); m.supp.log = []
     m.tap(f'wf_row{m.idx("Home")}', x=264)
     expect(('window_open', 'm1plus_wifiinfo') in m.hist and m.cmds() == [] and not m.asked('msg_wificancelsave'), 'x 264 and right opens the info page and sends nothing')
-    # a saved network out of range is listed in MY NETWORKS after the ones in range, all bars dim, and can be forgotten
+    # a saved network out of range is listed in My Networks after the ones in range, all bars dim, and can be forgotten
     sc = [r for r in SCAN if r[2] != b'Home']
     m = page(Supp(scan=sc, known=KNOWN + [(b'Far', [('key_mgmt', 'NONE')])])); opened(m)
     rows = m.rows()
-    expect([r[0] for r in rows][:2] == ['Home', 'Far'] and rows[1][2] == 'wf_sig0' and rows[1][3] == 0 and rows[1][4] == 'pod_cd_bot', f'a saved network that was not found: last of MY NETWORKS, no bar lit, its own security: {rows[:2]}')
+    expect([r[0] for r in rows][:2] == ['Home', 'Far'] and rows[1][2] == 'wf_sig0' and rows[1][3] == 0 and rows[1][4] == 'pod_cd_bot', f'a saved network that was not found: last of My Networks, no bar lit, its own security: {rows[:2]}')
 
 
 def pass_tests(ctx):
@@ -1685,7 +1685,7 @@ def switch_tests(ctx):
     m.sock = []
     m.tap('wf_row_sw')
     expect([x for x in m.sock if x[0] in ('wifi_switch', 'switchBluetooth')] == [('wifi_switch', 1, 0)] and m.image('wf_sw_img') == 'sset_on' and m.visible('wf_hdr_net') and m.visible('wf_row_other') and m.rows() == [],
-           'on: the stock switch, NETWORKS and Other..., the networks when the supplicant answers')
+           'on: the stock switch, Networks and Other..., the networks when the supplicant answers')
     m.tick(4)
     expect(len(m.rows()) == 8 and 'SCAN' in m.cmds(), 'and they come')
     # on with Bluetooth on: the coex warning first, Bluetooth stays on
