@@ -55,8 +55,8 @@ def layout_tests(ctx):
     """Every cards page under demo's own layouter, plus the asset against the model."""
     expect, P = ctx.expect, pod_pages
     pages = [p for p in P.PAGES if p.kind in ('cards', 'peq')]   # (the Equalizer page is a cards page its payload binds itself: its layout is the asset's, every row shown)
-    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion', 'm1plus_peq', 'm1plus_battery', 'm1plus_chargelimit', 'm1plus_idleview'],
-           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker, Equalizer, Battery and the Charge Limit picker, the Idle Display picker last')
+    expect([p.key for p in pages] == ['m1plus_settings', 'm1plus_library', 'm1plus_homeset', 'm1plus_developer', 'm1plus_npset', 'm1plus_keyboards', 'm1plus_tapetheme', 'm1plus_about', 'm1plus_vinylrec', 'm1plus_vinyltheme', 'm1plus_cache', 'm1plus_files', 'm1plus_background', 'm1plus_accent', 'm1plus_appearance', 'm1plus_podcastregion', 'm1plus_peq', 'm1plus_battery', 'm1plus_chargelimit', 'm1plus_idleview', 'm1plus_lockscreen', 'm1plus_lockstyle'],
+           'the cards pages: Settings, Library, Home Screen, Developer, Now Playing, Keyboards, the three pickers, About, Cache, Settings Files, the Background picker, the Accent picker, Appearance and the Podcast Region picker, Equalizer, Battery, the Charge Limit picker, the Idle Display picker, the Lock Screen page and the Player Style picker')
     expect(mod_icons.CARD_PIECE == {'ROW_W': ST.ROW_W, 'ROW_H': ST.ROW_H, 'CARD_X': ST.CM, 'CARD_W': ST.CARD_W, 'CARD_R': ST.CARD_R, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
            and ST.CARD_RGB == '#1C1C1C' and ST.PRESSED_RGB == '#2C2C2E', 'the pieces\' geometry in tools/mod_icons.py is the layout model\'s')
     expect(mod_icons.CARD_TALL == ST.LIB_ROW_H == 60 and ST.piece_images('top', tall=True) == ('pod_cdl_top', 'pod_cdl_top_down') and ST.piece_images('mid') == ('pod_cd_mid', 'pod_cd_mid_down')
@@ -272,7 +272,7 @@ def stock_tests(ctx):
     m = settings_machine()
     m.click(f'pod_row{rows["All Playback Settings"]}'); m.click(f'pod_row{rows["All System Settings"]}')
     # (the Home dispatcher's ids 16 and 17 are bound to the two rows: tests/pod/menu.py checks the table)
-    expect(len(P.STOCK_PAGES) == 4 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'four stock pages, each opened by an ACT_STOCK row')
+    expect(len(P.STOCK_PAGES) == 4 and all(r.action == P.ACT_STOCK for r in S.rows if r.label in want), 'four stock pages, each opened by an ACT_STOCK row (Lock Screen > Custom Wallpaper is our own page, see lockscreen/setting_tests)')
     expect(not [r for r in P.DEVELOPER_PAGE.rows if r.action == P.ACT_STOCK] and 'systemset/fwupdate_page' not in [n for n, *_ in P.STOCK_PAGES], 'no Developer row is a stock page: the firmware update page is not in STOCK_PAGES (About > Software Update is ours)')
     m = settings_machine()
     m.click(f'pod_row{rows["EQ"]}')

@@ -575,6 +575,14 @@
 #define MB_PLAY_X 194
 #define MB_NEXT_X 245
 #define MB_BTN_W 48
+/* The lock screen's mini player layout (patch/lockscreen.c, tools/mod_lockscreen.py MINI, docs/modules/lockscreen.md): the stock card re-laid as the Home bar's numbers
+ * above (MB_W x MB_H card with the mb_glass image, the MB_ART cover at MB_ART_X / MB_ART_Y, title and artist at MB_TEXT_X, play and next at MB_PLAY_X / MB_NEXT_X), at
+ * LK_MINI_X / LK_MINI_Y in the 320 x 480 window (10 px over the swipe hint); title and artist LK_TITLE_PX / LK_ARTIST_PX px, the artist colour LK_ARTIST_RGB. */
+#define LK_MINI_X 8
+#define LK_MINI_Y 386
+#define LK_TITLE_PX 17
+#define LK_ARTIST_PX 16
+#define LK_ARTIST_RGB "#D0D0D0"
 #define MB_FIRST_MS 120
 #define MB_TICK_MS 500
 #define MB_SETTLE 3

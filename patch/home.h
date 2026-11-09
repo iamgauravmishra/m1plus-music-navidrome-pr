@@ -67,6 +67,9 @@
 #define BG_FILE \
     "/mnt/data/m1plus/appearance-background" /* the background (patch/palette.c): "1" = Tinted, "2" = Light, "3" = Light Auto (07:00 - 18:59; Light is not in the picker), each with an optional newline, anything else or missing = Black (the default) */
 #define BG_TMP "/mnt/data/m1plus/appearance-background.tmp"
+#define LK_LAYOUT_FILE \
+    "/mnt/data/m1plus/lockscreen-layout" /* the lock screen layout (patch/lockscreen.c): "1" mini player, anything else or missing = the large cover (the default) */
+#define LK_LAYOUT_TMP "/mnt/data/m1plus/lockscreen-layout.tmp"
 #define ACCENT_FILE \
     "/mnt/data/m1plus/appearance-accent" /* the accent (patch/palette.c): one digit, the index 0 Neutral (default) .. 6 Champagne, with an optional newline; anything else or missing = Neutral */
 #define ACCENT_TMP "/mnt/data/m1plus/appearance-accent.tmp"

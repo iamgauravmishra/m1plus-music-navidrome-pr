@@ -1714,6 +1714,7 @@ def build_update_page(page):
 # Release Notes (patch/relnotes.c, docs/modules/update.md "Release notes"): the stock navbar over a stock list (list_view > scroll_view + scroll bar) holding one content view the payload paints the heading and the wrapped
 # notes on, as the Find Cover & Lyrics lyrics detail does. Two hidden labels only carry the text styles (22 px white heading, 18 px light grey text). Neutral, no accent colour.
 RN_HEAD_PX, RN_LINE_PX, RN_LINE_RGB = 22, 18, '#E6E6E6'
+RN_LOCK_LINE_PX = 20   # the Custom Wallpaper instructions' text (pod_pages.LOCKINFO_PAGE, same asset otherwise); the painter's pitch for it is 27 px (patch/relnotes.c RN_PITCH_LOCK)
 
 
 def build_relnotes_page(page):
@@ -1729,10 +1730,41 @@ def build_relnotes_page(page):
     sv.children.append(view)
     root.children.append(lv)
     root.children.append(nav_fade())
-    for name, px, colour in (('label_head', RN_HEAD_PX, '#FFFFFF'), ('label_line', RN_LINE_PX, RN_LINE_RGB)):
+    for name, px, colour in (('label_head', RN_HEAD_PX, '#FFFFFF'), ('label_line', RN_LOCK_LINE_PX if page.key == pod_pages.LOCKINFO_PAGE.key else RN_LINE_PX, RN_LINE_RGB)):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
+    return root
+
+
+# The Lock Screen's Wallpaper picker (patch/lockscreen.c lkwp_*, docs/modules/lockscreen.md "Wallpaper picker"): the wallpaper grid of stock's systemset/screensaver_page, which stock builds in code inside its view_covers
+# (0x4abe04: image_create at x 12 + 103 per column, y 0 then 143, 90 x 135, three to a row; cell builder 0x4abb3c: draw type 4 = scale_auto, clickable, name imgcover<i>, a 26 px child img_choice<i> at 4,4,
+# cell 0 also the 24 px screensaver_defaulticon at 0,111), copied under our navbar. The widget names are stock's. Every cell starts hidden and insensitive; the payload shows the ones it has a picture for.
+# Selected look: stock's picture_selected_style is a 2 px #FE7E40 border (the theme styles/screensaver_page.bin; unselected: none), here a 2 px border that is transparent until the payload sets border_color to the accent.
+LW_COLS, LW_ROWS, LW_N = 3, 2, 6
+LW_X0, LW_PITCH_X, LW_Y = 12, 103, (0, 143)
+LW_CELL_W, LW_CELL_H = 90, 135
+LW_MARK, LW_MARK_XY = 26, 4
+LW_DEFAULT_ICON, LW_DEFAULT_ICON_XY = 24, (0, 111)
+LW_VIEW_Y, LW_VIEW_H = NAVBAR_H, 400
+
+
+def build_lockwall_page(page):
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    root.children.append(navbar(page.title))
+    covers = Widget('view', 0, LW_VIEW_Y, SCREEN_W, LW_VIEW_H, [('name', 'view_covers')])
+    for i in range(LW_N):
+        cell = hidden(Widget('image', LW_X0 + LW_PITCH_X * (i % LW_COLS), LW_Y[i // LW_COLS], LW_CELL_W, LW_CELL_H,
+                             [('name', f'imgcover{i}'), ('draw_type', 'scale_auto'), ('clickable', 'true')]))
+        styled(cell, ('normal', 'disable', 'focused'), 'border_width', '2')
+        styled(cell, ('normal', 'disable', 'focused'), 'border_color', '#00000000')
+        cell.children.append(Widget('image', LW_MARK_XY, LW_MARK_XY, LW_MARK, LW_MARK, [('name', f'img_choice{i}'), ('image', 'screensaver_unselect'), ('draw_type', 'default'), ('sensitive', 'false')]))
+        if i == 0:
+            cell.children.append(Widget('image', LW_DEFAULT_ICON_XY[0], LW_DEFAULT_ICON_XY[1], LW_DEFAULT_ICON, LW_DEFAULT_ICON,
+                                        [('name', 'img_defaulticon'), ('image', 'screensaver_defaulticon'), ('draw_type', 'default'), ('sensitive', 'false')]))
+        covers.children.append(cell)
+    root.children.append(covers)
     return root
 
 
@@ -1825,7 +1857,7 @@ def cards_row(i, row, piece, last):
     from mod_icons import CARD_GLYPHS, card_name, CARD_CHEVRON, CARD_CHECK
     kind = pod_pages.row_kind(row)
     swatch = row.action == pod_pages.ACT_ACCENTSET   # the Accent picker's rows show the accent's round swatch where a glyph goes (never tinted: docs/modules/accent.md)
-    has_icon = swatch or (kind not in ('check', 'info', 'preset', 'preamp', 'band', 'lib', 'delete', 'plain', 'wvalue') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE, pod_pages.ACT_REGION, pod_pages.ACT_PEQ_PRESETS, pod_pages.ACT_PEQ_TENBAND))   # (the Cache counts, Unsupported Files, About's Software Update link, the Podcast Region row and the Presets count have no glyph, like the rows around them)
+    has_icon = swatch or (kind not in ('check', 'info', 'preset', 'preamp', 'band', 'lib', 'delete', 'plain', 'wvalue') and row.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE, pod_pages.ACT_REGION, pod_pages.ACT_PEQ_PRESETS, pod_pages.ACT_PEQ_TENBAND))   # (the Cache counts, Unsupported Files, About's Software Update link, the Podcast Region row and the Presets count have no glyph)
     h = ST.row_h(row)
     item = Widget('list_item', 0, 0, ST.LIST_W, h, [('name', f'pod_row{i}'), ('style', 'list_item_style')] + ([('sensitive', 'false')] if kind in ('info', 'preamp') and row.action != pod_pages.ACT_SFDEL else []))
     normal, down = ST.piece_images(piece, h != ST.ROW_H)
@@ -2943,6 +2975,8 @@ def build_page(page):
         return build_update_page(page)
     if page.kind == 'relnotes':
         return build_relnotes_page(page)
+    if page.kind == 'lockwall':
+        return build_lockwall_page(page)
     if page.kind == 'cover':
         return build_cover_page(page)
     if page.kind == 'artists':

@@ -95,6 +95,8 @@ ACT_PEQ_PAUTO = 72    # ... and the Preamp page's Auto row (the cut Auto makes n
 ACT_PEQ_PVAL = 73     # ... and its 0 dB .. -12 dB rows (the payload writes their text)
 ACT_PEQ_DELETE = 66   # the Preset page's Delete Preset row: red, no glyph, no chevron (confirms, then unlinks the file: patch/peqpage.c, patch/peq_ui.c peq_delete)
 ACT_PEQ_RENAME = 75   # the Preset page's Rename Preset row (white, plain: no glyph, no chevron), above Delete Preset in one card
+ACT_LOCKON = 79   # switch row (Settings > Lock Screen > Enable): stock's lock screen switch, the byte screensaver_mode saved as [SYSSET] SCREENSAVER (patch/lockscreen.c lk_enabled_toggle)
+ACT_LOCKSET = 88  # picker row (Lock Screen): choose the layout (arg 0 Large Cover, 1 Mini Player); a check shows on the chosen row; it applies the next time the lock screen opens (patch/lockscreen.c lk_layout_set)
 ACT_PEQ_TSAVE = 76    # the 10-Band editor's Save as Preset row (white, plain, its own card at the bottom): the name entry, then a new preset file of the curve (patch/tenband.c tb_on_save)
 ACT_ACCENTSET = 49 # picker row (Accent): choose the accent (arg = its index in ACCENT_VALUES); a check shows on the chosen row and the choice applies at once (patch/palette.c pal_accent_set)
 ACT_SFDEL = 51    # information row of Settings Files (Settings > Developer > Tools): a setting file's label and its value, like ACT_INFO, but tappable while the file is there: a confirm, then the file is deleted (arg = INFO_SF + k; patch/setfiles.c setfiles_delete)
@@ -109,14 +111,18 @@ ACT_CHGLIM = 80     # value row (Settings > System > Battery): Charge Limit, the
 ACT_CHGLIMSET = 81  # picker row (Charge Limit): choose the limit (arg = 80, 85, 90, 95 or 100, no limit); a check shows on the chosen row (patch/charging.c chg_set)
 ACT_IDLE = 82       # value row (Settings > Now Playing > Idle Display): where Now Playing goes after ten seconds, Off, Album Cover, Cassette or Vinyl (the payload shows stock's Cover mode byte and the saved destination); opens its picker page (arg = the page index; patch/bigcover.c idle_choice)
 ACT_IDLESET = 83    # picker row (Idle Display): choose Off (arg 0), Album Cover (1), Cassette (2) or Vinyl (3); a check shows on the chosen row (patch/bigcover.c idle_set)
+ACT_LOCKWP = 84     # link row (Settings > Lock Screen): Wallpaper, our own picker page (patch/lockscreen.c lkwp_open).
+ACT_LOCKSTYLE = 85  # value row (Settings > Lock Screen): Player Style, the saved layout (Large Cover / Mini Player); opens its picker page (arg = the page index; patch/lockscreen.c lk_layout)
+ACT_LOCKINFO = 87   # link row (Settings > Lock Screen): Custom Wallpaper, the instructions on a Release Notes page of our own (patch/relnotes.c lockinfo_open)
+ACT_LOCKTIME = 86   # switch row (Settings > Lock Screen): Show Time, stock's lock screen clock switch, the byte screensaver_timeshow saved as [SYSSET] SSAVERTIMESHOW (patch/lockscreen.c lk_time_toggle)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD)
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_IDLE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_IDLE: 'Album Cover'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings and Play Settings lists' rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
@@ -245,9 +251,13 @@ TENCURVE_PAGE_INDEX = 55
 TENPREAMP_PAGE_INDEX = 56
 AUTOEQ_PAGE_INDEX = 57
 PEQBAND_PAGE_INDEX = 58   # the band page
-BATTERY_PAGE_INDEX = 59   # Settings > System > Battery, then its Charge Limit picker: the last of PAGES
+BATTERY_PAGE_INDEX = 59   # Settings > System > Battery, then its Charge Limit picker
 CHGLIMIT_PAGE_INDEX = 60
-IDLE_PAGE_INDEX = 61      # the Idle Display picker: the last of PAGES
+IDLE_PAGE_INDEX = 61      # the Idle Display picker
+LOCK_PAGE_INDEX = 62      # the Lock Screen picker
+LOCKWALL_PAGE_INDEX = 63  # the Lock Screen's Wallpaper picker
+LOCKSTYLE_PAGE_INDEX = 64 # the Lock Screen's Player Style picker
+LOCKINFO_PAGE_INDEX = 65  # the Lock Screen's Custom Wallpaper instructions: the last of PAGES
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -403,7 +413,7 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 43  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 44  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
@@ -428,7 +438,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
 SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'nowplaying-idle', 'pod-appearance',
-                 'appearance-accent', 'appearance-background', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
+                 'appearance-accent', 'appearance-background', 'lockscreen-layout', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
                  'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'wifi-networks')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 # The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
@@ -439,7 +449,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 41      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 42      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 34   # after COVLIST (33)
@@ -683,10 +693,35 @@ BG_VALUES = ('Black', 'Tinted')   # the value the Background row shows for the s
 ACCENT_VALUES = ('Neutral', 'Red', 'Orange', 'Green', 'Teal', 'Purple', 'Champagne')
 ACCENT_PAGE = Page('m1plus_accent', 'm1plus_accent_page', 'Accent', layout=[Row(n, ACT_ACCENTSET, i) for i, n in enumerate(ACCENT_VALUES)])
 
-# Settings > System > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name), each opening its picker; then a card
+# Settings > System > Appearance > Lock Screen (patch/lockscreen.c, docs/modules/lockscreen.md): it replaces stock's systemset/screensaver_page (the Display page's Lock Screen row opens this page, tools/pod.py LOCKROW).
+# Four cards: Enable (stock's lock screen switch); Wallpaper (our picker) and Show Time (stock's clock switch; our own short label, as the page already says Lock Screen); Player Style (a value row, its picker); and
+# the Custom Wallpaper instructions (LOCKINFO_PAGE).
+LOCK_PAGE = Page('m1plus_lockscreen', 'm1plus_lockscreen_page', 'Lock Screen', layout=[
+    Row('Enable', ACT_LOCKON),
+    GAP,
+    Row('Wallpaper', ACT_LOCKWP),
+    Row('Show Time', ACT_LOCKTIME),
+    GAP,
+    Row('Player Style', ACT_LOCKSTYLE, LOCKSTYLE_PAGE_INDEX),
+    GAP,
+    Row('Custom Wallpaper', ACT_LOCKINFO),
+])
+# The Player Style picker: the two layouts, a check on the chosen row; the choice applies the next time the lock screen opens.
+LOCKSTYLE_PAGE = Page('m1plus_lockstyle', 'm1plus_lockstyle_page', 'Player Style', layout=[
+    Row('Large Cover', ACT_LOCKSET, 0),
+    Row('Mini Player', ACT_LOCKSET, 1),
+    Note('Applies the next time the lock screen opens.'),
+])
+# The Wallpaper picker (patch/lockscreen.c lkwp_*): stock's systemset/screensaver_page wallpaper grid as a page of its own (the Default picture and up to five from /mnt/mmc/lockscreenimage, a mark on the chosen one).
+# Built in code by tools/pod_ui.py build_lockwall_page (kind 'lockwall'); the payload binds its widgets by name.
+LOCKWALL_PAGE = Page('m1plus_lockwall', 'm1plus_lockwall_page', 'Wallpaper', kind='lockwall')
+# The Custom Wallpaper instructions: a Release Notes page (the same asset, tools/pod_ui.py build_relnotes_page, and painter, patch/relnotes.c lockinfo_open): the heading "Add Your Own Pictures" and three paragraphs.
+LOCKINFO_PAGE = Page('m1plus_lockinfo', 'm1plus_lockinfo_page', 'Custom Wallpaper', kind='relnotes')
+
+# Settings > System > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name), each opening its picker; then a card with the Lock Screen link row (LOCK_PAGE) and a card
 # with the Control Center link row (the pull-down's tiles, PULLDOWN_PAGE).
 APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX),
-                                                                                         GAP, Row('Control Center', ACT_PAGE, PULLDOWN_PAGE_INDEX)])
+                                                                                         GAP, Row('Lock Screen', ACT_PAGE, LOCK_PAGE_INDEX), GAP, Row('Control Center', ACT_PAGE, PULLDOWN_PAGE_INDEX)])
 
 # Settings > System > Battery (patch/charging.c, docs/modules/charging.md): the Charge Limit value row and its note; the picker lists the limits, a check on the chosen one
 # (100%, the default, is no limit). The labels are numbers, shown as they are (tools/pod_i18n.py BRANDS).
@@ -816,7 +851,7 @@ TENPREAMP_PAGE.layout = [Row('Auto', ACT_PEQ_PAUTO), Note('Auto reduces the leve
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE]
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -827,6 +862,6 @@ assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is REC
 assert PAGES[TENBAND_PAGE_INDEX] is TENBAND_PAGE and PAGES[TENCURVE_PAGE_INDEX] is TENCURVE_PAGE and PAGES[TENPREAMP_PAGE_INDEX] is TENPREAMP_PAGE and PAGES[AUTOEQ_PAGE_INDEX] is AUTOEQ_PAGE and PAGES[PEQBAND_PAGE_INDEX] is PEQBAND_PAGE
 assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
 assert PAGES[PULLDOWN_PAGE_INDEX] is PULLDOWN_PAGE and PAGES[REGION_PAGE_INDEX] is REGION_PAGE
-assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] is CHGLIMIT_PAGE and CHGLIMIT_PAGE_INDEX == len(PAGES) - 2
-assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE and IDLE_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] is CHGLIMIT_PAGE and PAGES[LOCK_PAGE_INDEX] is LOCK_PAGE and PAGES[LOCKWALL_PAGE_INDEX] is LOCKWALL_PAGE and PAGES[LOCKSTYLE_PAGE_INDEX] is LOCKSTYLE_PAGE and PAGES[LOCKINFO_PAGE_INDEX] is LOCKINFO_PAGE and LOCKINFO_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

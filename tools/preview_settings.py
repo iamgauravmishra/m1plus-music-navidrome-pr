@@ -23,6 +23,8 @@ STATE = {
     'm1plus_accent': {'shown': {'pod_check0'}},
     'm1plus_battery': {'values': {'pod_value1': '80%'}, 'switches': {'pod_switch0': True}},
     'm1plus_chargelimit': {'shown': {'pod_check0'}},
+    'm1plus_lockscreen': {'switches': {'pod_switch0': True, 'pod_switch2': True}, 'values': {'pod_value3': 'Large Cover'}},
+    'm1plus_lockstyle': {'shown': {'pod_check0'}},
     'm1plus_homeset': {'switches': {'pod_switch0': True, 'pod_switch1': True}},
     'm1plus_library': {'switches': {'pod_switch2': True, 'pod_switch3': True, 'pod_switch4': False}},
     'm1plus_npset': {'values': {'pod_value0': 'Chrome'}},
@@ -143,6 +145,58 @@ def draw_covlist(s, title, albums):
     d.rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0))
     lt = next(w for w in root.walk() if w.name == 'label_title'); tpx = PI.title_px(s.tree)
     s.text(im, lt.x, NAV / 2, title, tpx)
+    for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
+        g = s.img(name); im.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
+    return im
+
+
+def draw_lockwall(s, entries=4, chosen=2):
+    """Settings > Lock Screen > Wallpaper (patch/lockscreen.c lkwp_*): the widgets of ui/m1plus_lockwall.bin as the payload leaves them. The first cell is the Default wallpaper (the tree's own screensaver_default, scaled as
+    AWTK's scale_auto does), the others sample pictures (flat gradients standing for the user's 320 x 480 files); entries: cells shown (the rest stay hidden), chosen: the marked one (its 2 px #FE7E40 border)."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_lockwall.bin'), 'rb').read())
+    by = {w.name: w for w in root.walk() if w.name}
+    im = Image.new('RGBA', (W, SCREEN), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    covers = by['view_covers']
+    for i in range(6):
+        c = by[f'imgcover{i}']
+        if i >= entries: continue
+        x, y = c.x + covers.x, c.y + covers.y
+        if i == 0: pic = s.img('screensaver_default').resize((c.w, c.h), Image.LANCZOS)
+        else:
+            top, bot = [(0x3A, 0x5A, 0x8C), (0x8C, 0x4A, 0x3A), (0x3A, 0x8C, 0x6A), (0x7A, 0x3A, 0x8C)][(i - 1) % 4], (0x10, 0x10, 0x18)
+            pic = Image.new('RGBA', (c.w, c.h))
+            for r in range(c.h): ImageDraw.Draw(pic).line((0, r, c.w, r), fill=tuple(int(a + (b - a) * r / (c.h - 1)) for a, b in zip(top, bot)) + (255,))
+        im.alpha_composite(pic.convert('RGBA'), (x, y))
+        if i == chosen: d.rectangle((x, y, x + c.w - 1, y + c.h - 1), outline=rgb('#EEEEEC'), width=2)
+        mk = by[f'img_choice{i}']
+        im.alpha_composite(s.img('screensaver_selected' if i == chosen else 'screensaver_unselect'), (x + mk.x, y + mk.y))
+        if i == 0: ic = by['img_defaulticon']; im.alpha_composite(s.img('screensaver_defaulticon'), (x + ic.x, y + ic.y))
+    d.rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0))
+    lt = by['label_title']; tpx = PI.title_px(s.tree)
+    s.text(im, lt.x, NAV / 2, s.shown(lt), tpx)
+    for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
+        g = s.img(name); im.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
+    return im
+
+
+def draw_lockinfo(s):
+    """Settings > Lock Screen > Custom Wallpaper: the Release Notes page (ui/m1plus_lockinfo.bin, painter patch/relnotes.c): the 22 px white heading at y 12, then the three paragraphs, 20 px #E6E6E6 on a 27 px
+    pitch in x 16, width 288, wrapped by words, a 12 px gap between them (English here)."""
+    root = awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', 'm1plus_lockinfo.bin'), 'rb').read())
+    by = {w.name: w for w in root.walk() if w.name}
+    im = Image.new('RGBA', (W, SCREEN), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    px, pitch, y = int(style(by['label_line'], 'font_size')), 27, NAV + 12
+    s.text(im, 16, y + 15, 'Add Your Own Pictures', int(style(by['label_head'], 'font_size')))
+    y += 30 + 12
+    for para in ('Copy pictures to a folder named lockscreenimage at the top level of the card.', 'JPG or PNG, exactly 320 x 480 pixels, under 1 MB each.', 'Up to 5 pictures. Choose one in Wallpaper.'):
+        line = ''
+        for word in para.split():
+            if line and s.font.width(line + ' ' + word, px) > 288: s.text(im, 16, y + pitch / 2, line, px, (230, 230, 230)); line, y = word, y + pitch
+            else: line = (line + ' ' + word).strip()
+        s.text(im, 16, y + pitch / 2, line, px, (230, 230, 230)); y += pitch + 12
+    d.rectangle((0, 0, W - 1, NAV - 1), fill=(0, 0, 0))
+    lt = by['label_title']; tpx = PI.title_px(s.tree)
+    s.text(im, lt.x, NAV / 2, s.shown(lt), tpx)
     for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
         g = s.img(name); im.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
     return im
@@ -295,6 +349,11 @@ def main():
            ('Settings > Appearance', draw_page(s, 'm1plus_appearance')),
            ('Settings > Appearance > Accent', draw_page(s, 'm1plus_accent')),
            ('Settings > Appearance > Background', draw_page(s, 'm1plus_background')),
+           ('Settings > Appearance > Lock Screen', draw_page(s, 'm1plus_lockscreen')),
+           ('Settings > Lock Screen > Player Style', draw_page(s, 'm1plus_lockstyle')),
+           ('Settings > Lock Screen > Wallpaper', draw_lockwall(s)),
+           ('Settings > Lock Screen > Custom Wallpaper', draw_lockinfo(s)),
+           ('Wallpaper, Default only (empty folder)', draw_lockwall(s, entries=1, chosen=0)),
            ('Settings > Battery', draw_page(s, 'm1plus_battery')),
            ('Settings > Battery > Charge Limit', draw_page(s, 'm1plus_chargelimit')),
            ], out)

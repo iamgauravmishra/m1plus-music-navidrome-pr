@@ -41,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
+SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'charging.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c',
            'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
 
@@ -103,6 +103,64 @@ IDLE_PINS = (   # (address, stock word, what it proves)
     (0x4a00b4, 0x24a54540, 'cover mode row: a1 = "SYSSET"'), (0x4a00bc, 0x38840001, 'cover mode row: xori a0, a0, 1'), (0x4a00c0, 0x0320f809, 'cover mode row: jalr write_int_config'),
     (0x4a00c4, 0xa2440000, 'cover mode row: sb a0, (s2) in the delay slot (the byte is stored)'),
     (0x744540, 0x53535953, 'the string "SYSS(ET)"'), (0x74745c, 0x45564f43, 'the string "COVE(RMODE)"'), (0x747460, 0x444f4d52, 'the string "(COVE)RMOD(E)"'),
+)
+
+# The lock screen's mini player layout (patch/lockscreen.c, docs/modules/lockscreen.md, payload hook 25): screensaver_page_init, built by the navigator's page-init dispatcher whenever the lock
+# screen opens. m1plus_lockscreen_init runs the stock init, then (setting "1") re-lays the track card out as the Home bar's layout.
+LOCKSCREEN_INIT = 0x53fd44
+LOCKSCREEN_INIT_PROLOGUE = (0x3c1c004c, 0x279c418c, 0x0399e021)
+LOCKSCREEN_PINS = (   # (address, stock word, what it proves)
+    (0x53fd50, 0x10800054, 'screensaver_page_init: beqz a0 (the trampoline resumes here)'),
+    # the lock screen switch (Settings > Lock Screen: the stock systemset/screensaver_page's image_switch click handler 0x4aba34 flips the byte screensaver_mode and saves it): the byte, the order
+    # (byte first, then the save) and the save's section and key; config_init and into_standby read the byte (it is read whenever the screen goes dark: 0 = the lock screen never opens)
+    (0x4abaa4, 0x8f90affc, 'lock switch handler 0x4aba34: lw s0, GOT screensaver_mode (0xa05aa3)'), (0x4abaa8, 0x92020000, 'lock switch handler: lbu v0, (s0): the current state'),
+    (0x4ababc, 0xa2000000, 'lock switch handler: sb zero, (s0): off'), (0x4abb24, 0xa2020000, 'lock switch handler: sb v0 (1), (s0): on'),
+    (0x4abaf0, 0x24c6878c, 'lock switch handler: a2 = "SCREENSAVER"'), (0x4abaf8, 0x24a54540, 'lock switch handler: a1 = "SYSSET"'), (0x4abaf4, 0x0320f809, 'lock switch handler: jalr write_int_config(state, "SYSSET", "SCREENSAVER")'),
+    (0x4e615c, 0x8f83affc, 'config_init: lw v1, GOT screensaver_mode (the saved value, 0 or 1, is read once at boot)'),
+    (0x4e779c, 0x8f82affc, 'into_standby: lw v0, GOT screensaver_mode'), (0x4e77a0, 0x90430000, 'into_standby: lbu v1, (v0): 0 = awake_screen instead of the lock screen'),
+    # the Wallpaper picker (docs/modules/lockscreen.md "Wallpaper picker"). The picture list: get_screensaver_image 0x4d7524 (stock's wallpaper page calls it first in its init 0x4abe44) fills pdeq_screensaverlist
+    # through toolsGetScreenSaverPic(/mnt/mmc/lockscreenimage, 320, 480, 1 MiB, the deque, at most 5), pushes the name screensaver_default in front, and sets an unreadable chosen picture (access R_OK) back to it
+    (0x4d7558, 0x2484a960, 'get_screensaver_image: a0 = "/mnt/mmc/lockscreenimage"'), (0x4d7550, 0x24050140, 'get_screensaver_image: a1 = 320'), (0x4d7548, 0x240601e0, 'get_screensaver_image: a2 = 480'),
+    (0x4d7540, 0x3c070010, 'get_screensaver_image: a3 = 0x100000 (1 MiB)'), (0x4d7538, 0x24020005, 'get_screensaver_image: v0 = 5'), (0x4d755c, 0xafa20014, 'get_screensaver_image: the limit 5 is the 6th argument'),
+    (0x4d7578, 0x2605a97c, 'get_screensaver_image: a1 = "screensaver_default"'), (0x4d7584, 0x0320f809, 'get_screensaver_image: jalr _deque_push_front (the Default entry first)'),
+    (0x4d759c, 0x2605a97c, 'get_screensaver_image: strcmp(picture, "screensaver_default")'), (0x4d75b4, 0x24050004, 'get_screensaver_image: access(picture, R_OK)'),
+    (0x4abe44, 0x0320f809, 'wallpaper page init: jalr get_screensaver_image, the first thing'),
+    # the grid: three columns (x 12, then + 103), y 0 then 143, 90 x 135 (the cell builder 0x4abb3c: scale_auto = draw type 4, a 26 px mark child)
+    (0x4abed0, 0x24020087, 'wallpaper page init: h = 135'), (0x4abed4, 0x2407005a, 'wallpaper page init: w = 90'), (0x4abf0c, 0x26520067, 'wallpaper page init: x += 103'), (0x4abf38, 0x2412000c, 'wallpaper page init: x = 12'),
+    (0x4abefc, 0x2403008f, 'wallpaper page init: y = 143 after the third'), (0x4abf10, 0x2403000c, 'wallpaper page init: x = 12 after the third'), (0x4abf00, 0x3a220002, 'wallpaper page init: xori v0, s1, 2'),
+    (0x4abbd4, 0x24050004, 'cell builder 0x4abb3c: image_set_draw_type(cell, 4)'), (0x4abc48, 0x2402001a, 'cell builder: the mark is 26 px'),
+    # the tap handler 0x4ab52c (cell i: a1 = i): nothing to do when it is the chosen one; the old mark off (picture_unselect_style, screensaver_unselect), the new one on (picture_selected_style, screensaver_selected),
+    # the global screensaver_picture = the item ("%s", 256), then toolsWriteConfig("/mnt/data/config.ini", "SYSSET", "SCREENSAVERPATH", picture); no refresh flag, no other write
+    (0x4ab590, 0x12320084, 'wallpaper tap 0x4ab52c: beq s1, s2: the chosen one again does nothing'), (0x4ab7e0, 0x8f85b008, 'wallpaper tap: the chosen one is found by strcmp(item, screensaver_picture)'),
+    (0x4ab608, 0x24a586ec, 'wallpaper tap: picture_unselect_style'), (0x4ab674, 0x24a58704, 'wallpaper tap: screensaver_unselect'), (0x4ab6dc, 0x24a5871c, 'wallpaper tap: picture_selected_style'), (0x4ab744, 0x24a58734, 'wallpaper tap: screensaver_selected'),
+    (0x4ab770, 0x8f84b008, 'wallpaper tap: snprintf(screensaver_picture, 256, "%s", item)'), (0x4ab778, 0x24c61158, 'wallpaper tap: a2 = "%s"'),
+    (0x4ab78c, 0x8f99b00c, 'wallpaper tap: lw t9, GOT toolsWriteConfig'), (0x4ab790, 0x24c6874c, 'wallpaper tap: key "SCREENSAVERPATH"'), (0x4ab798, 0x24a54540, 'wallpaper tap: section "SYSSET"'),
+    (0x4ab7a0, 0x24844924, 'wallpaper tap: file "/mnt/data/config.ini"'), (0x4ab79c, 0x0320f809, 'wallpaper tap: jalr toolsWriteConfig'),
+    # who reads the choice: config_init (boot: the saved path if readable, else the default) and the lock screen's page visitor 0x53f1bc (each time the lock screen is built: access R_OK, then "file://%s"), both of the global
+    (0x4e61c4, 0x8f84b008, 'config_init: lw a0, GOT screensaver_picture (memset, then toolsReadConfig SCREENSAVERPATH into a buffer, copied when readable)'),
+    (0x53f228, 0x8f84b008, 'lock screen visitor: strcmp(screensaver_picture, "screensaver_default")'), (0x53f230, 0x2625a97c, 'lock screen visitor: a1 = "screensaver_default"'),
+    (0x53f258, 0x24050004, 'lock screen visitor: access(screensaver_picture, R_OK)'), (0x53f29c, 0x24c642cc, 'lock screen visitor: "file://%s"'),
+    # Show Time (docs/modules/lockscreen.md "Show Time"): stock's img_timeswitch click handler 0x4ab984 stores the byte screensaver_timeshow (0xa05aa2) xor 1 in the delay slot of write_int_config(new, "SYSSET",
+    # "SSAVERTIMESHOW"), so the byte is written first and then the save; config_init loads the key once at boot (atoi, 0 or 1: anything above 1 becomes 0) and the lock screen's visitor shows view_timeinfo from the byte
+    (0x4ab9c8, 0x8f91b000, 'show time handler 0x4ab984: lw s1, GOT screensaver_timeshow (0xa05aa2)'), (0x4ab9d8, 0x92240000, 'show time handler: lbu a0, (s1): the current state'),
+    (0x4ab9e4, 0x38840001, 'show time handler: xori a0, a0, 1: the new state'), (0x4ab9dc, 0x24c6877c, 'show time handler: a2 = "SSAVERTIMESHOW"'), (0x4ab9e0, 0x24a54540, 'show time handler: a1 = "SYSSET"'),
+    (0x4ab9e8, 0x0320f809, 'show time handler: jalr write_int_config(new, "SYSSET", "SSAVERTIMESHOW")'), (0x4ab9ec, 0xa2240000, 'show time handler: sb a0, (s1) in the delay slot: the byte first, then the save'),
+    (0x4e6190, 0x24c6877c, 'config_init: toolsReadConfig(.., "SYSSET", "SSAVERTIMESHOW")'), (0x4e61ac, 0x2c430002, 'config_init: sltiu v1, v0, 2'), (0x4e61b0, 0x0003100a, 'config_init: movz v0, zero, v1: above 1 is 0'),
+    (0x4e61b8, 0x8f83b000, 'config_init: lw v1, GOT screensaver_timeshow'),
+    (0x53f32c, 0x8f82b000, 'lock screen visitor: lw v0, GOT screensaver_timeshow'), (0x53f330, 0x90420000, 'lock screen visitor: lbu v0, (v0): view_timeinfo is shown (and enabled) from the byte'), (0x53f334, 0x1040000b, 'lock screen visitor: beqz v0: hidden'),
+)
+
+# The Display page's Lock Screen row (docs/modules/lockscreen.md "The Display row"): systemset_display_page_init (0x4a5f58) installs the row click handler 0x4a5c10 (atoi of the row's name: 0 brightness, 1 light time,
+# 2 lock screen, 3 atmosphere LED; each a navigator_to). The case for 2 (lw a0, GOT; b 0x4a5c88; addiu a0, "systemset/screensaver_page", reached by the beq v0, 2 at 0x4a5c38) is that string's only caller. Its first two
+# words become `j pod_lock_site; nop`: the stub calls lk_redirect (our Lock Screen page; 0 on the kill switch or a page that will not open) and then either resumes at the handler's epilogue (0x4a5c94) or does stock's two
+# words and jumps to the shared navigator_to call (0x4a5c88). The only other reference to the string, 0x4d14a8, is the navigator's page-init dispatcher (a strcmp), not a caller. Not reachable at boot (a list click).
+LOCKROW = 0x4a5ca8
+LOCKROW_NAV, LOCKROW_DONE = 0x4a5c88, 0x4a5c94
+LOCKROW_PINS = (   # (address, stock word, what it proves)
+    (0x4a5c1c, 0x27bdffe0, 'Display row handler 0x4a5c10: addiu sp, sp, -0x20'), (0x4a5c28, 0xafbf001c, 'its sw ra, 0x1c(sp)'), (0x4a5c38, 0x1043001b, 'its `beq v0, v1 (2)` to the lock screen case 0x4a5ca8'),
+    (LOCKROW, 0x8f84a708, 'Display row, case 2: lw a0, GOT 0x740000'), (LOCKROW + 4, 0x1000fff6, 'its `b 0x4a5c88` (the shared navigator_to call)'), (LOCKROW + 8, 0x24847d24, 'its delay slot: a0 = "systemset/screensaver_page"'),
+    (LOCKROW_NAV, 0x8f99a704, 'Display row: lw t9, GOT navigator_to'), (LOCKROW_NAV + 4, 0x0320f809, 'its jalr navigator_to'), (LOCKROW_DONE, 0x1000fff2, 'Display row epilogue: b 0x4a5c60'), (LOCKROW_DONE + 4, 0x8fbf001c, 'its delay slot: lw ra, 0x1c(sp)'),
+    (0x4a5c60, 0x00001025, 'Display row: move v0, zero'), (0x4a5c68, 0x27bd0020, 'Display row: addiu sp, sp, 0x20'), (0x4a5f58, 0x26525c10, 'display page init: the row handler is 0x4a5c10 (its one reference)'),
 )
 
 # Light Mode (patch/palette.c, docs/modules/accent.md, docs/modules/payload.md hooks 10 - 12): three hooks on the painter's inputs, q2-pod's (its style_get_color / style_get_gradient / image_manager_add hooks).
@@ -207,6 +265,10 @@ FUNCTIONS = {
     'notifyPlayMode':          ('int', 'void', 0x50ee04),
     'dmrSendPlayMode':         ('int', 'int', 0x4f10f0),
     'write_int_config':        ('int', 'int, const char *, const char *', 0x4d6a2c),
+    # the Lock Screen's Wallpaper picker (patch/lockscreen.c lkwp_*): stock's picture list builder (0x4d7524: toolsGetScreenSaverPic fills the deque pdeq_screensaverlist, the Default entry in front, an unreadable
+    # chosen picture back to the default) and its config writer (0x5e43f8: file, section, key, value), as the stock wallpaper grid's tap handler 0x4ab52c calls it
+    'get_screensaver_image':   ('int', 'void', 0x4d7524),
+    'toolsWriteConfig':        ('int', 'const char *, const char *, const char *, const char *', 0x5e43f8),
     # the Equalizer page (patch/peq_ui.c): stock's own switch handler (on_eqswitch_onclick 0x49d750) flips equalizer_flag, writes
     # [PLAYSET] EQFLAG and calls this with equalizer_mode (1..11, clamped by config_init): mcl-seteq with the mode's ten gains,
     # flag 0 (closes the player's equalizer) while equalizer_flag is 0, else 1 or 2 (adds it, or sends the gains again)
@@ -1033,6 +1095,10 @@ FUNCTIONS.update({
 })
 DATA.update({
     'TIME_ZONE':          (0xa05ab4, 'time_zone'),   # int: [SYSSET] TIMEZONE, the saved zone index (patch/timezones.c)
+    'LOCK_ON':            (0xa05aa3, 'screensaver_mode'),   # byte: stock's lock screen switch ([SYSSET] SCREENSAVER; patch/lockscreen.c lk_enabled)
+    'LOCK_TIMESHOW':      (0xa05aa2, 'screensaver_timeshow'),   # byte: stock's lock screen "show time" switch ([SYSSET] SSAVERTIMESHOW; patch/lockscreen.c lk_time)
+    'LOCK_PICTURE':       (0xa0473c, 'screensaver_picture'),   # char[256]: the chosen wallpaper, the resource name screensaver_default or a path ("file://" is added where it is shown; [SYSSET] SCREENSAVERPATH)
+    'LOCK_LIST':          (0xa045cc, 'pdeq_screensaverlist'),   # void *: the deque the wallpaper grid lists (strings: the Default name first, then up to five paths)
     'FOLDER_LAYER':       (0xa0554c, None),
     'FOLDER_TITLE':       (0xa0533c, None),
     'FOLDER_M3U':         (0xa0483c, None),
@@ -1353,6 +1419,7 @@ def gen_stock_h(out, demo_path):
     h.append('extern int stock_home_click_trampoline(void *, void *);')
     h.append('extern int stock_playing_init_trampoline(void *, void *);')
     h.append('extern int stock_bigcover_init_trampoline(void *, void *);')
+    h.append('extern int stock_lockscreen_init_trampoline(void *, void *);')
     h.append('extern int stock_playmore_init_trampoline(void *, void *);')
     h.append('extern int stock_pulldown_init_trampoline(void *, void *);')
     h.append('extern int stock_start_player_trampoline(void);')
@@ -1432,6 +1499,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_FILES_PAGE {pod_pages.FILES_PAGE_INDEX}')
     h.append(f'#define POD_PULLDOWN_PAGE {pod_pages.PULLDOWN_PAGE_INDEX}')
     h.append(f'#define POD_PEQ_PAGE {pod_pages.PEQ_PAGE_INDEX}')
+    h.append(f'#define POD_LOCK_PAGE {pod_pages.LOCK_PAGE_INDEX}')
     h.append(f'#define POD_PEQP_PAGE {pod_pages.PEQP_PAGE_INDEX}')
     h.append(f'#define POD_PEQLIB_PAGE {pod_pages.PEQLIB_PAGE_INDEX}')
     h.append(f'#define POD_TENBAND_PAGE {pod_pages.TENBAND_PAGE_INDEX}')
@@ -1456,6 +1524,9 @@ def gen_asm(out, slots):
     # and for the timed cover page's init
     asm += ['.globl stock_bigcover_init_trampoline', 'stock_bigcover_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{BIGCOVER_INIT + 12:x}', 'nop']
+    # and for the lock screen's init
+    asm += ['.globl stock_lockscreen_init_trampoline', 'stock_lockscreen_init_trampoline:',
+            f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{LOCKSCREEN_INIT + 12:x}', 'nop']
     # and for the Now Playing More dialog's init
     asm += ['.globl stock_playmore_init_trampoline', 'stock_playmore_init_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{PLAYMORE_INIT + 12:x}', 'nop']
@@ -1484,6 +1555,8 @@ def gen_asm(out, slots):
     asm += ['.globl stock_timezone_trampoline', 'stock_timezone_trampoline:',
             f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{timezones.SELECT + 12:x}', 'nop']
     # the Play Settings Equalizer row (patch/tenband.c): open the editor, then the stock function's epilogue (its frame is untouched: the C call uses the stack below it, $gp is set again)
+    asm += ['.globl pod_lock_site', 'pod_lock_site:', 'jal lk_redirect', 'nop', f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', 'bnez $v0, 1f', 'nop',
+            'lw $a0, -0x58f8($gp)', f'j 0x{LOCKROW_NAV:x}', 'addiu $a0, $a0, 0x7d24', f'1: j 0x{LOCKROW_DONE:x}', 'nop']   # (the fallback is stock's own two words: a0 = "systemset/screensaver_page", then its navigator_to call)
     asm += ['.globl pod_eq_site', 'pod_eq_site:', 'jal peq_open', 'nop', f'lui $gp, {GP >> 16}', f'ori $gp, $gp, {GP & 0xffff}', f'j 0x{EQ_ROW_RESUME:x}', 'nop']
     # libc GOT-slot stubs (load the resolved pointer from demo's own GOT, tail-call it).
     for name, addr in slots.items():
@@ -1528,10 +1601,10 @@ def compile_payload(out, demo_path, tag=TAG):
     # compact_set_row_layout is reached only from the patched stock call sites, so keep it
     keep = ['--undefined=compact_set_row_layout', '--undefined=m1plus_home_init',
             '--undefined=stock_home_init_trampoline', '--undefined=m1plus_playing_init',
-            '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_bigcover_init', '--undefined=stock_bigcover_init_trampoline', '--undefined=m1plus_scroll_event',
+            '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_bigcover_init', '--undefined=stock_bigcover_init_trampoline', '--undefined=m1plus_lockscreen_init', '--undefined=stock_lockscreen_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=pd_open_settings', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
-            '--undefined=bc_timed_open', '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pod_eq_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
+            '--undefined=bc_timed_open', '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pod_eq_site', '--undefined=pod_lock_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
@@ -1685,6 +1758,12 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     hook(patched, BIGCOVER_INIT, BIGCOVER_INIT_PROLOGUE, target5, 'bigcover_page_init')
+    target6 = ps['m1plus_lockscreen_init']
+    check(BASE <= target6 < BASE + len(payload), 'lockscreen init entry symbol outside payload')
+    for a, old, what in LOCKSCREEN_PINS:
+        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
+        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    hook(patched, LOCKSCREEN_INIT, LOCKSCREEN_INIT_PROLOGUE, target6, 'screensaver_page_init')
     check(BASE <= ps['bc_timed_open'] < BASE + len(payload), 'idle view hook symbol outside payload')
     for a, old, what in IDLE_PINS:
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
@@ -1697,7 +1776,7 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     patch_radio(patched, ps, len(payload))
-    for a, old, what in PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in LOCKROW_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf
@@ -1726,6 +1805,8 @@ def patch_demo(raw, payload, ps, demo_path):
     check(BASE <= ps['sh_clear_queue'] < BASE + len(payload), 'sh_clear_queue outside payload')
     struct.pack_into('<I', patched, fileoff(patched, CLEAR_SITE), jal(ps['sh_clear_queue'], CLEAR_SITE))   # the delay slot (a0 = *queue) stays stock's
     check(BASE <= ps['pod_eq_site'] < BASE + len(payload), 'pod_eq_site outside payload')
+    check(BASE <= ps['pod_lock_site'] < BASE + len(payload), 'pod_lock_site outside payload')
+    struct.pack_into('<II', patched, fileoff(patched, LOCKROW), j(ps['pod_lock_site']), 0)   # (the pins above checked the case's three words and the epilogue it resumes at)
     struct.pack_into('<II', patched, fileoff(patched, EQ_ROW), j(ps['pod_eq_site']), 0)   # (the pins above checked the row's three words and the epilogue it resumes at)
     for a, _ in MODE_SITES:   # the pins above checked each site's jalr and the lw t9 of mclGetPlayMode before it
         struct.pack_into('<I', patched, fileoff(patched, a), jal(ps['sh_display_mode'], a))
@@ -1747,7 +1828,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, BIGCOVER_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) != IDLE_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, BIGCOVER_INIT, LOCKSCREEN_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) != IDLE_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1782,6 +1863,7 @@ def main():
         'hook_init': {'addr': HOME_INIT, 'target': ps['m1plus_home_init']},
         'hook_playing': {'addr': PLAYING_INIT, 'target': ps['m1plus_playing_init']},
         'hook_bigcover': {'addr': BIGCOVER_INIT, 'target': ps['m1plus_bigcover_init']},
+        'hook_lockscreen': {'addr': LOCKSCREEN_INIT, 'target': ps['m1plus_lockscreen_init']},
         'hook_playmore': {'addr': PLAYMORE_INIT, 'target': ps['m1plus_playmore_init']},
         'hook_pulldown': {'addr': PULLDOWN_INIT, 'target': ps['m1plus_pulldown_init']},
         'hook_pulldown_open': {'sites': [hex(a) for a in PULLDOWN_OPEN_SITES], 'target': ps['pd_open_settings']},
@@ -1799,7 +1881,7 @@ def main():
         'hook_style_color': {'addr': STYLE_COLOR, 'target': ps['m1plus_style_color']}, 'hook_style_gradient': {'addr': STYLE_GRADIENT, 'target': ps['m1plus_style_gradient']},
         'hook_image_add': {'addr': IMAGE_ADD, 'target': ps['m1plus_image_add']},
         'hook_setmode': {'addr': SETMODE, 'target': ps['sh_set_mode']}, 'hook_loadplaylist': {'addr': LOADPL, 'target': ps['sh_load_playlist']}, 'hook_file_created': {'addr': FILETIME, 'target': ps['ft_created']},
-        'hook_clear_queue': {'addr': CLEAR_SITE, 'target': ps['sh_clear_queue']}, 'hook_eq_row': {'addr': EQ_ROW, 'target': ps['pod_eq_site']},
+        'hook_clear_queue': {'addr': CLEAR_SITE, 'target': ps['sh_clear_queue']}, 'hook_eq_row': {'addr': EQ_ROW, 'target': ps['pod_eq_site']}, 'hook_lock_row': {'addr': LOCKROW, 'target': ps['pod_lock_site']},
         'hook_display_mode': {'sites': [hex(a) for a, _ in MODE_SITES], 'target': ps['sh_display_mode']},
         'scroll_slot': {'addr': SCROLL_SLOT, 'target': ps['m1plus_scroll_event']}, 'scroll_edit': scroll,
         'zeroed_demo_sha256': ZEROED_DEMO_SHA, 'patched_demo_sha256': sha(patched),

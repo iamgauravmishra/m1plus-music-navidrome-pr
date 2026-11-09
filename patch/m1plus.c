@@ -73,11 +73,20 @@ enum {
     ACT_AZRAIL = 77, /* Settings > Library > Index Rail: a switch row, on by default (patch/azlist.c azrail_toggle) */
     ACT_AZHEAD =
         78, /* Settings > Library > Section Headers: a switch row, on by default (patch/azlist.c azhead_toggle) */
+    ACT_LOCKSET = 88,
+    ACT_LOCKON = 79,
     ACT_CHGLIM = 80, /* Settings > System > Battery: Charge Limit, a value row opening its picker */
     ACT_CHGLIMSET = 81, /* the Charge Limit picker's rows (arg = the limit, 80 .. 100) */
     ACT_IDLE =
         82, /* Settings > Now Playing > Idle Display: a value row (Off, Album Cover, Cassette, Vinyl) opening its picker */
-    ACT_IDLESET = 83 /* the picker's rows (arg 0 Off, 1 Album Cover, 2 Cassette, 3 Vinyl) */
+    ACT_IDLESET = 83, /* the picker's rows (arg 0 Off, 1 Album Cover, 2 Cassette, 3 Vinyl) */
+    ACT_LOCKWP = 84, /* Settings > Lock Screen > Wallpaper: our picker page (patch/lockscreen.c lkwp_open) */
+    ACT_LOCKSTYLE =
+        85, /* Settings > Lock Screen > Player Style: a value row (Large Cover / Mini Player) opening its picker */
+    ACT_LOCKTIME =
+        86, /* Settings > Lock Screen > Show Time: a switch row, stock's own clock switch (patch/lockscreen.c lk_time_toggle) */
+    ACT_LOCKINFO =
+        87 /* Settings > Lock Screen > Custom Wallpaper: the instructions page (patch/relnotes.c lockinfo_open) */
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -87,7 +96,11 @@ extern int albums_open(void); /* patch/albums.c: Albums, our page in the mode us
 extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosaics of each playlist's covers */
 extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
 extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
+extern int lockinfo_open(
+    void); /* patch/relnotes.c: the Lock Screen's Custom Wallpaper instructions, a Release Notes page; -1 when it did not open */
 extern int update_open(void); /* patch/update.c: Software Update, our page; -1 when it did not open */
+extern int
+lkwp_open(void); /* patch/lockscreen.c: the Lock Screen's Wallpaper picker, our page; -1 when it did not open */
 extern int wifipage_open(
     void); /* patch/wifipage.c: Settings > Wi-Fi, our page; -1 when it did not open (the stock page then opens) */
 extern int radio_open(void); /* patch/radiopage.c: Radio's stations page */
@@ -144,8 +157,8 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 40 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 41, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 42 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 42, /* the Unsupported Files count (setfiles_old_count), above those rows */
     INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
 };
 
@@ -162,6 +175,7 @@ enum {
     VK_ACCENT,
     VK_REGION,
     VK_CHGLIM,
+    VK_LOCKSTYLE,
     VK_IDLE
 };
 
@@ -350,8 +364,11 @@ static void pick_choose(const struct pod_row *row);
 static int is_pick(const struct pod_row *row) { /* the pickers' check rows */
     return row->action == ACT_THEMESET || row->action == ACT_RECSET || row->action == ACT_VTHSET ||
            row->action == ACT_BGSET || row->action == ACT_ACCENTSET || row->action == ACT_REGIONSET ||
-           row->action == ACT_CHGLIMSET || row->action == ACT_IDLESET;
+           row->action == ACT_CHGLIMSET || row->action == ACT_LOCKSET || row->action == ACT_IDLESET;
 }
+
+static void *stock_front __attribute__((section(
+    ".scratch"))); /* the window an ACT_STOCK row opened; forgotten when a Settings page is back in front (page_refresh) */
 
 static int on_row(void *ctx, void *e) {
     const struct pod_row *row = ctx;
@@ -362,7 +379,7 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_PAGE || row->action == ACT_CTHEME || row->action == ACT_VREC ||
              row->action == ACT_VTHEME || row->action == ACT_BG || row->action == ACT_ACCENT ||
              row->action == ACT_REGION || row->action == ACT_PEQ || row->action == ACT_CHGLIM ||
-             row->action == ACT_IDLE) /* the value rows open their picker page */
+             row->action == ACT_LOCKSTYLE || row->action == ACT_IDLE) /* the value rows open their picker page */
         open_page(row->arg, 0);
     else if (row->action == ACT_PLAYER)
         pod_open_now_playing();
@@ -404,6 +421,10 @@ static int on_row(void *ctx, void *e) {
         homecover_list_open(
             row->arg -
             INFO_CC); /* the albums with no art / no cache file, a plain list (nothing when the count is 0 or still being made) */
+    else if (row->action == ACT_LOCKWP)
+        lkwp_open(); /* patch/lockscreen.c: the wallpaper grid, our page (nothing when it will not open) */
+    else if (row->action == ACT_LOCKINFO)
+        lockinfo_open(); /* patch/relnotes.c: the instructions, a Release Notes page (nothing when it will not open) */
     else if (row->action == ACT_UPDATE)
         update_open(); /* patch/update.c: our page; the check, the download and the hand-over to the firmware's TF card update */
     else if (row->action == ACT_CLEARCACHE)
@@ -423,8 +444,15 @@ static int on_row(void *ctx, void *e) {
     else if (row->action == ACT_STOCK) {
         if (row->arg == 0 /* STOCK_WIFI */ && wifipage_open() == 0)
             return RET_OK; /* patch/wifipage.c: our Wi-Fi page; the stock page where it will not open */
-        pod_open_stock(POD_STOCK[row->arg].name,
-                       POD_STOCK[row->arg].window); /* stock's navigator_to, or the page's window if in the stack */
+        {
+            void *wm = window_manager(), *top = wm ? window_manager_get_top_main_window(wm) : (void *)0;
+            if (top && top == stock_front)
+                return RET_OK; /* the stock page this row opened is still the front window: a repeated tap opens no second one */
+            pod_open_stock(POD_STOCK[row->arg].name,
+                           POD_STOCK[row->arg].window); /* stock's navigator_to, or the page's window if in the stack */
+            top = wm ? window_manager_get_top_main_window(wm) : (void *)0;
+            stock_front = top;
+        }
     } else if (is_pick(row))
         pick_choose(ctx); /* a picker row */
     return RET_OK;
@@ -439,7 +467,7 @@ struct swctx {
     int action;
     void *img;
 };
-static struct swctx sw_slot[10] __attribute__((section(".scratch")));
+static struct swctx sw_slot[12] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
     if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
@@ -459,6 +487,14 @@ static void regen_show(void) {
             widget_set_sensitive(regen_note, 0); /* the note is never a touch target */
 }
 
+extern int lk_enabled(void); /* patch/lockscreen.c: stock's lock screen switch (the byte screensaver_mode): 1 on */
+extern int
+lk_enabled_toggle(void); /* flip it as stock's switch does (byte, then [SYSSET] SCREENSAVER); the new state */
+extern int
+lk_time(void); /* patch/lockscreen.c: stock's lock screen clock switch (the byte screensaver_timeshow): 1 on */
+extern int
+lk_time_toggle(void); /* flip it as stock's switch does (byte, then [SYSSET] SSAVERTIMESHOW); the new state */
+
 static int switch_state(int action) {
     return action == ACT_STARTUP    ? home_start()
            : action == ACT_SHELF    ? recent_setting()
@@ -469,6 +505,8 @@ static int switch_state(int action) {
            : action == ACT_BATTPCT  ? battpct_setting()
            : action == ACT_AZRAIL   ? azrail_setting()
            : action == ACT_AZHEAD   ? azhead_setting()
+           : action == ACT_LOCKON   ? lk_enabled()
+           : action == ACT_LOCKTIME ? lk_time()
                                     : coverflow_landscape();
 }
 
@@ -485,6 +523,8 @@ static int on_switch(void *ctx, void *e) {
          : s->action == ACT_BATTPCT  ? battpct_toggle()
          : s->action == ACT_AZRAIL   ? azrail_toggle()
          : s->action == ACT_AZHEAD   ? azhead_toggle()
+         : s->action == ACT_LOCKON   ? lk_enabled_toggle()
+         : s->action == ACT_LOCKTIME ? lk_time_toggle()
                                      : coverflow_landscape_toggle(); /* -1: not saved, unchanged */
     if (on >= 0) switch_show(s->img, on);
     if (s->action == ACT_DAILY) regen_show();
@@ -503,6 +543,8 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
             : row->action == ACT_BATTPCT  ? 7
             : row->action == ACT_AZRAIL   ? 8
             : row->action == ACT_AZHEAD   ? 9
+            : row->action == ACT_LOCKON   ? 10
+            : row->action == ACT_LOCKTIME ? 11
                                           : 0;
     snprintf(name, sizeof name, "pod_switch%u", i);
     sw_slot[k].action = row->action;
@@ -523,6 +565,9 @@ extern int tape_theme(void); /* patch/tape.c: the saved theme, 0 Normal (the def
 extern int tape_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
 extern int vinyl_record(void); /* patch/vinyl.c: the saved record colour, 0 Black (the default) .. VN_RECS - 1 */
 extern int vinyl_record_set(int rec); /* choose it, saved atomically; the colour or -1 */
+extern int
+lk_layout(void); /* patch/lockscreen.c: the saved lock screen layout, 0 Large Cover (the default), 1 Mini Player */
+extern int lk_layout_set(int layout); /* choose it, saved atomically; the layout or -1 */
 extern int idle_choice(
     void); /* patch/bigcover.c: Idle Display: 0 Off (stock's Cover mode byte off), 1 Album Cover, 2 Cassette, 3 Vinyl; read live */
 extern int idle_set(
@@ -565,6 +610,8 @@ static void value_text(void *label, int kind) {
         pcregion_value(buf, sizeof buf);
         widget_set_text_utf8(label, buf);
         return;
+    } else if (kind == VK_LOCKSTYLE) {
+        key = lk_layout() == 1 ? "Mini Player" : "Large Cover";
     } else if (kind == VK_CHGLIM) { /* "80%" .. "100%" (100: no limit) */
         snprintf(buf, sizeof buf, "%d%%", chg_limit());
         widget_set_text_utf8(label, buf);
@@ -632,17 +679,18 @@ static void info_text(void *label, int kind) {
 }
 
 static int row_value(const struct pod_row *row) {
-    return row->action == ACT_STOCK    ? POD_STOCK[row->arg].value
-           : row->action == ACT_CTHEME ? VK_THEME
-           : row->action == ACT_IDLE   ? VK_IDLE
-           : row->action == ACT_VREC   ? VK_RECORD
-           : row->action == ACT_VTHEME ? VK_VTHEME
-           : row->action == ACT_BG     ? VK_BG
-           : row->action == ACT_ACCENT ? VK_ACCENT
-           : row->action == ACT_REGION ? VK_REGION
-           : row->action == ACT_PEQ    ? VK_EQ
-           : row->action == ACT_CHGLIM ? VK_CHGLIM
-                                       : VK_NONE;
+    return row->action == ACT_STOCK       ? POD_STOCK[row->arg].value
+           : row->action == ACT_CTHEME    ? VK_THEME
+           : row->action == ACT_IDLE      ? VK_IDLE
+           : row->action == ACT_VREC      ? VK_RECORD
+           : row->action == ACT_VTHEME    ? VK_VTHEME
+           : row->action == ACT_BG        ? VK_BG
+           : row->action == ACT_ACCENT    ? VK_ACCENT
+           : row->action == ACT_REGION    ? VK_REGION
+           : row->action == ACT_PEQ       ? VK_EQ
+           : row->action == ACT_CHGLIM    ? VK_CHGLIM
+           : row->action == ACT_LOCKSTYLE ? VK_LOCKSTYLE
+                                          : VK_NONE;
 }
 
 /* The chosen picker row: the cassette theme, the vinyl record or base, the background or the accent. */
@@ -653,6 +701,7 @@ static int pick_chosen(const struct pod_row *row) {
            : row->action == ACT_ACCENTSET ? row->arg == pal_accent_saved()
            : row->action == ACT_REGIONSET ? row->arg == pcregion_saved()
            : row->action == ACT_CHGLIMSET ? row->arg == chg_limit()
+           : row->action == ACT_LOCKSET   ? row->arg == lk_layout()
            : row->action == ACT_VTHSET    ? row->arg == vinyl_theme()
                                           : row->arg == tape_theme();
 }
@@ -660,6 +709,7 @@ static int pick_chosen(const struct pod_row *row) {
 static void page_refresh(void *win, const struct pod_page *page) {
     char name[24];
     int i;
+    stock_front = (void *)0;
     for (i = 0; i < page->count; i++) {
         const struct pod_row *row = &page->rows[i];
         void *w;
@@ -667,7 +717,7 @@ static void page_refresh(void *win, const struct pod_page *page) {
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
             row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
-            row->action == ACT_AZHEAD) {
+            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME) {
             snprintf(name, sizeof name, "pod_switch%d", i);
             switch_show(widget_lookup(win, name, 1), switch_state(row->action));
         } else if (row->action == ACT_CCLIST || row->action == ACT_SFOLD) {
@@ -735,6 +785,7 @@ static void pick_choose(const struct pod_row *row) {
                  : row->action == ACT_ACCENTSET ? pal_accent_set(row->arg)
                  : row->action == ACT_REGIONSET ? pcregion_set(row->arg)
                  : row->action == ACT_CHGLIMSET ? chg_set(row->arg)
+                 : row->action == ACT_LOCKSET   ? lk_layout_set(row->arg)
                  : row->action == ACT_VTHSET    ? vinyl_theme_set(row->arg)
                                                 : tape_theme_set(row->arg)) >= 0) {
                 win = pod_fg[i];
@@ -782,7 +833,7 @@ static int open_page(int index, int as_home) {
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
             row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
-            row->action == ACT_AZHEAD)
+            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME)
             bind_switch(win, i, row), refresh = 1;
         else {
             if (row->action != ACT_INFO) pod_bind(win, row->name, on_row, row); /* an information row takes no tap */
@@ -843,6 +894,9 @@ int m1plus_open_entry(void) { return open_page(POD_ENTRY_PAGE, 1); }
 
 /* The Settings page, for the iPod page's Settings row (patch/ipod.c): the normal instance, with Back, over whatever is in front. */
 int pod_open_settings(void) { return open_page(POD_SETTINGS_PAGE, 0); }
+
+/* The Lock Screen page, for stock's Display page Lock Screen row (patch/lockscreen.c lk_redirect): the normal instance, with Back. */
+int pod_open_lock(void) { return open_page(POD_LOCK_PAGE, 0); }
 
 /* The preset page, for the Presets page's rows (patch/peqpage.c): the normal instance, with Back. */
 int pod_open_peqpage(void) { return open_page(POD_PEQP_PAGE, 0); }

@@ -6,7 +6,7 @@ usage: python3 -I test/demo_diff.py <stock demo> <built demo>
 Allowed differences: the zeroed .pdr section (space step), the program headers (the payload PT_LOAD),
 the 8-byte Home-icon hook at 0x533b80, the 8-byte boot guard hook at home_page_init 0x534cd4, the 8-byte
 Now Playing hook at playing_page_init
-0x53d1e4, the 8-byte timed cover page hook at bigcover_page_init 0x529a24, the one word of the timed open's navigator_to call at 0x53d0ec (the idle view), the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the 8-byte pull-down hook at dialog_dropdown_dialog_init 0x475f04, the pinned literals of tools/autotime.py (hwclock -su/-wu), the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
+0x53d1e4, the 8-byte timed cover page hook at bigcover_page_init 0x529a24, the one word of the timed open's navigator_to call at 0x53d0ec (the idle view), the 8-byte lock screen hook at screensaver_page_init 0x53fd44, the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the 8-byte pull-down hook at dialog_dropdown_dialog_init 0x475f04, the pinned literals of tools/autotime.py (hwclock -su/-wu), the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
 stock | 264), the five A-B marker immediates of Now Playing (tools/mod_nowplaying.py marker_edits) and bytes
 the four pinned branch words of tools/coex.py (Wi-Fi and Bluetooth together), the pinned words of tools/themeoff.py (theme1 off), appended after the stock file. Anything else is an error. Exit status 0 = clean.
 """
@@ -21,6 +21,7 @@ HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
 PLAYING = (0x53d1e4, 8)     # playing_page_init: the Now Playing hook (patch/nowplaying.c)
 BIGCOVER = (0x529a24, 8)    # bigcover_page_init: the timed cover page hook (patch/bigcover.c)
+LOCKSCREEN = (0x53fd44, 8)  # screensaver_page_init: the lock screen's mini player layout hook (patch/lockscreen.c)
 PLAYMORE = (0x479cc4, 8)    # dialog_playmore_dialog_init: the More menu hook (patch/playmore.c)
 PULLDOWN = (0x475f04, 8)    # dialog_dropdown_dialog_init: the pull-down tile hook (patch/pulldown.c)
 BACKTOPLAYER = (0x4cd58c, 8)   # on_backtoplayer_onclick: Radio Now Playing from stock pages (patch/radionp.c rn_backtoplayer)
@@ -89,6 +90,7 @@ def main():
     allow(va_to_off(s, HOME_INIT[0]), HOME_INIT[1], 'home-init hook')
     allow(va_to_off(s, PLAYING[0]), PLAYING[1], 'playing init hook')
     allow(va_to_off(s, BIGCOVER[0]), BIGCOVER[1], 'timed cover page init hook')
+    allow(va_to_off(s, LOCKSCREEN[0]), LOCKSCREEN[1], 'lock screen init hook')
     allow(va_to_off(s, PLAYMORE[0]), PLAYMORE[1], 'more dialog init hook')
     allow(va_to_off(s, PULLDOWN[0]), PULLDOWN[1], 'pull-down init hook')
     allow(va_to_off(s, START_PLAYER[0]), START_PLAYER[1], 'start player hook')
@@ -106,6 +108,7 @@ def main():
     allow(va_to_off(s, timezones.SELECT), 8, 'select_timezone hook')   # time zones (tools/timezones.py): the hook, the clamp, the row count and limit, the two call sites
     for a, *_ in timezones.edits(0, 0): allow(va_to_off(s, a), 4, 'time zone words')
     allow(va_to_off(s, pod.EQ_ROW), 8, 'Play Settings Equalizer row hook')
+    allow(va_to_off(s, pod.LOCKROW), 8, 'Display page Lock Screen row hook')
     for q in SHUFFLE_HOOKS: allow(va_to_off(s, q), 8, 'shuffle hook')
     for q in MODE_SITES: allow(va_to_off(s, q), 4, 'play mode display site')
     allow(va_to_off(s, pod.CLEAR_SITE), 4, 'dmr_serverstart deque_clear site')
@@ -149,6 +152,9 @@ def main():
     ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
     h = BIGCOVER[0]; o = va_to_off(s, h)
     print(f'Timed cover page hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
+    ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
+    h = LOCKSCREEN[0]; o = va_to_off(s, h)
+    print(f'Lock screen hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
     ok = ok and s[o:o + 8] != m[o:o + 8] and s[o + 8:o + 16] == m[va_to_off(m, h) + 8:va_to_off(m, h) + 16]
     h = PULLDOWN[0]; o = va_to_off(s, h)
     print(f'Pull-down hook {h:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'changed' if s[o:o + 8] != m[o:o + 8] else 'UNCHANGED')
@@ -206,6 +212,11 @@ def main():
         good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
         print(f'Line Out pill hook {q:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
         ok = ok and good
+    o = va_to_off(s, pod.LOCKROW); mw = struct.unpack_from('<I', m, o)[0]
+    good = (struct.unpack_from('<II', s, o) == (0x8f84a708, 0x1000fff6) and mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12]
+            and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s)))
+    print(f'Display page Lock Screen row hook {pod.LOCKROW:#x}: {s[o:o + 8].hex()} -> {m[o:o + 8].hex()}', 'ok' if good else 'WRONG')
+    ok = ok and good
     o = va_to_off(s, pod.EQ_ROW); mw = struct.unpack_from('<I', m, o)[0]
     good = (struct.unpack_from('<II', s, o) == (0x8f84a708, 0x1000ff93) and mw >> 26 == 2 and m[o + 4:o + 8] == bytes(4) and s[o + 8:o + 12] == m[o + 8:o + 12]
             and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s)))

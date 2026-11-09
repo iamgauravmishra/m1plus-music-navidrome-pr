@@ -327,7 +327,7 @@ def run(ctx):
                     if need > room + ST.TEXT_X - ST.CM - ST.PAD: cards_over.append((page.key, r.label, '99999', loc, need, room))
                     continue
                 if pod_pages.row_kind(r) != 'value': continue
-                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else pod_pages.IDLE_VALUES if r.action == pod_pages.ACT_IDLE else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
+                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else pod_pages.IDLE_VALUES if r.action == pod_pages.ACT_IDLE else ('Large Cover', 'Mini Player') if r.action == pod_pages.ACT_LOCKSTYLE else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
                 vals = [(vk, tr_text(loc, vk)) for vk in vkeys] if r.action != pod_pages.ACT_REGION else [('Automatic', tr_text(loc, 'Automatic'))] + [(n, n) for n in pcregion.NAMES]   # (the Podcast Region's value: Automatic, or a storefront's English name)
                 for vk, vt in vals:
                     need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(vt, ST.VALUE_PX) + 6, ST.VALUE_MAX)
@@ -337,6 +337,9 @@ def run(ctx):
                     px = int(node.get('style:normal:font_size'))
                     if width(tr_text(loc, pod_i18n.key_for(pod_i18n.shown_english(node))), px) > node.w - 4: cards_over.append((page.key, node.name, loc, px))
     expect(not cards_over, f'the Settings value rows (label and value), headers and notes fit in all 13 languages ({cards_over[:40]})')
+    # The Custom Wallpaper page (a Release Notes page): the heading fits its 288 px line at 22 px in every language (the paragraphs wrap)
+    head_over = [(loc, tr_text(loc, 'Add Your Own Pictures')) for loc in LOC if width(tr_text(loc, 'Add Your Own Pictures'), 22) > 288]
+    expect(not head_over, f'the Custom Wallpaper heading fits one line in all 13 languages ({head_over})')
     expect(not over, f'messages, the cover page, the album buttons and count line fit in all languages ({over[:4]})')
 
     # 8. Glyphs: every character of every text we add, and of the stock texts we reuse, has ink in the shipped font.

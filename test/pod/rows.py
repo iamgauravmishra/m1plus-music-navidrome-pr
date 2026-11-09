@@ -229,6 +229,7 @@ def rows_tests(expect):
     allowed |= {pod.fileoff(built, pod.HOME_INIT), pod.fileoff(built, pod.HOME_INIT) + 4}
     allowed |= {pod.fileoff(built, pod.PLAYING_INIT), pod.fileoff(built, pod.PLAYING_INIT) + 4}           # the Now Playing init hook
     allowed |= {pod.fileoff(built, pod.BIGCOVER_INIT), pod.fileoff(built, pod.BIGCOVER_INIT) + 4}         # the timed cover page init hook (patch/bigcover.c)
+    allowed |= {pod.fileoff(built, pod.LOCKSCREEN_INIT), pod.fileoff(built, pod.LOCKSCREEN_INIT) + 4}     # the lock screen init hook (patch/lockscreen.c)
     allowed |= {pod.fileoff(built, pod.PLAYMORE_INIT), pod.fileoff(built, pod.PLAYMORE_INIT) + 4}         # the More dialog init hook
     allowed |= {pod.fileoff(built, pod.PULLDOWN_INIT), pod.fileoff(built, pod.PULLDOWN_INIT) + 4}         # the pull-down init hook
     allowed |= {pod.fileoff(built, pod.START_PLAYER), pod.fileoff(built, pod.START_PLAYER) + 4}           # the mclStartPlayer hook (Internet Radio's hand-over)
@@ -239,6 +240,7 @@ def rows_tests(expect):
     allowed.add(pod.fileoff(built, pod.SCAN_SITE))                                                       # the library scan's folder test (patch/common.c pod_scan_dir)
     allowed |= {pod.fileoff(built, h) + k for h in (pod.SETMODE, pod.LOADPL, pod.FILETIME) for k in (0, 4)}               # the Shuffle hooks (patch/shuffle.c)
     allowed |= {pod.fileoff(built, a) for a, _ in pod.MODE_SITES}                                           # the 19 play mode display sites (jal sh_display_mode)
+    allowed |= {pod.fileoff(built, pod.LOCKROW), pod.fileoff(built, pod.LOCKROW) + 4}                                  # the Display page's Lock Screen row: its jump to our Lock Screen page (patch/lockscreen.c lk_redirect)
     allowed |= {pod.fileoff(built, pod.EQ_ROW), pod.fileoff(built, pod.EQ_ROW) + 4}                                  # the Play Settings Equalizer row's jump to the 10-Band editor (patch/tenband.c)
     allowed.add(pod.fileoff(built, pod.CLEAR_SITE))                                                      # dmr_serverstart's deque_clear call (jal sh_clear_queue)
     allowed.add(pod.fileoff(built, pod.UPDATE_SITE))                                                     # update_firmware's version compare operand (docs/modules/version.md)

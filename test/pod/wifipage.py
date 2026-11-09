@@ -611,7 +611,7 @@ def asset_tests(ctx):
     expect(len(wifi_rows) == 1 and wifi_rows[0].action == pod_pages.ACT_STOCK and wifi_rows[0].arg == pod_pages.STOCK_WIFI == 0 and pod_pages.STOCK_PAGES[0][0] == 'systemset/wifi_page',
            'Settings > Wi-Fi is still the stock row (its value shows On / Off), arg 0')
     src = open(os.path.join(ROOT, 'patch', 'm1plus.c')).read()
-    expect(re.search(r'row->action == ACT_STOCK\) \{\s*if \(row->arg == 0 /\* STOCK_WIFI \*/ && wifipage_open\(\) == 0\)\s*return RET_OK;[^\n]*\n\s*pod_open_stock\(\s*POD_STOCK\[row->arg\]\.name,\s*POD_STOCK\[row->arg\]\.window\)', src),
+    expect(re.search(r'row->action == ACT_STOCK\) \{\s*if \(row->arg == 0 /\* STOCK_WIFI \*/ && wifipage_open\(\) == 0\)\s*return RET_OK;[^\n]*\n[\s\S]{0,400}?pod_open_stock\(\s*POD_STOCK\[row->arg\]\.name,\s*POD_STOCK\[row->arg\]\.window\)', src),
            'the row opens our page, and the stock page where it will not open')
     expect(not any(k.startswith('ACT_') and 'WIFI' in k for k in vars(pod_pages)), 'no action id was added (the Wi-Fi row is the stock row) and the Developer page has no Wi-Fi switch')
     # the texts in every language

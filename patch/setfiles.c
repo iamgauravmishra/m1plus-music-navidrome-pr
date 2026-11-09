@@ -55,6 +55,7 @@ static const struct sf_file sf_files[] = {
     {IP_THEME_FILE, K_CHAR},
     {ACCENT_FILE, K_CHAR},
     {BG_FILE, K_CHAR},
+    {LK_LAYOUT_FILE, K_CHAR},
     {AZRAIL_FILE, K_CHAR},
     {AZHEAD_FILE, K_CHAR},
     {SHELF_FILE, K_CHAR},
