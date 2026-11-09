@@ -1050,16 +1050,19 @@ def library_tests(ctx, on_row):
     cf_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
     LAND, SORT = '/mnt/data/m1plus/coverflow-landscape', SORT_FILE
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
+    vk_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_VOLKEYS)
+    vsw, VK = f'pod_switch{vk_i}', '/mnt/data/m1plus/coverflow-volume-keys'
     sw = f'pod_switch{land_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Volume Buttons', P.ACT_VOLKEYS), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and P.row_kind(C.rows[0]) == 'action',
-           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, then the List Navigation switches (Index Rail, Section Headers), Landscape (switch) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, then the List Navigation switches (Index Rail, Section Headers), Landscape and Volume Buttons (switches, the second with its note) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
 
-    def open_lib(land=None, language=None):
+    def open_lib(land=None, language=None, vk=None):
         m = Machine()
         m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(
-            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw])}
+            ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [sw, vsw, 'pod_note1_t'])}
         if land is not None: m.fs[LAND] = land
+        if vk is not None: m.fs[VK] = vk
         if language: m.set_language(language)
         m.call(on_row, a0=rows_s + 12 * cf_i, count=3000000)
         return m
@@ -1085,6 +1088,35 @@ def library_tests(ctx, on_row):
     m.click(f'pod_row{land_i}')
     expect(m.fs.get(LAND) == b'1\n' and not any(c[0] == 'image_base_set_image' for c in m.calls) and LAND + '.tmp' not in m.fs,
            'a failed write changes neither the file nor the switch')
+
+    # Volume Buttons: its own setting file (the Cover Flow page reads it), a switch with a note below, off by default
+    layout = [f'{type(x).__name__}:{getattr(x, "label", getattr(x, "text", ""))}' for x in C.layout]
+    expect(layout[layout.index('Row:Landscape'):][:3] == ['Row:Landscape', 'Row:Volume Buttons', 'Note:In Cover Flow, the volume buttons move between albums.'] and P.ACT_VOLKEYS == 89
+           and P.ACT_VOLKEYS in P.SWITCH_ACTIONS and P.row_kind(C.rows[vk_i]) == 'switch', f'Volume Buttons is a switch row (89) right below Landscape, with its note ({layout})')
+    m = open_lib()
+    expect(('label_set_line_wrap', m.widgets['pod_note1_t'], 1) in m.calls, 'the note, a plain label, has its line wrap on')
+    # generic: the page table carries a bit per wrapping note (Note.lines > 1), never one for a one-line note, and open_page wraps exactly those
+    notes = [x for x in C.layout if isinstance(x, P.Note)]
+    expect(C.wrap_notes() == sum(1 << n for n, x in enumerate(notes) if x.lines > 1) and C.wrap_notes() == 0b10
+           and P.PEQ_PAGE.wrap_notes() == 0b10 and P.PEQP_PAGE.wrap_notes() == 1 and P.TENPREAMP_PAGE.wrap_notes() == 1, 'every Note with lines > 1 is a wrap bit of its page: Library note 1 (after the List Navigation note), the Equalizer hint, the skipped-lines note, the Preamp note')
+    expect([c[1] for c in m.calls if c[0] == 'label_set_line_wrap'] == [m.widgets['pod_note1_t']], 'only the wrapping note is wrapped when the Library page opens')
+    expect(('image_base_set_image', m.widgets[vsw], 'sset_off') in m.calls, 'Volume Buttons is off with nothing saved')
+    for data, img in ((b'1\n', 'sset_on'), (b'1', 'sset_on'), (b'x', 'sset_off'), (b'', 'sset_off'), (b'0\n', 'sset_off')):
+        m = open_lib(vk=data)
+        expect(('image_base_set_image', m.widgets[vsw], img) in m.calls, f'saved {data!r}: the Volume Buttons switch opens {img[5:]}')
+    m = open_lib()
+    m.click(f'pod_row{vk_i}')
+    expect(m.fs.get(VK) == b'1\n' and VK + '.tmp' not in m.fs and ('rename', VK + '.tmp', VK) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
+           and ('image_base_set_image', m.widgets[vsw], 'sset_on') in m.calls and LAND not in m.fs, 'a tap turns it on: written atomically, the switch on, Landscape untouched')
+    m.click(f'pod_row{vk_i}')
+    expect(m.fs.get(VK) == b'0\n' and ('image_base_set_image', m.widgets[vsw], 'sset_off') in m.calls, 'and off again')
+    m = open_lib(vk=b'1\n'); m.fail.add(('write', VK + '.tmp'))
+    m.click(f'pod_row{vk_i}')
+    expect(m.fs.get(VK) == b'1\n' and not any(c[0] == 'image_base_set_image' for c in m.calls) and VK + '.tmp' not in m.fs, 'a failed write changes neither the file nor the switch')
+    m = open_lib(); m.click(f'pod_row{land_i}')
+    expect(VK not in m.fs, 'the Landscape switch does not touch the volume keys file')
+    for loc in pod_i18n.LOCALES:
+        expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Volume Buttons', 'In Cover Flow, the volume buttons move between albums.')), f'the Volume Buttons row and its note have a text in {loc}')
 
     expect('m1plus_albumorder' not in [p.key for p in P.PAGES] and 'Album Order' not in [r.label for r in C.rows], 'no Album Order row and no picker page: the order is the Albums "..." card\'s')
 

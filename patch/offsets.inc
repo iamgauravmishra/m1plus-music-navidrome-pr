@@ -176,7 +176,12 @@
 #define GLYPH_FORMAT_ALPHA 0    /* glyph_t: x,y s16, w,h,advance u16 @0..9, format u8 @0xa (0 = 8 bit alpha, rows w bytes), pitch u8, data @0xc */
 
 /* Pointer events (Cover Flow's touch layer, the Albums grid) */
-#define EVT_POINTER_DOWN 0xff   /* input_device_status_on_input_event jump table @0x88f120 */
+#define EVT_KEY_DOWN 0x10f      /* widget_on_keydown tests 0x10f @0x670974; 0x110 is KEY_LONG_PRESS (@0x6a497c), not KEY_DOWN */
+#define EVT_KEY_UP 0x113        /* home_page_init binds on_wm_keyup_fun 0x4cd9ac with it (@0x534fbc); dialog_volume_dialog_init binds its window handler 0x47e330 (@0x47e494) */
+#define EV_KEY 0x18             /* the key event's code: on_wm_keyup_fun reads 0x18($a1) (0x4cda0c) */
+#define KEY_VOL_UP 0xdc         /* on_wm_keyup_fun, the volume dialog handler 0x47e330 */
+#define KEY_VOL_DOWN 0xdd
+#define EVT_POINTER_DOWN 0xff  /* input_device_status_on_input_event jump table @0x88f120 */
 #define EVT_POINTER_MOVE 0x101
 #define EVT_POINTER_UP 0x103
 #define EVT_POINTER_ABORT 0x107 /* widget_on_pointer_up/move dispatch it @0x6719b8 */

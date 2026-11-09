@@ -309,6 +309,7 @@ static struct {
      * the press stopped a snap animation; the greatest excursion from the down point (either axis); the
      * offset the press found; the recent samples for the fling velocity (a ring, the newest at sample) */
     int built; /* the covers screen's widgets exist (once per page) */
+    int vk_taken; /* 1 from a volume key press this page took until its release */
     int dragging, active, interrupted, reach, down_x, down_y, origin, base_off;
     int sample, samples, sx[CF_SAMPLES], st[CF_SAMPLES];
     /* the snap animation: from and to offsets, its start (time_now_ms) and length, and its timer */
@@ -1352,7 +1353,7 @@ static int on_destroy(void *ctx, void *e) {
     stop_timer();
     snap_stop();
     if (cf.dragging) widget_ungrab(cf.covers, cf.input);
-    cf.dragging = 0;
+    cf.dragging = cf.vk_taken = 0;
     build_end();
     fx_close();
     if (cf.saved_album && !cf.scoped) position_save(cf.saved_album);
@@ -1370,11 +1371,52 @@ static int on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* The hardware volume buttons (Settings > Library > Cover Flow > Volume Buttons, VOLKEYS_FILE; docs/modules/coverflow.md "Volume buttons").
+ * Stock never changes the volume from the key handler: on_wm_keyup_fun (wm EVT_KEY_UP, 0x4cd9ac) only opens the volume dialog, and that
+ * dialog's own window handler (0x47e330) is what steps the volume and returns RET_STOP. The same shape here: a window-level handler on the
+ * page, so a taken key returns RET_STOP and the wm handler never runs. Taken only while the switch is on, the screen is lit, the covers screen
+ * is up and no finger is down; everything else is RET_OK and stock runs unchanged. The step is on KEY_DOWN (auto-repeat, if the kernel sends
+ * it, keeps stepping); the KEY_UP of a taken press is swallowed too, any other KEY_UP passes. ROTATEMODE 1 swaps the two keys as stock does
+ * (0x4cd9f8, 0x47e340). Volume down is the next album (to the right), volume up the previous one. */
+static int volkeys_on(void) { return set_read(VOLKEYS_FILE, 0) == '1'; }
+
+int coverflow_volkeys(void) { return volkeys_on(); }
+
+int coverflow_volkeys_toggle(void) {
+    int next = !volkeys_on();
+    return home_write_atomic(VOLKEYS_FILE, VOLKEYS_TMP, next ? "1\n" : "0\n") == 0 ? next : -1;
+}
+
+static int on_volkey(void *ctx, void *e) {
+    int type, key, h;
+    (void)ctx;
+    if (!e) return RET_OK;
+    type = pe(e, 0), key = pe(e, EV_KEY);
+    if (key != KEY_VOL_UP && key != KEY_VOL_DOWN) return RET_OK;
+    if (type == EVT_KEY_UP) {
+        if (!cf.vk_taken) return RET_OK;
+        cf.vk_taken = 0;
+        return RET_STOP;
+    }
+    if (type != EVT_KEY_DOWN) return RET_OK;
+    if (*(volatile int *)ROTATEMODE == 1) key = key == KEY_VOL_UP ? KEY_VOL_DOWN : KEY_VOL_UP;
+    h = stride();
+    if (!pod_screen_lit() || cf.screen != CF_COVERS || !shelf_up() || cf.dragging || h <= 0 || !volkeys_on())
+        return RET_OK;
+    /* from the destination of a running snap (so quick presses add up), else from the committed album; bound() stops at the ends */
+    snap((cf.snap_timer ? cf.snap_to / h : 0) + (key == KEY_VOL_DOWN ? -1 : 1));
+    cf.vk_taken = 1;
+    reset_poweroptions_timer(1, 1, 1); /* stock's key handler, which does this for the keys it handles, does not run */
+    return RET_STOP;
+}
+
 /* The page and its widgets, everything hidden that waits for a screen; -1 if it did not open. */
 static int open_page(void) {
     cf.win = window_open("m1plus_cover");
     if (!cf.win) return -1;
     widget_on(cf.win, EVT_DESTROY, on_destroy, (void *)0);
+    widget_on(cf.win, EVT_KEY_DOWN, on_volkey, (void *)0);
+    widget_on(cf.win, EVT_KEY_UP, on_volkey, (void *)0);
     pod_bind(cf.win, "btn_return", on_back, (void *)0);
     pod_bind(cf.win, "btn_backtoplayer", pod_on_player, (void *)0);
     cf.covers = widget_lookup(cf.win, "view_covers", 1);

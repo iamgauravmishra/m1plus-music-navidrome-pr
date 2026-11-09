@@ -49,6 +49,9 @@
 #define LANDSCAPE_FILE \
     "/mnt/data/m1plus/coverflow-landscape" /* "1" = Cover Flow opens in landscape, anything else portrait (the default) */
 #define LANDSCAPE_TMP "/mnt/data/m1plus/coverflow-landscape.tmp"
+#define VOLKEYS_FILE \
+    "/mnt/data/m1plus/coverflow-volume-keys" /* "1" = the volume keys step Cover Flow, anything else or missing off (the default) */
+#define VOLKEYS_TMP "/mnt/data/m1plus/coverflow-volume-keys.tmp"
 #define OLD_ORDER_FILE \
     "/mnt/data/m1plus/album-order" /* the retired Settings > Library > Album Order ("0" Title, else Artist): cc_sort_mode moves it into ALBUMS_SORT_FILE once and deletes it */
 #define OLD_ORDER_TMP "/mnt/data/m1plus/album-order.tmp"

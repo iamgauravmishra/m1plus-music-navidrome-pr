@@ -333,9 +333,23 @@ def run(ctx):
                     need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(vt, ST.VALUE_PX) + 6, ST.VALUE_MAX)
                     if need > room + (ST.TEXT_X - ST.CM - ST.PAD if r.action == pod_pages.ACT_REGION else 0): cards_over.append((page.key, r.label, vk, loc, need, room))
             for node in tree.walk():
-                if node.name.startswith(('pod_sec', 'pod_note')) and node.name.endswith('_t'):
+                if node.name.startswith(('pod_sec', 'pod_note')) and node.name.endswith('_t') and node.type == 'hscroll_label':   # a one-line header or note: one line
                     px = int(node.get('style:normal:font_size'))
                     if width(tr_text(loc, pod_i18n.key_for(pod_i18n.shown_english(node))), px) > node.w - 4: cards_over.append((page.key, node.name, loc, px))
+    # every wrapping note (Note.lines > 1, a plain label) of every generated settings page wraps to at most `lines` lines of its label's width, in every language
+    wrap_seen = 0
+    for page in [p for p in pod_pages.PAGES if p.layout is not None]:
+        tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', page.key + '.bin'), 'rb').read())
+        for n, note in enumerate(x for x in page.layout if isinstance(x, pod_pages.Note)):
+            node = tree.find(f'pod_note{n}_t')
+            if note.lines < 2:
+                if node.type != 'hscroll_label': cards_over.append((page.key, node.name, 'one-line note is not an hscroll_label'))
+                continue
+            wrap_seen += 1
+            px = int(node.get('style:normal:font_size'))
+            for loc in LOC:
+                if node.type != 'label' or wrapped(tr_text(loc, pod_i18n.key_for(pod_i18n.shown_english(node))), px, node.w - 4) > note.lines: cards_over.append((page.key, node.name, loc, px, 'wrap'))
+    expect(wrap_seen >= 4, f'the wrapping notes were found ({wrap_seen})')
     expect(not cards_over, f'the Settings value rows (label and value), headers and notes fit in all 13 languages ({cards_over[:40]})')
     # The Custom Wallpaper page (a Release Notes page): the heading fits its 288 px line at 22 px in every language (the paragraphs wrap)
     head_over = [(loc, tr_text(loc, 'Add Your Own Pictures')) for loc in LOC if width(tr_text(loc, 'Add Your Own Pictures'), 22) > 288]

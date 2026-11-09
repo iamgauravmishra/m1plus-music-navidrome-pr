@@ -888,8 +888,8 @@ def preset_page_tests(ctx):
     expect(ptext(m, 'pod_gr_top') == ['+18'] and ptext(m, 'pod_gr_bot') == ['−18'], f'a +14 dB boost: the scale goes to +18 / −18 ({ptext(m, "pod_gr_top")})')
     nt = m.lookups[(m.widgets['pod_note0'], 'pod_note0_t')]
     note = [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == nt]
-    expect(note == ['2 lines not supported were skipped.'] and m.props.get((m.widgets['pod_note0'], 'visible')) == 1 and [c for c in m.calls if c[0] == 'label_set_line_wrap' and c[1] == nt]
-           and m.props.get((m.widgets['pod_gap1'], 'visible')) == 0, f'the skipped lines: the note shows, wrapping, in place of the gap before the Rename / Delete card ({note})')
+    expect(note == ['2 lines not supported were skipped.'] and m.props.get((m.widgets['pod_note0'], 'visible')) == 1
+           and m.props.get((m.widgets['pod_gap1'], 'visible')) == 0, f'the skipped lines: the note shows in place of the gap before the Rename / Delete card ({note})')
 
     # the graph: one bitmap, the card baked in, against the model pixel by pixel; the curve against the response
     expect([c for c in m.calls if c[0] == 'bitmap_create_ex'] == [('bitmap_create_ex', 300, 170)] and len(m.bitmaps) == 1, 'one 300 x 170 bitmap')

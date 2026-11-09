@@ -30,6 +30,7 @@ enum {
     ACT_STARTUP = 10,
     ACT_ALBUMS = 11,
     ACT_LANDSCAPE = 12,
+    ACT_VOLKEYS = 89,
     ACT_SHOT = 14,
     ACT_REBUILD = 15,
     ACT_SHELF = 16,
@@ -136,6 +137,8 @@ struct pod_page {
     const char *asset; /* window resource name (ui/<asset>.bin) */
     const struct pod_row *rows;
     int count;
+    unsigned
+        wrap_notes; /* bit n: the page's note pod_note<n>_t is a wrapping (plain) label, Note lines > 1: its wrap is turned on as the page opens */
 };
 
 struct pod_stock {
@@ -157,8 +160,8 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 42 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 42, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 43 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 43, /* the Unsupported Files count (setfiles_old_count), above those rows */
     INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
 };
 
@@ -467,7 +470,7 @@ struct swctx {
     int action;
     void *img;
 };
-static struct swctx sw_slot[12] __attribute__((section(".scratch")));
+static struct swctx sw_slot[13] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
     if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
@@ -507,6 +510,7 @@ static int switch_state(int action) {
            : action == ACT_AZHEAD   ? azhead_setting()
            : action == ACT_LOCKON   ? lk_enabled()
            : action == ACT_LOCKTIME ? lk_time()
+           : action == ACT_VOLKEYS  ? coverflow_volkeys()
                                     : coverflow_landscape();
 }
 
@@ -525,6 +529,7 @@ static int on_switch(void *ctx, void *e) {
          : s->action == ACT_AZHEAD   ? azhead_toggle()
          : s->action == ACT_LOCKON   ? lk_enabled_toggle()
          : s->action == ACT_LOCKTIME ? lk_time_toggle()
+         : s->action == ACT_VOLKEYS  ? coverflow_volkeys_toggle()
                                      : coverflow_landscape_toggle(); /* -1: not saved, unchanged */
     if (on >= 0) switch_show(s->img, on);
     if (s->action == ACT_DAILY) regen_show();
@@ -545,6 +550,7 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
             : row->action == ACT_AZHEAD   ? 9
             : row->action == ACT_LOCKON   ? 10
             : row->action == ACT_LOCKTIME ? 11
+            : row->action == ACT_VOLKEYS  ? 12
                                           : 0;
     snprintf(name, sizeof name, "pod_switch%u", i);
     sw_slot[k].action = row->action;
@@ -717,7 +723,8 @@ static void page_refresh(void *win, const struct pod_page *page) {
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
             row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
-            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME) {
+            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME ||
+            row->action == ACT_VOLKEYS) {
             snprintf(name, sizeof name, "pod_switch%d", i);
             switch_show(widget_lookup(win, name, 1), switch_state(row->action));
         } else if (row->action == ACT_CCLIST || row->action == ACT_SFOLD) {
@@ -822,6 +829,14 @@ static int open_page(int index, int as_home) {
     win = window_open(page->asset);
     if (!win) return -1;
     if (index == POD_FILES_PAGE) setfiles_open(); /* the files, read once as the page opens */
+    for (i = 0; i < 32; i++)
+        if (page->wrap_notes >> i & 1) { /* a note of more than one line is a plain label: its wrap is on at run time */
+            char nm[16];
+            void *note;
+            snprintf(nm, sizeof nm, "pod_note%d_t", i);
+            note = widget_lookup(win, nm, 1);
+            if (note) label_set_line_wrap(note, 1);
+        }
     if (index == POD_CACHE_PAGE) dur_stat_open(); /* the track table's header, read once as the page opens */
     if (index !=
         POD_PEQBAND_PAGE) { /* the band page asks about unsaved changes first: it binds both itself (patch/peqband.c) */
@@ -833,7 +848,8 @@ static int open_page(int index, int as_home) {
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
             row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
-            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME)
+            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME ||
+            row->action == ACT_VOLKEYS)
             bind_switch(win, i, row), refresh = 1;
         else {
             if (row->action != ACT_INFO) pod_bind(win, row->name, on_row, row); /* an information row takes no tap */

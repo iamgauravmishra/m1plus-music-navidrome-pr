@@ -92,6 +92,27 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   `/mnt/data/m1plus/coverflow-landscape` (`1` landscape, anything else or missing portrait; written atomically by the switch
   (`coverflow_landscape_toggle`), read when the covers screen is first built (`use_land`); shared by the main and artist pages). Without a depth frame (flat fallback) there is
   no landscape, whatever the setting says. A commit redraws the frame (the captions are in it).
+- **Volume buttons.** **Settings > Library > Cover Flow > Volume Buttons** is off by default
+  (`/mnt/data/m1plus/coverflow-volume-keys`: `1` on, anything else or missing off;
+  `coverflow_volkeys` / `coverflow_volkeys_toggle`, atomic write). On the main and artist shelves,
+  volume down steps one album right and volume up one left, including landscape. Quick presses
+  accumulate from the running snap's destination; the ends stop without wrapping. Captions,
+  textures and position memory follow the same commit as touch navigation.
+  The window binds `on_volkey` to `EVT_KEY_DOWN` / `EVT_KEY_UP` (`0x10f` / `0x113`), with no hook
+  or binary edit. **`0x110` is long press, not key down**: pinned stock evidence in `VOLKEYS_PINS`
+  (`tools/pod.py`) includes `widget_on_keydown`'s test at `0x670974`, the short-key injection at
+  `0x5ffaf8`, and the held-key timer at `0x6a497c`. The window's `RET_STOP` prevents the wm's
+  `on_wm_keyup_fun` (`0x4cd9ac`) from opening the volume dialog; its own window handler (`0x47e330`)
+  is the stock precedent. The code is at event `+0x18` (`0xdc` up, `0xdd` down);
+  `ROTATEMODE == 1` (`0xa05a9c`) swaps them as stock does.
+  Keys are taken only with the switch on, the backlight lit, the covers screen built and no
+  finger down. A taken down resets the power timers `(1, 1, 1)`; its release is swallowed and
+  clears `cf.vk_taken` (also cleared at destroy). Other conditions and keys pass to stock.
+  Pod Cover Flow and the Preparing screen keep stock volume behaviour. The one-second long
+  press adds no step; repeated downs step only if supplied by the device (unverified, CF-VOL).
+  Tests: `volkeys_tests` and `keyroute_tests` in `test/pod/coverflow.py` (literal device events,
+  stock key routing and synchronous emitter returns), Library rows in `test/pod/menu.py`,
+  note wrapping in `test/pod/i18n.py`. Hardware behaviour remains unverified.
 - **Captions.** `label_album` / `label_artist` are `hscroll_label`s configured as Now Playing's info
   lines (`loop`, `yoyo`, `lull` 3000 ms, centred, `ellipses`, 22 px white / 18 px `#AAAAAA`, in 16 px
   margins): a long title scrolls back and forth with a pause at each end, a short one is centred

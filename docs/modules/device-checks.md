@@ -45,6 +45,13 @@ in [history](../history.md); feature modules retain their detailed edge cases.
   pressed rows, sharp tiles and a large library. [Details](albums.md)
 - **CF-01 — Cover Flow:** portrait/landscape, artist scope, ends, drag/fling/snap, side/centre
   taps, first cache build, cancel and rebuild. The navbar stays usable. [Details](coverflow.md)
+- **CF-VOL — Cover Flow volume buttons:** Settings > Library > Volume Buttons on. In Cover Flow
+  (portrait, then landscape; the main shelf and an artist's) volume down moves one album right and
+  volume up one left, quick presses add up, the ends stop (no wrap), no volume dialog appears and
+  the volume does not change. Note whether holding a button keeps stepping (kernel key repeat).
+  Pod Cover Flow still changes the volume. Switch off: the volume dialog and volume change are
+  back. Screen off: a press wakes/behaves as stock. Also with `ROTATEMODE=1` (up/down swapped).
+  [Details](coverflow.md)
 - **SONG-01 — Songs:** title collapse, pinned letters, all rail sections/bubble, search, each
   sort, select-all, add/delete and return position. Check a large library; covers load after
   scrolling stops. [Details](songs.md)

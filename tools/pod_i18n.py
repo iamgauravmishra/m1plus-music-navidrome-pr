@@ -315,6 +315,15 @@ TEXT = dict([
     # the Settings > Cover Flow sub-page (landscape switch; sort order, valued Artist or Album: "Album" is the stock key 'album')
     _t('Landscape', '横屏', '橫向', '横向き', '가로 모드', 'Paysage', 'Querformat',
        'Horizontal', 'Orizzontale', 'แนวนอน', 'Poziomo', 'Горизонтально', 'Горизонтально'),
+    # Settings > Library > Cover Flow > Volume Buttons (patch/coverflow.c on_volkey) and its note
+    _t('Volume Buttons', '音量键', '音量鍵', '音量ボタン', '볼륨 버튼', 'Boutons de volume', 'Lautstärketasten',
+       'Teclas de volumen', 'Tasti volume', 'ปุ่มปรับเสียง', 'Przyciski głośności', 'Кнопки громкости', 'Кнопки гучності'),
+    _t('In Cover Flow, the volume buttons move between albums.', '在封面流中，音量键用于切换专辑。', '在封面流中，音量鍵用於切換專輯。',
+       'カバーフローでは、音量ボタンでアルバムを切り替えます。', '커버 플로우에서 볼륨 버튼으로 앨범을 넘깁니다.',
+       "Dans Cover Flow, les boutons de volume changent d'album.", 'In Cover Flow wechseln die Lautstärketasten das Album.',
+       'En Cover Flow, los botones de volumen cambian de álbum.', 'In Cover Flow, i tasti volume cambiano album.',
+       'ใน Cover Flow ปุ่มปรับเสียงใช้เลื่อนระหว่างอัลบั้ม', 'W Cover Flow przyciski głośności przełączają albumy.',
+       'В Cover Flow кнопки громкости переключают альбомы.', 'У Cover Flow кнопки гучності перемикають альбоми.'),
     _t('Artist', '歌手', '歌手', 'アーティスト', '아티스트', 'Artiste', 'Künstler',
        'Artista', 'Artista', 'ศิลปิน', 'Wykonawca', 'Исполнитель', 'Виконавець'),
     # Settings > Library > Rebuild Covers: the row, and the message of the stock confirm dialog (a centred white 20 px label

@@ -76,6 +76,17 @@ PLAYING_INIT_PROLOGUE = (0x3c1c004c, 0x279c6cec, 0x0399e021)
 
 # The timed cover page (patch/bigcover.c, docs/modules/bigcover.md, payload hook 23): bigcover_page_init, built by the navigator's page-init dispatcher whenever the page opens (Now Playing's
 # 500 ms timer after ~10 s is the only opener). m1plus_bigcover_init runs the stock init, then gives the page a 320 px cover of its own.
+VOLKEYS_PINS = (   # (address, stock word, what it proves): the hardware volume keys patch/coverflow.c on_volkey takes on its own page (docs/modules/coverflow.md "Volume buttons")
+    (0x670974, 0x2403010f, 'widget_on_keydown: ordinary KEY_DOWN is 0x10f'),
+    (0x5ffaf8, 0x2405010f, 'short key injection: key_event_init uses KEY_DOWN 0x10f'),
+    (0x6a497c, 0x24050110, 'held-key timer: key_event_init uses KEY_LONG_PRESS 0x110'),
+    (0x534fbc, 0x24050113, 'home_page_init: widget_on(wm, 0x113 EVT_KEY_UP, on_wm_keyup_fun)'), (0x534fd8, 0x24050110, 'home_page_init: widget_on(wm, 0x110 KEY_LONG_PRESS, on_wm_keylong_fun)'),
+    (0x4cd9f8, 0x8f82ab4c, 'on_wm_keyup_fun: lw v0, GOT ROTATEMODE (0xa05a9c)'), (0x4cda04, 0x14620007, 'on_wm_keyup_fun: ROTATEMODE != 1 skips the swap'),
+    (0x4cda0c, 0x8ca20018, 'on_wm_keyup_fun: the key code is the event field 0x18'), (0x4cdaf0, 0x240300dc, 'on_wm_keyup_fun: 0xdc (volume up)'),
+    (0x4cdaf8, 0x240500dd, 'on_wm_keyup_fun: 0xdd (volume down)'), (0x4cdb00, 0x240200dd, 'on_wm_keyup_fun: 0xdc becomes 0xdd under ROTATEMODE'),
+    (0x47e340, 0x8f82ab4c, 'volume dialog handler 0x47e330: reads ROTATEMODE the same way'), (0x47e3c8, 0x2402000b, 'volume dialog handler: returns RET_STOP (0xb) after stepping the volume'),
+    (0x47e494, 0x24050113, 'dialog_volume_dialog_init: widget_on(window, 0x113, handler 0x47e330)'),
+)
 BIGCOVER_INIT = 0x529a24
 BIGCOVER_INIT_PROLOGUE = (0x3c1c004e, 0x279ca4ac, 0x0399e021)
 BIGCOVER_PINS = (   # (address, stock word, what it proves)
@@ -886,6 +897,7 @@ PICKER_PINS = (
 # Stock data the payload reads or writes, by absolute address. Exported objects are checked
 # against .dynsym; the two unnamed ones carry the code that proves them.
 DATA = {
+    'ROTATEMODE':         (0xa05a9c, None),   # int, config.ini ROTATEMODE (0/1); 1 swaps the volume keys 0xdc <-> 0xdd (VOLKEYS_PINS)
     'BACKLIGHT_STATUS':   (0x97cae4, 'backlight_status'), # byte: 0 off, 1 lit (awake_screen)
     'PDEQ_SHOWLIST':      (0xa045d8, 'pdeq_showlist'),   # deque_t * of the loaded list
     'PDEQ_TOOLS_TMP':     (0xa03964, 'tools_pdeq_directory'),   # deque_t * the stock song row callback fills (toolsQueryDbTable clears it first; loadLocalClassList assigns it to the show list, then clears it)
@@ -1433,6 +1445,8 @@ def gen_stock_h(out, demo_path):
     h.append('extern int coverflow_open(void);')
     h.append('extern int coverflow_landscape(void);')
     h.append('extern int coverflow_landscape_toggle(void);')
+    h.append('extern int coverflow_volkeys(void);')
+    h.append('extern int coverflow_volkeys_toggle(void);')
     # the customisable menu (patch/menu.c): its item count, the default shown prefix and the row geometry
     h.append(f'#define POD_MENU_ITEMS {len(pod_pages.ITEMS)}')
     h.append(f'#define POD_MENU_DEFAULT {len(pod_pages.DEFAULT_MENU)}')   # the default menu: this many items ...
@@ -1484,7 +1498,7 @@ def gen_stock_h(out, demo_path):
     h.append('static const struct pod_page POD_PAGES[] = {')
     for pi, page in enumerate(pages):
         rows = f'pod_rows_{pi}' if page.rows else '0'
-        h.append(f'    {{"{page.key}", {rows}, {len(page.rows)}}},')
+        h.append(f'    {{"{page.key}", {rows}, {len(page.rows)}, {page.wrap_notes()}u}},')
     h.append('};')
     h.append(f'#define POD_PAGE_COUNT {len(pages)}')
     h.append(f'#define POD_ENTRY_ID {pod_pages.HOME_ENTRY}')
@@ -1754,6 +1768,9 @@ def patch_demo(raw, payload, ps, demo_path):
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     target5 = ps['m1plus_bigcover_init']
     check(BASE <= target5 < BASE + len(payload), 'bigcover init entry symbol outside payload')
+    for a, old, what in VOLKEYS_PINS:   # no hook: the volume keys are taken on our own page; the premises must still hold
+        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
+        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     for a, old, what in BIGCOVER_PINS:
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
