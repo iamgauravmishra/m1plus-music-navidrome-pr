@@ -673,6 +673,9 @@ TEXT = dict([
     _t('Latest Episode', '最新一集', '最新一集', '最新エピソード', '최신 에피소드', 'Dernier épisode', 'Neueste Folge', 'Último episodio', 'Ultimo episodio', 'ตอนล่าสุด', 'Najnowszy odcinek', 'Последний выпуск', 'Останній випуск'),
     _t('Episodes', '单集', '單集', 'エピソード', '에피소드', 'Épisodes', 'Folgen', 'Episodios', 'Episodi', 'ตอน', 'Odcinki', 'Выпуски', 'Випуски'),
     _t('Playback Speed', '播放速度', '播放速度', '再生速度', '재생 속도', 'Vitesse de lecture', 'Wiedergabetempo', 'Velocidad', 'Velocità di riproduzione', 'ความเร็วในการเล่น', 'Prędkość odtwarzania', 'Скорость', 'Швидкість відтворення'),
+    _t('Episode Order', '节目顺序', '節目順序', 'エピソードの順序', '에피소드 순서', 'Ordre', 'Reihenfolge', 'Orden', 'Ordine', 'ลำดับตอน', 'Kolejność', 'Порядок', 'Порядок'),   # (the row shares its line with a value: the longer wordings of fr, de, es, it, pl, ru and uk are cut to one word, as the Region row's)
+    _t('Newest First', '最新优先', '最新優先', '新しい順', '최신순', 'Plus récents', 'Neueste zuerst', 'Más recientes', 'Più recenti', 'ใหม่สุดก่อน', 'Najnowsze', 'Сначала новые', 'Спочатку нові'),
+    _t('Oldest First', '最早优先', '最舊優先', '古い順', '오래된순', 'Plus anciens', 'Älteste zuerst', 'Más antiguos', 'Più vecchi', 'เก่าสุดก่อน', 'Najstarsze', 'Сначала старые', 'Спочатку старі'),
     _t('Refresh Feed', '刷新订阅源', '更新訂閱源', 'フィードを更新', '피드 새로고침', 'Actualiser', 'Aktualisieren', 'Actualizar', 'Aggiorna', 'รีเฟรชฟีด', 'Odśwież', 'Обновить', 'Оновити'),
     _t('Select Episodes', '选择节目', '選擇節目', 'エピソードを選択', '에피소드 선택', 'Sélectionner des épisodes', 'Folgen auswählen', 'Seleccionar episodios', 'Seleziona episodi', 'เลือกตอน', 'Wybierz odcinki', 'Выбрать выпуски', 'Вибрати випуски'),
     _t('Mark All as Played', '全部标为已播放', '全部標為已播放', 'すべて再生済みにする', '모두 재생함으로 표시', 'Tout marquer comme lu', 'Alle als gehört markieren', 'Marcar todo como reproducido', 'Segna tutto come riprodotto',

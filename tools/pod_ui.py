@@ -469,24 +469,24 @@ def build_podcasts_page(page):
 
 
 # The Show page's bottom sheets (the show's "..." and an episode's), in the style of Now Playing's More sheet (docs/modules/playmore.md): the page dimmed (the Playlists menu's scrim), the
-# 320 px glass from the bottom of the window (pc_sheet5 .. pc_sheet1, a picture for each number of rows: tools/mod_icons.py PC_SHEETS; the payload sets the image
+# 320 px glass from the bottom of the window (pc_sheet6 .. pc_sheet1, a picture for each number of rows: tools/mod_icons.py PC_SHEETS; the payload sets the image
 # and the card's height and place for the rows it shows), PM_ROW_H rows, each a button (transparent, 6 % white pressed) with its 20 px glyph at x PS_SHEET_ICON_X, the label from
 # PS_SHEET_TEXT_X and, for the two rows that have one, the grey value right aligned to PS_SHEET_VALUE_R; a 1 px hairline child on the top of every row but the first (the payload shows it).
-# One widget set serves both sheets: the thirteen rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
+# One widget set serves both sheets: the fourteen rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
 PS_SHEET_ROWS = (('speed', 'pc_ic_speed', 'Playback Speed', True, False), ('refresh', 'pc_ic_refresh', 'Refresh Feed', True, False), ('select', 'pc_ic_select', 'Select Episodes', False, False),
                  ('markall', 'pc_ic_check', 'Mark All as Played', False, False), ('unsub', 'pc_ic_unsub', 'Unsubscribe', False, True),
                  ('dl', 'pc_ic_down', 'Download', False, False), ('rm', 'pc_ic_trash', 'Remove Download', False, False),
                  ('mark', 'pc_ic_check', 'Mark as Played', False, False), ('unmark', 'pc_ic_undo', 'Mark as Unplayed', False, False),
                  ('import', 'pc_ic_import', 'Import from Card', False, False), ('delplayed', 'pc_ic_trash', 'Delete Played Episodes', False, False),
-                 ('export', 'pod_ic_export', 'Export OPML', False, False), ('save', 'pod_ic_save', 'Save Episode', False, False))   # id, glyph, label, has a value, red; import is the Shows level's sheet, select (relabelled Select, or Select Shows) and delplayed the Downloads page's, select and export the Subscriptions page's, save (relabelled Unsave Episode when it is saved) an episode's
+                 ('export', 'pod_ic_export', 'Export OPML', False, False), ('save', 'pod_ic_save', 'Save Episode', False, False), ('order', 'pod_ic_order', 'Episode Order', True, False))   # id, glyph, label, has a value, red; import is the Shows level's sheet, select (relabelled Select, or Select Shows) and delplayed the Downloads page's, select and export the Subscriptions page's, save (relabelled Unsave Episode when it is saved) an episode's
 PS_SHEET_ICON_X, PS_SHEET_TEXT_X, PS_SHEET_VALUE_R, PS_SHEET_VALUE_W, PS_SHEET_GAP = (OFFSETS[k] for k in ('PS_SHEET_ICON_X', 'PS_SHEET_TEXT_X', 'PS_SHEET_VALUE_R', 'PS_SHEET_VALUE_W', 'PS_SHEET_GAP'))   # patch/offsets.inc
 PS_SHEET_RED = '#FF6B6B'
 PS_SHEET_PX = 18   # the labels (Now Playing's More sheet: 18 px)
 
 
 def podcasts_sheet():
-    """(scrim, card) of the Show page's sheets: the card at its tallest (five rows, pc_sheet5), at the bottom of the window."""
-    return sheet_widgets('pg_sh', PS_SHEET_ROWS, 5)
+    """(scrim, card) of the Show page's sheets: the card at its tallest (six rows, pc_sheet6), at the bottom of the window."""
+    return sheet_widgets('pg_sh', PS_SHEET_ROWS, 6)
 
 
 def sheet_widgets(prefix, sheet_rows, tallest):

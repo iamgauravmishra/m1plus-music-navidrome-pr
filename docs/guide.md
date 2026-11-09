@@ -135,7 +135,7 @@ or change volume on its Now Playing screen.
 
 **Podcasts** reads local episodes from `Podcasts/<Show>/` on the card. Open a show, then an
 episode; its button offers Play or Download. Use an episode's **…** menu to mark it played
-or unplayed. To find shows online, connect to Wi-Fi, then use the **Discover** row on the Podcasts page (on unless **Settings → Library → Podcast Discover** is off): the top 25 shows and top 25 episodes of your region (**Settings → Library → Podcast Region**, Automatic by default), the magnifier to search (the Podcasts page's globe opens the same search directly), and **Subscribe** on a show's preview.
+or unplayed. A show's **…** menu has **Episode Order**: **Newest First** (the default) or **Oldest First**, the order of its list and of the queue that follows the episode you start (Oldest First suits a series); a tap switches it. To find shows online, connect to Wi-Fi, then use the **Discover** row on the Podcasts page (on unless **Settings → Library → Podcast Discover** is off): the top 25 shows and top 25 episodes of your region (**Settings → Library → Podcast Region**, Automatic by default), the magnifier to search (the Podcasts page's globe opens the same search directly), and **Subscribe** on a show's preview.
 
 **Wi-Fi Transfer:** turn it on under **System settings → Network Service → Wifi file transfer**,
 then open the address it shows (port 8888)
