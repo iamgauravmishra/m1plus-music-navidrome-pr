@@ -172,7 +172,7 @@ def artists_tests(ctx):
     expect(got[-1] == 'touch_layer', f"the artist's covers take touches ({got})")
 
     # 39b. The Songs button (btn_songs): our Songs page on all the artist's songs. The capsule's left cap on the 214 slot, Now Playing its right cap, the same for
-    #      one album or many (every artist whose stock list had the All songs row); never on the main Cover Flow, a composer's page or while preparing.
+    #      one album or many (every artist or composer whose stock list had the All songs row); never on the main Cover Flow or while preparing.
     tree = awtk_ui.parse(open(cover_asset, 'rb').read())
     flags = lambda w: {k: v for k, v in w.props}
     sb = tree.find('btn_songs')
@@ -181,7 +181,7 @@ def artists_tests(ctx):
            and mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and 'NAV_SONGS_X' not in O,
            'the asset has the Songs button at x 214, 46 wide, hidden and insensitive, with its left-cap glyph and pressed glyph')
     expect(tree.find('btn_allalbums') is None and flags(tree.find('btn_backtoplayer')).get('style:normal:icon') == 'ah_nav_np',
-           'the asset has no All albums button, and Now Playing is the disc (the main Cover Flow and a composer\'s page keep it)')
+           'the asset has no All albums button, and Now Playing is the disc (the main Cover Flow keeps it)')
     def seed(m): m.props[(m.widgets['label_title'], 'x')] = 58; m.props[(m.widgets['label_title'], 'h')] = 22
     def scentre(m):
         b = node(cover_page_tree(m, cover_asset), 'btn_songs')
@@ -920,15 +920,25 @@ def genre_composer_tests(ctx):
     m.calls = []
     m.click('btn_songs', count=900000000)
     npw = m.widgets['btn_backtoplayer']
-    expect(m.props.get((m.widgets['btn_songs'], 'visible')) != 1 and m.props.get((npw, 'style:normal:icon')) != 'ah_nav_play'
-           and not any(c[0] in ('window_open', 'loadAlbumdetailList') or (c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page') for c in m.calls),
-           'a composer\'s page has no Songs button (it runs the artist queries) and Now Playing keeps its disc, and a stray click on it opens nothing')
+    lad = [c[:2] for c in m.calls if c[0] in ('loadAlbumList', 'loadAlbumdetailList')]
+    expect(m.props.get((m.widgets['btn_songs'], 'visible')) == 1 and m.props.get((npw, 'style:normal:icon')) == 'ah_nav_play'
+           and lad[:2] == [('loadAlbumList', O['CLASS_COMPOSERS']), ('loadAlbumdetailList', O['CLASS_COMPOSER_ALBUMS'])]
+           and ('window_open', 'm1plus_songs') in m.calls and m.word(CI) == O['CLASS_14'],
+           f'a composer\'s page has the Songs button too (Now Playing its right cap): our Songs page on the composer\'s songs (0xf005, then 0xff02 on the All songs row: class 0xff14) ({lad})')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    m.calls = []
+    m.tap(O['CF_CX'], count=900000000)
+    expect(('window_open', 'm1plus_songs') in m.calls and not any(c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page' for c in m.calls),
+           'the card: our Songs page on the composer\'s songs, as an artist\'s card')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    m.windows['m1plus_songs'] = 0   # our page will not open: the stock page on the All songs row
+    m.calls = []
     m.tap(O['CF_CX'])
     order = [c[0] for c in m.calls if c[0] in ('loadAlbumList', 'albumcoverinfo_init', 'navigator_to_with_context')][-3:]
     la = [c for c in m.calls if c[0] == 'loadAlbumList']
     expect(order == ['loadAlbumList', 'albumcoverinfo_init', 'navigator_to_with_context'] and la[-1][1] == O['CLASS_COMPOSERS'] and la[-1][3] == 'Bach'
            and ('navigator_to_with_context', 'albuminfo_page', O['CLASS_COMPOSER_ALBUMS'], 2) in m.calls,
-           'the card: the composer into the browsing record again, then albuminfo_page with class 0xff02 and the card row')
+           'the card when our page will not open: the composer into the browsing record again, then albuminfo_page with class 0xff02 and the card row')
     cls, rowi, shown_list = m.opened_album
     expect(m.word(m.deques[shown_list][rowi] + O['REC_ID']) == O['ID_ALL_SONGS'] & 0xffffffff, 'that row is the stock All songs row')
     put_value(m, 1); m.call(PSYMS['on_changed'], count=2000000)
@@ -1083,8 +1093,10 @@ def scoped_albums_tests(ctx):
     expect(any(c[:3] == ('navigator_to_with_context', 'albuminfo_page', O['CLASS_COMPOSER_ALBUMS']) for c in m.calls), 'and his album page opens as a composer\'s (0xff02)')
     m.calls = []
     tap(m, 100, 2 * ROWH + 10)
-    expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_COMPOSER_ALBUMS'], 2) in m.calls and ('window_open', 'm1plus_songs') not in m.calls,
-           'a composer\'s All Songs row is the stock page on the All songs row, as Cover Flow\'s card (no composer songs page)')
+    lad = [c[:2] for c in m.calls if c[0] in ('loadAlbumList', 'loadAlbumdetailList')]
+    expect(('window_open', 'm1plus_songs') in m.calls and lad[-1:] == [('loadAlbumdetailList', O['CLASS_COMPOSER_ALBUMS'])]
+           and not any(c[0] == 'navigator_to_with_context' and c[1] == 'albuminfo_page' for c in m.calls) and m.word(pod.DATA['CLASSINFO'][0]) == O['CLASS_14'],
+           f'a composer\'s All Songs row opens our Songs page on the composer\'s songs (class 0xff14), as Cover Flow\'s card ({lad})')
 
     # a window that will not open: Cover Flow on the artist, as before
     m = artists_machine(); m.call(open_, count=5000000); m.calls = []

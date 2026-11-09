@@ -75,8 +75,8 @@ extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int coverflow_artist(void *artists, unsigned index,
                             unsigned scope); /* patch/coverflow.c: Cover Flow scoped to an artist */
-extern int
-songs_open_artist(void *artist); /* patch/songs.c: our Songs page on all the artist's songs; -1 when it did not open */
+/* patch/songs.c: our Songs page on all the artist's (or composer's: scope CLASS_COMPOSERS) songs; -1 when it did not open */
+extern int songs_open_artist(void *artist, unsigned scope);
 extern void *songs_artist_list(
     void *artist,
     unsigned
@@ -629,10 +629,10 @@ static int al_on_up(void *ctx, void *e) {
     dy = al_abs(I(e, PE_Y) - al.down_y);
     if (dx < AL_TAP_PX && dy < AL_TAP_PX && al_item_of(e) == a) {
         int row = (int)(al.order ? al.order[a] : (unsigned)a); /* the stock row */
-        /* the All Songs tile of an artist: our Songs page on every song (Cover Flow's All albums card; a composer's has none, and a page that
-         * does not open leaves the stock page on the All songs row) */
-        if (al_is_card(deque_at(al.albums, (unsigned)row)) && al.scope == CLASS_ARTISTS &&
-            songs_open_artist(deque_at(al.artist_row, 0)) != -1)
+        /* the All Songs tile of an artist or a composer: our Songs page on every song (Cover Flow's All albums card; a page that does not open
+         * leaves the stock page on the All songs row) */
+        if (al_is_card(deque_at(al.albums, (unsigned)row)) &&
+            songs_open_artist(deque_at(al.artist_row, 0), al.scope) != -1)
             return RET_OK;
         na_note_albums(al.albums, al.order, al.count, al.scope,
                        al.artist_row); /* the order shown, for Continue with Next Album */

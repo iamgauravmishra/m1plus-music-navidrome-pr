@@ -41,8 +41,8 @@
 #include "nextalbum.h"
 #include "common.h"
 
-extern int
-songs_open_artist(void *artist); /* patch/songs.c: our Songs page on all the artist's songs; -1 when it did not open */
+/* patch/songs.c: our Songs page on all the artist's (or composer's: scope CLASS_COMPOSERS) songs; -1 when it did not open */
+extern int songs_open_artist(void *artist, unsigned scope);
 
 /* ===========================================================================
  * The depth renderer (q2-pod, after Rockbox PictureFlow). All integer: 16.16 turns and
@@ -366,10 +366,10 @@ static void *album_at(unsigned i) { return i < album_count() ? cc_row(cf.albums,
 /* The All albums card: the "All songs" row the stock artist query appends (getAlbumByArtist). */
 static int is_card(void *r) { return cf.scoped && r && I(r, REC_ID) == ID_ALL_SONGS; }
 
-/* The artist has songs: the stock list ended with the All songs row (load_artist keeps cf.albums whole, also when the card is dropped from the shelf). An
- * artist's page only: songs_open_artist runs the artist queries (a composer's would be 0xf005 / 0xff02 -> 0xff14). */
+/* The artist (or composer) has songs: the stock list ended with the All songs row (load_artist keeps cf.albums whole, also when the card is dropped from the
+ * shelf); songs_open_artist runs the artist's or the composer's queries (0xf004 / 0xff01 -> 0xff11, 0xf005 / 0xff02 -> 0xff14). */
 static int has_songs(void) {
-    unsigned n = cf.scoped && cf.scope == CLASS_ARTISTS && cf.albums ? deque_size(cf.albums) : 0;
+    unsigned n = cf.scoped && cf.albums ? deque_size(cf.albums) : 0;
     return n && I(deque_at(cf.albums, n - 1), REC_ID) == ID_ALL_SONGS;
 }
 
@@ -992,7 +992,7 @@ static void layout(void) {
 }
 
 /* The artist page's Songs button (the capsule's left cap at NAV_VIEW_X, as the Artists page's switch): shown, Now Playing becomes the capsule's right cap
- * (the asset has the disc, which the main page and a composer's page keep); the title ends before the slot. */
+ * (the asset has the disc, which the main page keeps); the title ends before the slot. */
 static void artist_nav(void) {
     void *title = widget_lookup(cf.win, "label_title", 1), *np = widget_lookup(cf.win, "btn_backtoplayer", 1);
     if (!cf.scoped) return;
@@ -1075,7 +1075,7 @@ static void open_album(int index) {
     if (!r) return;
     snap_stop();
     cf.album = index;
-    if (is_card(r) && has_songs() && songs_open_artist(deque_at(cf.artist_row, 0)) != -1) return;
+    if (is_card(r) && has_songs() && songs_open_artist(deque_at(cf.artist_row, 0), cf.scope) != -1) return;
     if (!cf.scoped) cf.saved_album = cc_album_key(r);
     na_note_albums(cf.albums, cf.order, album_count(), cf.scoped ? cf.scope : 0,
                    cf.scoped ? cf.artist_row : (void *)0); /* the order shown, for Continue with Next Album */
@@ -1092,7 +1092,7 @@ static int on_songs(void *ctx, void *e) {
     if (cf.screen != CF_COVERS || !album_count() || !has_songs())
         return RET_OK; /* (no albums: the page shows no covers and no button) */
     snap_stop();
-    if (songs_open_artist(deque_at(cf.artist_row, 0)) == -1)
+    if (songs_open_artist(deque_at(cf.artist_row, 0), cf.scope) == -1)
         cc_open_album(cf.artist_row, cf.scope, (int)deque_size(cf.albums) - 1);
     return RET_OK;
 }

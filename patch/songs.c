@@ -41,7 +41,7 @@
  *             the Unknown Genre byte) for every query and play, as the stock row tap leaves it; the stock navbar has no Search there, so its card is Select alone.
  *             An artist's songs (Cover Flow's artist page, songs_open_artist) is the same page on class 0xff11: its whole state is the 0x390 byte browsing
  *             record loadAlbumList(0xf004) and loadAlbumdetailList(0xff01, the All songs row) build, which the page snapshots and puts back before every query
- *             and play; the artist is the title and the grey line of a row is its album.
+ *             and play; the artist is the title and the grey line of a row is its album. A composer's songs (songs_open_artist with CLASS_COMPOSERS) are the same on\n *             class 0xff14 (loadAlbumList(0xf005), loadAlbumdetailList(0xff02)), the grey line staying the artist.
  *   albums    Recently Added (class 0xf009) has a View group in the "..." card (Albums / Songs, docs/modules/recent-albums.md): the same page shows the newest-first Albums grid
  *             (patch/grid.c, a second tile ring sg.rg). The grid is read from the full `time_create desc` query (sort_flag 3 through loadLocalClassList(0xf001), the flag put back
  *             at once), copied into at most RV_MAX library album rows (sg.rrow) at the moment of the toggle; the album view reads only that copy and the library's albums, never
@@ -144,7 +144,7 @@ static struct {
     const char *key; /* the title's key (TR), or 0: the title is name */
     char name[0x100]; /* a playlist's name */
     unsigned char ci
-        [CLASSINFO_SIZE]; /* CLASS_ARTIST_SONGS: the browsing record of the artist (CLASSINFO, as the two stock queries left it), put back before every query and play */
+        [CLASSINFO_SIZE]; /* CLASS_ARTIST_SONGS / CLASS_14: the browsing record of the artist or composer (CLASSINFO, as the two stock queries left it), put back before every query and play */
     void *big; /* the large title (sg_title) */
     void *foot; /* the song count under the last row (sg_foot, a label in the content view) */
     void *
@@ -226,8 +226,8 @@ static int sg_genre(void) {
     return sg.cls == CLASS_GENRE_SONGS;
 } /* a genre's songs: the stock navbar has no Search there */
 static int sg_artist(void) {
-    return sg.cls == CLASS_ARTIST_SONGS;
-} /* an artist's songs: Cover Flow's artist page is its other view (a toggle, not a stack) */
+    return sg.cls == CLASS_ARTIST_SONGS || sg.cls == CLASS_14;
+} /* an artist's (or a composer's) songs: Cover Flow's artist page is its other view (a toggle, not a stack) */
 static int sg_recent(void) {
     return sg.cls == CLASS_RECENTADD;
 } /* Recently Added: its card also holds the Albums / Songs rows (the songs or the newest albums) */
@@ -265,7 +265,7 @@ static void sg_classinfo(void) {
         *(int *)(CLASSINFO + CLASSINFO_ARG) = sg.pl_id;
     else if (sg_genre())
         sg_genre_info(sg.name, sg.pl_id);
-    else if (sg.cls == CLASS_ARTIST_SONGS)
+    else if (sg_artist())
         memcpy((void *)CLASSINFO, sg.ci, CLASSINFO_SIZE);
 }
 
@@ -318,10 +318,11 @@ static int sg_is_sel(int i) { return sg.sel && (sg.sel[i >> 3] >> (i & 7) & 1); 
 /* The tile of song a, made from the stock record (the caller has checked sg_valid). */
 static void sg_prep(tile_t *t, int a) {
     void *rec = deque_at(sg.list, (unsigned)a);
-    const char *sub =
-        cc_str(rec, sg.cls == CLASS_ARTIST_SONGS
-                        ? REC_ALBUM
-                        : REC_ARTIST); /* an artist's list: the artist is the title, the album the grey line */
+    const char *sub = cc_str(
+        rec,
+        sg.cls == CLASS_ARTIST_SONGS
+            ? REC_ALBUM
+            : REC_ARTIST); /* an artist's list: the artist is the title, the album the grey line (a composer's keeps the artist) */
     char buf[300];
     if (sg.cls ==
         CLASS_OFTEN) { /* Most Played: "12 plays · Artist" (the count first, a long artist is the part that is cut); REC_TRACK = plays - 1 */
@@ -1450,7 +1451,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     if (sg.win && (cls != CLASS_PLAYLIST_SONGS || sg_stack() == -1)) return -1;
     memset(&sg, 0, sizeof sg);
     sg.cls = cls, sg.pl_id = pl_id, sg.key = key;
-    if (cls == CLASS_ARTIST_SONGS)
+    if (sg_artist())
         memcpy(sg.ci, (void *)CLASSINFO, CLASSINFO_SIZE); /* songs_open_artist ran the two queries just before */
     for (i = 0; name[i] && i < (int)sizeof sg.name - 1; ++i) sg.name[i] = name[i];
     if (name[i]) /* a name cut short is cut before a character, not inside one */
@@ -1661,11 +1662,13 @@ void *songs_artist_list(void *artist, unsigned scope) {
     return *(void **)PDEQ_SHOWLIST;
 }
 
-/* Cover Flow's artist page (`artist`: the Artists row, the name in REC_TITLE): every song of the artist (songs_artist_list). The page keeps the record. -1 when the page
- * did not open or the artist has no All songs row (the caller opens the stock page). */
-int songs_open_artist(void *artist) {
-    if (sg.win || !artist || !songs_artist_list(artist, CLASS_ARTISTS)) return -1;
-    return sg_open(CLASS_ARTIST_SONGS, 0, (const char *)0, cc_str(artist, REC_TITLE), -1);
+/* Cover Flow's artist page and the scoped Albums page's All Songs tile (`artist`: the Artists row, the name in REC_TITLE; scope CLASS_ARTISTS, or CLASS_COMPOSERS for
+ * a composer's row): every song of the artist or composer (songs_artist_list), class 0xff11 or 0xff14. The page keeps the record. -1 when the page did not open or there
+ * is no All songs row (the caller opens the stock page). */
+int songs_open_artist(void *artist, unsigned scope) {
+    if (sg.win || !artist || !songs_artist_list(artist, scope)) return -1;
+    return sg_open(scope == CLASS_COMPOSERS ? CLASS_14 : CLASS_ARTIST_SONGS, 0, (const char *)0,
+                   cc_str(artist, REC_TITLE), -1);
 }
 
 /* The artist's (or composer's: scope CLASS_COMPOSERS) albums page's Play (how SO_IN_ORDER: the songs in order from the first) and Shuffle (SO_SHUFFLE: the stock Shuffle

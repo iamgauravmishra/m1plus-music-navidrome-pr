@@ -51,7 +51,8 @@ Entries (no hook, as Songs):
 | menu / Extras row Favorites, Recently Added, Recently Played, Most Played, Hi-Res (`ACT_LIST`, arg = the Home tile) | `songs_open_list(home)` (table `SG_LISTS`) | `0xf00a`, `0xf009`, `0xf007`, `0xf008`, `0xf002` | the row's key (`Hi-Res` is the stock `hr`) | the tile's stock page (`pod_home_open`) |
 | Playlists grid / list, a tap (`patch/playlists.c` `pl_open`) | `songs_open_playlist(id, name)` | `0xff13`, the id in `classinfo[1]` | the playlist's name | the stock songs page, as before (title in `nagvation_title`, the id in `classinfo[1]`, `allmusic_page` with `0xff13`) |
 | Genres page, a tap (`patch/artists.c` `ar_open`) | `songs_open_genre(name, unknown)` | `0xff09`, the name in `classinfo + 0x30d` and the Unknown byte `classinfo + 0xc` | the genre's name; no Search (below) | the stock row tap's own sequence (the record, `allmusic_page` with `0xff09`) |
-| Cover Flow's artist page, the Songs button (`patch/coverflow.c` `on_songs`) | `songs_open_artist(artist_row)` | `0xff11`, the artist's whole browsing record (below) | the artist's name | the stock album page on the All songs row (the All albums card's call); no Home fallback |
+| Cover Flow's artist page, the Songs button (`patch/coverflow.c` `on_songs`), the All albums card and the scoped Albums page's All Songs tile | `songs_open_artist(artist_row, CLASS_ARTISTS)` | `0xff11`, the artist's whole browsing record (below) | the artist's name | the stock album page on the All songs row (the All albums card's call); no Home fallback |
+| the same three on a composer (Composers) | `songs_open_artist(composer_row, CLASS_COMPOSERS)` | `0xff14`, the composer's whole browsing record (`loadAlbumList(0xf005)` + `loadAlbumdetailList(0xff02, the All songs row)`, the name at `classinfo + 0x20d`) | the composer's name; a row's grey line is its artist | the same |
 
 `songs_artist_list(artist)` is the two stock queries without a page (also the artist's albums page's years, docs/modules/albums.md); `songs_play_artist(artist, SO_IN_ORDER / SO_SHUFFLE)` plays that list as this page's pills would (the albums page's Play / Shuffle).
 
@@ -103,6 +104,7 @@ all songs, the album text at +0xd, `classinfo[0]` = `0xff11`, then `loadLocalCla
 when it opens and puts it back (`sg_classinfo`) before every `loadLocalClassList` (the read on each `sg_on_fg`) and every `loadSongList` (which runs the class query again from the record
 and copies it for the memory playback): any other page's query overwrites it. The title is the artist (cut like a playlist's); a row's grey line is its **album** (the artist is the title).
 Delete and Add use `0xff11` unchanged (`batch_delete_file` and `batch_add_file` take the generic songtable path for it).
+**A composer's songs** (`songs_open_artist(row, CLASS_COMPOSERS)`) are the same page on class `0xff14` (`sg_artist()` covers both): the composer queries (`loadAlbumList(0xf005)`, `loadAlbumdetailList(0xff02, the All songs row)`, `docs/modules/addresses.md`) build the record, which is snapshotted and put back the same way; the Cover Flow button, Back and select mode are the artist's. The title is the composer and a row's grey line stays its **artist** (the performer, which the title does not say). Delete and Add use `0xff14`: `batch_delete_file` lists it with the generic songtable loop, and `batch_add_file` sends every class it does not name (`0xff14` included, `0x4da97c..0x4da994`) to the generic path, as `0xff11`. Not run on a device (COMP-01).
 
 ## A playlist's header (class `0xff13`, `songs_open_playlist`)
 

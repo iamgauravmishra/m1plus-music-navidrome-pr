@@ -55,7 +55,10 @@ in [history](../history.md); feature modules retain their detailed edge cases.
 - **COMP-01 — Composer page:** Composers > a composer with two or more albums: the centred name and the
   Play / Shuffle pills (no circle, no photo), each album's year under it, All Songs with no line. Play
   plays every song of the composer from the first, Shuffle from a random one (stock class 0xff14, not
-  run on a device before): Now Playing and the Queue show the composer's songs. [Details](albums.md)
+  run on a device before): Now Playing and the Queue show the composer's songs. All Songs (the tile and,
+  in Cover Flow, the Songs button and the All albums card) opens our Songs page titled with the
+  composer, each row's grey line its artist; a row plays from there, Select > Add to Playlist works.
+  [Details](albums.md)
 - **SONG-01 — Songs:** title collapse, pinned letters, all rail sections/bubble, search, each
   sort, select-all, add/delete and return position. Check a large library; covers load after
   scrolling stops. [Details](songs.md)

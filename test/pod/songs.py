@@ -1662,7 +1662,7 @@ def lists_tests(ctx):
         m.artist_songs = {name: list(m.songs[:n]), 'Nina Simone': list(m.songs[n:])}
         return m, m.record(album='', artist=name, path='', title=name, name='', rid=7)
     m, row = artist_machine()
-    r = m.call(PSYMS['songs_open_artist'], a0=row, count=900000000)
+    r = m.call(PSYMS['songs_open_artist'], a0=row, a1=O['CLASS_ARTISTS'], count=900000000)
     calls = [c for c in m.calls if c[0] in ('loadAlbumList', 'loadAlbumdetailList', 'loadLocalClassList', 'window_open')]
     expect(r == 0 and [c[:2] for c in calls] == [('loadAlbumList', O['CLASS_ARTISTS']), ('loadAlbumdetailList', O['CLASS_ARTIST_ALBUMS']), ('window_open', 'm1plus_songs'),
                                                  ('loadLocalClassList', O['CLASS_ALBUMS']), ('loadLocalClassList', art_cls)]
@@ -1733,19 +1733,60 @@ def lists_tests(ctx):
     calls = click(m, 'sg_add')
     expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | art_cls) in calls, 'Add opens the playlist picker with class 0xff11')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
+    # A composer's songs (the scoped Albums page's All Songs tile, Cover Flow's Songs button on a composer): the same page on the composer queries, class 0xff14
+    comp_cls = O['CLASS_14']
+    m = list_machine(titles)
+    m.artist_albums = {'Bach': [m.record(album=f'Album {i}', artist='Bach', rid=100 + i) for i in range(2)]}
+    m.composer_songs = {'Bach': list(m.songs[:4])}
+    row = m.record(album='', artist='Bach', path='', title='Bach', name='', rid=7)
+    r = m.call(PSYMS['songs_open_artist'], a0=row, a1=O['CLASS_COMPOSERS'], count=900000000)
+    calls = [c for c in m.calls if c[0] in ('loadAlbumList', 'loadAlbumdetailList', 'loadLocalClassList', 'window_open')]
+    expect(r == 0 and [c[:2] for c in calls] == [('loadAlbumList', O['CLASS_COMPOSERS']), ('loadAlbumdetailList', O['CLASS_COMPOSER_ALBUMS']), ('window_open', 'm1plus_songs'),
+                                                 ('loadLocalClassList', O['CLASS_ALBUMS']), ('loadLocalClassList', comp_cls)]
+           and m.word(G_CLASS) == comp_cls and m.word(ci0) == comp_cls and m.read_cstr(ci0 + O['CLASSINFO_ARTIST_14']) == 'Bach'
+           and m.deques[m.word(SHOWLIST)] == m.songs[:4],
+           f'songs_open_artist on a composer: loadAlbumList(0xf005), loadAlbumdetailList(0xff02, the All songs row), the page, then class 0xff14: his four songs ({calls})')
+    expect(m.wtext[m.widgets['sg_title']] == 'Bach' and vis(m, 'btn_coverflow') == (1, 1) and vis(m, 'btn_select') == (1, 1) and not is_shown(m, 'btn_search'),
+           'a composer\'s songs: titled with the composer, the artist\'s navbar (Cover Flow, Select, no Search)')
+    blits, texts, styles, fills = settle(m)
+    shown = [t for t, rc in texts]
+    expect(m.props[(m.sv, 'virtual_h')] == Layout(['A'] * 4, sections=False).content() and shown[:4] == titles[:4] and 'Artist 1' in shown
+           and not any(t.startswith('Album ') for t in shown), f'a plain list in the query\'s order whose second line is the artist (the composer is the title, not the performer) ({shown[:6]})')
+    snap = bytes(m.u.mem_read(ci0, nci))
+    m.u.mem_write(ci0, b'\xaa' * nci); m.setword(SHOWLIST, m.new_deque([]))
+    m.calls = []
+    m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
+    expect([c[1] for c in m.calls if c[0] == 'loadLocalClassList'] == [comp_cls] and bytes(m.u.mem_read(ci0, nci)) == snap,
+           'a composer\'s songs read again on return: the record is put back first')
+    settle(m)
+    m.u.mem_write(ci0, b'\xaa' * nci)
+    calls = tap(m, 150, lay.row_y(1) + 30)
+    expect([c[3] for c in calls if c[0] == 'loadSongList'] == [comp_cls] and bytes(m.u.mem_read(ci0, nci)) == snap and m.played[1] == 1 and m.played[0] == m.songs[:4],
+           'a row plays the composer\'s songs with class 0xff14, the record put back before loadSongList')
+    pick(m, 'select'); tap(m, 150, lay.row_y(0) + 30)
+    m.confirm_answer = O['CONFIRM_DELETE_LIBRARY']
+    calls = click(m, 'sg_del')
+    bd = [c for c in calls if c[0] == 'batch_delete_file']
+    expect(bd and bd[0][1] == comp_cls and bd[0][6] == [0], 'Delete: batch_delete_file with class 0xff14 (the generic songtable loop)')
+    m.confirm_answer = None
+    pick(m, 'select'); tap(m, 150, lay.row_y(2) + 30)
+    m.windows['m1plus_playlists'] = 0
+    calls = click(m, 'sg_add')
+    expect(('navigator_to_with_context', 'playlist_page', O['PICKER_ADD'] | comp_cls) in calls, 'Add opens the playlist picker with class 0xff14 (batch_add_file\'s generic path)')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
     long_name = 'Miles Davis and the Quintet of Many Names'
     m, row = artist_machine(long_name)
-    m.call(PSYMS['songs_open_artist'], a0=row, count=900000000)
+    m.call(PSYMS['songs_open_artist'], a0=row, a1=O['CLASS_ARTISTS'], count=900000000)
     expect(m.wtext[m.widgets['sg_title']] == fitted(long_name, O['SG_TITLE_W']) and m.wtext[m.widgets['label_title']] == fitted(long_name, 110),
            'a long artist name is cut with an ellipsis, like a playlist\'s')
     m.call(PSYMS['sg_on_destroy'], count=4000000)
     m, row = artist_machine(); m.artist_albums = {}   # no All songs row (the stock list is empty)
-    r = m.call(PSYMS['songs_open_artist'], a0=row, count=900000000)
+    r = m.call(PSYMS['songs_open_artist'], a0=row, a1=O['CLASS_ARTISTS'], count=900000000)
     expect(r & NONE == NONE and 'window_open' not in m.names() and 'loadAlbumdetailList' not in m.names(), 'an artist with no All songs row: -1, no page, the caller falls back')
     m, row = artist_machine(); m.windows['m1plus_songs'] = 0
-    expect(m.call(PSYMS['songs_open_artist'], a0=row, count=900000000) & NONE == NONE and not any(c[0] == 'stock_resume' for c in m.calls),
+    expect(m.call(PSYMS['songs_open_artist'], a0=row, a1=O['CLASS_ARTISTS'], count=900000000) & NONE == NONE and not any(c[0] == 'stock_resume' for c in m.calls),
            'a window that will not open: -1, no Home fallback')
-    expect(m.call(PSYMS['songs_open_artist'], a0=0, count=900000000) & NONE == NONE, 'no artist: -1')
+    expect(m.call(PSYMS['songs_open_artist'], a0=0, a1=O['CLASS_ARTISTS'], count=900000000) & NONE == NONE, 'no artist: -1')
 
 
 SECTIONS = [asset_tests, open_and_paint_tests, touch_tests, rail_tests, switch_tests, order_search_and_stale_tests, collapse_and_select_tests, loader_tests, big_library_tests, lists_tests]   # tools/check.py runs each as its own task

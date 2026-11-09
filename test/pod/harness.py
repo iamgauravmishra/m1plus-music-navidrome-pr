@@ -764,7 +764,7 @@ class Machine:
                 self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
                 u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
                 return
-            if a0 == O['CLASS_ARTIST_SONGS']:   # getMusicByAlbumAndAlbumSonger: from the browsing record alone (all-songs flag +8, artist +0x10d)
+            if a0 in (O['CLASS_ARTIST_SONGS'], O['CLASS_14']):   # getMusicByAlbumAndAlbumSonger / AndComposer: from the browsing record alone (all-songs flag +8, artist +0x10d / composer +0x20d)
                 items = self.artist_query()
                 self.setword(pod.DATA['PDEQ_SHOWLIST'][0], self.new_deque(items))
                 u.reg_write(UC_MIPS_REG_V0, len(items)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
