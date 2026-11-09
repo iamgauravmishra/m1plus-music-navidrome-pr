@@ -67,6 +67,12 @@
 #define ACCENT_FILE \
     "/mnt/data/m1plus/appearance-accent" /* the accent (patch/palette.c): one digit, the index 0 Neutral (default) .. 6 Champagne, with an optional newline; anything else or missing = Neutral */
 #define ACCENT_TMP "/mnt/data/m1plus/appearance-accent.tmp"
+#define AZRAIL_FILE \
+    "/mnt/data/m1plus/appearance-index-rail" /* Index Rail (patch/azlist.c): "1" = the A-Z rail and its bubble on the A-Z lists, "0" = off, anything else or missing = on (the default) */
+#define AZRAIL_TMP "/mnt/data/m1plus/appearance-index-rail.tmp"
+#define AZHEAD_FILE \
+    "/mnt/data/m1plus/appearance-headers" /* Section Headers (patch/azlist.c): "0" = no section letters and no pinned header, anything else or missing = on (the default) */
+#define AZHEAD_TMP "/mnt/data/m1plus/appearance-headers.tmp"
 #define MENU_FILE \
     "/mnt/data/m1plus/home-menu" /* the menu's visible items in order, one digit (item id) each (patch/menu.c); missing or invalid = the defaults */
 #define MENU_TMP "/mnt/data/m1plus/home-menu.tmp"
@@ -243,6 +249,10 @@ extern int pcsearch_toggle(void); /* flip it, saved atomically; the new state, o
 extern int battpct_setting(
     void); /* patch/battery.c: Settings > System > Battery > Battery Percentage: 1 on, 0 off (the default) */
 extern int battpct_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
+extern int azrail_setting(void); /* patch/azlist.c: Settings > Library > Index Rail: 1 on (the default), 0 off */
+extern int azrail_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
+extern int azhead_setting(void); /* patch/azlist.c: Settings > Library > Section Headers: 1 on (the default), 0 off */
+extern int azhead_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
 
 /* patch/m1plus.c (stages with the home feature) */
 extern int m1plus_open_entry(void);

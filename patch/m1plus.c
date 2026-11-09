@@ -70,6 +70,9 @@ enum {
     ACT_REGION = 55,
     ACT_REGIONSET = 56,
     ACT_PEQ = 57,
+    ACT_AZRAIL = 77, /* Settings > Library > Index Rail: a switch row, on by default (patch/azlist.c azrail_toggle) */
+    ACT_AZHEAD =
+        78, /* Settings > Library > Section Headers: a switch row, on by default (patch/azlist.c azhead_toggle) */
     ACT_CHGLIM = 80, /* Settings > System > Battery: Charge Limit, a value row opening its picker */
     ACT_CHGLIMSET = 81 /* the Charge Limit picker's rows (arg = the limit, 80 .. 100) */
 };
@@ -138,8 +141,8 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 38 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 38, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 40 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 40, /* the Unsupported Files count (setfiles_old_count), above those rows */
     INFO_DUR = INFO_SFOLD + 1 /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
 };
 
@@ -432,7 +435,7 @@ struct swctx {
     int action;
     void *img;
 };
-static struct swctx sw_slot[8] __attribute__((section(".scratch")));
+static struct swctx sw_slot[10] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
     if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
@@ -460,6 +463,8 @@ static int switch_state(int action) {
            : action == ACT_KB_ZH    ? kb_zh_setting()
            : action == ACT_PCSEARCH ? pcsearch_setting()
            : action == ACT_BATTPCT  ? battpct_setting()
+           : action == ACT_AZRAIL   ? azrail_setting()
+           : action == ACT_AZHEAD   ? azhead_setting()
                                     : coverflow_landscape();
 }
 
@@ -474,6 +479,8 @@ static int on_switch(void *ctx, void *e) {
          : s->action == ACT_KB_ZH    ? kb_zh_toggle()
          : s->action == ACT_PCSEARCH ? pcsearch_toggle()
          : s->action == ACT_BATTPCT  ? battpct_toggle()
+         : s->action == ACT_AZRAIL   ? azrail_toggle()
+         : s->action == ACT_AZHEAD   ? azhead_toggle()
                                      : coverflow_landscape_toggle(); /* -1: not saved, unchanged */
     if (on >= 0) switch_show(s->img, on);
     if (s->action == ACT_DAILY) regen_show();
@@ -490,6 +497,8 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
             : row->action == ACT_KB_ZH    ? 5
             : row->action == ACT_PCSEARCH ? 6
             : row->action == ACT_BATTPCT  ? 7
+            : row->action == ACT_AZRAIL   ? 8
+            : row->action == ACT_AZHEAD   ? 9
                                           : 0;
     snprintf(name, sizeof name, "pod_switch%u", i);
     sw_slot[k].action = row->action;
@@ -644,7 +653,8 @@ static void page_refresh(void *win, const struct pod_page *page) {
         int kind = row_value(row);
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
-            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT) {
+            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
+            row->action == ACT_AZHEAD) {
             snprintf(name, sizeof name, "pod_switch%d", i);
             switch_show(widget_lookup(win, name, 1), switch_state(row->action));
         } else if (row->action == ACT_CCLIST || row->action == ACT_SFOLD) {
@@ -757,7 +767,8 @@ static int open_page(int index, int as_home) {
         const struct pod_row *row = &page->rows[i];
         if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
             row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
-            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT)
+            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
+            row->action == ACT_AZHEAD)
             bind_switch(win, i, row), refresh = 1;
         else {
             if (row->action != ACT_INFO) pod_bind(win, row->name, on_row, row); /* an information row takes no tap */

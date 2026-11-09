@@ -24,7 +24,7 @@ STATE = {
     'm1plus_battery': {'values': {'pod_value1': '80%'}, 'switches': {'pod_switch0': True}},
     'm1plus_chargelimit': {'shown': {'pod_check0'}},
     'm1plus_homeset': {'switches': {'pod_switch0': True, 'pod_switch1': True}},
-    'm1plus_library': {'switches': {'pod_switch2': False}},
+    'm1plus_library': {'switches': {'pod_switch2': True, 'pod_switch3': True, 'pod_switch4': False}},
     'm1plus_npset': {'values': {'pod_value0': 'Chrome'}},
     'm1plus_tapetheme': {'shown': {'pod_check1'}},
     'm1plus_developer': {'switches': {'pod_switch0': True}},

@@ -24,9 +24,9 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 | Page | Controls |
 |---|---|
 | Cover Flow | Drag to browse, tap a side cover to centre it, tap the centre cover to open its album |
-| Albums | The navbar's **…** switches grid/list and sorts by Title, Artist, Recently Added or Year; the choices are remembered |
+| Albums | The navbar's **…** switches grid/list and sorts by Title, Artist, Recently Added or Year; the choices are remembered; the list in Title order has section letters |
 | Artists | Switch Artist/Album Artist in the navbar's **…**, then open an artist's albums |
-| Songs | Jump with the A–Z rail; Search in the navbar; the **…** has Select and Sort (Title, File Name, Format, Recently Added; tap the ticked order to reverse it) |
+| Songs | Jump with the A–Z rail (Settings → Library → Index Rail, on by default); Search in the navbar; the **…** has Select and Sort (Title, File Name, Format, Recently Added; tap the ticked order to reverse it) |
 | Recently Added | The newest songs; the navbar's **…** switches to the newest albums |
 | Album | Play, shuffle the album, or tap a track; the footer shows the track count and length once measured |
 | Playlists | Open a playlist (Play, Shuffle, or tap a track); the list-plus button creates, imports, exports or deletes; the **…** switches grid/list and the name order |
@@ -58,7 +58,7 @@ To show, hide or reorder the tiles of the pull-down, open **Settings → System 
 |---|---|
 | Wi-Fi / Bluetooth | Wi-Fi: the Wi-Fi switch, the connected network, My Networks and nearby networks with their security, and Other… for a hidden network; a saved network's page has Forget This Network and Auto-Join. WPA3 and Enhanced Open networks join. All System Settings > Wi-Fi opens the same page (the stock page with `/mnt/mmc/m1plus-off`, the only route for WEP). Bluetooth: the stock page. Values show On/Off |
 | Home Screen | Recent Albums, Daily Mix, menu items; Regenerate Daily Mix takes effect next Home visit |
-| Library | Update Library, Rebuild Covers, landscape Cover Flow, Podcast Discover and Podcast Region |
+| Library | Update Library, Rebuild Covers, under **List Navigation** (the Songs, Artists, Albums and Radio lists) **Index Rail** (on by default: the A–Z rail on Songs, Artists, Radio countries and the Albums list in Title order) and **Section Headers** (on by default: the section letters and the pinned header; off closes the rows up), landscape Cover Flow, Podcast Discover and Podcast Region |
 | Now Playing | Cassette Theme: Normal, Chrome or Metal; applies next time Cassette Mode opens |
 | Playback | Stock Play Mode page; **EQ** opens the [Equalizer](#equalizer). All Playback Settings includes Gapless, and its Equalizer row opens the Equalizer |
 | System | Display, **Appearance** > **Background** (Black, or Tinted: with an accent chosen, the dark greys of every page, card and sheet take a 12 % wash of it; covers and cover-coloured pages keep their look) and **Accent** (the main menu's icons show in the accent; Neutral, Red, Orange, Green, Teal, Purple or Champagne: tints pressed rows and their icons, switches that are on, the lit pull-down tiles, sliders, progress bars and the picker check; applies at once) and **Control Center** (show, hide and reorder the eight tiles of the status bar swipe-down panel), Language (under All System Settings), Keyboards, **Battery** (**Battery Percentage**, off by default, shows the exact charge beside the status bar's battery icon; **Charge Limit** stops charging at 80, 85, 90 or 95 % while the player is on and resumes about 5 % lower, 100 % (the default) is no limit, and a switched-off player charges fully) and About (firmware, device, network and storage details; **Software Update** is the row under the version) |

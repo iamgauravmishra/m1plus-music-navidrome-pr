@@ -599,9 +599,40 @@ unsigned cc_cmap_key(cc_cmap_t *map, const char *album) {
 
 void cc_cmap_free(cc_cmap_t *map) { free(map); }
 
-/* s without leading white space (toolsTrimLeft) and without a following "The " (when something follows it). */
+/* The bytes of the punctuation character at s that so_name skips in front of a name, else 0: ASCII punctuation (everything printable that is not a
+ * letter, digit or space), and these opening / quote marks: Latin-1 inverted ! ? and guillemets, the general punctuation single, double and
+ * angle quotes (U+2018 2019 201A 201C 201D 201E 2039 203A), CJK brackets (U+3008..U+3011 less U+300A.. which are included too: 〈 〉 《 》 「 」 『 』 【 】)
+ * and the full-width ( ) [ ] { } " ' (U+FF08 FF09 FF3B FF3D FF5B FF5D FF02 FF07). Any other non-ASCII character counts as a letter. */
+static unsigned so_punct(const unsigned char *s) {
+    unsigned c = s[0];
+    if (c < 0x80) return c > ' ' && c < 0x7f && !(c >= '0' && c <= '9') && !((c | 0x20) >= 'a' && (c | 0x20) <= 'z');
+    if (c == 0xc2) return s[1] == 0xa1 || s[1] == 0xbf || s[1] == 0xab || s[1] == 0xbb ? 2 : 0;
+    if (c == 0xe2 && s[1] == 0x80) {
+        c = s[2];
+        return c == 0x98 || c == 0x99 || c == 0x9a || c == 0x9c || c == 0x9d || c == 0x9e || c == 0xb9 || c == 0xba ? 3
+                                                                                                                    : 0;
+    }
+    if (c == 0xe3 && s[1] == 0x80) return s[2] >= 0x88 && s[2] <= 0x91 ? 3 : 0;
+    if (c == 0xef && s[1] == 0xbc)
+        return s[2] == 0x88 || s[2] == 0x89 || s[2] == 0x82 || s[2] == 0x87 || s[2] == 0xbb || s[2] == 0xbd ? 3 : 0;
+    if (c == 0xef && s[1] == 0xbd) return s[2] == 0x9b || s[2] == 0x9d ? 3 : 0;
+    return 0;
+}
+
+/* s without leading white space (toolsTrimLeft), without a leading run of punctuation (so_punct, with white space between) when a letter or digit
+ * (or a non-ASCII character that is not so_punct) follows it, and without a following "The " (when something follows it). A name of
+ * punctuation only ("!!!", "...") keeps it. */
 static const char *so_name(const char *s) {
+    const unsigned char *p;
+    unsigned l;
     while (*s == ' ' || (*s >= '\t' && *s <= '\r')) ++s;
+    p = (const unsigned char *)s;
+    for (;;) {
+        while (*p == ' ' || (*p >= '\t' && *p <= '\r')) ++p;
+        if (!(l = so_punct(p))) break;
+        p += l;
+    }
+    if (*p && p != (const unsigned char *)s) s = (const char *)p;
     if (fold((unsigned char)s[0]) == 't' && fold((unsigned char)s[1]) == 'h' && fold((unsigned char)s[2]) == 'e' &&
         s[3] == ' ' && s[4])
         return s + 4;
@@ -828,11 +859,19 @@ static int so_cmp(unsigned a, unsigned b) {
     return d ? (so_rev ? -d : d) : a < b ? -1 : a > b;
 }
 
-/* The stock (title) order, as it is or backwards: Z-A. */
+/* The title order's fallback when there are no keys: the stock order, as it is or backwards (Z-A). */
 static int so_title_cmp(unsigned a, unsigned b) {
     int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0;
     if (ua != ub) return ua - ub;
     return (a < b) != (so_rev != 0) ? -1 : 1;
+}
+
+/* The Title order: the album titles' keys (one per row, so_key[i]) as the Artist order compares names; ties keep the stock order. */
+static int so_tkey_cmp(unsigned a, unsigned b) {
+    int ua = I(so_rec[a], REC_ID) < 0, ub = I(so_rec[b], REC_ID) < 0, d;
+    if (ua != ub) return ua - ub;
+    d = cc_key_cmp(so_key[a], so_key[b]);
+    return d ? (so_rev ? -d : d) : a < b ? -1 : a > b;
 }
 
 /* The key texts of the albums being sorted: even i the artist of row i / 2, odd i its title. */
@@ -840,6 +879,9 @@ static const char *so_text(const void *ctx, unsigned i) {
     void *r = ((void *const *)ctx)[i / 2];
     return cc_str(r, i & 1 ? REC_ALBUM : REC_ARTIST);
 }
+
+/* The album titles being sorted: i the title of row i. */
+static const char *so_title(const void *ctx, unsigned i) { return cc_str(((void *const *)ctx)[i], REC_ALBUM); }
 
 /* One-off: the retired Settings > Library > Album Order file. When ALBUMS_SORT_FILE is missing its meaning moves there ("0" Title, anything else Artist), then
  * the old file (and its .tmp) is deleted, whether or not that write worked (a failed write leaves the default, Artist). Nothing else reads it. */
@@ -850,7 +892,7 @@ static void sort_migrate(void) {
     unlink(OLD_ORDER_FILE), unlink(OLD_ORDER_TMP);
 }
 
-/* The album order (the Albums page's "..." card, ALBUMS_SORT_FILE): one character, 0 Title (the stock order), 1 Artist, 2 Recently Added, 3 Year, or a, b, c, d for the same order in its other
+/* The album order (the Albums page's "..." card, ALBUMS_SORT_FILE): one character, 0 Title (our name keys, as Artist), 1 Artist, 2 Recently Added, 3 Year, or a, b, c, d for the same order in its other
  * direction (Z-A, Oldest First). A missing or invalid file is Artist, not reversed. */
 static int sort_char(void) {
     sort_migrate();
@@ -1006,7 +1048,7 @@ unsigned *cc_album_order(void *albums) {
 unsigned *cc_album_order_mode(void *albums, int mode, int rev) {
     unsigned n = albums ? deque_size(albums) : 0, i;
     unsigned *v;
-    if (!n || (mode == CC_SORT_TITLE && !rev)) return (unsigned *)0;
+    if (!n) return (unsigned *)0;
     so_rev = rev;
     v = calloc(n, sizeof *v);
     so_rec = calloc(n, sizeof *so_rec);
@@ -1017,23 +1059,23 @@ unsigned *cc_album_order_mode(void *albums, int mode, int rev) {
         if (mode == CC_SORT_ARTIST)
             so_key = cc_name_keys(2 * n, so_text, so_rec);
         else if (mode == CC_SORT_TITLE)
-            so_key = (const char **)so_rec; /* (only "it worked": Z-A by title is the stock order backwards) */
+            so_key = cc_name_keys(n, so_title, so_rec);
         else {
             so_rank = calloc(n, sizeof *so_rank), so_year = calloc(n, sizeof *so_year);
             if (so_rank && so_year && so_stats(n)) so_key = (const char **)so_rank; /* (only "it worked") */
         }
     }
-    if (!v || !so_rec || !so_key) {
+    if (!v || !so_rec || (!so_key && mode != CC_SORT_TITLE)) {
         free(v);
         v = (unsigned *)0;
     } else
         cc_heapsort(v, n,
                     mode == CC_SORT_ARTIST   ? so_cmp
-                    : mode == CC_SORT_TITLE  ? so_title_cmp
+                    : mode == CC_SORT_TITLE  ? (so_key ? so_tkey_cmp : so_title_cmp) /* (no keys: the stock order) */
                     : mode == CC_SORT_RECENT ? so_recent_cmp
                                              : so_year_cmp);
     free(so_rec);
-    if (mode == CC_SORT_ARTIST) free((void *)so_key);
+    if (mode == CC_SORT_ARTIST || mode == CC_SORT_TITLE) free((void *)so_key);
     free(so_rank);
     free(so_year);
     so_rec = (void **)0, so_key = (const char **)0, so_rank = so_year = (unsigned *)0;

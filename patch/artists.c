@@ -57,8 +57,9 @@ extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination th
      2) /* the name's 24 px box (LIST_TITLE_H), centred in the row: a row cut by the window's edge has its name cut by the scroll_view's clip, as the Songs page's texts */
 #define AR_TEXT_H LIST_TITLE_H
 #define AR_TEXT_END \
-    252 /* the names are cut here: the chevron stands between this and the rail's touch column (x 284) */
-#define AR_CHEV_X 262
+    (LIST_TEXT_X + \
+     LIST_TEXT_W_CHEV) /* the names are cut here (278), the chevron at AR_CHEV_X: the list-row spec; both move left by az_inset while the rail is shown (x 252 and 262) */
+#define AR_CHEV_X LIST_CHEV_X
 #define AR_CHEV_W POD_CHEV_W /* the chevron's bitmap, made by pod_make_chevron (patch/common.c) */
 #define AR_CHEV_H POD_CHEV_H
 #define AR_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
@@ -239,20 +240,20 @@ static void ar_paint_rows(void *canvas) {
     for (r = r0; r <= r1; ++r) {
         int y = az_row_y(&ar.al, r) - off;
         if (ar.press == r + 1) az_fill(canvas, 0, y, y + AR_ROW - 1, AR_W, LIST_PRESS);
-        az_fill(canvas, AR_TEXT_X, y + AR_ROW - 1, y + AR_ROW, SG_TEXT_END - AR_TEXT_X, LIST_HAIR);
+        az_fill(canvas, AR_TEXT_X, y + AR_ROW - 1, y + AR_ROW, az_end(&ar.al) - AR_TEXT_X, LIST_HAIR);
         if (ar.chev) {
             int src[4], dst[4], top = y + (AR_ROW - AR_CHEV_H) / 2;
             if (top >= 0 && top + AR_CHEV_H <= GRID_VIEW_H) {
                 src[0] = src[1] = 0, src[2] = AR_CHEV_W, src[3] = AR_CHEV_H;
-                dst[0] = AR_CHEV_X, dst[1] = top, dst[2] = AR_CHEV_W, dst[3] = AR_CHEV_H;
+                dst[0] = AR_CHEV_X - az_inset(&ar.al), dst[1] = top, dst[2] = AR_CHEV_W, dst[3] = AR_CHEV_H;
                 canvas_draw_image(canvas, ar.chev, src, dst);
             }
         }
     }
     widget_prepare_text_style(ar.st_title, canvas);
     for (r = r0; r <= r1; ++r)
-        grid_text(canvas, ar_tile(r), 0, AR_TEXT_X, az_row_y(&ar.al, r) - off + AR_TEXT_Y, AR_TEXT_END - AR_TEXT_X,
-                  AR_TEXT_H, 0);
+        grid_text(canvas, ar_tile(r), 0, AR_TEXT_X, az_row_y(&ar.al, r) - off + AR_TEXT_Y,
+                  AR_TEXT_END - az_inset(&ar.al) - AR_TEXT_X, AR_TEXT_H, 0);
     az_paint_heads(&ar.al, canvas); /* the section letters, then over everything the pinned band and its letter */
 }
 
@@ -466,6 +467,7 @@ int artists_open(int home) {
     ar.fade = widget_lookup(ar.win, "img_nb_fade", 1);
     ar.st_title = widget_lookup(ar.win, "label_row_title", 1);
     ar.al.win = ar.win, ar.al.sv = ar.sv, ar.al.top = AR_TOP, ar.al.row = AR_ROW;
+    az_prefs(&ar.al);
     ar.al.st_hdr = widget_lookup(ar.win, "label_hdr", 1);
     ar.al.st_rail = widget_lookup(ar.win, "label_rail", 1);
     ar.al.st_rail_on = widget_lookup(ar.win, "label_rail_on", 1);

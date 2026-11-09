@@ -4,8 +4,10 @@ import mod_icons
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 VIEW_H, TOP, HDR, ROW, BOTTOM = O['GRID_VIEW_H'], O['SG_TITLE_H'], O['SG_HDR_H'], 52, 12
-TEXT_X, TEXT_Y, TEXT_H, TEXT_END = 24, (52 - O['LIST_TITLE_H']) // 2, O['LIST_TITLE_H'], 252
-CHEV_X, CHEV_W, CHEV_H = 262, 10, 16
+INSET = O['SG_RAIL_INSET']   # the rows give up this much on the right while the A-Z rail is shown (patch/azlist.c az_inset); rail off: the list-row spec (chevron x 288, text to 278, hairline to 310)
+TEXT_X, TEXT_Y, TEXT_H, TEXT_END = 24, (52 - O['LIST_TITLE_H']) // 2, O['LIST_TITLE_H'], O['LIST_TEXT_X'] + O['LIST_TEXT_W_CHEV'] - INSET
+CHEV_X, CHEV_W, CHEV_H = O['LIST_CHEV_X'] - INSET, 10, 16
+HAIR_END = O['LIST_HAIR_END'] - INSET
 SCREEN_Y0, SC_YOFF = 80, O['SC_YOFF']   # the list's top on the screen (30 px system bar + 50 px navbar)
 
 
@@ -37,7 +39,7 @@ def artists_tests(ctx):
     expect(la and la[0][1] == O['CLASS_ARTISTS'] and la[0][3] == 'Miles Davis', f'the stock artist query runs for that artist ({la[:1]})')
     expect(any(c[0] == '_deque_push_back' for c in m.calls), "the artist's row is copied")
     expect(('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls, 'the title is the artist')
-    expect(('widget_set_text_utf8', m.widgets['label_album'], 'Kind of Blue') in m.calls, 'the first album is centred')
+    expect(('widget_set_text_utf8', m.widgets['label_album'], 'Bitches Brew') in m.calls, 'the first album is centred')
     expect('pthread_create' not in m.names(), "the library's cached covers are used: nothing to build")
     expect(not any(c[0] in ('open', 'read') and c[1].endswith('coverflow-position') for c in m.calls),
            "the main Cover Flow's last album is not read")
@@ -266,14 +268,15 @@ def sections_of(ranks):
 
 class Model:
     """The page's geometry from the display-order names (the payload's, written again); the Unknown row (the name 'Unknown ...') takes the rank of the row before it."""
-    def __init__(self, names):
+    def __init__(self, names, hh=HDR):   # hh: the header height, 0 with Section Headers off
+        self.hh = hh
         ranks = []
         for i, n in enumerate(names): ranks.append(ranks[-1] if n.startswith('Unknown') and i else rank_of(n))
         self.n, self.secs = len(names), sections_of(ranks) if names else []
-    def hdr_y(self, s): return TOP + s * HDR + self.secs[s][0] * ROW
+    def hdr_y(self, s): return TOP + s * self.hh + self.secs[s][0] * ROW
     def sec_of(self, i): return max(k for k, (st, _) in enumerate(self.secs) if st <= i)
-    def row_y(self, i): return TOP + (self.sec_of(i) + 1) * HDR + i * ROW
-    def content(self): return TOP + len(self.secs) * HDR + self.n * ROW + BOTTOM
+    def row_y(self, i): return TOP + (self.sec_of(i) + 1) * self.hh + i * ROW
+    def content(self): return TOP + len(self.secs) * self.hh + self.n * ROW + BOTTOM
 
 
 def headers(m):
@@ -346,7 +349,7 @@ def page_tests(expect, cover_asset):
     expect(hd == [('M', mod.hdr_y(0)), ('N', mod.hdr_y(1))], f'the section letters at their headers, the Songs page\'s (x {O["SG_HDR_X"]}, 20 px): {hd}')
     chev = [b for b in blits if tuple(b[2][2:]) == (CHEV_W, CHEV_H)]
     expect([tuple(b[2]) for b in chev] == [(CHEV_X, mod.row_y(i) + (ROW - CHEV_H) // 2, CHEV_W, CHEV_H) for i in range(3)], 'a chevron at the right of every row, centred in its row')
-    hair = [f for f in fills if f[0] == O['LIST_HAIR'] and f[3] == O['SG_TEXT_END'] - TEXT_X]
+    hair = [f for f in fills if f[0] == O['LIST_HAIR'] and f[3] == HAIR_END - TEXT_X]
     expect([(f[1], f[2], f[4]) for f in hair] == [(TEXT_X, mod.row_y(i) + ROW - 1, 1) for i in range(3)], 'a hairline under every row from the text\'s x')
     expect(not [f for f in fills if f[0] == O['SG_HDR_BG']], 'no pinned header at the top (the first header has not reached the window\'s top)')
     # the chevron's pixels: a stroke of two segments, the grey of the rail's dots, antialiased in the alpha
@@ -424,6 +427,44 @@ def page_tests(expect, cover_asset):
     mm.calls = []; rail_touch('down', 3)
     mm.call(PSYMS['ar_on_bg'], count=4000000)
     expect(('widget_ungrab', mm.window, mm.rail) in mm.calls and vis(mm, 'sg_bubble')[0] == 0, 'a window put in front releases the rail')
+
+    # 29f. The Index Rail and Section Headers switches (patch/azlist.c az_prefs, read when the page opens): both on by default; with the headers off the rows close up (header height 0), the
+    # rail (when on) still jumps to the section's first row, nothing paints a letter or a pinned band; the rows keep the full list-row width with the rail off and give up SG_RAIL_INSET with it on
+    bands = [f'{chr(65 + i)} Band' for i in range(26)] + [f'{chr(65 + i)}2 Band' for i in range(0, 26, 5)]
+    for rail, heads in ((b'0\n', b'1\n'), (b'0\n', b'0\n'), (b'1\n', b'0\n'), (b'1\n', b'1\n')):
+        mm = artists_machine(bands); mm.fs[AZRAIL_FILE], mm.fs[AZHEAD_FILE] = rail, heads
+        mm.call(open_, count=40000000)
+        hh = 0 if heads == b'0\n' else HDR
+        mod = Model(shown(mm), hh)
+        what = f'rail {rail.strip().decode()}, headers {heads.strip().decode()}'
+        expect(mm.props.get((mm.sv, 'virtual_h')) == mod.content() and vis(mm, 'sg_rail') == ((1, 1) if rail == b'1\n' else (0, 0)),
+               f'{what}: the content is {mod.content()} px (header height {hh}) and the rail is {"shown" if rail == b"1\n" else "hidden and insensitive"}')
+        letters = []
+        for off in range(0, mod.content() - VIEW_H, 150):
+            _, texts, styles, _ = ar_paint(mm, off)
+            letters += [t for (t, r), s in zip(texts, styles) if s == 'label_hdr']
+        _, _, _, fills = ar_paint(mm, 300)
+        expect(bool(letters) == bool(hh) and bool([f for f in fills if f[0] == O['SG_HDR_BG']]) == bool(hh), f'{what}: section letters and the pinned band only with the headers')
+        _, texts, styles, fills = ar_paint(mm, 0)
+        rows = [r[1] for (t, r), s in zip(texts, styles) if s == 'label_row_title']
+        expect(rows[:3] == [mod.row_y(i) + TEXT_Y for i in range(3)], f'{what}: the rows start at {mod.row_y(0)}')
+        hair = [f for f in fills if f[0] == O['LIST_HAIR']]
+        gap = INSET if rail == b'1\n' else 0   # the rail's footprint: hairline end, chevron x and text end move left by it, with the rail off the rows keep the list-row spec
+        expect(hair and all(f[1] == TEXT_X and f[3] == O['LIST_HAIR_END'] - gap - TEXT_X for f in hair), f'{what}: the hairlines end at {O["LIST_HAIR_END"] - gap}')
+        blits, texts, styles, _ = ar_paint(mm, 0)
+        chev = [tuple(b[2]) for b in blits if tuple(b[2][2:]) == (CHEV_W, CHEV_H)]
+        names = [r for (t, r), s in zip(texts, styles) if s == 'label_row_title']
+        expect(chev and all(c[0] == O['LIST_CHEV_X'] - gap for c in chev) and names and all(r[0] + r[2] == O['LIST_TEXT_X'] + O['LIST_TEXT_W_CHEV'] - gap for r in names),
+               f'{what}: the chevrons at x {O["LIST_CHEV_X"] - gap} and the names cut at x {O["LIST_TEXT_X"] + O["LIST_TEXT_W_CHEV"] - gap}')
+        if rail == b'1\n':
+            geo = tuple(mm.props.get((mm.rail, k)) for k in 'xywh')
+            sp = geo[3] - 2 * O['SG_RAIL_PAD']
+            mm.calls = []
+            mm.touch('down', 300, 30 + geo[1] + O['SG_RAIL_PAD'] + int((5 + 0.5) * sp / len(mod.secs)), 3000, fn='ar_on_rail', count=40000000)
+            want = min(mod.hdr_y(5), mod.content() - VIEW_H)
+            got = [c for c in mm.calls if c[0] == 'widget_set_prop_int' and c[2] == 'yoffset']
+            expect(got and got[0][3] == want and (hh or want == min(mod.row_y(mod.secs[5][0]), mod.content() - VIEW_H)), f'{what}: the rail jumps to section {mod.secs[5][1]} at {want}' + ('' if hh else ' (its first row)'))
+            mm.touch('up', 300, 200, 3100, fn='ar_on_rail', count=4000000)
 
     # 29d. The large title collapses: the navbar's small title appears once the large one has scrolled away; the fade shows while the list is scrolled
     mm = artists_machine(); mm.call(open_, count=5000000)
@@ -639,12 +680,12 @@ def sort_tests(ctx):
     m = artists_machine(stock); m.call(open_, count=20000000)
     expect(shown(m) == ['Abba', 'Unknown Artist', 'The Beatles', 'Zed', 'Unknown Artist'], f'ASCII names are one set across the fixed rows ({shown(m)})')
     # digit runs by value, digits before letters, symbols before letters, leading white space skipped, ties stable
-    stock = ['Vol. 10', 'vol. 2', 'Vol. 1', '  Zed', '2 Pac', '10 Pac', '_Under', 'Abc', '007', '7', '  Abc']
+    stock = ['Vol. 10', 'vol. 2', 'Vol. 1', '  Zed', '2 Pac', '10 Pac', '_&', 'Abc', '007', '7', '  Abc']
     m = artists_machine(stock); m.call(open_, count=20000000)
     got = shown(m)
     expect(got == sort_model(stock)[0], f'natural order: {got}')
     expect(got.index('Vol. 1') < got.index('vol. 2') < got.index('Vol. 10'), 'digit runs compare by value ("Vol. 2" before "Vol. 10")')
-    expect(got.index('2 Pac') < got.index('10 Pac') < got.index('_Under') < got.index('Abc'), 'digits before symbols before letters')
+    expect(got.index('2 Pac') < got.index('10 Pac') < got.index('_&') < got.index('Abc'), 'digits before symbols before letters')
     expect(got.index('Abc') < got.index('  Abc') < got.index('Vol. 1') and got[-1] == '  Zed', 'leading white space is skipped; the equal names keep the stock order (Abc 7, "  Abc" 10)')
     expect(got.index('007') < got.index('7'), 'equal values keep the stock order ("007" is stock row 8, "7" row 9)')
 
@@ -695,6 +736,18 @@ def sort_tests(ctx):
     expect(shown(m) == ['Solo'] and not [c for c in m.calls if c[0] == 'calloc' and c[1] == 4], 'one artist needs no order')
     m = artists_machine(); m.calloc_fail = True   # no memory for the text ring: the page is left (the tile's stock page opens for Genres and Composers)
     expect(m.call(open_, count=2000000) == 0xffffffff and 'navigator_back' in m.names(), 'no memory for the ring: the page closes')
+    # 41c. Leading punctuation is skipped when something follows it (cc_name_keys / cc_name_initial, so_name): "(What's the Story)" files under W, "¡Viva" under V, "「すずめ」" under S,
+    # "(The Best Of)" under B (the "The " after the punctuation goes too), "   (x" under X, "+44" is the digits "44" (under "#"); names of punctuation only ("!!!", "...", "=", "÷") stay under "#".
+    stock_p = ["(What's the Story)", 'Wall', '\u00a1Viva', 'Vaca', '\u300c\u3059\u305a\u3081\u300d', 'Sam', '(The Best Of)', 'Bob', '   (x', 'Xylo', '+44', '45', '!!!', '...', '=', '\u00f7', 'Zed', 'Wish']
+    mp = artists_machine(stock_p); mp.call(open_, count=20000000)
+    got_p = shown(mp)
+    expect(got_p == sort_model(stock_p)[0], f'leading punctuation model: {got_p}')
+    pos = got_p.index
+    expect(pos('Wall') < pos("(What's the Story)") < pos('Wish') and pos('Vaca') < pos('\u00a1Viva') < pos('Wall') and pos('Sam') < pos('\u300c\u3059\u305a\u3081\u300d') < pos('Wall')
+           and pos('(The Best Of)') < pos('Bob') < pos('Sam') and pos('   (x') < pos('Xylo') < pos('Zed') and pos('+44') < pos('45'), f'W, V, S, B, X placed by the first letter after the punctuation, +44 as 44: {got_p}')
+    expect(all(pos(x) < pos('Bob') for x in ('!!!', '...', '=', '\u00f7', '+44', '45')), f'punctuation-only names and digits stay with the symbols: {got_p}')
+    hd_p = headers(mp)
+    expect(sorted(set(hd_p.values())) == sorted(['#', 'B', 'S', 'V', 'W', 'X', 'Z']), f'sections: #, B, S, V, W, X, Z only ({sorted(hd_p.values())})')
 
 
 def index_tests(ctx):
@@ -703,10 +756,10 @@ def index_tests(ctx):
     same keys; the index does far less work on a big library."""
     expect = ctx.expect
     ascii_fold = lambda s: ''.join(c.lower() if c.isascii() else c for c in s)
-    def keys(m, n):   # cf.keys: the word of cf that holds the n-key calloc (no struct offset assumed)
-        made = {c[2] for c in m.calls if c[0] == 'calloc' and c[1] == 4 * n and c[2]}
-        at = [m.word(PSYMS['cf'] + o) for o in range(0, 512, 4) if m.word(PSYMS['cf'] + o) in made]
-        return [m.word(at[0] + 4 * i) for i in range(n)] if len(at) == 1 else None
+    def keys(m, n):   # cf.keys: the word of cf that holds an n-key calloc (no struct offset assumed); cf.order (the Title order's rows) is an n-word block too, made after the keys
+        made = [c[2] for c in m.calls if c[0] == 'calloc' and c[1] == 4 * n and c[2]]
+        at = sorted({m.word(PSYMS['cf'] + o) for o in range(0, 512, 4) if m.word(PSYMS['cf'] + o) in made}, key=made.index)
+        return [m.word(at[0] + 4 * i) for i in range(n)] if at else None
     def build(lib_n, k):
         m = artists_machine(['Miles Davis'])
         library, lib = [], []
@@ -747,8 +800,8 @@ def index_tests(ctx):
     m.call(PSYMS['ar_open'], a0=0, count=900000000)
     got = keys(m, len(exp))
     expect(got == exp and not [c for c in m.calls if c[0] == 'calloc' and c[1] == 4 * 2048 and c[2]], 'a refused index: the scan finds the same keys')
-    if PERF: expect(INDEX_COST[(1000, 200)] < 1000000 and m.icount > 5000000,
-           f'200 albums over 1000: {INDEX_COST[(1000, 200)]:,} payload instructions with the index, {m.icount:,} with the scan (10.2 M before the index existed)')
+    if PERF: expect(INDEX_COST[(1000, 200)] < 1500000 and m.icount > 5000000,
+           f'200 albums over 1000: {INDEX_COST[(1000, 200)]:,} payload instructions with the index, {m.icount:,} with the scan (10.2 M before the index existed; the index run includes the Title sort of the 200 albums)')
 
 
 INDEX_COST = {}
@@ -858,7 +911,7 @@ def genre_composer_tests(ctx):
     la = [c for c in m.calls if c[0] == 'loadAlbumList']
     expect(('window_open', 'm1plus_cover') in m.calls and la and la[0][1] == O['CLASS_COMPOSERS'] and la[0][3] == 'Bach' and ('window_open', 'm1plus_songs') not in m.calls,
            f'a composer opens Cover Flow with loadAlbumList(0xf005, that composer) ({la[:1]})')
-    expect(('widget_set_text_utf8', m.widgets['label_title'], 'Bach') in m.calls and ('widget_set_text_utf8', m.widgets['label_album'], 'Goldberg Variations') in m.calls,
+    expect(('widget_set_text_utf8', m.widgets['label_title'], 'Bach') in m.calls and ('widget_set_text_utf8', m.widgets['label_album'], 'Cello Suites') in m.calls,
            'titled with the composer, centred on his first album')
     put_value(m, 2); m.call(PSYMS['on_changed'], count=2000000)
     expect(('widget_set_text_utf8', m.widgets['label_album'], 'All albums') in m.calls and ('widget_set_text_utf8', m.widgets['label_artist'], 'Bach') in m.calls,
@@ -880,7 +933,7 @@ def genre_composer_tests(ctx):
     put_value(m, 1); m.call(PSYMS['on_changed'], count=2000000)
     m.tap(O['CF_CX'])
     expect(('navigator_to_with_context', 'albuminfo_page', O['CLASS_COMPOSER_ALBUMS'], 1) in m.calls
-           and m.read_cstr(m.word(m.deques[m.opened_album[2]][1] + O['REC_ALBUM'])) == 'Cello Suites', 'a centre album opens as the stock composer page opens it (class 0xff02, its row)')
+           and m.read_cstr(m.word(m.deques[m.opened_album[2]][1] + O['REC_ALBUM'])) == 'Goldberg Variations', 'a centre album opens as the stock composer page opens it (class 0xff02, its row)')
     m.call(PSYMS['on_destroy'], count=2000000)
     # the artist's own scope is untouched by a composer's (the scope is per open)
     m = artists_machine(composers=comps); m.call(open_, count=20000000); m.call(PSYMS['ar_open'], a0=0, count=8000000)
@@ -928,6 +981,8 @@ def scoped_albums_tests(ctx):
            'a tap on an artist opens the Albums page, not Cover Flow')
     expect(la and la[0][1] == O['CLASS_ARTISTS'] and la[0][3] == 'Miles Davis', f'the stock artist query runs for that artist ({la[:1]})')
     expect(content(m) == 4 * ROWH, f'three albums and the All Songs row last ({content(m)} px of list rows)')
+    expect(m.props.get((m.widgets['sg_rail'], 'visible')) == 0 and m.props.get((m.widgets['sg_rail'], 'sensitive')) == 0 and not [f for f in m.fills if f[0] == O['SG_HDR_BG']],
+           'the artist\'s own list has no sections and no rail (the Index Rail switch is on here: the rail of the Artists page behind it is hidden)')
     expect(('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls, 'the title is the artist')
     expect(m.fs['/mnt/data/m1plus/albums-view'] == b'0\n' and m.props.get((m.widgets['vs_tick5'], 'visible')) == 1,
            'the list mode saved for Albums is the mode used, the "..." card ticks List')
@@ -996,7 +1051,7 @@ def scoped_albums_tests(ctx):
     m.texts.clear(); m.blits.clear()
     m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
     tx = [t for t, r in m.texts]
-    expect(tx == ['Kind of Blue', 'Jazz Hits', 'Bitches Brew', 'All Songs'], f'the fourth row is All Songs, with no line under it (an artist\'s albums show their years) ({tx})')
+    expect(tx == ['Bitches Brew', 'Jazz Hits', 'Kind of Blue', 'All Songs'], f'the fourth row is All Songs, with no line under it (an artist\'s albums show their years) ({tx})')
     m.calls = []
     tap(m, 100, 3 * ROWH + 10)
     expect(('window_open', 'm1plus_songs') in m.calls and not any(c[0] == 'navigator_to_with_context' for c in m.calls), 'a tap on All Songs opens our Songs page on the artist\'s songs')
@@ -1038,14 +1093,14 @@ def scoped_albums_tests(ctx):
 
 
 SORT_FILE = '/mnt/data/m1plus/albums-sort'
-# Miles Davis's albums in the stock order: Kind of Blue (0), Jazz Hits (1), Bitches Brew (2); the library songs, newest first, with their years
+# Miles Davis's albums in the stock order (by title, which is also our Title order): Bitches Brew (0), Jazz Hits (1), Kind of Blue (2); the library songs, newest first, with their years
 SCOPED_SONGS = [('Bitches Brew', 1970), ('Kind of Blue', 1959), ('Jazz Hits', 1990)]
 SCOPED_ORDERS = {0: [0, 1, 2], 1: [0, 1, 2],   # Title; the saved Artist is Title here
-                 2: [2, 0, 1],                  # Recently Added: Bitches Brew, Kind of Blue, Jazz Hits
-                 3: [1, 2, 0]}                  # Year, newest first: Jazz Hits 1990, Bitches Brew 1970, Kind of Blue 1959
+                 2: [0, 2, 1],                  # Recently Added: Bitches Brew, Kind of Blue, Jazz Hits
+                 3: [1, 0, 2]}                  # Year, newest first: Jazz Hits 1990, Bitches Brew 1970, Kind of Blue 1959
 SCOPED_REV = {0: [2, 1, 0], 1: [2, 1, 0],       # Z-A (the saved Artist's letter b is Title, Z-A here)
-              2: [1, 0, 2],                     # Oldest First: Kind of Blue, Bitches Brew... by newest song: Jazz Hits, Kind of Blue, Bitches Brew
-              3: [0, 2, 1]}                     # Oldest First: Kind of Blue 1959, Bitches Brew 1970, Jazz Hits 1990
+              2: [1, 2, 0],                     # Oldest First, by newest song: Jazz Hits, Kind of Blue, Bitches Brew
+              3: [2, 0, 1]}                     # Oldest First: Kind of Blue 1959, Bitches Brew 1970, Jazz Hits 1990
 
 
 def scoped_machine(sort=None, albums_page=True, view=b'0\n'):
@@ -1221,8 +1276,8 @@ def scoped_pills_tests(ctx):
         m.texts.clear(); m.blits.clear()
         m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
         tx = [t for t, r in m.texts]
-        expect(tx[:4] == ['Kind of Blue', 'Jazz Hits', 'Bitches Brew', 'All Songs'], f'{mode}: titles ({tx})')
-        expect(tx[4:] == ['1959', '1970'], f'{mode}: Kind of Blue 1959 (the earliest tag), Jazz Hits and All Songs empty, Bitches Brew 1970 ({tx})')
+        expect(tx[:4] == ['Bitches Brew', 'Jazz Hits', 'Kind of Blue', 'All Songs'], f'{mode}: titles ({tx})')
+        expect(tx[4:] == ['1970', '1959'], f'{mode}: Bitches Brew 1970, Kind of Blue 1959 (the earliest tag), Jazz Hits and All Songs empty ({tx})')
     # one read of the artist's songs; none for the sorts that need no years beyond it
     qs = [c for c in m.open_calls if c[0] == 'loadAlbumdetailList']
     expect(len(qs) == 1 and qs[0][1] == O['CLASS_ARTIST_ALBUMS'], f'one read of the artist\'s songs on open ({qs})')

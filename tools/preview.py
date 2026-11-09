@@ -113,9 +113,9 @@ def artists_page(s, album_artist=False, other=None, scroll=0, touched=None, to=N
                       if min(seg2(xx * 8 + 2 * j + 1, yy * 8 + 2 * i + 1, 14, 14, 68, 64), seg2(xx * 8 + 2 * j + 1, yy * 8 + 2 * i + 1, 68, 64, 14, 114)) <= 64)
             chev.putpixel((xx, yy), (0x8A, 0x8A, 0x8A, hit * 255 // 16))
     for n, ry in rows:
-        d.rectangle((24, ry + row - 1, O_['SG_TEXT_END'] - 1, ry + row - 1), fill=PS.HAIR)
-        s.text(tall, 24, ry + row / 2, s.clip(n, 21, 252 - 24), 21)
-        tall.alpha_composite(chev, (262, ry + (row - 16) // 2))
+        d.rectangle((24, ry + row - 1, O_['LIST_HAIR_END'] - O_['SG_RAIL_INSET'] - 1, ry + row - 1), fill=PS.HAIR)   # the rail is shown: everything moves left by SG_RAIL_INSET (patch/azlist.c az_inset)
+        s.text(tall, 24, ry + row / 2, s.clip(n, 21, O_['LIST_TEXT_X'] + O_['LIST_TEXT_W_CHEV'] - O_['SG_RAIL_INSET'] - 24), 21)
+        tall.alpha_composite(chev, (O_['LIST_CHEV_X'] - O_['SG_RAIL_INSET'], ry + (row - 16) // 2))
     scroll = max(0, min(dict(secs)[to] if to else scroll, end - 400))   # to: the rail's jump, section `to`'s header at the window's top
     im = PI.pod_page(s, 'm1plus_artists', 0, title=' ')
     im = im.crop((0, 0, 320, 50)); full = Image.new('RGBA', (320, 450), (0, 0, 0, 255)); full.paste(im, (0, 0))

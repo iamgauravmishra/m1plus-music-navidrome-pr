@@ -111,6 +111,7 @@ def stack(m, *words):
 
 def machine():
     m = RM()
+    m.fs[AZRAIL_FILE] = b'1\n'   # Index Rail on: the countries' rail tests (the switch defaults on)
     for sym in ('stock_start_player_trampoline', 'stock_save_stop_trampoline', 'stock_save_start_trampoline'):
         m.handlers[PSYMS[sym]] = sym
     return m
@@ -1362,6 +1363,25 @@ def directory_tests(ctx):
     expect(sites[1] == f'https://all.api.radio-browser.info/csv/stations/bycountrycodeexact/DE?{QUERY}' and text_of(m, 'sg_title') == 'Germany' and grid_titles(m) == ['Alpha FM', 'Beta Radio'],
            f"a country: its stations by the code, the title is its name ({sites[1:]})")
     expect(vis(m, 'rd_credit') == (0, 0), "a country's stations: no credit")
+    # the Index Rail and Section Headers switches (both on by default), read when the page opens: with the headers off the rows close up and no letter shows
+    keep = m
+    for rail, heads in ((b'0\n', b'1\n'), (b'1\n', b'0\n'), (b'0\n', b'0\n')):
+        m = page_machine(); m.fs[AZRAIL_FILE], m.fs[AZHEAD_FILE] = rail, heads; open_radio(m)
+        m.answer = COUNTRIES_CSV.encode(); sites_of(m)
+        tap_dir(m, 1); finish(m); tick(m)
+        hh = 28 if heads == b'1\n' else 0
+        ys = [52 + (sec[i] + 1) * hh + i * 52 for i in range(4)]
+        blits, texts, fills = paint(m)
+        ts = [r[1] for (t, r), st in texts if st == 'label_row_title']
+        what = f'rail {rail.strip().decode()}, headers {heads.strip().decode()}'
+        expect(ts == [y + (52 - O['LIST_TITLE_H']) // 2 for y in ys] and bool(rows_text(m, 'label_hdr')) == bool(hh) and not (not hh and [f_ for f_ in fills if f_[0] == O['SG_HDR_BG']]),
+               f'{what}: the countries at {ys} and the section letters only with the headers ({ts})')
+        gap = O['SG_RAIL_INSET'] if rail == b'1\n' else 0   # the rail's footprint (patch/azlist.c az_inset): chevron, text end and hairline end move left by it; rail off: the list-row spec
+        ws = [r[2] for (t, r), st in texts if st == 'label_row_title']
+        expect(ws and all(w == O['LIST_TEXT_X'] + O['LIST_TEXT_W_CHEV'] - gap - 24 for w in ws) and sorted({b[2][0] for b in blits if b[2][2] == 10}) == [O['LIST_CHEV_X'] - gap]
+               and {f_[3] for f_ in fills if f_[0] == 0xff222222 and f_[4] == 1} == {O['LIST_HAIR_END'] - gap - 24}, f'{what}: names to x {O["LIST_TEXT_X"] + O["LIST_TEXT_W_CHEV"] - gap}, chevrons at x {O["LIST_CHEV_X"] - gap}, hairlines to x {O["LIST_HAIR_END"] - gap}')
+        expect(vis(m, 'sg_rail') == ((1, 1) if rail == b'1\n' else (0, 0)) and m.props.get((m.sv, 'virtual_h'), 0) >= ys[3] + 52, f'{what}: the rail is {"shown" if rail == b"1\n" else "hidden and insensitive"}')
+    m = keep
     click(m, 'btn_return')
     expect(rows_text(m) == names and text_of(m, 'sg_title') == 'Countries' and vis(m, 'sg_rail') == (1, 1), 'Back: the countries and the rail')
     click(m, 'btn_return')

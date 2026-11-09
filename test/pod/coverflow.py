@@ -856,7 +856,7 @@ def landscape_tests(ctx, asset):
     print(f'  landscape frame: {land_icount:,} payload instructions ({LW}x{LH} logical, {LH}x{LW} bitmap, {LH * LW * 4 // 1024} KB)')
 
     # a long name is cut with an ellipsis inside the caption width
-    m = cover_machine(albums=2); m.load_image = 0; m.canvas_mem = m.alloc(0x80); m.fs[LFILE] = b'1\n'
+    m = cover_machine(albums=2); m.load_image = 0; m.canvas_mem = m.alloc(0x80); m.fs[LFILE] = b'1\n'; m.fs[SORT_FILE] = b'3\n'   # (Year with no song list keeps the stock rows' order: the long name stays first)
     m.showlist[0] = m.record(album='x' * 70, artist='Artist 0', path='/mnt/mmc/m/0/1.flac', rid=1)
     cached(m, 'Artist 0', 'x' * 70)
     m.call(PSYMS['coverflow_open'], count=5000000)
@@ -869,7 +869,7 @@ def landscape_tests(ctx, asset):
     lit = [x for x in range(LW) if physical(m, x, top + 3) & 0xffffff]
     expect(lit and (LW - O['CFL_CAP_W']) // 2 <= lit[0] and lit[-1] < (LW + O['CFL_CAP_W']) // 2, f'inside the {O["CFL_CAP_W"]} px width ({lit[0]}..{lit[-1]})')
     # a CJK name (wide glyphs), a missing glyph (a 4 px gap) and an empty artist draw without a fault
-    m = cover_machine(albums=2); m.load_image = 0; m.canvas_mem = m.alloc(0x80); m.fs[LFILE] = b'1\n'
+    m = cover_machine(albums=2); m.load_image = 0; m.canvas_mem = m.alloc(0x80); m.fs[LFILE] = b'1\n'; m.fs[SORT_FILE] = b'3\n'
     m.showlist[0] = m.record(album='中文标题�结尾', artist='', path='/mnt/mmc/m/0/1.flac', rid=1)
     cached(m, '', '中文标题�结尾')
     m.call(PSYMS['coverflow_open'], count=5000000)

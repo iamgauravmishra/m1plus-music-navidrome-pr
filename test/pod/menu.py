@@ -640,6 +640,7 @@ def settings_tests(ctx):
     keyboards_tests(ctx, on_row, rows_s)
     region_row_tests(ctx, on_row, rows_s)
     pcsearch_row_tests(ctx, on_row, rows_s)
+    azswitch_row_tests(ctx, on_row, rows_s)
 
 
 def mainmenu_section(ctx):
@@ -1001,8 +1002,48 @@ def pcsearch_row_tests(ctx, on_row, rows_s):
         expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Podcast Discover', 'Podcasts', 'Search words are sent to Apple.')), f'the row, its header and its note have a text in {loc}')
 
 
+def azswitch_row_tests(ctx, on_row, rows_s):
+    """Settings > Library > Index Rail and Section Headers (both on by default), docs/modules/settings.md: two switch rows in the List Navigation card, saved as "1" / "0" in
+    /mnt/data/m1plus/appearance-index-rail and appearance-headers, written atomically; a failed save changes neither the file nor the switch; the A-Z pages read them with azrail_setting / azhead_setting."""
+    expect, P = ctx.expect, pod_pages
+    A = P.LIBRARY_PAGE
+    sys_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.LIBRARY_PAGE_INDEX)
+    for label, act, fn, tog, name, default in (('Index Rail', P.ACT_AZRAIL, 'azrail_setting', 'azrail_toggle', 'appearance-index-rail', 1), ('Section Headers', P.ACT_AZHEAD, 'azhead_setting', 'azhead_toggle', 'appearance-headers', 1)):
+        FILE = '/mnt/data/m1plus/' + name
+        r_i = next(i for i, r in enumerate(A.rows) if r.action == act)
+        layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else '') for x in A.layout]
+        expect(A.rows[r_i].label == label and act in P.SWITCH_ACTIONS and P.row_kind(A.rows[r_i]) == 'switch' and name in P.SETTING_FILES and layout[2:6] == ['Hdr', 'Row:Index Rail', 'Row:Section Headers', 'Note'],
+               f'{label}: a switch row in the List Navigation card (header and note) under the first card of the Library page, its file {name} among the Settings Files ({layout[2:6]})')
+
+        def open_page(saved=None):
+            m = Machine()
+            m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(len(P.SETTINGS_PAGE.rows))] + [f'pod_switch{r_i}'])}
+            if saved is not None: m.fs[FILE] = saved
+            m.call(on_row, a0=rows_s + 12 * sys_i, count=3000000)
+            return m
+
+        def images(m): return [c[2] for c in m.calls if c[0] == 'image_base_set_image' and c[1] == m.widgets[f'pod_switch{r_i}']]
+
+        m = open_page()
+        expect(images(m) == ['sset_on' if default else 'sset_off'] and FILE not in m.fs and m.call(PSYMS[fn], count=2000000) == default, f'{label}: opened with nothing saved, the switch is {"on" if default else "off"} (the default) and nothing is written')
+        for data, on in ((b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'0', 0), (b'', default), (b'x', default), (b'11', default), (b'\n1', default)):
+            want = on if data in (b'1\n', b'1', b'0\n', b'0') else (1 if default else 0)
+            expect(images(open_page(data)) == ['sset_on' if want else 'sset_off'], f'{label}: saved {data!r}: the switch opens {"on" if want else "off"}')
+        m = open_page()
+        m.click(f'pod_row{r_i}')
+        now = 0 if default else 1
+        expect(m.fs.get(FILE) == (b'1\n' if now else b'0\n') and FILE + '.tmp' not in m.fs and ('rename', FILE + '.tmp', FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
+               and images(m)[-1] == ('sset_on' if now else 'sset_off') and m.call(PSYMS[fn], count=2000000) == now, f'{label}: a tap flips it, written atomically (a temp file, fsync, rename)')
+        m.click(f'pod_row{r_i}')
+        expect(m.fs.get(FILE) == (b'1\n' if default else b'0\n') and m.call(PSYMS[fn], count=2000000) == default, f'{label}: and back')
+        m = open_page(b'1\n'); m.fail.add(('write', FILE + '.tmp'))
+        m.click(f'pod_row{r_i}')
+        expect(m.fs.get(FILE) == b'1\n' and FILE + '.tmp' not in m.fs and images(m) == [] and m.call(PSYMS[fn], count=2000000) == 1, f'{label}: a failed save changes neither the file nor the switch')
+        expect(all(pod_i18n.TEXT[label][pod_i18n.table_for(loc)] for loc in pod_i18n.LOCALES), f'{label} has a text in every language')
+
+
 def library_tests(ctx, on_row):
-    """Settings > Library (m1plus_library): Update Library, Rebuild Covers, the Landscape switch, Podcast Discover and Podcast Region; no Album Order row or picker."""
+    """Settings > Library (m1plus_library): Update Library, Rebuild Covers, the List Navigation switches, the Landscape switch, Podcast Discover and Podcast Region; no Album Order row or picker."""
     expect, P = ctx.expect, pod_pages
     C = P.LIBRARY_PAGE
     rows_s = PSYMS[f'pod_rows_{P.SETTINGS_PAGE_INDEX}']
@@ -1010,9 +1051,9 @@ def library_tests(ctx, on_row):
     LAND, SORT = '/mnt/data/m1plus/coverflow-landscape', SORT_FILE
     land_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LANDSCAPE)
     sw = f'pod_switch{land_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and P.row_kind(C.rows[0]) == 'action',
-           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, then Landscape (switch) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, then the List Navigation switches (Index Rail, Section Headers), Landscape (switch) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
 
     def open_lib(land=None, language=None):
         m = Machine()

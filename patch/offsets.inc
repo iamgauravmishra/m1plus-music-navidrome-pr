@@ -802,12 +802,12 @@
 #define SG_HDR_H 28
 #define SG_HDR_X 10
 #define SG_HDR_BG 0xff000000u
-#define SG_TEXT_END 296
 #define SG_SEL_COL 30
 #define SG_MARK 26
 #define SG_RAIL_X 284        /* the touch column: x 284..320, 36 wide; the drawn letters and dots stay centred on x SG_RAIL_CX */
 #define SG_RAIL_W 36
 #define SG_RAIL_CX 310
+#define SG_RAIL_INSET (LIST_HAIR_END - SG_RAIL_X) /* 26: while the rail is shown the rows give up this much on the right (the rail's touch column starts at SG_RAIL_X, the hairline ends at LIST_HAIR_END): hairline end, chevron x and text end move left by it (patch/azlist.c az_inset) */
 #define SG_RAIL_PAD 12       /* the widget is the drawn span plus this much above and below: a tap further from the span reaches the row */
 #define SG_RAIL_TEXT_W 24    /* the letters' rect (centred on SG_RAIL_CX, shifted by SG_RAIL_DX, which pod.py derives from the tree's font into stock.h with SG_RAIL_INK2) */
 #define SG_LIST_Y 50         /* the list's top in the window (the navbar's height) */

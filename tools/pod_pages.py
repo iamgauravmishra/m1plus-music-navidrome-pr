@@ -100,6 +100,8 @@ ACT_ACCENTSET = 49 # picker row (Accent): choose the accent (arg = its index in 
 ACT_SFDEL = 51    # information row of Settings Files (Settings > Developer > Tools): a setting file's label and its value, like ACT_INFO, but tappable while the file is there: a confirm, then the file is deleted (arg = INFO_SF + k; patch/setfiles.c setfiles_delete)
 ACT_SFOLD = 52    # value row of Settings Files: Unsupported Files, the count of retired files (arg = INFO_SFOLD); a chevron and a tap that opens their list (patch/covlist.c kind 2) only while the count is not zero
 ACT_SFDELALL = 53 # action row of Settings Files: Delete Unsupported Files, a confirm, then every retired file is deleted (patch/m1plus.c unsupported_delete_ask)
+ACT_AZRAIL = 77   # switch row (Settings > Library): Index Rail, on by default; on shows the A-Z rail and its bubble on the A-Z lists (patch/azlist.c azrail_toggle, /mnt/data/m1plus/appearance-index-rail)
+ACT_AZHEAD = 78   # switch row (Settings > Library): Section Headers, on by default; off drops the section letters and the pinned header and closes the rows up (patch/azlist.c azhead_toggle, /mnt/data/m1plus/appearance-headers)
 ACT_RESETALL = 54 # action row of Developer > Tools: Reset All Settings, a confirm, then every settings file is deleted (patch/m1plus.c reset_all_ask, patch/setfiles.c setfiles_reset_all)
 ACT_REGION = 55    # value row (Settings > Library > Podcasts): the Podcast Region, the storefront the podcast search and Discover use, or Automatic; opens its picker page (arg = the page index; patch/pcregion.c pcregion_value)
 ACT_REGIONSET = 56 # picker row (Podcast Region): choose Automatic (arg 0) or a storefront (arg = its index in pcregion.CODES + 1); a check shows on the chosen row (patch/pcregion.c pcregion_set)
@@ -107,7 +109,7 @@ ACT_CHGLIM = 80     # value row (Settings > System > Battery): Charge Limit, the
 ACT_CHGLIMSET = 81  # picker row (Charge Limit): choose the limit (arg = 80, 85, 90, 95 or 100, no limit); a check shows on the chosen row (patch/charging.c chg_set)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH)
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
@@ -398,7 +400,7 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 40  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 42  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
@@ -423,7 +425,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
 SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'pod-appearance',
-                 'appearance-accent', 'appearance-background', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
+                 'appearance-accent', 'appearance-background', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
                  'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'wifi-networks')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 # The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
@@ -434,7 +436,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 38      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 40      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 34   # after COVLIST (33)
@@ -563,10 +565,14 @@ EXTRAS_PAGE = Page('m1plus_extras', 'm1plus_extras_page', 'Extras', rows=[Row(r.
 EXTRASCFG_PAGE = Page('m1plus_extrascfg', 'm1plus_extrascfg_page', 'Extras', kind='extrascfg')
 
 # Settings > Library: one card of Update Library (the stock page, as the Update Library item), Rebuild Covers (the stock confirm dialog, then Home's cover build extracts every
-# cover again), then Cover Flow's Landscape switch (the album order is the Albums "..." card's).
+# cover again), then the List Navigation card (Index Rail and Section Headers, the A-Z lists of patch/azlist.c), Cover Flow's Landscape switch (the album order is the Albums "..." card's).
 LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Rebuild Covers', ACT_REBUILD),
+    Hdr('List Navigation'),
+    Row('Index Rail', ACT_AZRAIL),
+    Row('Section Headers', ACT_AZHEAD),
+    Note('Songs, Artists, Albums and Radio lists'),
     Hdr('Cover Flow'),
     Row('Landscape', ACT_LANDSCAPE),
     Hdr('Podcasts'),

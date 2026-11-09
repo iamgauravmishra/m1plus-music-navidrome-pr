@@ -153,5 +153,5 @@ def run(ctx):
         bad = [(x, y, tgt(x, y)) for x, y in ((8, 6), (29, 25), (49, 45)) if tgt(x, y) != 'btn_return']
         bad += [(x, y, tgt(x, y)) for x, y in ((play.x + 10, 6), (play.x + 30, 25), (311, 45)) if tgt(x, y) != 'btn_backtoplayer']
         expect(not bad, f'{pg}: the disc corners and centres of Back and Now Playing reach their buttons ({bad})')
-        expect(all(tgt(x, y) == 'row0' for x in (20, 160, 280 if pg in ('m1plus_songs.bin', 'm1plus_artists.bin') else 300) for y in (50, 55, 62, 69)) and all(tgt(x, y) != pod_ui.NB_FADE_NAME for x in (0, 160, 319) for y in range(50, 70)),
+        expect(all(tgt(x, y) == 'row0' for x in (20, 160, 280 if pg in ('m1plus_songs.bin', 'm1plus_artists.bin', 'm1plus_albums.bin') else 300) for y in (50, 55, 62, 69)) and all(tgt(x, y) != pod_ui.NB_FADE_NAME for x in (0, 160, 319) for y in range(50, 70)),
                f'{pg}: the first row takes touches through the whole fade, which never gets one')

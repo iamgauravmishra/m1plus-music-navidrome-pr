@@ -127,6 +127,9 @@ def latin_initial(c):
     return d[0].lower() if len(d) > 1 and d[0].isascii() and d[0].isalpha() else None
 
 
+NAME_PUNCT = frozenset(c for c in map(chr, range(0x21, 0x7f)) if not c.isalnum()) | set('\u00a1\u00bf\u00ab\u00bb\u2018\u2019\u201a\u201c\u201d\u201e\u2039\u203a\u3008\u3009\u300a\u300b\u300c\u300d\u300e\u300f\u3010\u3011\uff08\uff09\uff3b\uff3d\uff5b\uff5d\uff02\uff07')   # (the leading punctuation the name order skips)
+
+
 def name_sort_key(name):
     """The library name order, independently written: leading white space and a leading "The " dropped, a CJK character
     as its pinyin initial and a kana as its Hepburn initial, then per position a digit run (by value) before a symbol
@@ -134,6 +137,12 @@ def name_sort_key(name):
     Latin letter is its base letter (ß s, æ a, ø o ...) before a letter (ASCII case
     folded); a shorter key that is a prefix comes first."""
     s = name.lstrip(' \t\n\r\v\f')
+    t = s
+    while t:   # a leading run of punctuation (white space between) is skipped when something else follows it
+        t = t.lstrip(' \t\n\r\v\f')
+        if t and t[0] in NAME_PUNCT: t = t[1:]
+        else: break
+    if t: s = t
     if len(s) > 4 and s[:4].lower() == 'the ': s = s[4:]
     s = ''.join(PINYIN_INITIAL.get(c) or kana_initial(c) or latin_initial(c) or c for c in s)
     key = []
@@ -1813,6 +1822,7 @@ COVER_WIDGETS = ['btn_return', 'btn_backtoplayer', 'btn_cancel', 'navigationbar_
 
 
 SORT_FILE, SORT_TMP = '/mnt/data/m1plus/albums-sort', '/mnt/data/m1plus/albums-sort.tmp'   # patch/home.h; the album order (0 Title, 1 Artist, 2 Recently Added, 3 Year)
+AZRAIL_FILE, AZHEAD_FILE = '/mnt/data/m1plus/appearance-index-rail', '/mnt/data/m1plus/appearance-headers'   # patch/home.h: the Index Rail and Section Headers switches (both on by default)
 OLD_ORDER_FILE, OLD_ORDER_TMP = '/mnt/data/m1plus/album-order', '/mnt/data/m1plus/album-order.tmp'   # the retired Album Order setting (patch/covercache.c migrates and deletes it)
 
 
@@ -1887,7 +1897,7 @@ def artist_rec(m, name, rid):
     return m.record(album='', artist=name, path='', title=name, name='', rid=rid)
 
 
-COMPOSER_ALBUMS = {'Bach': ['Goldberg Variations', 'Cello Suites'], 'Mozart': ['Requiem'], 'Unknown Composer': []}
+COMPOSER_ALBUMS = {'Bach': ['Cello Suites', 'Goldberg Variations'], 'Mozart': ['Requiem'], 'Unknown Composer': []}
 
 
 AR_WIDGETS = ('artists_listview', 'view_grid', 'sg_rail', 'sg_bubble', 'sg_bubble_letter', 'ar_title', 'label_hdr', 'label_rail', 'label_rail_on', 'label_row_title',
@@ -1942,6 +1952,7 @@ def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), co
     otherwise that window will not open and the tap falls back to Cover Flow on the artist, which
     the Cover Flow tests of this module drive."""
     m = cover_machine(albums=0, cls=ListMachine)
+    m.fs[AZRAIL_FILE] = b'1\n'   # Index Rail on: the rail tests of this page (the switch defaults on)
     for n in AR_WIDGETS: m.widget(n)
     if albums_page:
         for n in ALBUMS_PAGE_WIDGETS: m.widget(n)
@@ -1969,7 +1980,7 @@ def artists_machine(artists=('Miles Davis', 'Nina Simone', 'Unknown Artist'), co
         m.class_lists[O['CLASS_COMPOSERS']] = [artist_rec(m, c, -1 if c.startswith('Unknown') else i + 1) for i, c in enumerate(composers)]
     if genres:
         m.class_lists[O['CLASS_GENRES']] = [artist_rec(m, g, -1 if g.startswith('Unknown') else i + 1) for i, g in enumerate(genres)]
-    albums = {'Miles Davis': ['Kind of Blue', 'Jazz Hits', 'Bitches Brew'], 'Nina Simone': ['Pastel Blues'],
+    albums = {'Miles Davis': ['Bitches Brew', 'Jazz Hits', 'Kind of Blue'], 'Nina Simone': ['Pastel Blues'],
               'Unknown Artist': []}
     albums.update({c: COMPOSER_ALBUMS.get(c, []) for c in composers})
     artists = tuple(artists) + tuple(composers)

@@ -343,7 +343,7 @@ def large_title(name, text):
     return title
 
 
-def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview', 'albums_scrollview'), more=False, albums=False, more_left=False, plactions=False, title_name=None):
+def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview', 'albums_scrollview'), more=False, albums=False, more_left=False, plactions=False, title_name=None, az=False):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     nb = navbar(page.title, toggle=toggle, coverflow=coverflow, more=more, albums=albums, more_left=more_left, plactions=plactions)
@@ -375,6 +375,9 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
+    if az:   # the list mode's section letters, rail and bubble (patch/albums.c, the Songs page's furniture); the payload hides the rail while the grid shows or the Index Rail switch is off
+        root.children.extend(azlist_labels())
+        root.children.extend(azlist_rail())
     if albums:
         root.children.extend(view_sort_card())   # last: above everything
     return root
@@ -2901,7 +2904,7 @@ def build_page(page):
     if page.kind == 'covlist':
         return build_grid_page(page, toggle=None, coverflow=False, names=('covlist_listview', 'covlist_scrollview'))
     if page.kind == 'grid':
-        return build_grid_page(page, toggle=None, coverflow=False, albums=True)
+        return build_grid_page(page, toggle=None, coverflow=False, albums=True, az=True)   # the Albums page: its list mode has the A-Z furniture (patch/azlist.c)
     if page.kind == 'podcasts':
         return build_podcasts_page(page)
     if page.kind == 'peq':

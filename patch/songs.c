@@ -308,10 +308,10 @@ static int sg_tx(void) { return LIST_TEXT_X + (sg.select ? SG_SEL_COL : 0); }
 static int sg_art_x(void) { return LIST_ART_X + (sg.select ? SG_SEL_COL : 0); }
 
 /* The row's "..." (patch/rowmenu.c): shown outside select mode, its zone ends at the list's edge, or left of the A-Z rail while that is shown; the title and the artist end before it. */
-static int sg_more_right(void) { return sg.al.nsec > 0 ? RM_MORE_RIGHT_RAIL : RM_MORE_RIGHT; }
-static int sg_edge(void) { return rowmenu_on(&sg.rm) ? rowmenu_zone_x(sg_more_right()) - RM_TEXT_GAP : SG_TEXT_END; }
+static int sg_more_right(void) { return RM_MORE_RIGHT - az_inset(&sg.al); }
+static int sg_edge(void) { return rowmenu_on(&sg.rm) ? rowmenu_zone_x(sg_more_right()) - RM_TEXT_GAP : az_end(&sg.al); }
 static int sg_more(void) { return !sg.select && rowmenu_on(&sg.rm); }
-static int sg_text_end(void) { return sg.select ? SG_TEXT_END : sg_edge(); }
+static int sg_text_end(void) { return sg.select ? az_end(&sg.al) : sg_edge(); }
 
 static int sg_is_sel(int i) { return sg.sel && (sg.sel[i >> 3] >> (i & 7) & 1); }
 
@@ -445,7 +445,7 @@ static int rv_cell_at(int x, int y) {
  * moved the canvas up by yoffset, which the paint adds back (CANVAS_OY) for its duration, as the Albums page does.
  */
 static void sg_paint_rows(void *canvas) {
-    int r0, r1, r, off = sg_off(), tx = sg_tx(), hair = SG_TEXT_END - tx, room = sg_text_end() - tx, pass;
+    int r0, r1, r, off = sg_off(), tx = sg_tx(), hair = az_end(&sg.al) - tx, room = sg_text_end() - tx, pass;
     if (sg.head) { /* a playlist's mosaic (the cover, or the placeholder disc until it is made) */
         grid_tile_t *h = grid_find(&sg.hg, 0);
         if (h) grid_blit(canvas, &sg.hg, h, PH_COVER_X, PH_COVER_Y - off, GRID_VIEW_H);
@@ -467,7 +467,7 @@ static void sg_paint_rows(void *canvas) {
         }
         grid_blit(canvas, &sg.g, t, sg_art_x(), y + LIST_ART_Y, GRID_VIEW_H);
         az_fill(canvas, tx, y + ROW - 1, y + ROW, hair, LIST_HAIR);
-        if (sg_more()) rowmenu_paint(canvas, &sg.rm, sg_more_right(), sg.al.nsec > 0, y, ROW, GRID_VIEW_H);
+        if (sg_more()) rowmenu_paint(canvas, &sg.rm, sg_more_right(), az_inset(&sg.al) > 0, y, ROW, GRID_VIEW_H);
     }
     for (pass = 0; pass < 2; ++pass) { /* titles, then artists: one text style at a time */
         widget_prepare_text_style(pass ? sg.st_sub : sg.st_title, canvas);
@@ -1499,6 +1499,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name) {
     sg.foot = widget_lookup(sg.win, "sg_foot", 1);
     sg.hname = widget_lookup(sg.win, "sg_hname", 1); /* optional: a playlist's header */
     sg.al.win = sg.win, sg.al.sv = sg.sv, sg.al.top = SG_TOP, sg.al.row = ROW;
+    az_prefs(&sg.al);
     if (!sg.foot || !sg.back || !sg.np || !sg.btn_more || !sg.btn_select || !sg.btn_selall || !sg.btn_play ||
         !sg.btn_shuffle || !sg.hd_play || !sg.hd_shuffle || !sg.pill.glyph || !sg.pill.ptext || !sg.btn_add ||
         !sg.btn_del || !sg.title || !sg.view || !sg.sv || !sg.status || !sg.st_title || !sg.st_sub || !sg.al.st_hdr ||

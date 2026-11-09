@@ -103,10 +103,10 @@ int cc_key_cmp(
 int cc_name_cmp(
     const char *a,
     const char *
-        b); /* cc_key_cmp of the names without leading white space and a leading "The " (no pinyin or kana initials: see cc_name_keys) */
+        b); /* cc_key_cmp of the names without leading white space, leading punctuation (when a letter or digit follows) and a leading "The " (no pinyin or kana initials: see cc_name_keys) */
 const char *cc_name_key(
     const char *
-        s); /* s without leading white space and a leading "The " (when something follows it): the text the Artist order compares */
+        s); /* s without leading white space, leading punctuation (so_name) and a leading "The " (when something follows it): the text the Artist order compares */
 int cc_name_initial(
     const char *
         name); /* the first byte of that text, a CJK character as its pinyin initial (stock's utf8_to_pinyin), a kana as its romaji initial: the section letter of a name */
@@ -131,12 +131,12 @@ int cc_sort_mode_set(
     int rev); /* save it atomically; the mode, or -1 when it could not be saved (and the setting is unchanged) */
 unsigned *cc_album_order(
     void *
-        albums); /* heap array of the rows in display order for cc_sort_mode (Recently Added and Year read the whole song list once); NULL = stock order (Title, or no memory / no songs) */
+        albums); /* heap array of the rows in display order for cc_sort_mode (Recently Added and Year read the whole song list once); NULL = stock order (no memory / no songs) */
 int cc_scoped_sort(
-    void); /* cc_sort_mode for one artist's albums: Artist shows as Title (the stock order); its direction is cc_sort_rev */
+    void); /* cc_sort_mode for one artist's albums: Artist shows as Title; its direction is cc_sort_rev */
 unsigned *cc_album_order_mode(
     void *albums, int mode,
-    int rev); /* cc_album_order for the given CC_SORT_* and direction instead of the saved ones; NULL for Title in its default direction; "Unknown Album" and the All Songs row stay last */
+    int rev); /* cc_album_order for the given CC_SORT_* and direction instead of the saved ones; NULL: no albums or no memory (Title falls back to the stock order, backwards for Z-A); "Unknown Album" and the All Songs row stay last */
 unsigned *cc_album_years(
     void *albums,
     void *
