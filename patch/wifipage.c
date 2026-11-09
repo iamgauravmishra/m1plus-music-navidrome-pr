@@ -1306,7 +1306,8 @@ static int wp_tick(const void *timer) {
         if (wp.alive && !was) { /* the supplicant came up: the first scan, and the cached list is read at once */
             wp_scan();
             wp_fetch();
-        }
+        } else if (wp.alive && wp.crow >= 0 && wp.scan_t < 0)
+            wp_fetch(); /* connecting, so no scan of ours: the supplicant's own scans fill its table, read for the row's signal */
     }
     return RET_REPEAT;
 }

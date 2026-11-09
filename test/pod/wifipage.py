@@ -1770,6 +1770,18 @@ def timer_tests(ctx):
     expect(not m.visible('wf_hdr_net_spin'), 'the initial scan has ended')
     fr = spin_run(m, 12)
     expect(len(set(fr)) == 8 and steps(fr) == [1] * 11, f'an automatic connection after the scan: turning: {fr}')
+    # an automatic connection that starts before the supplicant's table has the network: the row's signal comes once the table has it, without a scan of ours
+    supp = Supp(scan=[], known=KNOWN); supp.state, supp.cur, supp.ip = 'ASSOCIATING', 0, None
+    m = page(supp); opened(m); m.tick(20)
+    expect(not m.visible('wf_hdr_net_spin') and m.rows()[0][0] == 'Home' and m.rows()[0][2] == 'wf_sig0', f'the initial scan found nothing: no signal yet: {m.rows()[:1]}')
+    supp.scan, supp.log = list(SCAN), []
+    m.tick(4)
+    expect(m.rows()[0][2] == 'wf_sig3' and 'SCAN' not in m.cmds() and 'SCAN_RESULTS' in m.cmds(), f'still connecting: the table is read, the row shows its signal, no scan started: {m.rows()[:1]} {m.cmds()}')
+    supp.state, supp.ip = 'COMPLETED', '192.168.1.20'
+    m.tick(4)
+    supp.log = []
+    m.tick(16)
+    expect(m.rows()[0][1] == 'wf_check' and 'SCAN_RESULTS' not in m.cmds(), f'connected: the table is read only with the scans again: {m.cmds()}')
     supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'ASSOCIATING', 0, None
     m = page(supp); opened(m)
     fr = spin_run(m, 8)
