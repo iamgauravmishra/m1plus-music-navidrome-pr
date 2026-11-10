@@ -668,7 +668,7 @@ def accent_image_tests(ctx):
     GLYPHS = tuple(sorted(f[:-4] for f in os.listdir(d) if f.startswith(L.ACCENT_GLYPH) and f.endswith('.png') and f[:-4] not in L.ACCENT_GLYPH_NOT)) + L.ACCENT_GLYPH_STOCK   # (the row glyphs, tinted by prefix, and the More sheet's stock ones by name)
     expect(len(GLYPHS) >= 60 and sum(g.startswith('pod_ci_') for g in GLYPHS) >= 30, f'{len(GLYPHS)} pod_ic_/fo_ic_/pod_ci_ glyph images in the tree ({sum(g.startswith("pod_ci_") for g in GLYPHS)} Settings card glyphs)')
     expect(not [g for g in GLYPHS if g.startswith('pod_sw')] and all(L.accent_kind(f'pod_sw{k}') is None for k in range(7)), 'the accent swatches pod_sw* are not glyphs (never tinted)')
-    expect({'fo_ic_sd', 'fo_ic_usb', 'fo_ic_file'} <= set(GLYPHS), 'the Folders list\'s own glyphs are in the tinted set')
+    expect({'fo_ic_sd', 'pod_ic_usbmode', 'fo_ic_file'} <= set(GLYPHS), 'the Folders list\'s own glyphs are in the tinted set')
     expect(all(g in GLYPHS and os.path.exists(os.path.join(d, g + '.png')) for g in L.ACCENT_GLYPH_STOCK) and not {'pc_ic_unsub', 'selected'} & set(GLYPHS) and {'pc_ic_trash', 'pl_ic_delete', 'p_delete'} <= set(GLYPHS),
            'every stock glyph named for the accent is an image of the tree and in the tinted set, the delete rows\' glyphs too; the red unsubscribe glyph and the stock selected check are not')
     bad, n, costs = tint_check(d, L.ACCENT_ALL + GLYPHS, None, 'black')
@@ -992,7 +992,7 @@ def tinted_tests(ctx):
     d = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'images', 'xx')
     names = sorted(f[:-4] for f in os.listdir(d) if f.endswith('.png'))
     surf = [n for n in names if n.startswith(L.TINT_SURFACE)]
-    expect(L.TINT_SURFACE == ('pod_cd_', 'pod_cdl_', 'pc_sheet', 'pm_sheet', 'mb_glass', 'nb_fade') and len(surf) >= 8 and not [n for n in surf if n.startswith(L.KEEP)], f'{len(surf)} surface images in the tree, none in KEEP')
+    expect(L.TINT_SURFACE == ('pod_cd_', 'pod_cdl_', 'pc_sheet', 'mb_glass', 'nb_fade') and len(surf) >= 8 and not [n for n in surf if n.startswith(L.KEEP)], f'{len(surf)} surface images in the tree, none in KEEP')
     stock_h = open(os.path.join(BUILD, 'stock.h')).read()
     line = next((l for l in stock_h.splitlines() if l.startswith('#define TINT_SURFACE ')), '')
     expect(line == '#define TINT_SURFACE "' + ''.join(n + '\\0' for n in L.TINT_SURFACE) + '"', 'TINT_SURFACE in the generated header is the model\'s list')
@@ -1062,7 +1062,7 @@ def rest_glyph_tests(ctx):
                 got = m.image('pod_ic_songs', 8, 8, glyph, fmt)
                 want = [L.accent_pixel('glyph', p, ac) for p in glyph]
                 if got != want: expect(False, f'{ac}, background {bg}, format {fmt}: pod_ic_songs is the accent, alpha kept ({got[:3]} vs {want[:3]})')
-    expect(L.accent_kind('pod_ic_songs') == 'glyph' and all(L.accent_kind(t) == 'tile' for t in L.ACCENT_TILE) and L.accent_kind('pod_ci_wifi') == 'glyph' and L.accent_kind('fo_ic_usb') == 'glyph' and L.accent_kind('pod_sw3') is None and L.accent_kind('pod_chev') is None and L.accent_kind('pod_check') == 'fill', 'the model: pod_ic_*, fo_ic_* and pod_ci_* are glyphs, the two tiles, the swatches and the chevron are not')
+    expect(L.accent_kind('pod_ic_songs') == 'glyph' and all(L.accent_kind(t) == 'tile' for t in L.ACCENT_TILE) and L.accent_kind('pod_ci_wifi') == 'glyph' and L.accent_kind('pod_ic_usbmode') == 'glyph' and L.accent_kind('pod_sw3') is None and L.accent_kind('pod_chev') is None and L.accent_kind('pod_check') == 'fill', 'the model: pod_ic_*, fo_ic_* and pod_ci_* are glyphs, the two tiles, the swatches and the chevron are not')
     m = LM(acc=b'2\n')
     got = m.image('pod_ic_shuffle', 8, 8, [(p[3], p[3], p[3], p[3]) for p in glyph], premul=True)
     want = [L.glyph_image_px(p, 'orange', True) for p in glyph]
@@ -1077,8 +1077,8 @@ def rest_glyph_tests(ctx):
     # Neutral, the tiles and the other pages' glyphs
     m = LM()
     expect(m.image('pod_ic_songs', 8, 8, glyph) == glyph and 'bitmap_lock_buffer_for_write' not in [c[0] for c in m.calls], 'Neutral: a pod_ic_ glyph is not even locked')
-    expect(all(LM().image(nm, 8, 8, glyph) == glyph for nm in ('fo_ic_sd', 'fo_ic_usb', 'fo_ic_file')), 'Neutral: the Folders glyphs are untouched')
-    expect(all(LM(acc=b'%d\n' % i).image(nm, 8, 8, glyph) == [L.accent_pixel('glyph', p, ac) for p in glyph] for i, ac in enumerate(L.ACCENTS[1:], 1) for nm in ('fo_ic_sd', 'fo_ic_usb', 'fo_ic_file')), 'each accent: the Folders glyphs are the accent')
+    expect(all(LM().image(nm, 8, 8, glyph) == glyph for nm in ('fo_ic_sd', 'pod_ic_usbmode', 'fo_ic_file')), 'Neutral: the Folders glyphs are untouched')
+    expect(all(LM(acc=b'%d\n' % i).image(nm, 8, 8, glyph) == [L.accent_pixel('glyph', p, ac) for p in glyph] for i, ac in enumerate(L.ACCENTS[1:], 1) for nm in ('fo_ic_sd', 'pod_ic_usbmode', 'fo_ic_file')), 'each accent: the Folders glyphs are the accent')
     m = LM(acc=b'1\n')
     expect(L.accent_kind('pod_ic_rd_art') is None and all(LM(acc=b'%d\n' % i).image('pod_ic_rd_art', 8, 8, glyph) == glyph for i in range(1, 7)), 'the Radio placeholder art pod_ic_rd_art stays neutral under every accent')
     expect(all(m.image(nm, 8, 8, glyph) == glyph for nm in ('pod_sw0', 'pod_sw3', 'pod_chev')), 'the swatches and the chevron stay as they are at rest')

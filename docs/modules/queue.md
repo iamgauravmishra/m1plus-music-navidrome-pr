@@ -38,9 +38,9 @@ y   0   (back)                                                  glass Back (band
         | cov  |  Driftless Pony Club                           title 20 px white (y 65, 24 high), artist 16 px #AAAAAA (y 91, 20 high), x 86, 224 wide
   120   +------+
   136   [   shuffle   ]  [   repeat   ]                          two equal icon-only buttons, 145 x 40 at x 10 and 165 (10 px apart, spanning 10..310), the Songs page's flat pill look
-  192   Queue                                          Clear     20 px white at x 10, 28 high; "Clear" 17 px #9C9C9C right-aligned to x 310 (button 210..310 x 186..226)
+  192   Queue                                          Clear     20 px white at x 10, 28 high; "Clear" 17 px #AAAAAA right-aligned to x 310 (button 210..310 x 186..226)
   226   [cover] Title                                            Up Next: rows 64 px as the Songs page's: 52 px cover (4 px corners) at x 10, title 21 px, artist 18 px #AAAAAA from x 74 to 298, hairline
-        [cover] Artist                                           (or "No upcoming songs", 16 px #9C9C9C at x 10, where the first row would be)
+        [cover] Artist                                           (or "No upcoming songs", 16 px #AAAAAA at x 10, where the first row would be)
 ```
 
 - **Up Next** is the tracks after the play position, **in queue order**, which is the real play order (Shuffle reorders the queue itself, stock plays it in order). The playing track is only in the header. A row's text rules are the stock drawer's (CUE: file name; no title: file name). A row cut by the window's edge shows its texts cut too (no "wholly inside" rule: the
@@ -68,7 +68,7 @@ y   0   (back)                                                  glass Back (band
   Now Playing below follows. A drag, the header and the air play nothing.
 - **Refresh timer** (500 ms, `QP_TICK_MS`; 1 s with the screen dark, as Now Playing's): the play position moved (the next track, a key) -> the page is read again; the mode changed elsewhere -> the buttons; the queue was replaced ->
   read again when the page is on top (`EVT_WINDOW_TO_FG` reads at once). The stock queue is checked by pointer, size and first record, like the other pages' lists (`qp_valid`).
-- **Clear** (`btn_qclear`, Apple's text button): 17 px `#9C9C9C` (pressed `#7A7A7A`, 4.5:1 on black as the contrast scan needs), flat, no fill, right-aligned to x 310; the button is `QP_CLEAR_X/Y/W/H` = 210, 186, 100 x 40, centred on the "Queue" line (the
+- **Clear** (`btn_qclear`, Apple's text button): 17 px `#AAAAAA` (pressed `#7A7A7A`, 4.5:1 on black as the contrast scan needs), flat, no fill, right-aligned to x 310; the button is `QP_CLEAR_X/Y/W/H` = 210, 186, 100 x 40, centred on the "Queue" line (the
   whole right part of the row is the tap area), neutral, no accent. Shown (visible and sensitive) only while Up Next is non-empty, the play type is not a stream and `pod_clear_ready()` (libcstl as pinned, no DLNA service running, below) holds (`qp_load`); hidden and insensitive otherwise ("No upcoming songs").
   A tap asks no confirmation and calls `pod_clear_upnext` (`patch/shuffle.c`, which owns the queue lock), then `qp_load(0)`: the header stays, Up Next shows "No upcoming songs", Clear hides. The playing track keeps playing (no `start_playqueue`,
   no `mclSetPlayPos`), the play position and the tracks before it stay. "Clear" is translated in the 13 languages (`tools/pod_i18n.py`). Nothing can fail for lack of memory any more (no allocation), so there is no message box.

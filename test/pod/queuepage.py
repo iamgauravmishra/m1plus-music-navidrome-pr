@@ -193,7 +193,7 @@ def asset_tests(ctx):
     expect((head.x, head.y, head.h) == (O['SG_HDR_X'], O['QP_HEAD_Y'], O['QP_HEAD_H']) and head.get('style:normal:font_size') == '20' and head.get('style:normal:text_color') == '#FFFFFF'
            and head.get('tr_text', 'Queue') == 'Queue' and head.get('sensitive') == 'false' and f('qp_count') is None, '"Queue" 20 px white at x 10 (the shelf header\'s style), no count')
     expect((empty.x, empty.y, empty.h) == (O['SG_HDR_X'], TOP + O['QP_EMPTY_Y'], O['QP_EMPTY_H']) and empty.get('visible') == 'false' and empty.get('sensitive') == 'false'
-           and empty.get('style:normal:text_color') == '#9C9C9C' and empty.get('style:normal:font_size') == '16' and empty.get('tr_text', 'No upcoming songs') == 'No upcoming songs',
+           and empty.get('style:normal:text_color') == '#AAAAAA' and empty.get('style:normal:font_size') == '16' and empty.get('tr_text', 'No upcoming songs') == 'No upcoming songs',
            '"No upcoming songs": a quiet grey 16 px line where the first row would be, hidden until nothing follows')
     expect(O['QP_HEAD_Y'] == O['QP_PILL_Y'] + O['SG_PILL_H'] + 16 and O['QP_TOP'] == O['QP_HEAD_Y'] + O['QP_HEAD_H'] + 6, 'the section line is 16 px under the buttons, the rows 6 px under it')
     for name, px, colour in (('label_row_title', 21, '#FFFFFF'), ('label_row_sub', 18, '#AAAAAA')):
@@ -893,8 +893,8 @@ def clear_tests(ctx):
     root = ui(); b = root.find('btn_qclear'); view = root.find('view_queue')
     expect(b is not None and b.type == 'button' and (b.x, b.y, b.w, b.h) == (O['QP_CLEAR_X'], O['QP_CLEAR_Y'], O['QP_CLEAR_W'], O['QP_CLEAR_H']) and b.get('visible') == 'false' and b.get('sensitive') == 'false',
            'btn_qclear: a 100 x 40 button at x 210, hidden and insensitive from the start')
-    expect(b.get('style:normal:text_color') == '#9C9C9C' and b.get('style:pressed:text_color') == '#7A7A7A' and b.get('style:normal:font_size') == '17' and b.get('style:normal:text_align_h') == 'right'
-           and b.get('style:normal:bg_color') == '#00000000' and b.get('style:pressed:bg_color') == '#00000000' and b.get('tr_text', 'Clear') == 'Clear', 'Clear: 17 px neutral grey #9C9C9C, #7A7A7A pressed, right aligned, no fill')
+    expect(b.get('style:normal:text_color') == '#AAAAAA' and b.get('style:pressed:text_color') == '#7A7A7A' and b.get('style:normal:font_size') == '17' and b.get('style:normal:text_align_h') == 'right'
+           and b.get('style:normal:bg_color') == '#00000000' and b.get('style:pressed:bg_color') == '#00000000' and b.get('tr_text', 'Clear') == 'Clear', 'Clear: 17 px neutral grey #AAAAAA, #7A7A7A pressed, right aligned, no fill')
     expect(O['QP_CLEAR_X'] + O['QP_CLEAR_W'] == 310 and O['QP_CLEAR_Y'] + O['QP_CLEAR_H'] // 2 == O['QP_HEAD_Y'] + O['QP_HEAD_H'] // 2 and O['QP_CLEAR_Y'] >= O['QP_PILL_Y'] + O['SG_PILL_H']
            and O['QP_CLEAR_Y'] + O['QP_CLEAR_H'] <= TOP, 'it ends at x 310, is centred on the "Queue" line and touches neither the buttons above nor the rows below')
     names = [c.name for c in view.children]

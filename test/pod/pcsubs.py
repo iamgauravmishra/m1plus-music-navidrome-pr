@@ -157,7 +157,7 @@ def sheet_tests(ctx):
     for n in ('pod_ic_export',):
         im = asset_image(n)
         path = os.path.join(mod_icons.PNG, n + '.png')
-        expect(im.size == (20, 20) and im.getchannel('A').getbbox() is not None and os.path.isfile(path) and open(path, 'rb').read() == open(asset_path(n), 'rb').read(), f'{n}.png: 20 px, has pixels, committed and shipped')
+        expect(im.size == (24, 24) and im.getchannel('A').getbbox() is not None and os.path.isfile(path) and open(path, 'rb').read() == open(asset_path(n), 'rb').read(), f'{n}.png: 24 px, has pixels, committed and shipped')
     expect(len({asset_image(n).tobytes() for n in ('pod_ic_export', 'pc_ic_import', 'pc_ic_trash')}) == 3, 'different glyphs')
     # the sheet row of the asset
     rows = {r[0]: r for r in pod_ui.PS_SHEET_ROWS}

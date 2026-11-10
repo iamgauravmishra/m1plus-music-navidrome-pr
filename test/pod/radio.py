@@ -987,7 +987,7 @@ def asset_tests(ctx):
     for n in ('label_status', 'label_row_title', 'label_row_sub', 'label_grid_title', 'label_grid_sub', 'label_hdr', 'label_rail', 'label_rail_on', 'sg_bubble', 'img_nb_fade', 'rd_credit', 'kb_field'):
         expect(f(n).get('visible') == 'false' and f(n).get('sensitive') == 'false', f'{n}: hidden and insensitive at rest')
     cr = f('rd_credit')
-    expect((cr.x, cr.w, cr.h) == (0, 296, 20) and cr.get('style:normal:font_size') == '14' and cr.get('style:normal:text_color') == '#8E8E93' and cr.get('style:normal:text_align_h') == 'left'
+    expect((cr.x, cr.w, cr.h) == (0, 296, 20) and cr.get('style:normal:font_size') == '14' and cr.get('style:normal:text_color') == '#AAAAAA' and cr.get('style:normal:text_align_h') == 'left'
            and pod_i18n.shown_english(cr) == 'Stations from radio-browser.info' and cr in f('view_grid').children, "the credit: a small grey caption inside the content view, so it scrolls with the rows")
     expect(f('kb_field').y == 56 and all(f(n) is not None for n in ('kb_pad', 'kb_strip', 'kb_stem', 'kb_pop', 'kb_text', 'kb_hint', 'kb_caret', 'kb_clear', 'kb_go')), "the search page's field and pad are in the asset, the field under the navbar")
     fld, se = f('kb_field'), awtk_ui.parse(open(os.path.join(UI_DIR, 'm1plus_search.bin'), 'rb').read()).find('kb_field')
@@ -1027,7 +1027,7 @@ def asset_tests(ctx):
     expect(g('rd_sh_card') is not None and g('rd_sh_add') is not None and g('rd_sh_scrim').h == 450 and (names_ := [c.name for c in np.children]).index('rd_sh_card') > names_.index('btn_return'), 'the sheet is on the page, over everything')
     rows2 = [c for c in g('rd_sh_card').children]
     expect([c.name for c in rows2] == ['rd_sh_add', 'rd_sh_info'] and (g('rd_sh_card').h, g('rd_sh_card').y) == (2 * O['PM_ROW_H'], 450 - 2 * O['PM_ROW_H']) and g('rd_sh_card').get('style:normal:bg_image') == 'pc_sheet2'
-           and rows2[1].y == O['PM_ROW_H'] and g('rd_sh_info_ic').get('image') == 'pod_ic_rd_info' and g('rd_sh_info_tx').get('text') in ('Station Info', None) and g('rd_sh_info_tx').get('style:normal:text_color') == '#FFFFFF',
+           and rows2[1].y == O['PM_ROW_H'] and g('rd_sh_info_ic').get('image') == 'rm_ic_info' and g('rd_sh_info_tx').get('text') in ('Station Info', None) and g('rd_sh_info_tx').get('style:normal:text_color') == '#FFFFFF',
            "Radio Now Playing's sheet has two rows: Add to / Remove from My Stations, Station Info (Lucide info), white, the card two rows high")
     cr_ = f('rd_sh_card')
     expect([c.name for c in cr_.children] == ['rd_sh_import', 'rd_sh_clear'] and f('rd_sh_clear_ic').get('image') == 'pc_ic_trash' and f('rd_sh_clear_tx').get('style:normal:text_color') == '#FFFFFF'
@@ -1039,7 +1039,7 @@ def asset_tests(ctx):
            'Station Info: a black page, the stock navbar (Back, Now Playing) over a stock list holding one content view, the fade hidden at rest')
     expect(all(h(n).get('visible') == 'false' and h(n).get('sensitive') == 'false' for n in ('label_head', 'label_key', 'label_val'))
            and [h(n).get(f'style:normal:{k}') for n, k in (('label_head', 'font_size'), ('label_key', 'font_size'), ('label_val', 'font_size'))] == ['28', '14', '18']
-           and [h(n).get('style:normal:text_color') for n in ('label_head', 'label_key', 'label_val')] == ['#FFFFFF', '#8E8E93', '#FFFFFF'], 'the three text styles: a 28 px white heading, the 14 px grey (#8E8E93) label, the 18 px white value')
+           and [h(n).get('style:normal:text_color') for n in ('label_head', 'label_key', 'label_val')] == ['#FFFFFF', '#AAAAAA', '#FFFFFF'], 'the three text styles: a 28 px white heading, the 14 px grey (#AAAAAA) label, the 18 px white value')
     expect(h('rd_sh_card') is None, 'the page has no sheet of its own')
     expect(all(g(n).get('sensitive') == 'false' for n in ('rn_art','rn_art_ic', 'img_np_shadow', 'rn_title', 'rn_artist', 'rn_live', 'img_np_tint')),
            'decoration and text are insensitive: only the grabber, the "..." and the play button take touches')

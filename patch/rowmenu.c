@@ -235,7 +235,7 @@ static void rm_third(rowmenu_t *rm, const ls_row_t *x) {
     const char *text = "Add to Playlist", *icon = "rm_ic_add";
     if (rm->src) {
         if (x->dl == LS_DL_DONE)
-            text = "Remove Download", icon = "rm_ic_rmdl", rm->dl = LS_ACT_DELETE_DL;
+            text = "Remove Download", icon = "pc_ic_trash", rm->dl = LS_ACT_DELETE_DL;
         else if (x->dl == LS_DL_WAIT || x->dl == LS_DL_ACTIVE)
             text = "Cancel Download", icon = "rm_ic_cxdl", rm->dl = LS_ACT_CANCEL_DL;
         else

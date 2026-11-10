@@ -739,7 +739,7 @@
 /* The track rows' "..." menu (patch/rowmenu.c, tools/pod_ui.py row_menu, docs/modules/rowmenu.md): each row of the album page and of the Songs page's lists ends with a grey "..." (RM_DOTS_PX px,
  * RM_DOTS_RGB) centred in a RM_MORE_W wide tap zone (flush with its right edge beside the rail) whose right edge is RM_MORE_RIGHT (the list's width); on the Songs page, while the A-Z rail is shown, RM_MORE_RIGHT_RAIL (flush with the rail's
  * touch column, which starts at SG_RAIL_X 284). The row's text ends RM_TEXT_GAP before the zone. A tap on it opens the sheet: RM_ROWS rows of PM_ROW_H at the window's foot in
- * Now Playing's More sheet's glass (rm_glass, 320 x 250, top corners only), laid out by the asset (the payload only shows and hides it). */
+ * Now Playing's More sheet's glass (pc_sheet5, 320 x 250, top corners only), laid out by the asset (the payload only shows and hides it). */
 #define RM_ROWS 5
 #define RM_MORE_W 44
 #define RM_MORE_RIGHT 310
@@ -861,7 +861,7 @@
 #define SG_FOOT_H 52            /* the song count under the last row ("25 songs"): this much content, the text box SG_FOOT_GAP below the row, SG_FOOT_TEXT_H high, from x SG_HDR_X */
 #define SG_FOOT_GAP 14
 #define SG_FOOT_TEXT_H 20
-#define SG_FOOT_PX 15           /* the album page's meta line (srlabel_ahmeta_style colour #9C9C9C) */
+#define SG_FOOT_PX 15           /* the album page's footer's size, in the secondary grey #AAAAAA */
 #define PICKER_ADD 0x10000     /* the stock playlist picker's context is PICKER_ADD | the class listed (the stock Add button @0x52817c: lui 1, or g_class_type) */
 #define CONFIRM_KIND_DELETE 3
 #define CONFIRM_DELETE_LIBRARY 0xa
@@ -980,7 +980,7 @@
 #define DP_BOTTOM 16
 #define DP_V_MIN 48
 #define DP_LUM_MAX 4588
-#define DP_PILL_INK 0x141414u     /* the pill's dark text (the glyph image dp_play is the same colour, the album's AH_PLAY_INK): #141414 as r | g << 8 | b << 16 */
+#define DP_PILL_INK 0x141414u     /* the pill's dark text (the glyph is the album page's image ah_play, the same colour AH_PLAY_INK): #141414 as r | g << 8 | b << 16 */
 #define DP_GREY_K 184
 #define DP_ACC_K 208
 #define DP_ROWS_MAX 64          /* songs the page keeps (the mix has MIX_SONGS; a playlist of ours cannot have more, but a rename-proof id could meet a longer one) */
@@ -1192,8 +1192,8 @@
 #define PS_DOTS_HIT 44
 #define PS_BADGE_CHECK_W 20
 #define PS_BADGE_DISC_W 18
-#define PS_SHEET_ICON_X 16
-#define PS_SHEET_TEXT_X 56
+#define PS_SHEET_ICON_X 14
+#define PS_SHEET_TEXT_X 48
 #define PS_SHEET_VALUE_R 304
 #define PS_SHEET_VALUE_W 130
 #define PS_SHEET_GAP 12

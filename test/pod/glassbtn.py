@@ -80,7 +80,7 @@ def run(ctx):
            and list(mod_icons.capsule_piece('left', 'sliders-horizontal', True).getdata()) != list(mod_icons.capsule_piece('left', 'sliders-horizontal', False).getdata()),
            'pod_nav_settings is the left-cap piece of sliders-horizontal, the Settings row\'s glyph; its _down differs (the round highlight)')
     # Cover Flow's artist page: Songs (left cap at 214) | Now Playing (ah_nav_play, set at run time): the same two pieces as the Artists page's "...", one 95 px capsule
-    expect(mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW_POS
+    expect(mod_icons.NAV_VIEW_POS['pod_nav_listl'] == 'left' and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW and 'pod_nav_allalbums' not in mod_icons.NAV_VIEW_POS
            and mod_icons.NAV_VIEW_POS['pod_nav_more'] == 'left' and 'pod_nav_artist' not in mod_icons.NAV_VIEW and 'pod_nav_albumartist' not in mod_icons.NAV_VIEW_POS and O['NAV_VIEW_X'] + O['NAV_VIEW_W'] == 260,
            'Cover Flow\'s artist page: Songs is a left cap at 214 and Now Playing (ah_nav_play) the right cap at 260 (glued exactly as Select | Now Playing above, glass 223 .. 311); no All albums disc')
     # a pressed slice is the rest slice but for a round highlight on its glyph, inside its button and its glass: the capsule keeps one pane, no lit block

@@ -28,7 +28,7 @@ Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unic
   and a release on the title block, a section header or the air below the last row open nothing. A press that began elsewhere in the row and moved a few pixels into the zone is a row tap
   (it plays, as it always did). The rest of the row plays the song as before.
 - **The sheet** copies Now Playing's More sheet ([playmore](playmore.md) "Glass"): a full-window `#00000082` scrim (the sheet's dim) whose tap closes the menu, then `rm_card`, 320 x 250 on the
-  window's foot (window y 200..450, screen 230..480) with `rm_glass` (`mod_icons.glass_image(320, 250, 18, GLASS_SHEET_FILL, top_only=True)`: top corners only) as its `bg_image`, drawn 1:1.
+  window's foot (window y 200..450, screen 230..480) with `pc_sheet5` (`mod_icons.glass_image(320, 250, 18, GLASS_SHEET_FILL, top_only=True)`: top corners only) as its `bg_image`, drawn 1:1.
   Five full-width 50 px rows: a bare 24 px Lucide glyph at x 14 (the accent with one picked, as every sheet's glyphs: `ACCENT_GLYPH_STOCK`, [accent](accent.md)) and the 18 px white label from x 48 to 298 (the sheet's own rows, `pod_tape`), rows transparent and `#FFFFFF10` pressed,
   the sheet's `#FFFFFF22` hairline above every row but the first. Rows, top to bottom: **Play Next** (`list-start`), **Play After** (`list-end`), **Add to Playlist** (`list-plus`), **Favorite** (`star`; "Undo Favorite" with the filled star `rm_ic_unfav` when the track is a favourite), **Get Info** (`info`).
   The label is "Play After", not "Play Last". The hairline sits above every row (not only between the groups). No Go to Album / Go to Artist.
@@ -62,7 +62,7 @@ The menu also closes when the page reads its list again (`sg_load` / `ab_load`: 
 ## A library source's rows (ND-14)
 
 `rowmenu_open_src(rm, row, rec, add, src)` (the pages pass their `src`; `rowmenu_open` is it with NULL) shows the same five-row card for a Navidrome track (docs/modules/subsonic.md "Row sheet"): the third row is **Download**
-(`rm_ic_dl`), **Cancel Download** (`rm_ic_cxdl`, waiting or running) or **Remove Download** (`rm_ic_rmdl`, on the card) from `src->row` (`ls_row_t.dl`), in place of Add to Playlist; Favorite / **Undo Favorite** follows `ls_row_t.fav`
+(`rm_ic_dl`), **Cancel Download** (`rm_ic_cxdl`, waiting or running) or **Remove Download** (`pc_ic_trash`, on the card) from `src->row` (`ls_row_t.dl`), in place of Add to Playlist; Favorite / **Undo Favorite** follows `ls_row_t.fav`
 and goes through `src->act(LS_ACT_FAVORITE)` (no stock myfav call); the words and glyph of the third row are set at every open (Add to Playlist and `rm_ic_add` again for the stock library). Download, Cancel and Remove are
 `src->act` (`LS_ACT_DOWNLOAD`, `LS_ACT_CANCEL_DL`, `LS_ACT_DELETE_DL`); the row re-paints when `src->gen` moves. Play Next / Play After hand `src->queue_row(rec)` (a stock queue record: the stream address or the local file, its
 synthetic id added to the queue map by `sba_queue_add`) to `upnext_add`, which skips the file test for a stream address whose id the map knows; the source shows why when it cannot (offline and not downloaded). An undownloaded DSD
@@ -80,7 +80,7 @@ row asks `ls_dsd_confirm` instead ("Download to Play?"). Get Info is `songinfo_o
 
 ## Tests (`test/pod/rowmenu.py`, emulated)
 
-`asset_tests` (both assets: the menu last; the sheet's place, rows, glyphs, labels, hairlines; `rm_glass` and the glyph PNGs are the generator's; white labels >= 7:1 on the glass over black and over
+`asset_tests` (both assets: the menu last; the sheet's place, rows, glyphs, labels, hairlines; `pc_sheet5` and the glyph PNGs are the generator's; white labels >= 7:1 on the glass over black and over
 white under the dim, at rest and pressed; the "..." 6.2:1 on black; the Developer rows, their ids, texts and `upnext_test` gone; every text in 13 languages),
 `paint_tests` (the "..." at the right place (right-aligned beside the rail, centred without it and on the album page); the text widths 162 / 188 / 220; none in select mode, without the widgets;
 the bitmap's pixels), `touch_tests` (tap in the zone, one pixel left of it, first pixel of it, a drag, an abort, a press that leaves the zone, the title block, a section header, select mode, both pages),

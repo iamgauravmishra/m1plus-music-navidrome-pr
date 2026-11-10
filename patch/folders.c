@@ -68,7 +68,7 @@ extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask,
 
 /* The glyphs are the menu rows' images (pod_ic_folders, pod_ic_playlists, pod_ic_cdripper, pod_ic_nowplaying: the wave) and three of ours (tools/mod_icons.py FOLDER_ROWS) */
 enum { FO_I_FOLDER, FO_I_SD, FO_I_USB, FO_I_CD, FO_I_LIST, FO_I_FILE, FO_I_WAVE, FO_ICONS };
-static const char *const FO_ICON_NAME[FO_ICONS] = {"pod_ic_folders",   "fo_ic_sd",         "fo_ic_usb",
+static const char *const FO_ICON_NAME[FO_ICONS] = {"pod_ic_folders",   "fo_ic_sd",         "pod_ic_usbmode",
                                                    "pod_ic_cdripper",  "pod_ic_playlists", "fo_ic_file",
                                                    "pod_ic_nowplaying"};
 

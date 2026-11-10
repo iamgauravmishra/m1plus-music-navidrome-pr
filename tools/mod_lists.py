@@ -81,10 +81,10 @@ PM_SPEED = {'scrlabel1': ((48, 8, 60, 20), (48, 8, 96, 20)),          # Playback
             'img_1_25x': ((172, 0, 36, 50), (188, 0, 36, 50)),        # note under them may use the whole row
             'img_1_5x': ((222, 0, 36, 50), (228, 0, 36, 50)),
             'img_2x': ((272, 0, 36, 50), (268, 0, 36, 50))}
-PM_SHEET = 'pm_sheet'                               # the glass image of page 2 (320 x 250, five rows, top corners r 18; tools/mod_icons.py GLASS_SHEET); page 1's is pm_sheet6 (320 x 300, GLASS_SHEET6): the payload sets the one the page needs on the dialog's first child, the insensitive image pod_glass
+PM_SHEET = 'pc_sheet5'                               # the glass image of page 2 (320 x 250, five rows, top corners r 18; tools/mod_icons.py GLASS_SHEET); page 1's is pc_sheet6 (320 x 300, GLASS_SHEET6): the payload sets the one the page needs on the dialog's first child, the insensitive image pod_glass
 PM_GLASS = 'pod_glass'
 PM_PRESSED, PM_HAIR = '#FFFFFF10', '#FFFFFF22'      # the rows over it: transparent, pressed 6 % white (a 20 % band, as the album page's, takes the red under 3:1), hairline 13 % white
-PM_RED = '#FF5A4F'                                 # the Delete label: >= 4.5:1 on the glass at rest (test/pod/playmore.py; a label in a pressed row stays in its normal state)
+PM_RED = '#FF6B6B'                                 # the Delete label: >= 4.5:1 on the glass at rest (test/pod/playmore.py; a label in a pressed row stays in its normal state)
 QUEUE_ROW, QUEUE_BTN = 44, 40                       # the queue drawer's rows: table row, its button / label (4 px gap)
 QUEUE_NAME_PX, QUEUE_NOW_PX = 18, 20                # other rows / the playing row
 
@@ -313,7 +313,7 @@ def edit_playmore(root, pal):
     first.set('style:normal:border', 'none')
     back.set('style:normal:border', 'none')
     ab.set('style:normal:border', 'top')
-    # the glass sheet (pm_sheet, mod_icons.glass_image top corners only): the dialog's image is its whole look (no fill, no #666666 top line:
+    # the glass sheet (pc_sheet5, mod_icons.glass_image top corners only): the dialog's image is its whole look (no fill, no #666666 top line:
     # the rim is in the image), the list and its scroll view and every row are transparent over it. Inline styles of this dialog's widgets only.
     lv = root.find('playmore_listview')
     assert root.get('style:normal:bg_color') == '#000000' and root.get('style:normal:border') == 'top' and lv.get('style:normal:bg_color') == '#000000'
@@ -322,7 +322,7 @@ def edit_playmore(root, pal):
         root.set(f'style:{st}:border', 'none')
         lv.set(f'style:{st}:bg_color', '#00000000'); sv.set(f'style:{st}:bg_color', '#00000000')
     # the glass is the dialog's FIRST child, an insensitive image (drawn under the list): the dialog's own bg_image cannot change with the page (250 px on page 2, 300 on page 1),
-    # so the payload sets the image and the size of this one, pm_sheet (page 2's, the kill switch's look) or pm_sheet6
+    # so the payload sets the image and the size of this one, pc_sheet5 (page 2's, the kill switch's look) or pc_sheet6
     root.children.insert(0, awtk_ui.Widget('image', 0, 0, 320, 250, [('name', PM_GLASS), ('draw_type', 'default'), ('image', PM_SHEET), ('sensitive', 'false')]))
     for r in sv.children:
         assert r.type == 'list_item' and r.get('style:normal:bg_color') == '#000000' and r.get('style:pressed:border_color') == '#666666', f'{r.name}: unexpected row style'

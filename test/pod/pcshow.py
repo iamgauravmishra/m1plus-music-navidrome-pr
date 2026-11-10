@@ -189,7 +189,7 @@ def asset_tests(ctx):
         ic, tx, hr = tree.find(f'pg_sh_{r}_ic'), tree.find(f'pg_sh_{r}_tx'), tree.find(f'pg_sh_{r}_hr')
         expect(row.type == 'button' and row.h == rh and row.w == 320 and row.get('visible') == 'false' and row.get('sensitive') == 'false' and row.get('style:pressed:bg_color') == pod_ui.PL_PRESSED
                and row.get('style:normal:bg_color') == '#00000000', f'{r}: a 50 px row button, transparent, 6 % white pressed, hidden')
-        expect(ic.get('image') == icon and ic.get('sensitive') == 'false' and (ic.w, ic.h) == (20, 20) and ic.x == O['PS_SHEET_ICON_X'] and tx.x == O['PS_SHEET_TEXT_X'] and tx.get('sensitive') == 'false'
+        expect(ic.get('image') == icon and ic.get('sensitive') == 'false' and (ic.w, ic.h) == (24, 24) and ic.x == O['PS_SHEET_ICON_X'] and tx.x == O['PS_SHEET_TEXT_X'] and tx.get('sensitive') == 'false'
                and tx.get('style:normal:font_size') == '18' and tx.get('style:normal:text_color') == ('#FF6B6B' if red else '#FFFFFF') and pod_i18n.shown_english(tx) == label, f'{r}: the glyph {icon}, the 18 px label "{label}"{" in the delete red" if red else ""}')
         expect(hr.h == 1 and hr.get('sensitive') == 'false' and hr.get('style:normal:bg_color') == pod_ui.PL_HAIR, f'{r}: a hairline on its top')
         vl = tree.find(f'pg_sh_{r}_vl')
@@ -206,7 +206,7 @@ def asset_tests(ctx):
         im = Image.open(img(n))
         expect(im.size == (320, h) and h // rh == int(n[-1]), f'{n}: 320 x {h}, the glass of {n[-1]} row(s)')
     for n, g, _ in mod_icons.PC_SHEET_ICONS:
-        expect(Image.open(img(n)).size == (20, 20), f'{n}: the 20 px glyph ({g})')
+        expect(Image.open(img(n)).size == (24, 24), f'{n}: the 24 px glyph ({g})')
     expect(os.path.isfile(os.path.join(mod_icons.LUCIDE_SVG, 'arrow-down.svg')) and any(g == 'arrow-down' for _, g, _ in mod_icons.PC_SHEET_ICONS) and 'arrow-down' in mod_icons.PC_GLYPHS,
            'the Lucide arrow-down is the download symbol of the sheet, the pill and the badge (not download or arrow-down-to-line)')
     # the atlas numbers are the payload's
@@ -660,7 +660,7 @@ def sheet_tests(ctx):
     expect(text_of(m, 'pg_sh_speed_vl') == '1×' and text_of(m, 'pg_sh_refresh_vl') == '1h ago', f'the values: the speed ({text_of(m, "pg_sh_speed_vl")}) and the age alone, "1h ago" ({text_of(m, "pg_sh_refresh_vl")})')
     tx = {r: [c for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets[f'pg_sh_{r}_tx']] for r in ('speed', 'refresh')}
     vw = font().width('1h ago', 18) + 12
-    expect(tx['refresh'][-1][2:] == (304 - 56 - vw, 50), f'the label makes room for the value ({tx["refresh"][-1]})')
+    expect(tx['refresh'][-1][2:] == (304 - 48 - vw, 50), f'the label makes room for the value ({tx["refresh"][-1]})')
     # the value for every speed, the default first: the sheet opens on the show's own speed
     for mode, want in enumerate(('1×', '1.25×', '1.5×', '2×')):
         m2 = shown()

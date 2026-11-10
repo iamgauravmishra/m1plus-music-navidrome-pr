@@ -805,8 +805,8 @@ def root_asset(ctx):
            'the status glyph (the check circle) and the spinner (the Wi-Fi frames, hidden) share one 14 px place before the text')
     ft = f('nd_foot')
     expect((ft.x, ft.y, ft.w, ft.h) == (O['SG_HDR_X'], O['SG_FOOT_GAP'], 320 - 2 * O['SG_HDR_X'], O['SG_FOOT_TEXT_H']) and ft.get('style:normal:font_size') == str(O['SG_FOOT_PX'])
-           and ft.get('style:normal:text_color') == '#9C9C9C' and ft.get('text') == '' and ft.get('sensitive') == 'false' and 'nd_foot' in {c.name for c in f('nd_end').children},
-           'the footer: the library\'s song-count label (x SG_HDR_X, 15 px #9C9C9C) in the last item under the rows, empty until a sync')
+           and ft.get('style:normal:text_color') == '#AAAAAA' and ft.get('text') == '' and ft.get('sensitive') == 'false' and 'nd_foot' in {c.name for c in f('nd_end').children},
+           'the footer: the library\'s song-count label (x SG_HDR_X, 15 px #AAAAAA) in the last item under the rows, empty until a sync')
     sc, cd = f('vs_scrim'), f('vs_card')
     expect(sc.get('visible') == 'false' and cd.get('visible') == 'false' and f('vs_label6').get('tr_text') == 'Sync Now' and f('vs_label7').get('tr_text') == 'Server Settings'
            and f('vs_glyph6').get('image') == 'pod_ic_vsrefresh' and f('vs_glyph7').get('image') == 'pod_ic_vsserver' and f('vs_item8') is None,

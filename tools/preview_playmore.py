@@ -36,7 +36,7 @@ def sheet(p, im, tree, order, pressed=None, offline=False):
     transparent over it (the painter draws no row fill), the hairlines and the pressed band (`pressed`: a row name) as the rows' inline styles."""
     h = len(order) * ROW_H; sy = SCREEN_H - h
     im.alpha_composite(Image.new('RGBA', (SHEET_W, SCREEN_H), (0, 0, 0, DIM_ALPHA)), (0, 0))
-    glass = p.image('pm_sheet6'); assert glass and glass.size == (SHEET_W, h), 'the page\'s own glass picture (pod_glass: pm_sheet6 for the six rows of both pages), not a crop'
+    glass = p.image('pc_sheet6'); assert glass and glass.size == (SHEET_W, h), 'the page\'s own glass picture (pod_glass: pc_sheet6 for the six rows of both pages), not a crop'
     im.alpha_composite(glass, (0, sy))
     hair = tint(tree.find('listitem1').get('style:normal:border_color'))
     for pos, name in enumerate(order):

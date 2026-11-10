@@ -115,7 +115,7 @@ def asset_tests(ctx):
         expect(scrim.type == 'button' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and all(scrim.get(f'style:{st}:bg_color') == pod_ui.PL_DIM == '#00000082' for st in pod_ui.STATES),
                f'{name}: the scrim is the full window\'s #00000082 dim, a button (a tap closes the menu)')
         expect((card.x, card.y, card.w, card.h) == (0, CARD_Y, 320, CARD_H) == (0, 200, 320, 250)
-               and all(card.get(f'style:{st}:bg_image') == 'rm_glass' and card.get(f'style:{st}:bg_image_draw_type') == 'default' and card.get(f'style:{st}:bg_color') == '#00000000'
+               and all(card.get(f'style:{st}:bg_image') == 'pc_sheet5' and card.get(f'style:{st}:bg_image_draw_type') == 'default' and card.get(f'style:{st}:bg_color') == '#00000000'
                        and card.get(f'style:{st}:round_radius') is None for st in pod_ui.STATES),
                f'{name}: the card is a 320 x 250 bottom sheet (five 50 px rows) on the window\'s foot, the glass drawn 1:1 over no fill')
         expect(all(w.get('visible') == 'false' and w.get('sensitive') == 'false' for w in (scrim, card)), f'{name}: the scrim and the card start hidden and insensitive')
@@ -134,10 +134,10 @@ def asset_tests(ctx):
     # the images: the glass is the generator's, five rows high; the glyphs and the dots are in the tree
     xx = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx')
     w, h, r = mod_icons.GLASS_ROWMENU
-    raw_ = open(os.path.join(xx, 'rm_glass.png'), 'rb').read()
+    raw_ = open(os.path.join(xx, 'pc_sheet5.png'), 'rb').read()
     gen = mod_icons.glass_image(w, h, r, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)
-    expect(raw_ == open(os.path.join(mod_icons.PNG, 'rm_glass.png'), 'rb').read() and same_pixels(raw_, gen) and (w, h, r) == (320, CARD_H, 18) and r == mod_icons.GLASS_SHEET[2],
-           'rm_glass.png is the generator\'s: 320 x 250 (the sheet\'s height), Now Playing\'s sheet: 18 px top corners only, the sheet\'s fill')
+    expect(raw_ == open(os.path.join(mod_icons.PNG, 'pc_sheet5.png'), 'rb').read() and same_pixels(raw_, gen) and (w, h, r) == (320, CARD_H, 18) and r == mod_icons.GLASS_SHEET[2],
+           'pc_sheet5.png is the generator\'s: 320 x 250 (the sheet\'s height), Now Playing\'s sheet: 18 px top corners only, the sheet\'s fill')
     expect(all(open(os.path.join(xx, n + '.png'), 'rb').read() == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() for n, _ in mod_icons.RM_MENU_ICONS + (mod_icons.RM_FAV_ON, mod_icons.RM_DOTS)),
            'the five glyphs, the filled star and rm_dots are the committed PNGs')
     expect(mod_icons.RM_DOTS == ('rm_dots', 'ellipsis') and mod_icons.RM_DOTS_PX == DOTS == 24 and O['RM_DOTS_RGB'] == 0x8c8c8c,
@@ -550,7 +550,7 @@ def source_tests(ctx):
         # the words and glyphs by state
         want = [(dict(), 'Download', 'rm_ic_dl', 'Favorite', 'rm_ic_fav'), (dict(dl=LS_DL_FAILED), 'Download', 'rm_ic_dl', 'Favorite', 'rm_ic_fav'),
                 (dict(dl=LS_DL_WAIT), 'Cancel Download', 'rm_ic_cxdl', 'Favorite', 'rm_ic_fav'), (dict(dl=LS_DL_ACTIVE, pct=42), 'Cancel Download', 'rm_ic_cxdl', 'Favorite', 'rm_ic_fav'),
-                (dict(dl=LS_DL_DONE, fav=1), 'Remove Download', 'rm_ic_rmdl', 'Undo Favorite', 'rm_ic_unfav'), (dict(fav=1), 'Download', 'rm_ic_dl', 'Undo Favorite', 'rm_ic_unfav')]
+                (dict(dl=LS_DL_DONE, fav=1), 'Remove Download', 'pc_ic_trash', 'Undo Favorite', 'rm_ic_unfav'), (dict(fav=1), 'Download', 'rm_ic_dl', 'Undo Favorite', 'rm_ic_unfav')]
         for st, third, icon, fav, favicon in want:
             S = Src(page)
             S.state(2, **st)

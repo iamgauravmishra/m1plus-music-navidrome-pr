@@ -298,7 +298,7 @@ static void pl_mark(void *canvas, int a, int x, int y) {
 static void pl_plus(void *canvas, int y) {
     int i, x = LIST_ART_X, c = LIST_ART_X + LIST_ART / 2, cy = y + LIST_ART / 2;
     if (y < 0 || y + LIST_ART > GRID_VIEW_H) return;
-    canvas_set_fill_color(canvas, 0xff2c2c2eu);
+    canvas_set_fill_color(canvas, 0xff2e2c2cu); /* #2C2C2E (red lowest) */
     for (i = 0; i < 2; ++i) { /* the corners of a LIST_R 4 arc: the first line starts 2 px in, the second 1 */
         canvas_fill_rect(canvas, x + 2 - i, y + i, LIST_ART - 2 * (2 - i), 1);
         canvas_fill_rect(canvas, x + 2 - i, y + LIST_ART - 1 - i, LIST_ART - 2 * (2 - i), 1);
@@ -352,7 +352,7 @@ static void *pl_make_star(void) {
 static void pl_star(void *canvas, int y) {
     int i, x = LIST_ART_X, src[4], dst[4];
     if (y < 0 || y + LIST_ART > GRID_VIEW_H) return;
-    canvas_set_fill_color(canvas, 0xff2c2c2eu);
+    canvas_set_fill_color(canvas, 0xff2e2c2cu); /* #2C2C2E (red lowest) */
     for (i = 0; i < 2; ++i) {
         canvas_fill_rect(canvas, x + 2 - i, y + i, LIST_ART - 2 * (2 - i), 1);
         canvas_fill_rect(canvas, x + 2 - i, y + LIST_ART - 1 - i, LIST_ART - 2 * (2 - i), 1);

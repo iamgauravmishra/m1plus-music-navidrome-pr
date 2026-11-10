@@ -20,7 +20,7 @@ TEXT_X = 56         # the label, after the glyph (patch/radiopage.c RP_TEXT_X)
 CHEV_X, TEXT_END = 288, 278   # the shared list chevron's left edge and where a row with one ends its text
 HAIR_RGB = '#222222'          # patch/offsets.inc LIST_HAIR
 STATUS_PX = 15
-GREY = '#8E8E93'            # the empty state's sentence
+GREY = '#AAAAAA'            # the empty state's sentence: the secondary grey (tools/pod_ui.py SUB_RGB)
 ROW_GREY = '#AAAAAA'        # the status line: the grey must pass the build's 4.5:1 check on black (tools/mod_theme.py)
 ROWS = (('Albums', 'pod_ic_albums'), ('Artists', 'pod_ic_artists'), ('Songs', 'pod_ic_songs'), ('Playlists', 'pod_ic_playlists'), ('Favorites', 'pod_ic_fav'), ('Downloaded', 'pod_sb_download'))
 

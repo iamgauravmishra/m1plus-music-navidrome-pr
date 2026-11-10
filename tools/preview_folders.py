@@ -34,7 +34,7 @@ F = fo_consts()
 TEXT_END = F['FO_TEXT_END']
 T_LIST, T_SD, T_OTG, T_DIR, T_FILE = 1, 2, 3, 4, 8
 ROW_H = F['FO_ICON_Y'] * 2 + F['FO_ICON']   # the menu rows' pitch (52)
-ICON = {T_SD: 'fo_ic_sd', T_OTG: 'fo_ic_usb', T_DIR: 'pod_ic_folders', T_LIST: 'pod_ic_playlists', T_FILE: 'fo_ic_file'}
+ICON = {T_SD: 'fo_ic_sd', T_OTG: 'pod_ic_usbmode', T_DIR: 'pod_ic_folders', T_LIST: 'pod_ic_playlists', T_FILE: 'fo_ic_file'}
 
 
 def chevron(im, x, y):

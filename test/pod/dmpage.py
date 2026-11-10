@@ -296,7 +296,7 @@ def constants_tests(ctx):
     expect(kids == ['btn_dp_shuffle', 'btn_dp_play', 'img_dp_glyph', 'btn_dp_add'] and (shuf.x, shuf.y, shuf.w, shuf.h) == (32, 263, 44, 44) and (play.x, play.y, play.w, play.h) == (86, 263, 148, 44)
            and (add.x, add.y, add.w, add.h) == (244, 263, 44, 44)
            and shuf.get('style:normal:icon') == 'ah_shuffle' and play.get('style:normal:icon') == 'dp_pill' and play.get('style:pressed:icon') == 'dp_pill_down'
-           and glyph.get('sensitive') == 'false' and glyph.get('image') == 'dp_play', 'the content view holds the Shuffle disc, the Play pill and its insensitive dark glyph (the glass images of the album page and the white pill) and the Add disc')
+           and glyph.get('sensitive') == 'false' and glyph.get('image') == 'ah_play', 'the content view holds the Shuffle disc, the Play pill and its insensitive dark glyph (the glass images of the album page and the white pill) and the Add disc')
     expect(add.get('style') == shuf.get('style') == 'img_btn_style' and add.get('enable') == 'true' and add.get('visible') != 'false' and add.get('sensitive') != 'false'
            and [add.get(f'style:{s}:icon') for s in ('normal', 'over', 'pressed')] == ['dp_add', 'dp_add', 'dp_add_down'], 'the Add disc is a visible, sensitive img_btn_style button with its own normal and pressed images, like the Shuffle disc')
     labels = {n: tree.find(n) for n in ('label_dp_title', 'label_dp_sub', 'label_dp_upd', 'label_dp_desc', 'label_dp_play', 'label_dp_row', 'label_dp_artist', 'label_title')}
@@ -312,7 +312,7 @@ def constants_tests(ctx):
     expect(all(same(n) for n in mod_icons.DPAGE), f'the page\'s seven images are in the build and equal the generator ({[n for n in mod_icons.DPAGE if not same(n)]})')
     pill = Image.open(os.path.join(xx, 'dp_pill.png')).convert('RGBA')
     expect(pill.size == (148, 40) and pill.getpixel((74, 20)) == (255, 255, 255, 255) and pill.getpixel((0, 0))[3] == 0 and Image.open(os.path.join(xx, 'dp_back.png')).size == (40, 40)
-           and Image.open(os.path.join(xx, 'dp_play.png')).size == (16, 16), 'the white pill is 148 x 40 and opaque white inside, the disc 40, the glyph 16')
+           and Image.open(os.path.join(xx, 'ah_play.png')).size == (16, 16), 'the white pill is 148 x 40 and opaque white inside, the disc 40, the glyph 16')
     a_n, a_d, s_n, s_d = (Image.open(os.path.join(xx, n + '.png')).convert('RGBA') for n in ('dp_add', 'dp_add_down', 'ah_shuffle', 'ah_shuffle_down'))
     plus_ink = lambda im: Image.eval(im.convert('L'), lambda v: 255 if v > 200 else 0).getbbox()   # the white glyph on the grey disc (0x2A / 0x44)
     expect(a_n.size == s_n.size == a_d.size == s_d.size == (40, 40) and a_n.getpixel((2, 19)) == s_n.getpixel((2, 19)) and a_d.getpixel((2, 19)) == s_d.getpixel((2, 19))

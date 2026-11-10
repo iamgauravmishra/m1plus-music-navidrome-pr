@@ -36,7 +36,7 @@ PRESS_SURFACES = {ROLE_PRESS_ROW: (0, 0, 0), ROLE_PRESS_PILL: PILL, ROLE_PRESS_Q
 KEEP = ('tape_', 'ipod_', 'np_shadow', 'lk_card', 'dm_disc', 'pod_sw')
 # Images of ours that are plates, cards and gradients rather than glyphs, flipped whole (every neutral pixel): the Settings cards, the bottom sheets, the mini player's glass pane, and the
 # black fades over a page (the navbar's, the tint under Now Playing / the album page, the lyrics scrim), which become paper fades.
-WHOLE = ('pod_cd_', 'pod_cdl_', 'pc_sheet', 'pm_sheet', 'mb_glass', 'nb_fade', 'np_tint', 'np_scrim', 'ah_tint')
+WHOLE = ('pod_cd_', 'pod_cdl_', 'pc_sheet', 'mb_glass', 'nb_fade', 'np_tint', 'np_scrim', 'ah_tint')
 # The fades over a cover-tinted page (Now Playing, the album page): they stay black on the Tinted background, as the pages' cover tones do. The other WHOLE images are surfaces the Tinted background tints.
 COVER_FADES = ('np_tint', 'np_scrim', 'ah_tint')
 TINT_SURFACE = tuple(n for n in WHOLE if n not in COVER_FADES)
@@ -83,7 +83,7 @@ ACCENT_PRESS = tuple(f'pod_cd_{p}_down' for p in ('single', 'top', 'mid', 'bot')
 # DISC: the pull-down's ON tiles, a filled white disc with a #141414 glyph (or a glyph cut out of the disc): white to the accent, the dark glyph stays dark (ACC_KNOB_R), a pixel between moves by its lightness.
 ACCENT_DISC = ('drop_wifiopen', 'drop_btopen', 'drop_keylockopen', 'drop_eqopen', 'drop_usbaudio', 'drop_usbdac', 'drop_usbstorage', 'drop_playsetdown', 'drop_syssetdown', 'drop_highgain', 'drop_lo')
 # GLYPH, by name prefix: every row glyph is white art, tinted at decode: every colour becomes the accent, alpha kept. The M1+ Music rows' (the main menu, Shuffle, Extras and Main Menu pages), the Folders list's own
-# (fo_ic_sd, fo_ic_usb, fo_ic_file), the track rows' "..." sheet's (rm_ic_*: Play Next, Play After, Add to Playlist, Favorite, Undo Favorite, Get Info; patch/rowmenu.c: a prefix, cheaper through the hook than six exact names) and the Settings cards' (pod_ci_*, tools/mod_icons.py CARD_GLYPHS; the accent swatches pod_sw* are not). The two tiles (a rounded square with its own colour behind the glyph,
+# (fo_ic_sd, pod_ic_usbmode, fo_ic_file), the track rows' "..." sheet's (rm_ic_*: Play Next, Play After, Add to Playlist, Favorite, Undo Favorite, Get Info; patch/rowmenu.c: a prefix, cheaper through the hook than six exact names) and the Settings cards' (pod_ci_*, tools/mod_icons.py CARD_GLYPHS; the accent swatches pod_sw* are not). The two tiles (a rounded square with its own colour behind the glyph,
 # patch/podcasts.c) are not glyphs. GLYPH_STOCK, by exact name (plain white art, alpha kept): the More sheet's stock row glyphs (Look up album, Look up artist, Add to playlist, Speed, A-B repeat; patch/playmore.c),
 # the Podcasts sheets' (pc_ic_*: all but pc_ic_unsub, already red; pc_ic_trash is Radio's Clear row's too), the Playlists "..." menu's (pl_ic_new, pl_ic_import, pl_ic_export, pl_ic_delete),
 # the multi-select Add dialog's (batchadd_fav, batchadd_playlist) and the selection checks: the Songs sort card's tick (sg_tick) and the stock Select All navbar button's checked state (mulselected). So every

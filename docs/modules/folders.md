@@ -43,7 +43,7 @@ the capsule **"..." | Now Playing** as on Songs and Artists, the "..." the left 
 audio file, the Play / Shuffle pills, and paints the rows itself. Mock: `out/preview/folders.png` (the Extras rows beside it for comparison).
 
 - **Rows** are the menu / Extras rows' (`tools/mod_icons.py` `POD_ICON_X` 16, `POD_ICON` 24, `POD_TEXT_X` 56; `pod_ui.ROW_H` 52): the bare white 24 px Lucide glyph at x 16 (the menu rows' own
-  images `pod_ic_folders`, `pod_ic_playlists` for a playlist file, `pod_ic_cdripper` for the CD Library, and three of ours, `fo_ic_file` file-music, `fo_ic_sd` memory-stick, `fo_ic_usb` usb:
+  images `pod_ic_folders`, `pod_ic_playlists` for a playlist file, `pod_ic_cdripper` for the CD Library, and three of ours, `fo_ic_file` file-music, `fo_ic_sd` memory-stick, `pod_ic_usbmode` usb:
   `mod_icons.FOLDER_ROWS`), the name at x 56 (21 px white, cut at x 256), one line, a hairline from x 56, press fill 20 %. A folder, a storage and a playlist file end in the grey chevron at the
   shared list chevron (`FO_CHEV_X` = `LIST_CHEV_X` 288, centred above the hairline); the wave (`pod_ic_nowplaying`, 24 px, x 262) marks what plays. A file shows its file name with its extension (as stock;
   one line each, so the 52 px pitch of the menu rows and no second text style). The large title and the pills are the Songs page's (x 12 and 10: `SG_TITLE_X`, `SG_PILL_X0` / `X1`); the first row is

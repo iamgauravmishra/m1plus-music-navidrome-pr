@@ -111,7 +111,7 @@ ALBUM = ['ah_tint', 'ah_play', 'ah_shuffle', 'ah_shuffle_down', 'ah_pill', 'ah_p
 AH_SHUF_DISC, AH_SHUF_DISC_DOWN, AH_SHUF_GLYPH, AH_DISC_PX = (0x2A,) * 3, (0x44,) * 3, 19, 40   # AH_DISC (patch/offsets.inc)
 AH_PLAY_GLYPH, AH_PLAY_INK = 16, (0x14,) * 3
 AH_PILL_PX, AH_PILL_FILL, AH_PILL_FILL_DOWN = (180, 40), (0xFF,) * 3, (0xBE,) * 3   # AH_PLAY_W x AH_PILL_H
-DPAGE = ['dp_back', 'dp_back_down', 'dp_pill', 'dp_pill_down', 'dp_play', 'dp_add', 'dp_add_down', 'dp_added', 'dp_added_down']   # the Daily Mix page (patch/dailymix.c dp_*): the glass back disc (a white chevron), the white Play pill (pressed a light grey), its dark play glyph, the Add disc (Shuffle's disc and pressed colours, a plus: saves the mix as a playlist; a check once it is saved)
+DPAGE = ['dp_back', 'dp_back_down', 'dp_pill', 'dp_pill_down', 'dp_add', 'dp_add_down', 'dp_added', 'dp_added_down']   # the Daily Mix page (patch/dailymix.c dp_*): the glass back disc (a white chevron), the white Play pill (pressed a light grey), its dark play glyph, the Add disc (Shuffle's disc and pressed colours, a plus: saves the mix as a playlist; a check once it is saved)
 DP_BACK_PX, DP_BACK_GLYPH, DP_PILL_PX, DP_PILL_INK, DP_PILL_DOWN = 40, 20, (148, 40), AH_PLAY_INK, (0xD6, 0xD6, 0xD8)   # patch/offsets.inc DP_BACK_DISC, DP_PILL_H, DP_PLAY_W
 DP_ADD_GLYPH = 'plus'
 DP_ADDED_GLYPH = 'check'
@@ -205,8 +205,8 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Albums': ('pod_ic_albums', 'disc-3'), 'Artists': ('pod_ic_artists', 'mic-vocal'),
             'Genres': ('pod_ic_genres', 'guitar'), 'Folders': ('pod_ic_folders', 'folder'),
             'Playlists': ('pod_ic_playlists', 'list-music'), 'Subsonic': ('pod_ic_navidrome', 'server'), 'Settings': ('pod_ic_prefs', 'sliders-horizontal'), 'Extras': ('pod_ic_extras', 'ellipsis'),
-            'Shuffle Songs': ('pod_ic_shufsongs', 'music'), 'Shuffle Albums': ('pod_ic_shufalbums', 'disc-3'),
-            'Shuffle Folders': ('pod_ic_shuffolders', 'folder'),
+            'Shuffle Songs': ('pod_ic_songs', 'music'), 'Shuffle Albums': ('pod_ic_albums', 'disc-3'),   # the library rows' own images: one file per glyph
+            'Shuffle Folders': ('pod_ic_folders', 'folder'),
             # the Extras page (the stock Home tiles the menu does not repeat; glyphs as the Home grid's)
             'Favorites': ('pod_ic_fav', 'star'), 'Recently Added': ('pod_ic_recentadd', 'clock-plus'),
             'Recently Played': ('pod_ic_recent', 'history'), 'Most Played': ('pod_ic_most', 'flame'),
@@ -216,9 +216,9 @@ POD_ROWS = {'Now Playing': ('pod_ic_nowplaying', 'audio-lines'), 'Cover Flow': (
             'Cassette Mode': ('pod_ic_tape', '+cassette-tape'), 'Vinyl Mode': ('pod_ic_vinyl', '+turntable'), 'Cover & Lyrics': ('pod_ic_art', '+cover-lyrics'), 'Sleep Timer': ('pod_ic_sleep', 'moon'),   # Now Playing's More sheet rows (tools/mod_lists.py)
             # the Control Center page (pod_pages.PULLDOWN_TILES): each tile's own glyph (PULLDOWN below); Output's tile shows the text PO / LO, so its row has stock's Output glyph (sset_outputway)
             'Wi-Fi': ('pod_ic_wifi', 'wifi'), 'Bluetooth': ('pod_ic_bt', 'bluetooth'), 'Button Lock': ('pod_ic_lock', 'lock'), 'Gain': ('pod_ic_gain', '+gain-high'),
-            'USB Mode': ('pod_ic_usbmode', 'usb'), 'Output': ('pod_ic_output', 'headphones'), 'Playback': ('pod_ic_playset', 'sliders-horizontal'), 'System': ('pod_ic_sysset', 'settings')}
+            'USB Mode': ('pod_ic_usbmode', 'usb'), 'Output': ('pod_ic_output', 'headphones'), 'Playback': ('pod_ic_prefs', 'sliders-horizontal'), 'System': ('pod_ic_sysset', 'settings')}
 # The Folders page's row glyphs (patch/folders.c): the menu rows' bare white 24 px glyph for what POD_ROWS has no row for: an audio file, the SD card, a USB drive (folders, playlist files, the CD Library and the wave are pod_ic_folders, pod_ic_playlists, pod_ic_cdripper, pod_ic_nowplaying)
-FOLDER_ROWS = {'fo_ic_file': 'file-music', 'fo_ic_sd': 'memory-stick', 'fo_ic_usb': 'usb'}
+FOLDER_ROWS = {'fo_ic_file': 'file-music', 'fo_ic_sd': 'memory-stick'}   # a USB drive's row uses the USB Mode row's pod_ic_usbmode
 # The Navidrome pages' glyphs (patch/sbsrc.c row marks, tools/pod_nd.py): the Downloaded row and the downloaded-song disc.
 ND_ICONS = {'pod_sb_download': 'download'}
 # The Radio page's row glyphs (patch/radiopage.c): bare white 24 px glyphs for Top Stations, By Country (flag), By Genre, Stations (radio) and Radio Browser (globe; Now Playing and Recently Played are the menu rows' pod_ic_nowplaying and pod_ic_recent);
@@ -238,7 +238,7 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
             'pod_nav_more': 'ellipsis',   # the Playlists page's "..." menu button
             'pod_nav_globe': 'globe',   # the Podcasts page's Apple Podcasts search, the capsule's left cap
             'pod_nav_moremid': 'ellipsis',   # the Podcasts page's "..." as the middle piece of [Globe | ... | Now Playing]
-            'pod_nav_songs': 'list',   # Cover Flow's artist page: our Songs page on the artist's songs (the left cap, then Now Playing)
+            
             'pod_nav_search': 'search',
             'pod_nav_listplus': 'list-plus',   # the Playlists page's actions card (New Playlist, Import, Export, Delete Playlists): the capsule's left cap at 168, Lucide list-plus = SF Symbols text.badge.plus
             'pod_nav_select': 'list-checks',   # the Songs page's Select button as the middle piece after Search / Cover Flow (the lists whose "..." card would hold Select alone)
@@ -248,7 +248,7 @@ NAV_VIEW = {'pod_nav_grid': 'layout-grid', 'pod_nav_list': 'list',
 # the glass piece each Pod page button is (docs/modules/navbar.md): the Albums and Playlists pages' capsule is Cover Flow / "..." (left cap), the grid / list
 # toggle (middle), Now Playing (right cap); the Artists page's is "..." (left cap) and Now Playing; the Cover Flow artist page's is Songs (left cap) and Now Playing
 NAV_VIEW_POS = {'pod_nav_grid': 'middle', 'pod_nav_list': 'middle', 'pod_nav_gridl': 'left', 'pod_nav_listl': 'left', 'pod_nav_coverflow': 'left',
-                'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_globe': 'left', 'pod_nav_songs': 'left', 'pod_nav_search': 'left', 'pod_nav_listplus': 'left', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left',
+                'pod_nav_more': 'left', 'pod_nav_moremid': 'middle', 'pod_nav_globe': 'left', 'pod_nav_search': 'left', 'pod_nav_listplus': 'left', 'pod_nav_select': 'middle', 'pod_nav_selectl': 'left', 'pod_nav_settings': 'left',
                 'pod_nav_bprev': 'left', 'pod_nav_bnext': 'middle'}
 NAV_PX = 24
 # The Playlists page's "..." card's action rows (tools/pod_ui.py build_playlists_page: the shared view-sort card's slots 6..9, in row order): a bare white glyph left of the label, as on Now
@@ -260,7 +260,7 @@ PL_MENU_ICONS = (('pl_ic_new', 'list-plus'), ('pl_ic_import', 'file-input'), ('p
 # the row's own "..." (RM_DOTS: the Lucide ellipsis, 24 px white on transparent; the payload makes it a RM_DOTS_RGB bitmap from the image's coverage and paints it at the right end of a track row)
 RM_MENU_ICONS = (('rm_ic_next', 'list-start'), ('rm_ic_after', 'list-end'), ('rm_ic_add', 'list-plus'), ('rm_ic_fav', 'star'), ('rm_ic_info', 'info'))
 RM_FAV_ON = ('rm_ic_unfav', 'star')   # Favorite's glyph while the track is a favourite (Undo Favorite): the same star filled solid; the payload swaps the row's image
-RM_DL_ICONS = (('rm_ic_dl', 'download'), ('rm_ic_rmdl', 'trash'), ('rm_ic_cxdl', 'x'))   # a Navidrome row's sheet (patch/rowmenu.c rm_third): the third row's Download / Remove Download / Cancel Download, in place of Add to Playlist's glyph
+RM_DL_ICONS = (('rm_ic_dl', 'download'), ('rm_ic_cxdl', 'x'))   # a Navidrome row's sheet (patch/rowmenu.c rm_third): the third row's Download / Remove Download / Cancel Download, in place of Add to Playlist's glyph
 RM_DOTS = ('rm_dots', 'ellipsis')
 RM_DOTS_PX = 24
 # Bare glyphs (no disc) on every list page: a BARE_PX canvas, stroke BARE_SW px absolute. The Pod rows' image is that
@@ -353,12 +353,10 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'mb_next_off': ('pil:mb_next', (34, 24), 0, 'off', None),   # the next button while a station owns the bar (patch/minibar.c mb_next_look): NP_OFF grey, inert
       'mb_glass': ('pil:glass', (304, 56), 0, 'fg', 'mb_glass_down'),
       'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
-      'pm_sheet': ('pil:glass_sheet', (320, 250), 0, 'fg', None), 'pm_sheet6': ('pil:glass_sheet6', (320, 300), 0, 'fg', None),
       'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
       'vs_glass7': ('pil:glass_viewsort', (72, 336), 0, 'fg', None), 'vs_glass6': ('pil:glass_viewsort6', (72, 288), 0, 'fg', None),
       'vs_glass5': ('pil:glass_viewsort5', (72, 240), 0, 'fg', None), 'vs_glass4': ('pil:glass_viewsort4', (72, 192), 0, 'fg', None), 'vs_glass1': ('pil:glass_viewsort1', (72, 48), 0, 'fg', None),
       'vs_glass3': ('pil:glass_viewsort3', (72, 144), 0, 'fg', None), 'vs_glass2': ('pil:glass_viewsort2', (72, 96), 0, 'fg', None),
-      'rm_glass': ('pil:glass_rowmenu', (320, 150), 0, 'fg', None),
       'pq_glass': ('pil:glass_peqdialog', (72, 276), 0, 'fg', None),   # the band page's unsaved-changes dialog (patch/peqband.c): the Playlists menu's glass (patch3_x), 76 px of head and four 50 px buttons high
       'bk_glass': ('pil:glass_bandkeypad', (320, 320), 0, 'fg', None),   # the band page's number keypad sheet (patch/peqband.c): the sheet's glass, 320 px high, top corners only
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
@@ -902,6 +900,7 @@ PA_DL_X, PA_DL_Y, PA_DL_PX, PA_DL_N, PA_DL_COLS = 76, 112, 14, 12, 6   # the sou
 PA_DL_ARROW, PA_DL_STOP = 12, 13                         # the marks after the steps, the same grid: the arrow-down (WAIT, on the empty ring) and the stop square (ACTIVE, drawn over the ring's step); row 2 from (76, 112)
 PA_DL_TRACK, PA_DL_STROKE, PA_DL_STOP_PX = (0x5A,) * 3, 1.5, 5   # the ring's track grey (the arc and the marks are PA_BADGE_GREY, the downloaded disc's); the stop square is 5 px, centred in the cell (antialiased)
 PA_GREY, PA_BADGE_GREY, PA_DARK, PA_RED = (0xAA,) * 3, (0xD0,) * 3, (0x14,) * 3, (0xFF, 0x6B, 0x6B)
+PA_DOTS_GREY = (0x8C,) * 3                               # the rows' "...": the track rows' dots' grey (patch/offsets.inc RM_DOTS_RGB); the chevron is every list's (CHEVRON)
 PA_CHEV = 6                                              # glyph 6 of the strip: the chevron-right (grey) of the Shows page's Downloads row
 PA_TILE_PX, PA_TILE_R, PA_TILE_RGB, PA_TILE_GLYPH = 44, 8, (0x1E,) * 3, 22   # the Library rows' tile: a 44 px rounded square, the Lucide glyph (22 px, white) on it
 PC_DL_TILE = 'pod_ic_dltile'                           # the Downloads row's tile: the same square with the Lucide download glyph (an image of its own, like the other two, so the accent can tint its glyph by name)
@@ -913,9 +912,9 @@ PC_ATLAS = 'pc_atlas'
 PC_SHEET_ICONS = (('pc_ic_import', 'file-input', WHITE), ('pc_ic_speed', 'gauge', WHITE), ('pc_ic_refresh', 'refresh-cw', WHITE), ('pc_ic_select', 'list-checks', WHITE), ('pc_ic_check', '+check', WHITE),
                   ('pc_ic_unsub', 'x', PA_RED), ('pc_ic_down', 'arrow-down', WHITE), ('pc_ic_trash', 'trash', WHITE), ('pc_ic_undo', 'rotate-ccw', WHITE),
                   ('pod_ic_export', 'file-output', WHITE), ('pod_ic_save', 'bookmark', WHITE), ('pod_ic_order', 'arrow-down-wide-narrow', WHITE),
-                  ('pod_ic_rd_add', 'plus', WHITE), ('pod_ic_rd_remove', 'minus', WHITE), ('pod_ic_rd_import', 'import', WHITE), ('pod_ic_rd_info', 'info', WHITE))   # the Radio sheets: Add to / Remove from Stations and Station Info (Now Playing), Import from Card (Stations; its Recently Played sheet's Clear row uses pc_ic_trash)   # (pod_ic_ names: the images the stock pages' digest test ignores, test/pod/navbars.py NEW_IMAGES; a new pc_ image would change test/navbars-stock.sha256 in every branch)
-PC_SHEET_PX = 20
-PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250), ('pc_sheet6', 300))   # the sheets' glass for 1..6 rows (Now Playing's pm_sheet / pm_sheet5 for 4 and 5, but a name of ours: the Show page's rows need no other page's image)
+                  ('pod_ic_rd_add', 'plus', WHITE), ('pod_ic_rd_remove', 'minus', WHITE), ('pod_ic_rd_import', 'import', WHITE))   # the Radio sheets: Add to / Remove from Stations and Station Info (Now Playing), Import from Card (Stations; its Recently Played sheet's Clear row uses pc_ic_trash)   # (pod_ic_ names: the images the stock pages' digest test ignores, test/pod/navbars.py NEW_IMAGES; a new pc_ image would change test/navbars-stock.sha256 in every branch)
+PC_SHEET_PX = BARE_PX   # the sheets' glyphs: the size of the track rows' menu's and of Now Playing's More sheet's own rows (24 px)
+PC_SHEETS = (('pc_sheet1', 50), ('pc_sheet2', 100), ('pc_sheet3', 150), ('pc_sheet4', 200), ('pc_sheet5', 250), ('pc_sheet6', 300))   # the sheets' glass for 1..6 rows (one family for every bottom sheet: the Podcasts and Radio sheets, the track rows' menu's pc_sheet5, Now Playing's More sheet's pc_sheet6)
 PC_GLYPHS = ('arrow-down', 'download', 'chevron-right', 'file-input', 'podcast', 'compass', 'file-output', 'plus', 'minus', 'import')                                 # the Lucide glyph the set adds to the sources (the download symbol of the pill, the badge and the sheet)
 PODCASTS = [PC_ATLAS, PC_DL_TILE, PC_LIB_TILE, PC_SAVE_TILE, PC_SRCH_TILE] + [n for n, _, _ in PC_SHEET_ICONS] + [n for n, _ in PC_SHEETS]
 ALBUM += PODCASTS
@@ -1020,8 +1019,8 @@ def pc_atlas():
     cell(3, ImageOps.mirror(glyph('rotate-ccw', PA_G_PX, 'small')))
     cell(4, tint(glyph('+check', 14, 'small'), PA_GREY))
     cell(5, tint(glyph('play', 14, 'solid'), PA_DARK))
-    cell(PA_CHEV, tint(glyph('chevron-right', PA_G_PX, 'small'), PA_GREY))
-    d = glyph('ellipsis', PA_DOTS_PX, 'solid'); a.alpha_composite(tint(d, PA_GREY), (0, PA_DOTS_Y))
+    cell(PA_CHEV, tint(glyph('chevron-right', PA_G_PX, 'small'), CHEVRON))
+    d = glyph('ellipsis', PA_DOTS_PX, 'solid'); a.alpha_composite(tint(d, PA_DOTS_GREY), (0, PA_DOTS_Y))
     a.alpha_composite(_pc_badge(), (PA_BADGE_X, PA_DOTS_Y))
     a.alpha_composite(tint(badge('DSD', size=(PA_DSD_W, PA_DSD_H), font_px=10, stroke=1, radius=3, pad=1), PA_GREY), (PA_DSD_X, PA_DSD_Y))
     a.alpha_composite(_pc_playb(), (PA_PLAYB_X, PA_PLAYB_Y))
@@ -1070,7 +1069,6 @@ def album_images():
         d = glass_image(DP_BACK_PX, DP_BACK_PX, DP_BACK_PX // 2, pressed)
         d.alpha_composite(chev, ((DP_BACK_PX - chev.width) // 2 - 1, (DP_BACK_PX - chev.height) // 2)); f[n] = d
     for n, rgb in (('dp_pill', (255, 255, 255)), ('dp_pill_down', DP_PILL_DOWN)): f[n] = solid_pill(*DP_PILL_PX, rgb)
-    f['dp_play'] = glyph_fit('play:filled', AH_PLAY_GLYPH, AH_PLAY_GLYPH, DP_PILL_INK, 0)
     plus = glyph_fit(DP_ADD_GLYPH, AH_SHUF_GLYPH, AH_SHUF_GLYPH, WHITE, 0)   # the Shuffle glyph's box and stroke on the Shuffle disc's two greys
     f['dp_add'] = on_disc(plus, AH_DISC_PX, AH_SHUF_DISC)
     f['dp_add_down'] = on_disc(plus, AH_DISC_PX, AH_SHUF_DISC_DOWN)
@@ -1500,8 +1498,6 @@ def np_images():
             rgb, alpha = (NP_PRESSED.get(tone) or (NP_DIM, 255)) if pressed else NP_TONES[tone]
             if g == 'pil:glass': out[name] = glass_image(*GLASS, pressed)
             elif g == 'pil:glass_card': out[name] = glass_image(*GLASS_CARD, fill=GLASS_CARD_FILL)
-            elif g == 'pil:glass_sheet': out[name] = glass_image(*GLASS_SHEET, fill=GLASS_SHEET_FILL, top_only=True)
-            elif g == 'pil:glass_sheet6': out[name] = glass_image(*GLASS_SHEET6, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_menu': out[name] = glass_image(*GLASS_MENU, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_viewsort': out[name] = glass_image(*GLASS_VIEWSORT, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_viewsort6': out[name] = glass_image(*GLASS_VIEWSORT6, fill=GLASS_SHEET_FILL)
@@ -1510,7 +1506,6 @@ def np_images():
             elif g == 'pil:glass_viewsort1': out[name] = glass_image(*GLASS_VIEWSORT1, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_viewsort2': out[name] = glass_image(*GLASS_VIEWSORT2, fill=GLASS_SHEET_FILL)
             elif g == 'pil:glass_viewsort3': out[name] = glass_image(*GLASS_VIEWSORT3, fill=GLASS_SHEET_FILL)
-            elif g == 'pil:glass_rowmenu': out[name] = glass_image(*GLASS_ROWMENU, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_bandkeypad': out[name] = glass_image(*GLASS_BANDKEYPAD, fill=GLASS_SHEET_FILL, top_only=True)
             elif g == 'pil:glass_peqdialog': out[name] = glass_image(*GLASS_PEQDIALOG, fill=GLASS_SHEET_FILL)
             elif g.startswith('pil:'): out[name] = pil_glyph(g[4:], px, rgb, alpha)

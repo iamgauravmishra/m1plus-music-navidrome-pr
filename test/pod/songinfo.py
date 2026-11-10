@@ -107,8 +107,8 @@ def asset_tests(ctx):
            'a black page, the stock navbar (Back, Now Playing) over a stock list holding one content view, the fade hidden at rest')
     expect(all(h(n).get('visible') == 'false' and h(n).get('sensitive') == 'false' for n in ('label_head', 'label_sub', 'label_key', 'label_val'))
            and [h(n).get('style:normal:font_size') for n in ('label_head', 'label_sub', 'label_key', 'label_val')] == ['22', '16', '14', '18']
-           and [h(n).get('style:normal:text_color') for n in ('label_head', 'label_sub', 'label_key', 'label_val')] == ['#FFFFFF', '#8E8E93', '#8E8E93', '#FFFFFF'],
-           'the four text styles: a 22 px white title, 16 px grey (#8E8E93) artist and album, the 14 px grey label, the 18 px white value')
+           and [h(n).get('style:normal:text_color') for n in ('label_head', 'label_sub', 'label_key', 'label_val')] == ['#FFFFFF', '#AAAAAA', '#AAAAAA', '#FFFFFF'],
+           'the four text styles: a 22 px white title, 16 px grey (#AAAAAA) artist and album, the 14 px grey label, the 18 px white value')
     import pod_i18n
     keys = ['Get Info', 'Favorite', 'Undo Favorite', 'Added to Favorites', 'Removed from Favorites', 'Format', 'Sample Rate', 'Bit Depth', 'Bitrate', 'Duration', 'Size', 'Path']
     expect(all(k in pod_i18n.TEXT and set(pod_i18n.TEXT[k]) == set(pod_i18n.LOCALES) for k in keys), 'every text of the page and the sheet rows has its 13 translations')

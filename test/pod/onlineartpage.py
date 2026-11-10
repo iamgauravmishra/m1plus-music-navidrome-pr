@@ -193,7 +193,7 @@ def asset_tests(ctx):
     ic, ti, tx, rt = box('oa_es_icon'), box('oa_status'), box('oa_es_text'), box('oa_es_retry')
     expect(ic[2:] == (40, 40) and by['oa_es_icon'].type == 'image' and by['oa_es_icon'].get('image') == 'pod_es_info' and ti[2:] == (288, 26) and tx[2:] == (260, 40) and rt[2:] == (168, 36), f'the block\'s parts: a 40 px glyph image, the title 288 x 26, the text 260 x 40, the pill 168 x 36 ({ic}, {ti}, {tx}, {rt})')
     expect(by['oa_status'].get('style:normal:font_size') == '18' and by['oa_status'].get('style:normal:text_align_h') == 'center' and by['oa_status'].get('style:normal:text_color') == '#FFFFFF'
-           and by['oa_es_text'].get('style:normal:font_size') == '14' and by['oa_es_text'].get('style:normal:text_align_h') == 'center' and by['oa_es_text'].get('style:normal:text_color') == '#8E8E93',
+           and by['oa_es_text'].get('style:normal:font_size') == '14' and by['oa_es_text'].get('style:normal:text_align_h') == 'center' and by['oa_es_text'].get('style:normal:text_color') == '#AAAAAA',
            'the title is white, 18 px, centred; the explanation grey, 14 px, centred')
     full = 40 + 14 + 26 + 4 + 40 + 18 + 36
     expect(260 - full // 2 >= LIST_Y and 260 + (full + 1) // 2 <= LIST_Y + LIST_H, f'the tallest block (glyph, title, two lines, pill: {full} px) centred on y 260 lies inside the list')

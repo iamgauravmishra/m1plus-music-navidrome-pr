@@ -24,7 +24,7 @@ TONE = (0x3A, 0x1E, 0x24)   # a cover's tone behind the album page (m1_tone of a
 
 ND_STATES = {   # a Navidrome row's sheet (patch/rowmenu.c rm_third): the third row and the star by the row's state
     'new': (('Play Next', 'Play After', 'Download', 'Favorite', 'Get Info'), ('rm_ic_next', 'rm_ic_after', 'rm_ic_dl', 'rm_ic_fav', 'rm_ic_info')),
-    'done': (('Play Next', 'Play After', 'Remove Download', 'Undo Favorite', 'Get Info'), ('rm_ic_next', 'rm_ic_after', 'rm_ic_rmdl', 'rm_ic_unfav', 'rm_ic_info')),
+    'done': (('Play Next', 'Play After', 'Remove Download', 'Undo Favorite', 'Get Info'), ('rm_ic_next', 'rm_ic_after', 'pc_ic_trash', 'rm_ic_unfav', 'rm_ic_info')),
     'busy': (('Play Next', 'Play After', 'Cancel Download', 'Favorite', 'Get Info'), ('rm_ic_next', 'rm_ic_after', 'rm_ic_cxdl', 'rm_ic_fav', 'rm_ic_info'))}
 
 

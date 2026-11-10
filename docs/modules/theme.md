@@ -18,7 +18,7 @@ theme** is modded: stock's theme1 (accent salmon `#FA7268`) is forced off at run
 | muted partner text | `#8C8C8C` | `#FFFFFF` |
 | secondary text | `#AAAAAA` | same |
 | settings icon | bare white glyph (no disc; the Home grid keeps its `#777777` discs) | coloured discs |
-| list chevron | `#8C8C8C` (pressed `#6E6E6E`) | white |
+| list chevron | `#8A8A8A` (pressed `#6E6E6E`) | white |
 | status glyph on / off | `#FFFFFF` / `#666666` | white / grey |
 | slider fill / track / thumb disc | `#EEEEEC` / `#333333` / `#777777` | orange `#FE7E40` / `#333333` / orange disc |
 | toggle on / off | white track, dark knob / stock grey track, light knob | orange track / same grey |

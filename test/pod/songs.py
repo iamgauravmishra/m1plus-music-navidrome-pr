@@ -416,8 +416,8 @@ def asset_tests(ctx):
            'the header\'s numbers stack: the cover centred, the name, the pills 16 px under it, the rows start as far under the pills as the library\'s do')
     ft = kids['sg_foot']
     expect(ft.type == 'label' and ft.get('sensitive') == 'false' and (ft.x, ft.w, ft.h) == (O['SG_HDR_X'], 320 - 2 * O['SG_HDR_X'], O['SG_FOOT_TEXT_H'])
-           and ft.get('style:normal:font_size') == str(O['SG_FOOT_PX']) and ft.get('style:normal:text_color') == '#9C9C9C' and ft.get('style:normal:text_align_h') == 'left',
-           'the song count: an insensitive label, 15 px #9C9C9C (the album page\'s meta line), left at x 10 (the covers\' edge), 20 px high')
+           and ft.get('style:normal:font_size') == str(O['SG_FOOT_PX']) and ft.get('style:normal:text_color') == '#AAAAAA' and ft.get('style:normal:text_align_h') == 'left',
+           'the song count: an insensitive label, 15 px #AAAAAA (the album page\'s footer\'s grey), left at x 10 (the covers\' edge), 20 px high')
     for nm, x, icon in (('btn_play', 10, 'sg_play'), ('btn_shuffle', 149, 'sg_shuffle')):
         b = kids[nm]
         expect((b.x, b.y, b.w, b.h) == (x, 52, 129, 40) and b.type == 'button' and b.get('style:normal:bg_color') == '#1E1E1E' and b.get('style:pressed:bg_color') == '#333335'

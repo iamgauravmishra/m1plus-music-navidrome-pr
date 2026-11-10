@@ -177,8 +177,8 @@ def artists_tests(ctx):
     flags = lambda w: {k: v for k, v in w.props}
     sb = tree.find('btn_songs')
     expect(sb and (sb.x, sb.y, sb.w, sb.h) == (O['NAV_VIEW_X'], 0, O['NAV_VIEW_W'], pod_ui.NAVBAR_H)
-           and flags(sb).get('visible') == 'false' and flags(sb).get('sensitive') == 'false' and 'pod_nav_songs_down' in str(sb.props) and 'pod_nav_songs' in str(sb.props)
-           and mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and 'NAV_SONGS_X' not in O,
+           and flags(sb).get('visible') == 'false' and flags(sb).get('sensitive') == 'false' and 'pod_nav_listl_down' in str(sb.props) and 'pod_nav_listl' in str(sb.props)
+           and mod_icons.NAV_VIEW_POS['pod_nav_listl'] == 'left' and 'NAV_SONGS_X' not in O,
            'the asset has the Songs button at x 214, 46 wide, hidden and insensitive, with its left-cap glyph and pressed glyph')
     expect(tree.find('btn_allalbums') is None and flags(tree.find('btn_backtoplayer')).get('style:normal:icon') == 'ah_nav_np',
            'the asset has no All albums button, and Now Playing is the disc (the main Cover Flow keeps it)')

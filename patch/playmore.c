@@ -6,7 +6,7 @@
  * The sheet is as high as its page's rows (page 1: PM_PAGE_N = 6 x 50 = 300 px, page 2: PM_PAGE2_N = 6 x 50 = 300 px) and sits on the bottom of the screen; the page
  * above it is dimmed by the asset's own dialog highlight (highlight="default(alpha=..)", the AWTK dialog highlighter the window
  * manager sets up when the dialog opens). The glass is the dialog's first child, an insensitive image (pod_glass) that gets the page's own picture and height
- * (pm_sheet6, 300 px, both pages): never a crop of a taller one. Page 1 (when it opens): Look up album (listitem4), Look up artist (5), Add to playlist
+ * (pc_sheet6, 300 px, both pages): never a crop of a taller one. Page 1 (when it opens): Look up album (listitem4), Look up artist (5), Add to playlist
  * (2), Cassette Mode (pod_tape, the asset's: it opens the landscape cassette page, patch/tape.c), Vinyl Mode (pod_vinyl: the turntable page, patch/vinyl.c) and "More" (pod_more, a row the asset adds, hidden until now; a chevron
  * at its right). A tap on More switches to page 2: a header row "< More" (pod_back, also the asset's; a tap returns to page 1), Playback speed (1), Sleep Timer (pod_sleep: a link to the stock Power page), A-B repeat (0), Find Cover & Lyrics (pod_art) and
  * Delete (6, its label red in the asset). Online search (3) is never shown. A switch only hides one row set and shows the other and sets the sheet to the page's height;
@@ -66,7 +66,7 @@ static const unsigned char pm_page[3][PM_PAGE_N] = {
 };
 static const unsigned char pm_rows[3] = {PM_PAGE_N, PM_PAGE2_N, PM_PAGE_EP_N};
 static const char *const pm_glass[3] = {
-    "pm_sheet6", "pm_sheet6",
+    "pc_sheet6", "pc_sheet6",
     "pc_sheet2"}; /* each set's own picture (pc_sheet2: the Podcasts page's 100 px glass, the same pane) */
 
 static struct {
@@ -120,7 +120,7 @@ static void pm_arrange(void) {
         if (!used[i]) widget_restack(pm.row[i], k++);
     widget_resize(
         pm.glass, PM_DIALOG_W,
-        h); /* the glass of the page's own height: pm_sheet6 (pages 1 and 2, 300 px) or pc_sheet2 (an episode's page 1), never a crop */
+        h); /* the glass of the page's own height: pc_sheet6 (pages 1 and 2, 300 px) or pc_sheet2 (an episode's page 1), never a crop */
     image_base_set_image(pm.glass, pm_glass[set]);
     widget_resize(pm.dlg, PM_DIALOG_W, h);
     widget_move(pm.dlg, 0, PM_SCREEN_H - h);

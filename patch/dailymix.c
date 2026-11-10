@@ -42,7 +42,7 @@ extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one b
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
-#define DM_GREY 0xff1c1c1eu
+#define DM_GREY 0xff1e1c1cu /* #1C1C1E (red lowest) */
 #define DM_TEXT 48 /* wide chars of a title line */
 #define DM_STEXT 160 /* wide chars of an artists line */
 #define DM_LINES 16 /* most lines a wrap may need before it is given up */

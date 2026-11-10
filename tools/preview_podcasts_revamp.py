@@ -282,7 +282,7 @@ def glyph16(i): return sprite(i * O['PA_G_PX'], O['PA_G_Y'], O['PA_G_PX'], O['PA
 
 def bottom_sheet(s, fr, rows):
     """The Show page's bottom sheet as the payload makes it (patch/podcasts.c pg_sheet_rows): the window (not the status bar) dimmed, the sheet's own glass picture of that height (pc_sheet<n>) at
-    the window's bottom, PM_ROW_H rows with hairlines, the 20 px glyph at x PS_SHEET_ICON_X, the 18 px label from PS_SHEET_TEXT_X, the grey value right aligned to PS_SHEET_VALUE_R (the label
+    the window's bottom, PM_ROW_H rows with hairlines, the 24 px glyph at x PS_SHEET_ICON_X, the 18 px label from PS_SHEET_TEXT_X, the grey value right aligned to PS_SHEET_VALUE_R (the label
     keeps its text: the value takes the room that is left). rows: (glyph image name or a Lucide name, label, value, rgb)."""
     dim = Image.new('RGBA', (W, WIN), (0, 0, 0, 0x82)); fr.alpha_composite(dim, (0, STAT))
     rh = O['PM_ROW_H']; h = rh * len(rows); top = fr.height - h
@@ -290,8 +290,8 @@ def bottom_sheet(s, fr, rows):
     for i, (g, label, value, rgb) in enumerate(rows):
         y = top + i * rh
         if i: hline(fr, 0, W, y, (255, 255, 255, 0x22))
-        if g in IMGS: _paste(fr, IMGS[g], O['PS_SHEET_ICON_X'], y + (rh - 20) // 2)
-        else: put_icon(fr, g, O['PS_SHEET_ICON_X'] + 10, y + rh / 2, 20, rgb)
+        if g in IMGS: _paste(fr, IMGS[g], O['PS_SHEET_ICON_X'], y + (rh - 24) // 2)
+        else: put_icon(fr, g, O['PS_SHEET_ICON_X'] + 12, y + rh / 2, 24, rgb)
         vw = FONT.width(value, 18) if value else 0
         room = O['PS_SHEET_VALUE_R'] - O['PS_SHEET_TEXT_X'] - (vw + O['PS_SHEET_GAP'] if vw else 0)
         s.text(fr, O['PS_SHEET_TEXT_X'], y + rh / 2, PS.fit(s, label, 18, room), 18, rgb)

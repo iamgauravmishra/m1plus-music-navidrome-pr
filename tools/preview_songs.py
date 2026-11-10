@@ -243,12 +243,12 @@ def sort_card(s, im, current=0, rev=False, kind='library'):
 
 
 def row_menu(s, im, keys=('Play Next', 'Play After', 'Add to Playlist', 'Favorite', 'Get Info'), fav_on=False, glyphs=('rm_ic_next', 'rm_ic_after', 'rm_ic_add', 'rm_ic_fav', 'rm_ic_info')):
-    """The rows' menu (patch/rowmenu.c, tools/pod_ui.py row_menu): the scrim's dim, then Now Playing's More sheet at the window's foot: the rm_glass pane (320 x 250, top corners only),
+    """The rows' menu (patch/rowmenu.c, tools/pod_ui.py row_menu): the scrim's dim, then Now Playing's More sheet at the window's foot: the pc_sheet5 pane (320 x 250, top corners only),
     five 50 px rows, a 24 px glyph at x 14, the 18 px label from x 48, the 13 % white hairline above every row but the first."""
     import pod_ui
     im.alpha_composite(Image.new('RGBA', im.size, (0, 0, 0, 0x82)))
     rh = O['PM_ROW_H']; h = len(keys) * rh; y = im.height - h
-    im.alpha_composite(s.img('rm_glass'), (0, y))
+    im.alpha_composite(s.img('pc_sheet5'), (0, y))
     for i, (key, name) in enumerate(zip(keys, glyphs)):
         ry = y + i * rh
         if i: im.alpha_composite(Image.new('RGBA', (W, 1), (255, 255, 255, 0x22)), (0, ry))

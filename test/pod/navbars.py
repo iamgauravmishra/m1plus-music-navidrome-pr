@@ -10,7 +10,7 @@ import awtk_strings, awtk_ui, mod_icons, mod_overlays, pod_i18n, pod_ui
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIGESTS = os.path.join(os.path.dirname(HERE), 'navbars-stock.sha256')
-NEW_IMAGES = ('pod_nav_', 'pod_sb_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'rm_', 'sg_', 'vs_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_', 'vinyl_', 'pm_sheet', 'qk_', 'pod_ci_', 'pod_cd_', 'pod_cdl_', 'pod_chev', 'pod_check', 'se_', 'fo_ic_', 'pod_es_', 'rn_', 'wf_', 'nd_st_', 'pq_glass', 'pc_sheet6')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
+NEW_IMAGES = ('pod_nav_', 'pod_sb_', 'nb_fade', 'ah_', 'pl_glass', 'pl_ic_', 'rm_', 'sg_', 'vs_', 'np_', 'dm_', 'dp_', 'pod_ic_', 'ipod_', 'tape_', 'vinyl_', 'qk_', 'pod_ci_', 'pod_cd_', 'pod_cdl_', 'pod_chev', 'pod_check', 'se_', 'fo_ic_', 'pod_es_', 'rn_', 'wf_', 'nd_st_', 'pq_glass', 'pc_sheet6')      # the images this work adds or changes (all ours; ah_*: the album page's buttons, tint and navbar; np_*: Now Playing's glyphs and discs; pl_*: the Playlists page's menu, docs/modules/playlists.md; sg_*: the Songs page's); dm_ / dp_: the Daily Mix card and page; pod_ic_*: the menu and settings row glyphs (tools/mod_icons.py POD_ROWS); ipod_*: the Pod page's click wheel; tape_*: the Tape page's pictures
 OVERLAY_UI = ('confirminfo_dialog.bin', 'rippercompleted_dialog.bin', 'cardupdate_dialog.bin', 'formatcard_dialog.bin', 'dialog_autoshutdown.bin')   # the ui files tools/mod_overlays.py restyles (docs/modules/overlays.md; their window themes in styles/ stay stock)
 OUR_FILES = ('about_page.bin', 'albuminfo_page.bin', 'lyrics.ttf')  # lyrics.ttf: the lyrics' bold face (docs/modules/lyrics.md, a second font file next to default.ttf); the About page (the digest was taken when it carried the release tag; it is stock again, our own About page is m1plus_about) and the plain stock album page (its ui file: the navbar's y, as allmusic_page's)
 # the code-built stock navbars: (first, last + 1) of the builders' bytes in demo (the album pages' two, Folders, Artists/Genres/Composers, stock Playlists)
@@ -85,8 +85,8 @@ def run(ctx):
             expect('btn_select' not in k and 'btn_more' in k, f'{name}: no Select button of its own any more (Select is a sheet row on the Downloads page)')
         if 'btn_songs' in k:
             s = k['btn_songs']
-            expect((s.x, s.w, s.y, s.h) == (O['NAV_VIEW_X'], slot_w, 0, 50) and s.x + s.w == play.x and s.get('visible') == 'false' and s.get('style:normal:icon') == 'pod_nav_songs'
-                   and mod_icons.NAV_VIEW_POS['pod_nav_songs'] == 'left' and play.get('style:normal:icon') == 'ah_nav_np',
+            expect((s.x, s.w, s.y, s.h) == (O['NAV_VIEW_X'], slot_w, 0, 50) and s.x + s.w == play.x and s.get('visible') == 'false' and s.get('style:normal:icon') == 'pod_nav_listl'
+                   and mod_icons.NAV_VIEW_POS['pod_nav_listl'] == 'left' and play.get('style:normal:icon') == 'ah_nav_np',
                    f'{name}: the hidden Songs button is the left cap on the 214 slot, abutting Now Playing (the disc in the asset; the code makes it the right cap)')
         fades = [c for c in root.children if c.name == pod_ui.NB_FADE_NAME]
         listed = any(c.y == 50 and c.h >= 300 for c in root.children if c.type == 'list_view')

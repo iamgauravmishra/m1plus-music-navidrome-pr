@@ -298,19 +298,19 @@ BACKDROPS = {'black': 0, 'white under the dim': round(255 * (255 - DIM) / 255), 
 
 
 def glass_checks(expect, built_ui, stock_ui, lum):
-    """The glass sheet (pm_sheet): the image is the generator's output, top corners transparent and bottom corners and edge opaque; the dialog
+    """The glass sheet (pc_sheet5): the image is the generator's output, top corners transparent and bottom corners and edge opaque; the dialog
     and every row are transparent over it, the pressed band and hairline translucent, inline in this dialog only; every label, badge and
     chevron keeps its contrast with the glass over black, over white under the dim and over pure white, at rest and on a pressed row."""
     import mod_icons
     from PIL import Image
     xx = os.path.join(WORK, RAW, 'images', 'xx')
     sheets = {}
-    for name, spec in (('pm_sheet', mod_icons.GLASS_SHEET), ('pm_sheet6', mod_icons.GLASS_SHEET6)):   # pm_sheet (5 rows, 250 px: only pod_glass's first picture, a failed start's look) and pm_sheet6 (6 rows, 300 px, both pages): none a crop of the other
+    for name, spec in (('pc_sheet5', mod_icons.GLASS_SHEET), ('pc_sheet6', mod_icons.GLASS_SHEET6)):   # pc_sheet5 (5 rows, 250 px: only pod_glass's first picture, a failed start's look) and pc_sheet6 (6 rows, 300 px, both pages): none a crop of the other
         gen = mod_icons.glass_image(*spec, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)
         raw = open(os.path.join(xx, name + '.png'), 'rb').read()
         sheets[name] = im = Image.open(os.path.join(xx, name + '.png')).convert('RGBA')
         w, h, r = spec
-        expect(raw == open(os.path.join(mod_icons.PNG, name + '.png'), 'rb').read() and same_pixels(raw, gen) and im.size == (w, h) == (built_ui.w, ROW_H * (5 if name == 'pm_sheet' else O['PM_PAGE_N'] == O['PM_PAGE2_N'] and O['PM_PAGE_N'])),
+        expect(raw == open(os.path.join(mod_icons.PNG, name + '.png'), 'rb').read() and same_pixels(raw, gen) and im.size == (w, h) == (built_ui.w, ROW_H * (5 if name == 'pc_sheet5' else O['PM_PAGE_N'] == O['PM_PAGE2_N'] and O['PM_PAGE_N'])),
                f'{name}.png is the generator output pixel for pixel, {w}x{h} = the page\'s own sheet height, r {r}, top corners only')
         a = lambda x, y, im=im: im.getpixel((x, y))[3]
         expect(a(0, 0) == 0 and a(w - 1, 0) == 0 and a(0, h - 1) >= 0.7 * 255 and a(w - 1, h - 1) >= 0.7 * 255 and all(a(x, h - 1) >= 0.7 * 255 for x in range(w))
@@ -319,7 +319,7 @@ def glass_checks(expect, built_ui, stock_ui, lum):
     gen = mod_icons.glass_image(320, 100, 18, fill=mod_icons.GLASS_SHEET_FILL, top_only=True)   # a podcast episode's page 1 (two rows) uses the Podcasts page's 100 px glass
     expect(same_pixels(open(os.path.join(xx, 'pc_sheet2.png'), 'rb').read(), gen) and Image.open(os.path.join(xx, 'pc_sheet2.png')).size == (320, 2 * ROW_H),
            'pc_sheet2.png is the generator output at the two-row sheet height (the episode page 1\'s glass)')
-    sheet, sheet6 = sheets['pm_sheet'], sheets['pm_sheet6']
+    sheet, sheet6 = sheets['pc_sheet5'], sheets['pc_sheet6']
     # the same top edge: the first 18 rows of both are the rim and the rounded corners (a 300 px sheet is the 250 px one with 50 more rows of body)
     ea, eb = sheet.getchannel('A').crop((0, 0, 320, 24)).tobytes(), sheet6.getchannel('A').crop((0, 0, 320, 24)).tobytes()
     expect(max(abs(p - q) for p, q in zip(ea, eb)) <= 2, 'both sheets have the same top edge: the rim and the rounded corners (the alpha of their first 24 rows within 2 levels: the rim fades over the sheet\'s height)')
@@ -327,9 +327,9 @@ def glass_checks(expect, built_ui, stock_ui, lum):
                and built_ui.get(f'style:{s}:round_radius') is None for s in ('normal', 'disable', 'focused')),
            'the dialog itself is transparent (no fill, no image, no top line, no radius): the glass is its first child')
     glass = built_ui.find('pod_glass')
-    expect(glass is not None and glass.type == 'image' and built_ui.children[0] is glass and glass.get('sensitive') == 'false' and glass.get('image') == 'pm_sheet'
+    expect(glass is not None and glass.type == 'image' and built_ui.children[0] is glass and glass.get('sensitive') == 'false' and glass.get('image') == 'pc_sheet5'
            and (glass.x, glass.y, glass.w, glass.h) == (0, 0, 320, 250) and glass.get('draw_type') == 'default',
-           'pod_glass is the dialog\'s first child (under the list), an insensitive image of pm_sheet 320 x 250 (a failed start\'s look; the pages set pm_sheet6)')
+           'pod_glass is the dialog\'s first child (under the list), an insensitive image of pc_sheet5 320 x 250 (a failed start\'s look; the pages set pc_sheet6)')
     lv, sv = built_ui.find('playmore_listview'), built_ui.find('playmore_scrollview')
     expect(all(x.get(f'style:{s}:bg_color') == '#00000000' for x in (lv, sv) for s in ('normal', 'disable', 'focused')), 'the list_view and its scroll_view are transparent')
     states = ('normal', 'pressed', 'over', 'disable', 'focused')
@@ -337,15 +337,15 @@ def glass_checks(expect, built_ui, stock_ui, lum):
     expect(all(c.type == 'list_item' and all(c.get(f'style:{s}:bg_color') == ('#FFFFFF10' if s == 'pressed' else '#00000000') and c.get(f'style:{s}:border_color') == '#FFFFFF22' for s in states)
                for c in rows) and len(rows) == 14,
            'all fourteen rows: transparent in every state but pressed (#FFFFFF10, 6 % white), the hairline #FFFFFF22 (13 % white)')
-    expect(not any('pm_sheet' in str(c.props) for c in stock_ui.walk()) and 'pm_sheet' not in str([p for w_ in built_ui.walk() if w_.name not in ('pod_glass',) for p in w_.props]),
-           'only pod_glass refers to pm_sheet; the rows and every other widget carry inline styles of this dialog, no shared style name')
+    expect(not any('pc_sheet5' in str(c.props) for c in stock_ui.walk()) and 'pc_sheet5' not in str([p for w_ in built_ui.walk() if w_.name not in ('pod_glass',) for p in w_.props]),
+           'only pod_glass refers to pc_sheet5; the rows and every other widget carry inline styles of this dialog, no shared style name')
     # the other pages' row styles are untouched: no ui asset but this one, and no style file, mentions the image or a transparent list_item_style
     ui_root = os.path.join(WORK, RAW)
     users = []
     for base, _, files in os.walk(ui_root):
         for f in files:
-            if f.endswith('.bin') and 'pm_sheet' in open(os.path.join(base, f), 'rb').read().decode('latin-1'): users.append(os.path.relpath(os.path.join(base, f), ui_root))
-    expect(users == ['ui/dialog/playmore_dialog.bin'], f'pm_sheet is used by playmore_dialog.bin only ({users})')
+            if f.endswith('.bin') and 'pc_sheet5' in open(os.path.join(base, f), 'rb').read().decode('latin-1'): users.append(os.path.relpath(os.path.join(base, f), ui_root))
+    expect(sorted(users) == ['ui/dialog/playmore_dialog.bin', 'ui/m1plus_album.bin', 'ui/m1plus_songs.bin'], f'pc_sheet5 (the five-row sheet glass) is the asset image of playmore_dialog.bin and of the two pages with the track rows\' menu ({users})')
     ths = awtk_style.parse(open(os.path.join(ui_root, 'styles', 'default.bin'), 'rb').read())
     its = ths.find('list_item', 'list_item_style')
     expect(its and all((it.get('bg_color') >> 24) == 255 or it.state in ('pressed', 'over', 'disable', 'focused', 'selected') for it in its)
@@ -382,7 +382,7 @@ def glass_checks(expect, built_ui, stock_ui, lum):
     for lname, level in BACKDROPS.items():
         for pressed in (False, True):
             for row, lab in texts.items():
-                col = hexrgb('#FF5A4F') if lab == 'scrlabel6' else hexrgb(tc)
+                col = hexrgb('#FF6B6B') if lab == 'scrlabel6' else hexrgb(tc)
                 table[lname, pressed, lab] = worst(row, lab, col, level, pressed)
             table[lname, pressed, 'note'] = worst('listitem1', 'label1_msg', hexrgb('#AAAAAA'), level, False)
             for badge in ('img_1x', 'img_2x'):
@@ -476,7 +476,7 @@ def run(ctx):
            'the More row and the back header read "More", the Cassette Mode row "Cassette Mode" (translated by key)')
     expect(('widget_set_tr_text', m.nodes['scrlabel1'], 'Speed') in m.calls and ('widget_set_tr_text', m.nodes['label1_msg'], 'Files below 48 kHz only') in m.calls,
            'the Playback speed label reads "Speed" and the note under it its short text')
-    expect([c for c in m.calls if c[0] == 'image_base_set_image'] == [('image_base_set_image', m.nodes['pod_glass'], 'pm_sheet6')], 'the More chevron is a fixed image: the only picture set is the glass (page 1\'s pm_sheet6)')
+    expect([c for c in m.calls if c[0] == 'image_base_set_image'] == [('image_base_set_image', m.nodes['pod_glass'], 'pc_sheet6')], 'the More chevron is a fixed image: the only picture set is the glass (page 1\'s pc_sheet6)')
     names = [c[1] for c in m.calls if c[0] == 'widget_lookup']
     expect(all(n in names for n in ('listitem0', 'listitem6', 'pod_more', 'pod_back', 'pod_tape', 'pod_vinyl', 'pod_more_label', 'pod_back_label', 'pod_tape_label', 'pod_vinyl_label', 'scrlabel1', 'label1_msg')), 'the rows and labels are found by their names')
     expect(m.stock_kept(),
@@ -514,7 +514,7 @@ def run(ctx):
     expect(m.stacked()[:6] == PAGE2 and sorted(m.stacked()[6:]) == HIDDEN2, f'page 2: stacked in that order, the hidden rows last ({m.stacked()})')
     expect(m.size(m.dialog) == (320, 300) and m.size(m.lv) == (320, 300) and m.size(m.sv) == (310, 300) and m.size(m.bar) == (10, 300) and m.vh() == 300 and m.size(m.glass) == (320, 300),
            f'page 2: the sheet is 6 rows tall, 300 px ({m.size(m.dialog)})')
-    expect(('image_base_set_image', m.nodes['pod_glass'], 'pm_sheet6') == [c for c in m.calls if c[0] == 'image_base_set_image'][-1], 'page 2: the glass is pm_sheet6 (300 px, as page 1\'s)')
+    expect(('image_base_set_image', m.nodes['pod_glass'], 'pc_sheet6') == [c for c in m.calls if c[0] == 'image_base_set_image'][-1], 'page 2: the glass is pc_sheet6 (300 px, as page 1\'s)')
     expect(m.top() == SHEET2_Y == SHEET_Y == 180 and m.top() + m.size(m.dialog)[1] == SCREEN_H, 'page 2: the sheet is on the bottom of the screen (its top edge is page 1\'s)')
     expect(all(m.s32(m.rows[i] + 4) >= 300 for i in HIDDEN2), 'page 2: the hidden rows are parked below the sheet')
     m.relayout_all()
@@ -538,7 +538,7 @@ def run(ctx):
     m.click_back()
     expect(m.shown() == PAGE1 and m.size(m.dialog) == (320, 300) and m.top() == SHEET_Y and m.vh() == 300 and m.size(m.glass) == (320, 300) and all(m.dead(i) for i in HIDDEN1),
            f'the back header returns to page 1: six rows, the sheet taller again, with its own glass ({m.shown()}, {m.size(m.dialog)}, y {m.top()})')
-    expect([c for c in m.calls if c[0] == 'image_base_set_image'][-1] == ('image_base_set_image', m.nodes['pod_glass'], 'pm_sheet6') and m.stacked()[:6] == PAGE1 and all(m.states.get(m.rows[i]) == 'normal' for i in (MORE, BACK)), 'page 1 again: stacked in order, the tapped rows back in their normal state')
+    expect([c for c in m.calls if c[0] == 'image_base_set_image'][-1] == ('image_base_set_image', m.nodes['pod_glass'], 'pc_sheet6') and m.stacked()[:6] == PAGE1 and all(m.states.get(m.rows[i]) == 'normal' for i in (MORE, BACK)), 'page 1 again: stacked in order, the tapped rows back in their normal state')
     m.relayout_all()
     expect(m.shown() == PAGE1 and m.ys() == [0, 50, 100, 150, 200, 250] and m.stacked()[:6] == PAGE1, 'page 1 again: a relayout keeps the order')
     for _ in range(3): m.click_more(); m.click_back()
@@ -761,7 +761,7 @@ def run(ctx):
     m.window_event(O['EVT_WINDOW_TO_BG'])
     expect(m.top() == SCREEN_H - 100, f'episode: another dialog over the sheet leaves it on the bottom ({m.top()})')
     m.click_more()
-    expect(m.shown() == PAGE2 and m.size(m.dialog) == (320, SHEET2_H) and m.top() == SHEET2_Y and [c for c in m.calls if c[0] == 'image_base_set_image'][-1] == ('image_base_set_image', m.glass, 'pm_sheet6'),
+    expect(m.shown() == PAGE2 and m.size(m.dialog) == (320, SHEET2_H) and m.top() == SHEET2_Y and [c for c in m.calls if c[0] == 'image_base_set_image'][-1] == ('image_base_set_image', m.glass, 'pc_sheet6'),
            'episode: More opens the same second page as for a song (300 px, the same glass)')
     m.click_back()
     expect(m.shown() == PAGE_EP and m.size(m.dialog) == (320, 100) and m.size(m.glass) == (320, 100) and all(m.dead(i) for i in HIDDEN_EP), 'episode: the back header returns to the episode\'s page 1')
@@ -1009,7 +1009,7 @@ def run(ctx):
     expect(diff == ['style:normal:border'] or all(k == 'style:normal:border' for k in diff), f'pod_back is styled as the Add to playlist row, but for its hairline ({diff})')
     lab = built_ui.find('scrlabel6')
     reds = {lab.get(f'style:{s}:text_color') for s in ('normal', 'pressed', 'over', 'disable', 'focused')}
-    expect(reds == {'#FF5A4F'}, f'the Delete label is red in every state ({reds})')
+    expect(reds == {'#FF6B6B'}, f'the Delete label is red in every state ({reds})')
     glass_checks(expect, built_ui, stock_ui, lum)
     expect(built_ui.find('listitem4').get('style:normal:border') == 'none' and built_ui.find('pod_back').get('style:normal:border') == 'none' and built_ui.find('pod_goep').get('style:normal:border') == 'none' and built_ui.find('listitem0').get('style:normal:border') == 'top'
            and all(built_ui.find(n).get('style:normal:border') == 'top' for n in ('listitem1', 'listitem2', 'listitem3', 'listitem5', 'listitem6', 'pod_more', 'pod_tape', 'pod_vinyl')),

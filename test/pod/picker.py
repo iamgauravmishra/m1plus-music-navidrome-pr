@@ -155,7 +155,7 @@ def run(ctx):
     open_picker(m); PL.settle(m)
     blits, texts, styles = PL.paint(m)
     white = sorted((f[3], f[4]) for f in m.fills if f[0] == 0xffffffff)
-    expect([f for f in m.fills if f[0] == 0xff2c2c2e and f[3] == O['LIST_ART'] and f[4] == O['LIST_ART'] - 4] and white == [(2, 20), (20, 2)],
+    expect([f for f in m.fills if f[0] == 0xff2e2c2c and f[3] == O['LIST_ART'] and f[4] == O['LIST_ART'] - 4] and white == [(2, 20), (20, 2)],
            f'the New playlist row paints a dark square and a white plus (two bars, {white})')
     title0 = next(x for x, s in zip(texts, styles) if s == 'label_row_title')
     expect(title0[1][1] == PL.TOP + (ROW - O['LIST_TITLE_H']) // 2, f'the New playlist title is centred in the row ({title0})')
@@ -163,7 +163,7 @@ def run(ctx):
     # the Favourites row: the same dark square and a 24 px star (an alpha bitmap), centred in the art box, titled "Favorites" and centred like New playlist
     ay = PL.TOP + ROW + O['LIST_ART_Y']
     star = [b for b in blits if b[2][2] == 24 and b[2][3] == 24 and b[2][1] == ay + (O['LIST_ART'] - 24) // 2]
-    expect(len([f for f in m.fills if f[0] == 0xff2c2c2e and f[3] == O['LIST_ART'] and f[4] == O['LIST_ART'] - 4]) == 2 and len(star) == 1
+    expect(len([f for f in m.fills if f[0] == 0xff2e2c2c and f[3] == O['LIST_ART'] and f[4] == O['LIST_ART'] - 4]) == 2 and len(star) == 1
            and star[0][2][0] == O['LIST_ART_X'] + (O['LIST_ART'] - 24) // 2, f'the Favorites row paints the dark square and the star centred in it ({star})')
     if star:
         a = lambda x, y: PL.pixel(m, star[0][0], x, y) >> 24

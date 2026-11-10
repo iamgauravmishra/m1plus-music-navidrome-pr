@@ -22,7 +22,7 @@ UI = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_folders.
 T_LIST, T_SD, T_OTG, T_DIR, T_FILE = 1, 2, 3, 4, 8
 WIDGETS = ('view_grid', 'btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'btn_play', 'btn_shuffle', 'sg_add', 'sg_del', 'label_title', 'sg_title', 'label_status',
            'label_row_title', 'sg_bar', 'img_nb_fade') + VS_WIDGETS
-ICONS = ('pod_ic_folders', 'fo_ic_sd', 'fo_ic_usb', 'pod_ic_cdripper', 'pod_ic_playlists', 'fo_ic_file', 'pod_ic_nowplaying')
+ICONS = ('pod_ic_folders', 'fo_ic_sd', 'pod_ic_usbmode', 'pod_ic_cdripper', 'pod_ic_playlists', 'fo_ic_file', 'pod_ic_nowplaying')
 ROOT = [(T_SD, 'SD', '/mnt/mmc'), (T_OTG, 'OTG', '/mnt/usb'), (T_SD, 'CD Library', '/mnt/mmc/Ripper')]
 TREE = {
     '/mnt/mmc': [(T_DIR, 'Blank'), (T_DIR, '.m1plus'), (T_DIR, 'Music'), (T_DIR, 'Podcasts'), (T_DIR, 'Sort'), (T_FILE, 'readme.mp3'), (T_FILE, '.hidden.flac')],

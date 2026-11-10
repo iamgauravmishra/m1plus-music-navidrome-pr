@@ -579,8 +579,8 @@ def asset_tests(ctx):
     expect(all(st(f'wf_row{k}') == 'list_item_style' for k in range(WP_ROWS)) and st('wf_row_sw') == st('wf_row_other') == 'list_item_style', 'rows are stock list items')
     expect(all(st(f'wf_name{k}') == 'srlabel_leftwhite21_style' for k in range(WP_ROWS)) and st('wf_sw_label') == st('wf_other_label') == 'srlabel_leftwhite21_style', 'the stock 21 px white labels')
     hdr = by['wf_hdr_my_t']
-    expect([hdr.get(f'style:{s}:font_size') for s in ('normal', 'disable', 'focused')] == ['15'] * 3 and [hdr.get(f'style:{s}:text_color') for s in ('normal', 'disable', 'focused')] == ['#AAAAAA'] * 3
-           and hdr.get('style:normal:text_align_h') == 'left' and by['wf_hdr_net_t'].get('style:normal:font_size') == '15', 'the headers: small grey, left aligned')
+    expect([hdr.get(f'style:{s}:font_size') for s in ('normal', 'disable', 'focused')] == ['18'] * 3 and [hdr.get(f'style:{s}:text_color') for s in ('normal', 'disable', 'focused')] == ['#AAAAAA'] * 3
+           and hdr.get('style:normal:text_align_h') == 'left' and by['wf_hdr_net_t'].get('style:normal:font_size') == '18', 'the headers: the Settings pages\' 18 px grey, left aligned')
     # the pictures: pieces as the Settings pages, the payload changes them
     expect(all(by[n].get(f'style:{s}:bg_image') == 'pod_cd_single' for n in ('wf_row_sw',) for s in ('normal', 'over', 'focused', 'disable')) and by['wf_row_sw'].get('style:pressed:bg_image') == 'pod_cd_single_down'
            and by['wf_row0'].get('style:normal:bg_image') == 'pod_cd_mid' and by['wf_row_other'].get('style:normal:bg_image') == 'pod_cd_bot' and by['wf_row_other'].get('style:pressed:bg_image') == 'pod_cd_bot_down', 'card pieces and their pressed twins')
@@ -620,8 +620,8 @@ def asset_tests(ctx):
     for loc in pod_i18n.LOCALES:
         w = lambda t, px: StbText(font, px).layout(t)[1]
         tx = lambda k: pod_i18n.TEXT[k][pod_i18n.table_for(loc)]
-        too = [k for k in ('My Networks', 'Networks') if w(tx(k), 15) > 240] + [k for k in ('Other…',) if w(tx(k), 21) > 190]
-        expect(not too, f'{loc}: the headers (15 px, room for the spinner after them) and Other... (21 px, 190 px) fit: {too}')
+        too = [k for k in ('My Networks', 'Networks') if w(tx(k), 18) > 240] + [k for k in ('Other…',) if w(tx(k), 21) > 190]
+        expect(not too, f'{loc}: the headers (18 px, room for the spinner after them) and Other... (21 px, 190 px) fit: {too}')
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------- the page

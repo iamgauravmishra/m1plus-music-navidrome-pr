@@ -57,7 +57,7 @@ NAV_PLAY_X, NAV_PLAY_W = 260, 60     # Now Playing: main's button; its image is 
 NAV_TITLE_END = NAV_PLAY_X            # a title with no toggle ends before Now Playing's button (its disc starts at 269)
 
 
-NAV_SONGS_ICON = 'pod_nav_songs'
+NAV_SONGS_ICON = 'pod_nav_listl'   # the list glyph on the capsule's left cap: the Radio results' toggle's image
 NB_FADE_NAME, NB_FADE_H = 'img_nb_fade', 20     # the soft fade under the bar (tools/mod_icons.py NB_FADE; mod_ipodrows.NB_FADE_NAME)
 
 
@@ -215,6 +215,11 @@ def row_item(name, y, label, chevron, h=ROW_H, w=SCREEN_W, switch=None, value=No
     return item
 
 
+SUB_RGB = '#AAAAAA'    # the secondary text grey of every page (docs/modules/ui-rules.md): sub lines, footers, values, keys, credits
+HINT_RGB = SUB_RGB     # a page's empty-state hint (label_status): one line 20 px, a wrapped caption 18 px
+RED_RGB = '#FF6B6B'    # the one red: a destructive row's label and glyph
+
+
 def label(name, x, y, w, h, text, size, colour, align='center'):
     lab = Widget('label', x, y, w, h, [('name', name), ('text', text)])
     styled(lab, ('normal',), 'text_color', colour)
@@ -282,7 +287,7 @@ def build_cover_page(page):
     root.children.append(frame)
     root.children.append(scroll_caption('label_album', ay, ah, 22, '#FFFFFF'))
     root.children.append(scroll_caption('label_artist', ry, rh, 18, '#AAAAAA'))
-    status = label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')
+    status = label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)
     root.children.append(hidden(status))
     cancel = Widget('button', 100, 260, 120, 46, [('name', 'btn_cancel'), ('enable', 'true'),
                                                   pod_i18n.text_prop('Cancel')])
@@ -374,7 +379,7 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/albums.c / playlists.c show it while yoffset > 0
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     if albums or title_name:   # a source's list still loading: the one spinner, centred in the content area (patch/libsrc.c ls_spin)
         root.children.append(hidden(wf_image((title_name or 'al_title')[:2] + '_spin', (SCREEN_W - WF_SPIN_PX) // 2, (CLIENT_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))
     # The two modes' text styles (patch/albums.c reads them with widget_prepare_text_style; never shown)
@@ -392,9 +397,9 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
 
 
 # The Show page's text styles (patch/podcasts.c; hidden labels the payload reads with widget_prepare_text_style and measures with widget_measure_text): name, px, colour, alignment.
-# Colours as the approved design: the description #B8B8B8, the grey lines #AAAAAA, a played title #A6A6A6; the Latest Episode pill's label is dark on its white pill.
+# Colours as the approved design: the description #B8B8B8, the grey lines, a played title and the empty pages' hint #AAAAAA; the Latest Episode pill's label is dark on its white pill.
 PS_STYLES = (('label_ps_name', 22, '#FFFFFF', 'center'), ('label_ps_sec', 16, '#B8B8B8', 'left'), ('label_ps_meta', 15, '#AAAAAA', 'left'), ('label_ps_head', 22, '#FFFFFF', 'left'),
-             ('label_ps_date', 15, '#AAAAAA', 'left'), ('label_ps_ctitle', 20, '#FFFFFF', 'left'), ('label_ps_cdim', 20, '#A6A6A6', 'left'), ('label_ps_cdesc', 16, '#AAAAAA', 'left'),
+             ('label_ps_date', 15, '#AAAAAA', 'left'), ('label_ps_ctitle', 20, '#FFFFFF', 'left'), ('label_ps_cdim', 20, '#AAAAAA', 'left'), ('label_ps_cdesc', 16, '#AAAAAA', 'left'),
              ('label_ps_pill', 16, '#FFFFFF', 'left'), ('label_ps_latest', 18, '#000000', 'left'), ('label_ps_latestw', 18, '#FFFFFF', 'left'),
              # the Shows page (round 2): the section headers (Continue Listening, Shows), the refresh line's white "Refresh", a Continue Listening item's title and its grey "35m left", the grid's title and grey line under each cover (the Albums grid's 18 / 15 px)
              ('label_ps_sech', 20, '#FFFFFF', 'left'), ('label_ps_line', 15, '#FFFFFF', 'left'), ('label_ps_stitle', 14, '#FFFFFF', 'left'), ('label_ps_sleft', 13, '#AAAAAA', 'left'),
@@ -456,7 +461,7 @@ def build_podcasts_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/podcasts.c shows it while yoffset > 0 (not on the Show level, which paints a fade in the page's colour)
-    status = hidden(label('label_status', 20, 180, SCREEN_W - 40, 90, '', 18, '#FFFFFF'))
+    status = hidden(label('label_status', 20, 180, SCREEN_W - 40, 90, '', 18, HINT_RGB))
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
     for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA')):
@@ -478,7 +483,7 @@ def build_podcasts_page(page):
 
 # The Show page's bottom sheets (the show's "..." and an episode's), in the style of Now Playing's More sheet (docs/modules/playmore.md): the page dimmed (the Playlists menu's scrim), the
 # 320 px glass from the bottom of the window (pc_sheet6 .. pc_sheet1, a picture for each number of rows: tools/mod_icons.py PC_SHEETS; the payload sets the image
-# and the card's height and place for the rows it shows), PM_ROW_H rows, each a button (transparent, 6 % white pressed) with its 20 px glyph at x PS_SHEET_ICON_X, the label from
+# and the card's height and place for the rows it shows), PM_ROW_H rows, each a button (transparent, 6 % white pressed) with its 24 px glyph at x PS_SHEET_ICON_X (the geometry of the track rows' menu, row_menu: 14 and 48), the label from
 # PS_SHEET_TEXT_X and, for the two rows that have one, the grey value right aligned to PS_SHEET_VALUE_R; a 1 px hairline child on the top of every row but the first (the payload shows it).
 # One widget set serves both sheets: the fourteen rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
 PS_SHEET_ROWS = (('speed', 'pc_ic_speed', 'Playback Speed', True, False), ('refresh', 'pc_ic_refresh', 'Refresh Feed', True, False), ('select', 'pc_ic_select', 'Select Episodes', False, False),
@@ -488,7 +493,7 @@ PS_SHEET_ROWS = (('speed', 'pc_ic_speed', 'Playback Speed', True, False), ('refr
                  ('import', 'pc_ic_import', 'Import from Card', False, False), ('delplayed', 'pc_ic_trash', 'Delete Played Episodes', False, False),
                  ('export', 'pod_ic_export', 'Export OPML', False, False), ('save', 'pod_ic_save', 'Save Episode', False, False), ('order', 'pod_ic_order', 'Episode Order', True, False))   # id, glyph, label, has a value, red; import is the Shows level's sheet, select (relabelled Select, or Select Shows) and delplayed the Downloads page's, select and export the Subscriptions page's, save (relabelled Unsave Episode when it is saved) an episode's
 PS_SHEET_ICON_X, PS_SHEET_TEXT_X, PS_SHEET_VALUE_R, PS_SHEET_VALUE_W, PS_SHEET_GAP = (OFFSETS[k] for k in ('PS_SHEET_ICON_X', 'PS_SHEET_TEXT_X', 'PS_SHEET_VALUE_R', 'PS_SHEET_VALUE_W', 'PS_SHEET_GAP'))   # patch/offsets.inc
-PS_SHEET_RED = '#FF6B6B'
+PS_SHEET_RED = RED_RGB
 PS_SHEET_PX = 18   # the labels (Now Playing's More sheet: 18 px)
 
 
@@ -830,7 +835,7 @@ def build_playlists_page(page):
 
 
 RM_KEYS = ('Play Next', 'Play After', 'Add to Playlist', 'Favorite', 'Get Info')   # the track rows' "..." menu (patch/rowmenu.c): the rows in order, each with its glyph (tools/mod_icons.py RM_MENU_ICONS)
-RM_GLASS = 'rm_glass'                                       # the sheet's glass: Now Playing's More sheet's pane, five rows high, top corners only (tools/mod_icons.py GLASS_ROWMENU)
+RM_GLASS = 'pc_sheet5'                                       # the sheet's glass: Now Playing's More sheet's pane, five rows high, top corners only (tools/mod_icons.py GLASS_ROWMENU)
 RM_ICON_X, RM_TEXT_X, RM_TEXT_R = 14, 48, 22                  # Now Playing's More sheet's rows (pod_tape: the 24 px glyph at x 14, the label from x 48, ending at 298)
 RM_LABEL_PX = 18
 
@@ -885,7 +890,7 @@ def row_menu():
 SG_TITLE_PX, SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = 32, 20, 12, 56, 18
 SG_PILL_RGB, SG_PILL_DOWN_RGB, SG_PILL_OFF_RGB = '#1E1E1E', '#333333', '#141414'   # flat: no glass
 SG_PILL_PRESS_RGB = '#333335'   # the Play / Shuffle pills pressed: palette.ROLE_PRESS_PILL, one blue level off #333333 so the accent can find it (the select bars' pills keep #333333)
-SG_FOOT_RGB = '#9C9C9C'   # the song count under the last row: the album page's meta line colour (mod_ipodrows.META_COLOR)
+SG_FOOT_RGB = SUB_RGB   # the song count under the last row: the album page's footer's grey
 
 
 RAIL_INK_MIN = 64   # a pixel is "ink" from 25 % coverage up (the antialiased fringe of the outline's bbox is not)
@@ -1103,7 +1108,7 @@ def build_artists_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/artists.c shows it while yoffset > 0 (at rest it would darken the large title)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children.append(hidden(wf_image('ar_spin', (SCREEN_W - WF_SPIN_PX) // 2, (CLIENT_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))   # a source's list still loading (patch/libsrc.c ls_spin)
     lab = hidden(label('label_row_title', 0, 0, 10, 10, '', LIST_TITLE_PX, '#FFFFFF', 'left'))   # the row text style (the stock srlabel_leftwhite21_style's 21 px white)
     styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -1160,7 +1165,7 @@ def build_search_page(page):
     root.children.append(Widget('button', PS.SE_CLOSE_X, PS.SE_CLOSE_Y, PS.SE_CLOSE_W, PS.SE_CLOSE_H, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:over:icon', 'se_close'), ('style:normal:icon', 'se_close'), ('style:pressed:icon', 'se_close_down')]))
-    root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children.append(hidden(wf_image('se_spin', (SCREEN_W - WF_SPIN_PX) // 2, 120, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))   # a source's loading spinner (patch/search.c shows and turns it)
     root.children.append(hidden(label('label_title', 0, 0, 200, 22, '', 16, '#FFFFFF', 'left')))
     root.children[-1].set(*pod_i18n.text_prop(page.title))
@@ -1197,7 +1202,7 @@ def build_autoeq_page(page):
         if c.name == 'kb_clear': c.x = RD_FIELD_W - PS.SE_CLEAR_W
         elif c.name in ('kb_hint', 'kb_text'): c.w = RD_TEXT_W
     root.children.append(field)
-    root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     for name, px, colour in (('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB)):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))   # text styles only (widget_prepare_text_style); never shown
         styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -1241,7 +1246,7 @@ def build_songs_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/songs.c shows it while yoffset > 0 (at rest it would darken the large title)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     for name, px, colour, align in (('label_row_title', LIST_TITLE_PX, '#FFFFFF', 'left'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA', 'left'),
                                     ('label_row_dim', LIST_TITLE_PX, '#7A7A7A', 'left'), ('label_row_subdim', LIST_SUB_PX, '#7A7A7A', 'left'),   # a source's rows that cannot play
                                     ('label_grid_title', GRID_ALBUM_PX, '#FFFFFF', 'left'), ('label_grid_sub', GRID_ARTIST_PX, '#AAAAAA', 'left')):   # the last two: Recently Added's album grid
@@ -1267,7 +1272,7 @@ def build_songs_page(page):
 AB_STYLES = (('label_row_num', 'right', '#AAAAAA', 19), ('label_row_title', 'left', '#FFFFFF', 19),   # the stock rows' 19 px number (the grey line's colour) and title (white)
              ('label_row_dim', 'left', '#7A7A7A', 19))   # a source's rows: the title of a row that cannot play (the dim grey, the lowest that keeps 4.5:1 on black)
 AB_META = (('ab_title', 'AH_TITLE_Y', 'AH_TITLE_H', 22, '#FFFFFF'), ('ab_artist', 'AH_ARTIST_Y', 'AH_ARTIST_H', 18, '#AAAAAA'), ('ab_meta', 'AH_META_Y', 'AH_META_H', 15, '#9C9C9C'))   # srlabel_ah{title,artist,meta}_style
-AB_FOOT_RGB = '#AAAAAA'   # the footer's grey: the artist line's (not the meta line's #9C9C9C)
+AB_FOOT_RGB = SUB_RGB   # the footer's grey: the artist line's (not the meta line's #9C9C9C)
 AB_PLAY_TEXT_W = OFFSETS['AB_PLAY_TEXT_W']   # the English "Play" at 18 px, where the payload cannot measure it; the payload centres the pair for the language
 
 
@@ -1329,7 +1334,7 @@ def build_album_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(play_text('ab_play_text'))   # the pill's text style and its translated text; the payload paints the text over the pill
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     for name, align, colour, px in AB_STYLES:
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))   # text styles only (widget_prepare_text_style); never shown
         styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -1375,8 +1380,8 @@ def ab_button(name, x, w, rest, down, y=None):
 # Repeat buttons (the Songs page's flat pills, icon only), the section line "Queue" with the song count at its right. The cover is painted by the payload. The window is black; the
 # glass Back is the window's last child, over the rows.
 QP_HEAD_PX, QP_EMPTY_PX = 20, 16
-QP_EMPTY_RGB = '#9C9C9C'
-QP_CLEAR_PX, QP_CLEAR_RGB, QP_CLEAR_DOWN_RGB = 17, '#9C9C9C', '#7A7A7A'   # the Clear text button: neutral grey, dimmer while pressed
+QP_EMPTY_RGB = SUB_RGB
+QP_CLEAR_PX, QP_CLEAR_RGB, QP_CLEAR_DOWN_RGB = 17, SUB_RGB, '#7A7A7A'   # the Clear text button: neutral grey, dimmer while pressed
 QP_OFF_RGB, QP_OFF_DOWN_RGB = '#2C2C2E', '#3A3A3D'   # a mode button that is off (the payload sets the lit look: #C8C8C8, pressed #A8A8A8, with the dark glyph); patch/offsets.inc QP_PILL_*; pressed #3A3A3D is palette.ROLE_PRESS_QPILL (one blue level off #3A3A3C)
 
 
@@ -1436,7 +1441,7 @@ def build_queue_page(page):
     view.children = kids
     sv.children.append(view)
     root.children.append(lv)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA')):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))   # text styles only (widget_prepare_text_style); never shown
         styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -1476,7 +1481,7 @@ def build_dailymix_page(page):
             ('name', 'btn_dp_play'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'dp_pill_down'), ('style:normal:icon', 'dp_pill'), ('style:over:icon', 'dp_pill')]),
         Widget('image', D.DP_PLAY_X + (D.DP_PLAY_W - D.DP_PILL_GLYPH) // 2, D.DP_BTN_Y + (D.DP_BTN_H - D.DP_PILL_GLYPH) // 2, D.DP_PILL_GLYPH, D.DP_PILL_GLYPH, [
-            ('name', 'img_dp_glyph'), ('image', 'dp_play'), ('draw_type', 'center'), ('sensitive', 'false')]),
+            ('name', 'img_dp_glyph'), ('image', 'ah_play'), ('draw_type', 'center'), ('sensitive', 'false')]),
         Widget('button', D.DP_ADD_X, D.DP_BTN_Y, D.DP_ADD_W, D.DP_BTN_H, [   # saves the mix as a stock playlist (Shuffle's disc mirrored, a plus)
             ('name', 'btn_dp_add'), ('enable', 'true'), ('style', 'img_btn_style'),
             ('style:pressed:icon', 'dp_add_down'), ('style:normal:icon', 'dp_add'), ('style:over:icon', 'dp_add')])]
@@ -1609,15 +1614,15 @@ def oa_es_layout(glyph, text, pill):
 
 OA_STATUS =(16, 214, 288, OA_ES_TITLE_H, 18, '#FFFFFF')    # x, y, w, h, px, colour: the title of the state block
 OA_HEAD_TITLE = (16, 52, 288, 20, 17, '#FFFFFF')   # the lyrics detail's header, in the chip row's place
-OA_HEAD_SUB = (16, 72, 288, 15, 13, '#8E8E93')
+OA_HEAD_SUB = (16, 72, 288, 15, 13, SUB_RGB)
 OA_LPILL = (16, 400, 288, 40)    # the lyrics detail's pill (window y); the text lines stop above it (OA_LY_H of patch/onlineart.c)
 OA_DC = (0, NAVBAR_H, SCREEN_W, CLIENT_H - NAVBAR_H)   # the cover detail's container (window y)
 OA_DC_ART = (40, 8, 240, 240)    # the larger cover (container y)
 OA_DC_LABELS = (   # name, y (container), h, px, colour: the album, the artist, the source, the failure line
     ('oa_dc_name', 256, 26, 20, '#FFFFFF'),
     ('oa_dc_artist', 282, 22, 16, '#AAAAAA'),
-    ('oa_dc_source', 304, 20, 13, '#8E8E93'),
-    ('oa_hint', 326, 20, 14, '#8E8E93'))
+    ('oa_dc_source', 304, 20, 13, SUB_RGB),
+    ('oa_hint', 326, 20, 14, SUB_RGB))
 OA_PILL = (16, 352, 288, 40)     # the cover detail's pill (container y)
 OA_BADGE_PX = 12
 OA_LINE_PX = 17                  # a lyrics text line
@@ -1670,7 +1675,7 @@ def build_onlineart_page(page):
     x, y, w, h, px, colour = OA_STATUS
     root.children.append(hidden(_oa_label('oa_status', x, y, w, h, px, colour)))
     root.children.append(hidden(Widget('image', (SCREEN_W - OA_ES_ICON) // 2, OA_ES_CENTRE - 100, OA_ES_ICON, OA_ES_ICON, [('name', 'oa_es_icon'), ('image', 'pod_es_info'), ('draw_type', 'center'), ('sensitive', 'false')])))
-    root.children.append(hidden(_oa_label('oa_es_text', (SCREEN_W - OA_ES_TEXT_W) // 2, OA_ES_CENTRE - 20, OA_ES_TEXT_W, OA_ES_TEXT_H, OA_ES_TEXT_PX, '#8E8E93', valign='top')))
+    root.children.append(hidden(_oa_label('oa_es_text', (SCREEN_W - OA_ES_TEXT_W) // 2, OA_ES_CENTRE - 20, OA_ES_TEXT_W, OA_ES_TEXT_H, OA_ES_TEXT_PX, SUB_RGB, valign='top')))
     root.children.append(_oa_pill('oa_es_retry', (SCREEN_W - OA_ES_PILL_W) // 2, OA_ES_CENTRE + 30, OA_ES_PILL_W, OA_ES_PILL_H))
     x, y, w, h, px, colour = OA_HEAD_TITLE
     root.children.append(hidden(_oa_label('oa_dh_title', x, y, w, h, px, colour)))
@@ -2416,7 +2421,7 @@ def build_folders_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/folders.c shows it while yoffset > 0 (at rest it would darken the large title)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, '#FFFFFF')))
+    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     lab = hidden(label('label_row_title', 0, 0, 10, 10, '', LIST_TITLE_PX, '#FFFFFF', 'left'))   # the text style only (widget_prepare_text_style); never shown
     styled(lab, ('normal',), 'text_align_v', 'middle')
     root.children.append(lab)
@@ -2427,7 +2432,7 @@ def build_folders_page(page):
 RD_FIELD_W = SCREEN_W - 2 * PS.SE_FIELD_X   # the Radio search field's width (patch/radiopage.c RP_TEXT_W is its text's)
 RD_TEXT_W = RD_FIELD_W - PS.SE_TEXT_X - PS.SE_CLEAR_W
 RD_CREDIT_PX = 14   # the credit line's size (patch/radiopage.c RP_CREDIT_PX)
-RD_SHEET_ROWS = (('add', 'pod_ic_rd_add', 'Add to My Stations', False, False), ('info', 'pod_ic_rd_info', 'Station Info', False, False))   # Radio Now Playing's sheet: two rows, the first's glyph and label swapped for Remove from My Stations by the payload (patch/radionp.c)
+RD_SHEET_ROWS = (('add', 'pod_ic_rd_add', 'Add to My Stations', False, False), ('info', 'rm_ic_info', 'Station Info', False, False))   # Radio Now Playing's sheet: two rows, the first's glyph and label swapped for Remove from My Stations by the payload (patch/radionp.c)
 RS_SHEET_ROWS = (('import', 'pod_ic_rd_import', 'Import from Card', False, False), ('clear', 'pc_ic_trash', 'Clear Recently Played', False, False))   # the "..." sheets (patch/radiopage.c): My Stations has Import from Card, Recently Played Clear Recently Played (the payload shows one row)
 
 
@@ -2464,14 +2469,14 @@ def build_radio_page(page):
     styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
     styled(title, ('normal',), 'text_align_h', 'left')
     styled(title, ('normal',), 'text_align_v', 'middle')
-    credit = hidden(label('rd_credit', 0, 0, SCREEN_W - 2 * 12, 20, '', RD_CREDIT_PX, '#8E8E93', 'left'))   # the directory's credit under its rows (patch/radiopage.c moves it and shows it)
+    credit = hidden(label('rd_credit', 0, 0, SCREEN_W - 2 * 12, 20, '', RD_CREDIT_PX, SUB_RGB, 'left'))   # the directory's credit under its rows (patch/radiopage.c moves it and shows it)
     credit.set(*pod_i18n.text_prop('Stations from radio-browser.info'))
     styled(credit, ('normal',), 'text_align_v', 'middle')
     grid.children = [title, credit]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/radiopage.c shows it while yoffset > 0 (at rest it would darken the large title)
-    status = hidden(label('label_status', 20, 165, SCREEN_W - 40, 120, '', 18, '#8E8E93'))   # the captions are grey, centred on y 225; up to four lines of 280 px (the payload sets line_wrap and word_wrap)
+    status = hidden(label('label_status', 20, 165, SCREEN_W - 40, 120, '', 18, HINT_RGB))   # the captions are grey, centred on y 225; up to four lines of 280 px (the payload sets line_wrap and word_wrap)
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
     for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
@@ -2584,7 +2589,7 @@ def build_radioinfo_page(page):
     sv.children.append(view)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # the payload shows it while the content is scrolled (at rest it would darken the heading)
-    for name, px, colour in (('label_head', SI_HEAD_PX, '#FFFFFF'), ('label_key', SI_KEY_PX, '#8E8E93'), ('label_val', SI_VAL_PX, '#FFFFFF')):
+    for name, px, colour in (('label_head', SI_HEAD_PX, '#FFFFFF'), ('label_key', SI_KEY_PX, SUB_RGB), ('label_val', SI_VAL_PX, '#FFFFFF')):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
@@ -2609,7 +2614,7 @@ def build_songinfo_page(page):
     sv.children.append(view)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))
-    for name, px, colour in (('label_head', GI_HEAD_PX, '#FFFFFF'), ('label_sub', GI_SUB_PX, '#8E8E93'), ('label_key', GI_KEY_PX, '#8E8E93'), ('label_val', GI_VAL_PX, '#FFFFFF')):
+    for name, px, colour in (('label_head', GI_HEAD_PX, '#FFFFFF'), ('label_sub', GI_SUB_PX, SUB_RGB), ('label_key', GI_KEY_PX, SUB_RGB), ('label_val', GI_VAL_PX, '#FFFFFF')):
         lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
         styled(lab, ('normal',), 'text_align_v', 'middle')
         root.children.append(lab)
@@ -2626,7 +2631,7 @@ WF_CUR, WF_MY, WF_OTH = 1, 16, 32   # the row pools: the connected network, My N
 WF_ROWS = WF_CUR + WF_MY + WF_OTH
 WF_CHK_X, WF_NAME_X, WF_NAME_W, WF_LOCK_X, WF_SIG_X, WF_INFO_X, WF_INFO_PX = 24, 54, 156, 216, 242, 274, 22   # row relative: the check column, the name's box (its ink starts at 56), the glyphs' left edges
 WF_SIG_W, WF_SIG_H, WF_LOCK_PX, WF_CHK_PX, WF_SPIN_PX = 20, 16, 16, 20, 14   # the signal fan (mod_icons.WIFI_SIG_W x H): 16 px tall like the lock
-WF_HDR_PX, WF_HDR_X, WF_HDR_H = 15, 24, 40   # the small grey group headers: 15 px, the text of the rows (x 24), a 40 px strip (the label 14..36 in it)
+WF_HDR_PX, WF_HDR_X, WF_HDR_H = _ST.HDR_PX, 24, 40   # the grey group headers: the Settings pages' (18 px), the text of the rows (x 24), a 40 px strip (the label 14..36 in it)
 
 
 def wf_hair(name, x):
