@@ -627,7 +627,3 @@ def manifest_tests(ctx):
 
 
 SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, dsd_tests, manifest_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

@@ -443,7 +443,3 @@ def destroy_tests(ctx):
 
 
 SECTIONS = [hook_tests, asset_tests, life_tests, history_tests, research_tests, navbtn_tests, order_tests, fallback_tests, destroy_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

@@ -134,7 +134,7 @@ VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', A
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
 STOCK_WIFI, STOCK_BLUETOOTH, STOCK_DISPLAY = range(3)
-# (navigator path, value shown, window name): the window name is the asset's root widget name, which pod_open_stock restacks an opened window of instead of stacking a second one; None: always a new window.
+# (navigator path, value shown, window name): the window name is the asset's root widget name, which m1_open_stock restacks an opened window of instead of stacking a second one; None: always a new window.
 # Only a page whose init does nothing that a restack would not redo has one (docs/modules/settings.md "Stock pages"): Display (nothing started). Wi-Fi: its init scans (wifi_scan) on every open and the foreground handler only rebuilds the list from the old results.
 # Bluetooth: its background handler stops discovery (btStopSearch) and the foreground handler does not restart it, only init does.
 STOCK_PAGES = (('systemset/wifi_page', 'wifi', None), ('systemset/bluetooth_page', 'bluetooth', None),

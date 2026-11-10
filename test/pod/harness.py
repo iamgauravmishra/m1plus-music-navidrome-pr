@@ -2050,3 +2050,37 @@ def host_frame(frac, ring=None, land=False):
         frame = (hostcf.render(lib, frac, texs, hostcf.land_cfg(lib), O['CFL_H'], O['CFL_W']) if land
                  else hostcf.render(lib, frac, texs))
         return bytes(frame)
+
+
+# Small helpers many page modules share (a module that needs another shape defines its own under the same name).
+def vis(m, name):
+    """(visible, sensitive) of the widget called name, as the payload last set them (1 when never set)."""
+    w = m.widgets[name]
+    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
+
+
+def click(m, name):
+    """Click the widget called name; the stock calls the machine has seen."""
+    m.click(name, count=900000000)
+    return list(m.calls)
+
+
+def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
+
+
+def undo(s):
+    """A mocked text as the user reads it: UTF-8 bytes read as latin-1 (the payload's own strings come back twice over from the mocked translation)."""
+    for _ in range(2):
+        try: s = s.encode('latin-1').decode('utf-8')
+        except (UnicodeDecodeError, UnicodeEncodeError): break
+    return s
+
+
+def cut(s, cap):
+    """At most cap - 1 bytes of s, whole characters only."""
+    out, n = '', 0
+    for ch in s:
+        b = len(ch.encode('utf-8'))
+        if n + b > cap - 1: break
+        out, n = out + ch, n + b
+    return out

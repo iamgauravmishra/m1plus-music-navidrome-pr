@@ -446,7 +446,7 @@ static void pg_fill(void) {
         widget_set_text_utf8(pg.sub[i], text);
         peq_piece_set(pg.row[i], &pg.piece[i], piece, 0);
         if (pg.hair[i]) widget_set_visible(pg.hair[i], i < n, 0);
-        if (!pg.shown[i]) pod_show(pg.row[i], 1), pg.shown[i] = 1;
+        if (!pg.shown[i]) m1_show(pg.row[i], 1), pg.shown[i] = 1;
     }
     peq_graph_curve(&pg.g, &pg.work);
     peq_graph_scale(&pg.g, pg.top, pg.bot);
@@ -458,9 +458,9 @@ static void pg_fill(void) {
 static void pg_note(void) {
     char text[96];
     if (pg.skipped) {
-        pod_fmt(text, sizeof text,
-                TR(pg.skipped == 1 ? "%d line not supported was skipped." : "%d lines not supported were skipped."),
-                (int)pg.skipped);
+        m1_fmt(text, sizeof text,
+               TR(pg.skipped == 1 ? "%d line not supported was skipped." : "%d lines not supported were skipped."),
+               (int)pg.skipped);
         widget_set_text_utf8(pg.note_t, text);
     }
     widget_set_visible(pg.note, pg.skipped != 0, 0);

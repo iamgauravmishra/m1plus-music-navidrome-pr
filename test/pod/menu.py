@@ -335,7 +335,6 @@ def arrange_tests(ctx):
     expect(extras_ok(m, b'12345-ab') == '', f'the Extras page: the items turned off are restacked with the hidden ones, last ({extras_ok(m, b'12345-ab')})')
 
 
-
 def arrange_invalid_tests(ctx):
     expect, P = ctx.expect, pod_pages
     entry, on_row, rows0 = addresses()
@@ -422,7 +421,6 @@ def arrange_model_tests(ctx):
     on_ = [i for _, i in sorted((y, i) for i, (y, on) in a.items() if on and i < NI)]
     expect([items[i] for i in on_] == DEF_EXTRAS and [a[i][0] for i in on_] == [k * ROW_H for k in range(len(on_))]
            and ('widget_set_prop_int', m.widgets['pod_scrollview'], 'virtual_h', len(on_) * ROW_H) in m.calls, 'no headers in the asset: Extras stacks its rows from y 0 as before')
-
 
 
 def arrange_extras_tests(ctx):
@@ -523,7 +521,6 @@ def arrange_extras_tests(ctx):
         mm = Machine()
         mm.call(on_row, a0=rows0 + 12 * i)
         expect([c for c in m.calls if c[0] != 'widget_on'] == [c for c in mm.calls if c[0] != 'widget_on'], f'Extras > {r.label} acts as the menu row')
-
 
 
 def arrange_hit_tests(ctx):
@@ -1451,7 +1448,3 @@ def mainmenu_tests(ctx, on_row, rows_s, mm_i):
 
 
 SECTIONS = [entry_tests, arrange_tests, arrange_invalid_tests, arrange_model_tests, arrange_extras_tests, arrange_hit_tests, settings_tests, mainmenu_section, extrascfg_section]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

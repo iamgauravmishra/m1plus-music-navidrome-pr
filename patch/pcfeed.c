@@ -10,6 +10,7 @@
 #include "stock.h"
 #include "podcasts.h"
 #include "pcfeed.h"
+#include "utf8.h"
 
 #define PF_TEXT 512 /* the text of the element being collected (a title is cut to PC_TITLE later) */
 #define PF_TAG \
@@ -85,19 +86,9 @@ static int pf_is(const char *nm, unsigned len, const char *s) {
 
 /* The UTF-8 bytes of code point cp into dst[*n..cap): 0 when it does not fit whole (or is not a character). */
 static int pf_put_cp(char *dst, unsigned *n, unsigned cap, unsigned cp) {
-    unsigned len = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+    unsigned len = m1_utf8_len(cp);
     if (!cp || cp > 0x10ffff || (cp >= 0xd800 && cp < 0xe000) || *n + len > cap) return 0;
-    if (len == 1)
-        dst[*n] = (char)cp;
-    else if (len == 2)
-        dst[*n] = (char)(0xc0 | cp >> 6), dst[*n + 1] = (char)(0x80 | (cp & 0x3f));
-    else if (len == 3)
-        dst[*n] = (char)(0xe0 | cp >> 12), dst[*n + 1] = (char)(0x80 | (cp >> 6 & 0x3f)),
-        dst[*n + 2] = (char)(0x80 | (cp & 0x3f));
-    else
-        dst[*n] = (char)(0xf0 | cp >> 18), dst[*n + 1] = (char)(0x80 | (cp >> 12 & 0x3f)),
-        dst[*n + 2] = (char)(0x80 | (cp >> 6 & 0x3f)), dst[*n + 3] = (char)(0x80 | (cp & 0x3f));
-    *n += len;
+    *n += m1_utf8_put(dst + *n, cp);
     return 1;
 }
 

@@ -457,7 +457,7 @@ int songinfo_open(void *rec) {
     char url[80];
     int fresh = 0;
     if (!rec) return -1;
-    if (gi.win && pod_is_top(gi.win) && widget_is_window_opened(gi.win)) return 0;
+    if (gi.win && m1_is_top(gi.win) && widget_is_window_opened(gi.win)) return 0;
     r = (gi_rec_t *)calloc(1, sizeof *r);
     if (!r) return -1;
     gi_copy(r->path, sizeof r->path, cc_str(rec, REC_PATH));
@@ -491,8 +491,8 @@ int songinfo_open(void *rec) {
         return -1;
     }
     widget_on(gi.win, EVT_DESTROY, gi_on_destroy, gi.win);
-    pod_bind(gi.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(gi.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(gi.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(gi.win, "btn_backtoplayer", m1_on_player, (void *)0);
     gi.sv = widget_lookup(gi.win, "gi_scrollview", 1);
     gi.view = widget_lookup(gi.win, "gi_view", 1);
     gi.fade = widget_lookup(gi.win, "img_nb_fade", 1);

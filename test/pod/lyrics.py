@@ -646,7 +646,7 @@ def follow_tests(ctx):
 
 
 def overflow_tests(ctx):
-    """Stock widget_get_text_utf8 ignores its size for a wide text and a lyric line over the 256 byte stack buffer rebooted the player: pod_text_utf8 (patch/common.c) encodes the wide text bounded."""
+    """Stock widget_get_text_utf8 ignores its size for a wide text and a lyric line over the 256 byte stack buffer rebooted the player: m1_text_utf8 (patch/common.c) encodes the wide text bounded."""
     expect = ctx.expect
     def want(t, size):
         """The longest prefix of t's UTF-8 that is whole characters and leaves room for the NUL."""
@@ -657,11 +657,11 @@ def overflow_tests(ctx):
         return out
     m = LyMachine(); h = m.widget('probe_text')
     def run_(text=None, size=256, cps=None, pad=8):
-        """pod_text_utf8 into a buffer of `size` bytes among 0xAA canaries: (result, the buffer's string, canaries intact)."""
+        """m1_text_utf8 into a buffer of `size` bytes among 0xAA canaries: (result, the buffer's string, canaries intact)."""
         if text is not None: m.texts[h] = utf8(text)
         if cps is not None: m.wide[h] = cps
         buf = m.alloc(size + 2 * pad); m.u.mem_write(buf, b'\xaa' * (size + 2 * pad))
-        r = m.call(PSYMS['pod_text_utf8'], h, buf + pad, a2=size, count=200000)
+        r = m.call(PSYMS['m1_text_utf8'], h, buf + pad, a2=size, count=200000)
         raw = bytes(m.u.mem_read(buf, size + 2 * pad)); body = raw[pad:pad + size]
         z = body.find(b'\0')
         return (r if r < 1 << 31 else r - (1 << 32)), (body[:z] if z >= 0 else None), raw[:pad] + raw[pad + size:] == b'\xaa' * (2 * pad)
@@ -678,11 +678,11 @@ def overflow_tests(ctx):
     expect(len(got) == 254 and got.decode('utf-8') == 'ab' + '😀' * 63 and safe, 'an emoji line (4 bytes each) too')
     # a size of 0 writes nothing; a widget without a text is -1 and an empty buffer; U+FFFD for what is not a character
     buf = m.alloc(8); m.u.mem_write(buf, b'\xaa' * 8)
-    expect((m.call(PSYMS['pod_text_utf8'], h, buf, a2=0) == 0xffffffff) and bytes(m.u.mem_read(buf, 8)) == b'\xaa' * 8, 'a size of 0: -1, nothing written')
+    expect((m.call(PSYMS['m1_text_utf8'], h, buf, a2=0) == 0xffffffff) and bytes(m.u.mem_read(buf, 8)) == b'\xaa' * 8, 'a size of 0: -1, nothing written')
     m.u.mem_write(buf, b'\xaa' * 8)
-    expect(m.call(PSYMS['pod_text_utf8'], m.alloc(8), buf, a2=8) == 0xffffffff and bytes(m.u.mem_read(buf, 2)) == b'\0\xaa', 'a widget without text: -1, an empty string')
+    expect(m.call(PSYMS['m1_text_utf8'], m.alloc(8), buf, a2=8) == 0xffffffff and bytes(m.u.mem_read(buf, 2)) == b'\0\xaa', 'a widget without text: -1, an empty string')
     m.u.mem_write(buf, b'\xaa' * 8)
-    expect(m.call(PSYMS['pod_text_utf8'], 0, buf, a2=8) == 0xffffffff and bytes(m.u.mem_read(buf, 2)) == b'\0\xaa', 'no widget: -1, an empty string')
+    expect(m.call(PSYMS['m1_text_utf8'], 0, buf, a2=8) == 0xffffffff and bytes(m.u.mem_read(buf, 2)) == b'\0\xaa', 'no widget: -1, an empty string')
     r, got, safe = run_(cps=[0x41, 0xd800, 0x110000, 0xffffffff, 0x10ffff], size=64)
     expect(got == b'A' + '\ufffd'.encode() * 3 + '\U0010ffff'.encode() and r == 1 + 9 + 4 and safe, 'a surrogate or a code point beyond U+10FFFF is U+FFFD')
     # the lyric rows: a line over the buffer is cut where the page reads it (ly_text), never written past, and what is set on the labels is whole characters
@@ -1201,7 +1201,3 @@ def font_tests(ctx):
 
 
 SECTIONS = [asset_tests, start_tests, follow_tests, dots_tests, face_tests, touch_tests, wrap_tests, overflow_tests, cost_tests, font_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

@@ -92,7 +92,7 @@ def round_rect(im, x, y, w, h, r, rgb):
 
 
 def play_header(s, im, y):
-    """A playlist's header: the album page's Shuffle disc and Play pill (patch/common.c pod_pill_place): y is the pill's drawn top (PH_PILL_Y), the 44 px buttons start 2 px above it."""
+    """A playlist's header: the album page's Shuffle disc and Play pill (patch/common.c m1_pill_place): y is the pill's drawn top (PH_PILL_Y), the 44 px buttons start 2 px above it."""
     by = y - (O['AH_BTN_H'] - O['AH_PILL_H']) // 2
     disc = s.img('ah_shuffle'); im.alpha_composite(disc, (O['AH_SHUF_X'] + (O['AH_SHUF_W'] - disc.width) // 2, by + (O['AH_BTN_H'] - disc.height) // 2))
     im.alpha_composite(s.img('ah_pill'), (O['AH_PLAY_X'], by + (O['AH_BTN_H'] - O['AH_PILL_H']) // 2))

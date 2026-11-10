@@ -768,7 +768,3 @@ def crop_tests(ctx):
 
 
 SECTIONS = [key_tests, discovery_tests, crop_tests, request_tests, purity_snapshot_tests, purity_tests, recheck_tests, home_tests, lead_tests, lookup_tests, circle_tests, settings_tests, counts_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

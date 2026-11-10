@@ -493,7 +493,7 @@ static int tp_volume(void) { /* the status bar's label_volume text, read only (n
     int v = 0, i;
     if (!lab) return 0;
     buf[0] = 0;
-    pod_text_utf8(lab, buf, sizeof buf);
+    m1_text_utf8(lab, buf, sizeof buf);
     for (i = 0; buf[i] >= '0' && buf[i] <= '9' && i < 4; ++i) v = v * 10 + buf[i] - '0';
     return v;
 }
@@ -600,7 +600,7 @@ static void tp_update(int force) {
  * The timer, the window's events
  */
 static unsigned tp_want_ms(void) {
-    return !pod_screen_lit() ? POD_DARK_MS : tp.playing ? TP_PLAY_MS : TP_IDLE_MS;
+    return !m1_screen_lit() ? POD_DARK_MS : tp.playing ? TP_PLAY_MS : TP_IDLE_MS;
 } /* screen off: a slow check, no visual work (docs/modules/tape.md "Idle power") */
 
 static void tp_retime(void) {
@@ -617,7 +617,7 @@ static int tp_tick(const void *timer) {
         tp.timer = 0;
         return RET_OK;
     }
-    if (pod_screen_lit())
+    if (m1_screen_lit())
         tp_update(
             0); /* dark: no reels, no text, no invalidation; the first lit tick looks at everything (dt is capped, the text compares with what it shows) */
     tp_retime();
@@ -628,7 +628,7 @@ static int tp_first(const void *timer) {
     (void)timer;
     tp.timer = 0;
     if (!tp.win || !tp.fg) return RET_OK;
-    if (!pod_screen_lit()) { /* opened with the screen off: the first full draw waits for the light */
+    if (!m1_screen_lit()) { /* opened with the screen off: the first full draw waits for the light */
         tp.timer = timer_add(tp_first, (void *)0, POD_DARK_MS);
         return RET_OK;
     }
@@ -638,10 +638,7 @@ static int tp_first(const void *timer) {
     return RET_OK;
 }
 
-static void tp_unarm(void) {
-    if (tp.timer) timer_remove(tp.timer);
-    tp.timer = 0;
-}
+static void tp_unarm(void) { m1_timer_stop(&tp.timer); }
 
 static void tp_release(void) { /* the touch is over (or never was): the close screw is let go */
     int was = tp.pressed;

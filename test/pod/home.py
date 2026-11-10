@@ -429,7 +429,7 @@ def home_tests(expect, page):
            'the switches are images (sset_on / sset_off): no text is set anywhere (the V2.1iM ghost text cannot come back)')
     expect(not hid(m) and not moved(m), 'the Developer page keeps its navbar and list')
     expect([c[0] for c in m.calls].count('widget_on') == 2 + len(HOMESET.rows) + 2,'its Back, its bars icon and its rows are bound (and the switch refresh events)')
-    m.call(PSYMS['pod_on_back'])
+    m.call(PSYMS['m1_on_back'])
     expect(m.names() == ['navigator_back'], 'Back goes back to the Settings page')
 
     # 13. kill switches are honoured later too

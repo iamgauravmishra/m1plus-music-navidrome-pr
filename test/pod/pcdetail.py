@@ -686,7 +686,3 @@ def goto_tests(ctx):
 
 
 SECTIONS = [parser_tests, notes_file_tests, page_tests, pill_tests, show_row_tests, tint_page_tests, local_tests, preview_tests, width_tests, screen_off_tests, goto_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

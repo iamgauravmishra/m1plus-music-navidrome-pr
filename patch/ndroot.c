@@ -5,7 +5,7 @@
  * Opened by the menu row Subsonic (patch/m1plus.c ACT_SUBSONIC). With a server saved the page is the large title, a grey status line under it (a 14 px glyph, then "Synced 5m ago": the check circle
  * when connected, the spinner and "Syncing..." while a sync runs, the unplugged plug and the same line when offline, "Not Connected" when the server does not answer), six menu rows (Albums, Artists, Songs,
  * Playlists, Favorites, Downloaded: each opens the library's own page on lib_nd) and the library's grey footer under them ("2431 songs", nothing before the first sync). The large title scrolls away and the navbar's small
- * title fades in (pod_title_gone, as on every large-title page). The navbar's Search button (btn_search, the capsule's left cap at NAV_CF_X, the Songs page's place: shown with a server saved when lib_nd has
+ * title fades in (m1_title_gone, as on every large-title page). The navbar's Search button (btn_search, the capsule's left cap at NAV_CF_X, the Songs page's place: shown with a server saved when lib_nd has
  * LS_CAP_SEARCH) opens the library's search on the source (search_open_src). The navbar's "..." (btn_more) opens the shared view-sort card with two action rows: Sync Now (slot VS_SEARCH; inactive while a sync runs, the Wi-Fi toast
  * when there is none) and Server Settings (slot VS_SELECT; the Server page, as the Add Server pill). With none saved the list is hidden and the shared empty state shows: a plug, "Not Connected", one
  * sentence, the Add Server pill and, under it, a Downloaded pill (the card's downloads stay reachable); the card then holds Server Settings alone. The page's asset is tools/pod_nd.py (window m1plus_ndroot: rows pod_row0..5,
@@ -122,7 +122,7 @@ static void nr_footer(char *out, unsigned size) {
     unsigned songs, when;
     int trunc;
     out[0] = 0;
-    if (sba_summary(&songs, &when, &trunc)) pod_fmt(out, size, TR(songs == 1 ? "%d song" : "%d songs"), (int)songs);
+    if (sba_summary(&songs, &when, &trunc)) m1_fmt(out, size, TR(songs == 1 ? "%d song" : "%d songs"), (int)songs);
 }
 
 /* The glyph before the status text: the spinner while syncing, else the check circle (connected) or the unplugged plug (offline, not connected). */
@@ -149,7 +149,7 @@ static void nr_nav(void) {
                *down = on ? "pod_nav_moremid_down" : "pod_nav_more_down";
     if (on == nr.nav) return;
     nr.nav = on;
-    pod_show(nr.search, on);
+    m1_show(nr.search, on);
     widget_set_prop_str(nr.more, "style:normal:icon", mid);
     widget_set_prop_str(nr.more, "style:over:icon", mid);
     widget_set_prop_str(nr.more, "style:pressed:icon", down);
@@ -159,7 +159,7 @@ static void nr_nav(void) {
 /* The navbar's small title once the large one has scrolled away; the fade shows while the list is scrolled. The empty state has no scrolling list: its own large title stays. */
 static void nr_title_update(void) {
     int off = nr.sv ? *(int *)((char *)nr.sv + SC_YOFF) : 0, list = nr.shown == 0;
-    pod_title_set(nr.title, &nr.title_on, nr.noscroll || (list && pod_title_gone(off, 0)));
+    m1_title_set(nr.title, &nr.title_on, nr.noscroll || (list && m1_title_gone(off, 0)));
     if (nr.fade) {
         widget_set_visible(nr.fade, list && off > 0, 0);
         widget_set_sensitive(nr.fade, 0);
@@ -198,13 +198,13 @@ static void nr_refresh(int force) {
         nr.f[1] = 0; /* (a text no real one equals) */
     if (nr.shown != !conf) {
         nr.shown = !conf;
-        pod_show(nr.list, conf);
-        pod_show(nr.es_big, !conf);
-        pod_show(nr.es_icon, !conf);
-        pod_show(nr.es_title, !conf);
-        pod_show(nr.es_text, !conf);
-        pod_show(nr.es_pill, !conf);
-        pod_show(nr.es_dl, !conf);
+        m1_show(nr.list, conf);
+        m1_show(nr.es_big, !conf);
+        m1_show(nr.es_icon, !conf);
+        m1_show(nr.es_title, !conf);
+        m1_show(nr.es_text, !conf);
+        m1_show(nr.es_pill, !conf);
+        m1_show(nr.es_dl, !conf);
         vs_offer(&nr.vs,
                  conf ? VS_WITH_SEARCH | VS_WITH_SELECT : VS_WITH_SELECT); /* signed out: Server Settings alone */
         nr.dim = -1; /* (the offer made the Sync Now row sensitive again) */
@@ -318,7 +318,7 @@ static int nr_on_fg(void *ctx, void *e) {
 static int nr_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != nr.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
-    if (nr.timer) timer_remove(nr.timer);
+    m1_timer_stop(&nr.timer);
     ls_spin_end(nr.spin);
     memset(&nr, 0, sizeof nr);
     return RET_OK;
@@ -361,24 +361,24 @@ int nd_root_open(void) {
     }
     widget_on(nr.win, EVT_DESTROY, nr_on_destroy, nr.win);
     widget_on(nr.win, EVT_WINDOW_TO_FG, nr_on_fg, (void *)0);
-    pod_bind(nr.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(nr.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(nr.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(nr.win, "btn_backtoplayer", m1_on_player, (void *)0);
     nr.list = widget_lookup(nr.win, "nd_list", 1);
     nr.status = widget_lookup(nr.win, "nd_status", 1);
     nr.es_big = widget_lookup(nr.win, "nd_es_big", 1);
     nr.es_icon = widget_lookup(nr.win, "nd_es_icon", 1);
     nr.es_title = widget_lookup(nr.win, "nd_es_title", 1);
     nr.es_text = widget_lookup(nr.win, "nd_es_text", 1);
-    nr.es_pill = pod_bind(nr.win, "nd_es_pill", nr_on_server, (void *)0);
-    nr.es_dl = pod_bind(nr.win, "nd_es_dl", nr_on_downloaded, (void *)0);
+    nr.es_pill = m1_bind(nr.win, "nd_es_pill", nr_on_server, (void *)0);
+    nr.es_dl = m1_bind(nr.win, "nd_es_dl", nr_on_downloaded, (void *)0);
     nr.icon = widget_lookup(nr.win, "nd_st_icon", 1);
     nr.spin = widget_lookup(nr.win, "nd_st_spin", 1);
     nr.foot = widget_lookup(nr.win, "nd_foot", 1);
     nr.sv = widget_lookup(nr.win, "pod_scrollview", 1);
     nr.title = widget_lookup(nr.win, "label_title", 1);
     nr.fade = widget_lookup(nr.win, "img_nb_fade", 1);
-    nr.more = pod_bind(nr.win, "btn_more", nr_on_more, (void *)0);
-    nr.search = pod_bind(nr.win, "btn_search", nr_on_search, (void *)0);
+    nr.more = m1_bind(nr.win, "btn_more", nr_on_more, (void *)0);
+    nr.search = m1_bind(nr.win, "btn_search", nr_on_search, (void *)0);
     if (!nr.list || !nr.status || !nr.es_big || !nr.es_icon || !nr.es_title || !nr.es_text || !nr.es_pill ||
         !nr.es_dl || !nr.icon || !nr.spin || !nr.foot || !nr.sv || !nr.title || !nr.fade || !nr.more || !nr.search ||
         vs_bind(&nr.vs, nr.win, nr_on_card, nr_on_scrim, VS_WITH_SELECT)) {
@@ -388,7 +388,7 @@ int nd_root_open(void) {
     for (i = 0; i < NR_ROWS; ++i) {
         char name[24];
         snprintf(name, sizeof name, "pod_row%d", i);
-        if (!pod_bind(nr.win, name, nr_on_row, (void *)(long)i)) {
+        if (!m1_bind(nr.win, name, nr_on_row, (void *)(long)i)) {
             navigator_back();
             return -1;
         }

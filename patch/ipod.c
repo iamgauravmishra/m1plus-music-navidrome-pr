@@ -513,7 +513,7 @@ static void ip_load(void) {
 /* The page is in front and its list went stale (another page queried): read it again. Returns whether the rows can be read now. */
 static int ip_ensure(void) {
     if (ip_valid()) return 1;
-    if (!pod_is_top(ip.win)) return 0;
+    if (!m1_is_top(ip.win)) return 0;
     ip_load();
     return ip_valid();
 }
@@ -731,7 +731,7 @@ static void ip_rows_build(void) {
     int i, n = (int)ip.count - ip_top()->top, kind = ip_top()->kind;
     unsigned j;
     if (n > 4) n = 4;
-    if (ip.row_worker || cc_build_busy() || !pod_card_mounted()) return;
+    if (ip.row_worker || cc_build_busy() || !m1_card_mounted()) return;
     for (i = 0; i < n; ++i)
         if (ip.rows[i].kind == kind && ip.rows[i].index == ip_top()->top + i && ip.rows[i].waiting) break;
     if (i == n || !cc_build_open(16, CC_MISSING)) return;
@@ -746,7 +746,7 @@ static void ip_rows_build(void) {
 static int ip_rows_tick(void) {
     int i, kind = ip_top()->kind;
     unsigned j;
-    if (!pod_is_top(ip.win)) return 0;
+    if (!m1_is_top(ip.win)) return 0;
     if (ip.row_worker && cc_build_done() >= cc_build_total()) ip_rows_stop();
     if (!ip_tall(kind) || !ip_valid()) {
         ip_rows_stop();
@@ -863,7 +863,7 @@ static void ip_pane_xfer_stop(void) {
 
 /* Start the extraction of the track's album art at IP_PANE_ART px into the transient file. 1: running; 0: not allowed or not possible (the 168 px file is used). */
 static int ip_pane_xfer_start(const char *track) {
-    if (!*track || ip.row_worker || cc_build_busy() || !pod_card_mounted() || !pod_screen_lit()) return 0;
+    if (!*track || ip.row_worker || cc_build_busy() || !m1_card_mounted() || !m1_screen_lit()) return 0;
     unlink(IP_PANE_TMP);
     if (!cc_build_open(1, CC_MISSING)) return 0;
     if (cc_build_add_file(track, IP_PANE_TMP, IP_PANE_ART) != 1 || !cc_build_start()) {
@@ -962,7 +962,7 @@ static void ip_pane_frame(void) {
 static int ip_pane_advance(void) {
     unsigned want, now, step;
     int c = ip.pane.cur, o = !c;
-    if (!ip_split(ip_top()->kind) || !pod_is_top(ip.win)) return 0;
+    if (!ip_split(ip_top()->kind) || !m1_is_top(ip.win)) return 0;
     now = time_now_ms(), step = now - ip.pane.t0;
     ip.pane.t0 = now;
     if (step > IP_DRIFT_MAX_MS) step = IP_DRIFT_MAX_MS;
@@ -1055,7 +1055,7 @@ static int ip_pane_advance(void) {
 /* The tick's pane work: the state machine above, then the frame when something moved. 1: the pane's rectangle needs painting. */
 static int ip_pane_step(void) {
     int changed, pos;
-    if (!ip_split(ip_top()->kind) || !pod_is_top(ip.win) || ip_pc_pane())
+    if (!ip_split(ip_top()->kind) || !m1_is_top(ip.win) || ip_pc_pane())
         return 0; /* (the Podcasts picture is still: the covers wait, and pan on from where they were) */
     changed = ip_pane_advance();
     if (!ip.pane.have[ip.pane.cur]) return changed;
@@ -1077,18 +1077,18 @@ static int ip_pane_step(void) {
 /* The interval the page's one timer should have: IPCF_FRAME_MS while the Cover Flow level in front slides or decodes (ipod_cf.c); IP_DRIFT_MS while the cover pans
  * (the main menu is the level, the page is in front, and the pane has a cover or is still being made); IP_TICK_MS otherwise (the disc: the slow look still finds a new cover). */
 static unsigned ip_want_ms(void) {
-    if (ip.fg && !pod_screen_lit())
+    if (ip.fg && !m1_screen_lit())
         return POD_DARK_MS; /* the screen is off: no visual work (the idle-power rule of the other pages) */
-    if (ip.fg && pod_is_top(ip.win) && ip_render_active()) return IPCF_FRAME_MS;
+    if (ip.fg && m1_is_top(ip.win) && ip_render_active()) return IPCF_FRAME_MS;
     if (ip.fg && ip.touch == R_RING && ip.menu_zone && !ip.long_done && ip.depth > 0)
         return IP_DRIFT_MS; /* watching for the long press of MENU */
-    if (ip.fg && pod_is_top(ip.win) && ip_rows_more()) return IPCF_FRAME_MS;
-    if (ip.fg && pod_is_top(ip.win) && ip.row_worker) return IP_DRIFT_MS;
+    if (ip.fg && m1_is_top(ip.win) && ip_rows_more()) return IPCF_FRAME_MS;
+    if (ip.fg && m1_is_top(ip.win) && ip.row_worker) return IP_DRIFT_MS;
     if (ip.fg && ip_top()->kind == K_CF && ipcf_busy()) return IPCF_FRAME_MS;
     if (ip_pc_pane()) return IP_TICK_MS; /* the Podcasts picture: nothing moves */
-    if (ip_split(ip_top()->kind) && ip.fg && ip.pane.fading && pod_is_top(ip.win)) return IP_FADE_TICK_MS;
+    if (ip_split(ip_top()->kind) && ip.fg && ip.pane.fading && m1_is_top(ip.win)) return IP_FADE_TICK_MS;
     return ip_split(ip_top()->kind) && ip.fg &&
-                   (!ip.pane.have[ip.pane.cur] || ip.pane.key[ip.pane.cur] || ip.pane.rot_n) && pod_is_top(ip.win)
+                   (!ip.pane.have[ip.pane.cur] || ip.pane.key[ip.pane.cur] || ip.pane.rot_n) && m1_is_top(ip.win)
                ? IP_PAN_MS
                : IP_TICK_MS;
 }
@@ -2119,7 +2119,7 @@ static int ip_tick(const void *timer) {
         ip.long_done = 1; /* MENU held: back to the main menu */
         ip_pop_root();
     }
-    if (!pod_screen_lit()) { /* the screen is off: no pan, no cover work, no repaint (the idle-power rule); the next lit tick looks again */
+    if (!m1_screen_lit()) { /* the screen is off: no pan, no cover work, no repaint (the idle-power rule); the next lit tick looks again */
         ip_pane_xfer_stop();
         ip_retime();
         return RET_REPEAT;
@@ -2130,7 +2130,7 @@ static int ip_tick(const void *timer) {
         finished = 1;
     }
     if (!ip_valid() &&
-        pod_is_top(
+        m1_is_top(
             ip.win)) { /* another query replaced the stock list under the page: read it again (the Songs page's stale timer) */
         ip_load();
         ip_redraw();
@@ -2138,7 +2138,7 @@ static int ip_tick(const void *timer) {
     if (ip_rows_tick()) ip_redraw();
     if (ip_top()->kind == K_CF && ip_valid() && ipcf_tick(ip.list, ip.count))
         ip_redraw(); /* Cover Flow slides and decodes on this timer (ipod_cf.c) */
-    if ((ip.pane.worker || ip.pane.xfer) && !(ip_split(ip_top()->kind) && pod_is_top(ip.win)))
+    if ((ip.pane.worker || ip.pane.xfer) && !(ip_split(ip_top()->kind) && m1_is_top(ip.win)))
         ip_pane_xfer_stop(); /* the pane is not in front: its extraction goes (cc_build_stop) */
     if (ip_pane_step()) ip_redraw_pane(); /* the cover pane of a split page: only its rectangle is invalidated */
     if (finished || ip.ival == IP_TICK_MS ||
@@ -2160,10 +2160,7 @@ static int ip_first(const void *timer) {
     return RET_OK;
 }
 
-static void ip_unarm(void) {
-    if (ip.timer) timer_remove(ip.timer);
-    ip.timer = 0;
-}
+static void ip_unarm(void) { m1_timer_stop(&ip.timer); }
 
 static int ip_on_background(void *ctx, void *e) {
     (void)e;

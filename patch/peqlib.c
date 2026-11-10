@@ -78,7 +78,7 @@ static int lb_stamp(const char *file, char *sub, unsigned size) {
         if (dn >= kn && j == kn) break;
     }
     /* the stamp keeps the source percent-encoded (it is the file's identity); only the grey line shows it decoded, cut back to a whole character */
-    o = pod_url_decode(sub, size, p, a);
+    o = m1_url_decode(sub, size, p, a);
     for (k = o; k > 0 && ((unsigned char)sub[k - 1] & 0xc0) == 0x80; k--) {
     }
     if (k > 0) {
@@ -111,7 +111,7 @@ static void lb_layout(void) {
     for (s = 0; s < LB_SLOTS; s++) {
         int ae = s < PQ_ROWS, j = ae ? s : s - PQ_ROWS, count = ae ? na : nc, row = s + 1, p;
         int on = j < count;
-        pod_show(lb.row[row], on);
+        m1_show(lb.row[row], on);
         if (!on) continue;
         {
             char shown[PEQ_NAME];
@@ -124,8 +124,8 @@ static void lb_layout(void) {
         peq_piece_set(lb.row[row], &lb.piece[row], p, 1);
         if (lb.hair[row]) widget_set_visible(lb.hair[row], j < count - 1, 0);
     }
-    pod_show(lb.sec[0], na != 0);
-    pod_show(lb.sec[1], nc != 0);
+    m1_show(lb.sec[0], na != 0);
+    m1_show(lb.sec[1], nc != 0);
     /* the column's height as the layouter makes it (the download row, the two spacers and the visible headers and rows): set now, so that a list
      * that got shorter is not left scrolled past its end */
     vh = POD_LIB_BASE + (na ? POD_LIB_HDR + na * POD_LIB_ROW : 0) + (nc ? POD_LIB_HDR + nc * POD_LIB_ROW : 0);

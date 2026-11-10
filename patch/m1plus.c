@@ -407,7 +407,7 @@ static int on_row(void *ctx, void *e) {
              row->action == ACT_NEXTALBUM) /* the value rows open their picker page */
         open_page(row->arg, 0);
     else if (row->action == ACT_PLAYER)
-        pod_open_now_playing();
+        m1_open_now_playing();
     else if (row->action == ACT_COVER)
         coverflow_open(); /* patch/coverflow.c; its own page */
     else if (row->action == ACT_ARTISTS)
@@ -477,8 +477,8 @@ static int on_row(void *ctx, void *e) {
             void *wm = window_manager(), *top = wm ? window_manager_get_top_main_window(wm) : (void *)0;
             if (top && top == stock_front)
                 return RET_OK; /* the stock page this row opened is still the front window: a repeated tap opens no second one */
-            pod_open_stock(POD_STOCK[row->arg].name,
-                           POD_STOCK[row->arg].window); /* stock's navigator_to, or the page's window if in the stack */
+            m1_open_stock(POD_STOCK[row->arg].name,
+                          POD_STOCK[row->arg].window); /* stock's navigator_to, or the page's window if in the stack */
             top = wm ? window_manager_get_top_main_window(wm) : (void *)0;
             stock_front = top;
         }
@@ -491,12 +491,6 @@ static int on_row(void *ctx, void *e) {
  * by name (pod_row<i>), its switch image is pod_switch<i>, its value label pod_value<i> (the row's own label pod_label<i>), a picker row's check pod_check<i>. page_refresh sets all of them from
  * the saved or stock state when the page opens and each time it is back in front (a stock page or a picker may have changed what it shows). */
 static void *pod_fg[POD_PAGE_COUNT] __attribute__((section(".scratch")));
-
-struct swctx {
-    int action;
-    void *img;
-};
-static struct swctx sw_slot[13] __attribute__((section(".scratch")));
 
 static void switch_show(void *img, int on) {
     if (img) image_base_set_image(img, on ? "sset_on" : "sset_off");
@@ -524,62 +518,60 @@ lk_time(void); /* patch/lockscreen.c: stock's lock screen clock switch (the byte
 extern int
 lk_time_toggle(void); /* flip it as stock's switch does (byte, then [SYSSET] SSAVERTIMESHOW); the new state */
 
-static int switch_state(int action) {
-    return action == ACT_STARTUP    ? home_start()
-           : action == ACT_SHELF    ? recent_setting()
-           : action == ACT_DAILY    ? dailymix_setting()
-           : action == ACT_KB_EN    ? 1 /* English: always on */
-           : action == ACT_KB_ZH    ? kb_zh_setting()
-           : action == ACT_PCSEARCH ? pcsearch_setting()
-           : action == ACT_BATTPCT  ? battpct_setting()
-           : action == ACT_AZRAIL   ? azrail_setting()
-           : action == ACT_AZHEAD   ? azhead_setting()
-           : action == ACT_LOCKON   ? lk_enabled()
-           : action == ACT_LOCKTIME ? lk_time()
-           : action == ACT_VOLKEYS  ? coverflow_volkeys()
-                                    : coverflow_landscape();
+/* The switch rows, the one list of them (tools/pod_pages.py SWITCH_ACTIONS but the Equalizer's, which its own page binds): the action, its state (1 on) and its toggle (the new
+ * state, -1: not saved, unchanged). A new switch is one line here. */
+static int sw_always(void) { return 1; } /* Keyboards > English: always on, and its row takes no tap */
+static const struct pod_switch {
+    int action;
+    int (*state)(void), (*toggle)(void);
+} sw_tab[] = {
+    {ACT_STARTUP, home_start, home_toggle},
+    {ACT_LANDSCAPE, coverflow_landscape, coverflow_landscape_toggle},
+    {ACT_SHELF, recent_setting, recent_toggle},
+    {ACT_DAILY, dailymix_setting, dailymix_toggle},
+    {ACT_KB_EN, sw_always, sw_always},
+    {ACT_KB_ZH, kb_zh_setting, kb_zh_toggle},
+    {ACT_PCSEARCH, pcsearch_setting, pcsearch_toggle},
+    {ACT_BATTPCT, battpct_setting, battpct_toggle},
+    {ACT_AZRAIL, azrail_setting, azrail_toggle},
+    {ACT_AZHEAD, azhead_setting, azhead_toggle},
+    {ACT_LOCKON, lk_enabled, lk_enabled_toggle},
+    {ACT_LOCKTIME, lk_time, lk_time_toggle},
+    {ACT_VOLKEYS, coverflow_volkeys, coverflow_volkeys_toggle},
+};
+#define SW_N ((int)(sizeof sw_tab / sizeof *sw_tab))
+struct swctx {
+    const struct pod_switch *sw;
+    void *img;
+};
+static struct swctx sw_slot[sizeof sw_tab / sizeof *sw_tab] __attribute__((section(".scratch")));
+
+/* The switch of a row's action: its place in sw_tab, -1 for a row that is not a switch. */
+static int switch_of(int action) {
+    int k;
+    for (k = 0; k < SW_N; k++)
+        if (sw_tab[k].action == action) return k;
+    return -1;
 }
 
 static int on_switch(void *ctx, void *e) {
     const struct swctx *s = ctx;
     int on;
     (void)e;
-    if (!s) return RET_OK;
-    on = s->action == ACT_STARTUP    ? home_toggle()
-         : s->action == ACT_SHELF    ? recent_toggle()
-         : s->action == ACT_DAILY    ? dailymix_toggle()
-         : s->action == ACT_KB_ZH    ? kb_zh_toggle()
-         : s->action == ACT_PCSEARCH ? pcsearch_toggle()
-         : s->action == ACT_BATTPCT  ? battpct_toggle()
-         : s->action == ACT_AZRAIL   ? azrail_toggle()
-         : s->action == ACT_AZHEAD   ? azhead_toggle()
-         : s->action == ACT_LOCKON   ? lk_enabled_toggle()
-         : s->action == ACT_LOCKTIME ? lk_time_toggle()
-         : s->action == ACT_VOLKEYS  ? coverflow_volkeys_toggle()
-                                     : coverflow_landscape_toggle(); /* -1: not saved, unchanged */
+    if (!s || !s->sw) return RET_OK;
+    on = s->sw->toggle();
     if (on >= 0) switch_show(s->img, on);
-    if (s->action == ACT_DAILY) regen_show();
+    if (s->sw->action == ACT_DAILY) regen_show();
     return RET_OK;
 }
 
 static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
     char name[24];
     void *r = widget_lookup(win, row->name, 1);
-    int k = row->action == ACT_LANDSCAPE  ? 1
-            : row->action == ACT_SHELF    ? 2
-            : row->action == ACT_DAILY    ? 3
-            : row->action == ACT_KB_EN    ? 4
-            : row->action == ACT_KB_ZH    ? 5
-            : row->action == ACT_PCSEARCH ? 6
-            : row->action == ACT_BATTPCT  ? 7
-            : row->action == ACT_AZRAIL   ? 8
-            : row->action == ACT_AZHEAD   ? 9
-            : row->action == ACT_LOCKON   ? 10
-            : row->action == ACT_LOCKTIME ? 11
-            : row->action == ACT_VOLKEYS  ? 12
-                                          : 0;
+    int k = switch_of(row->action);
+    if (k < 0) return;
     snprintf(name, sizeof name, "pod_switch%u", i);
-    sw_slot[k].action = row->action;
+    sw_slot[k].sw = &sw_tab[k];
     sw_slot[k].img = widget_lookup(win, name, 1);
     if (row->action == ACT_KB_EN) { /* English cannot be turned off: on, dimmed, and the row takes no tap */
         if (r) widget_set_opacity(r, KB_EN_DIM), widget_set_sensitive(r, 0);
@@ -748,13 +740,9 @@ static void page_refresh(void *win, const struct pod_page *page) {
         const struct pod_row *row = &page->rows[i];
         void *w;
         int kind = row_value(row);
-        if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
-            row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
-            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
-            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME ||
-            row->action == ACT_VOLKEYS) {
+        if (switch_of(row->action) >= 0) {
             snprintf(name, sizeof name, "pod_switch%d", i);
-            switch_show(widget_lookup(win, name, 1), switch_state(row->action));
+            switch_show(widget_lookup(win, name, 1), sw_tab[switch_of(row->action)].state());
         } else if (row->action == ACT_CCLIST || row->action == ACT_SFOLD) {
             /* Cache's No art / Missing, and Unsupported Files: a value; the chevron and the tap only while there is a list to open */
             int on = row->action == ACT_SFOLD ? setfiles_old_count() > 0 : homecover_tappable(row->arg - INFO_CC);
@@ -869,19 +857,15 @@ static int open_page(int index, int as_home) {
     if (index == POD_CACHE_PAGE) dur_stat_open(); /* the track table's header, read once as the page opens */
     if (index !=
         POD_PEQBAND_PAGE) { /* the band page asks about unsaved changes first: it binds both itself (patch/peqband.c) */
-        pod_bind(win, "btn_return", pod_on_back, (void *)0);
-        pod_bind(win, "btn_backtoplayer", pod_on_player, (void *)0);
+        m1_bind(win, "btn_return", m1_on_back, (void *)0);
+        m1_bind(win, "btn_backtoplayer", m1_on_player, (void *)0);
     }
     for (i = 0; i < page->count; i++) {
         const struct pod_row *row = &page->rows[i];
-        if (row->action == ACT_STARTUP || row->action == ACT_LANDSCAPE || row->action == ACT_SHELF ||
-            row->action == ACT_DAILY || row->action == ACT_KB_EN || row->action == ACT_KB_ZH ||
-            row->action == ACT_PCSEARCH || row->action == ACT_BATTPCT || row->action == ACT_AZRAIL ||
-            row->action == ACT_AZHEAD || row->action == ACT_LOCKON || row->action == ACT_LOCKTIME ||
-            row->action == ACT_VOLKEYS)
+        if (switch_of(row->action) >= 0)
             bind_switch(win, i, row), refresh = 1;
         else {
-            if (row->action != ACT_INFO) pod_bind(win, row->name, on_row, row); /* an information row takes no tap */
+            if (row->action != ACT_INFO) m1_bind(win, row->name, on_row, row); /* an information row takes no tap */
             if (row->action == ACT_INFO || row->action == ACT_SFDEL || row->action == ACT_CCLIST ||
                 row->action == ACT_SFOLD || row_value(row) || is_pick(row))
                 refresh = 1;
@@ -906,8 +890,8 @@ static int open_page(int index, int as_home) {
     } else if (index == POD_EXTRAS_PAGE) {
         menu_arrange(win, 1);
         home_extras_opened(win);
-        pod_bind(win, "btn_settings", on_settings,
-                 (void *)0); /* the navbar's Settings button (a missing one: stock-safe, nothing happens) */
+        m1_bind(win, "btn_settings", on_settings,
+                (void *)0); /* the navbar's Settings button (a missing one: stock-safe, nothing happens) */
     } else if (index == POD_MENUCFG_PAGE)
         menu_custom_opened(win);
     else if (index == POD_PULLDOWN_PAGE)

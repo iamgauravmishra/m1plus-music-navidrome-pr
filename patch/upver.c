@@ -5,6 +5,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "upver.h"
+#include "utf8.h"
 
 #ifndef M1PLUS_VERSION
 #error "M1PLUS_VERSION is set by tools/pod.py from tools/build.py VERSION"
@@ -257,24 +258,6 @@ static int up_hex4(const char *s, unsigned n, unsigned i) {
     return v;
 }
 
-static unsigned up_utf8(char *p, unsigned cp) {
-    if (cp < 0x80) {
-        p[0] = (char)cp;
-        return 1;
-    }
-    if (cp < 0x800) {
-        p[0] = (char)(0xc0 | cp >> 6), p[1] = (char)(0x80 | (cp & 0x3f));
-        return 2;
-    }
-    if (cp < 0x10000) {
-        p[0] = (char)(0xe0 | cp >> 12), p[1] = (char)(0x80 | (cp >> 6 & 0x3f)), p[2] = (char)(0x80 | (cp & 0x3f));
-        return 3;
-    }
-    p[0] = (char)(0xf0 | cp >> 18), p[1] = (char)(0x80 | (cp >> 12 & 0x3f)), p[2] = (char)(0x80 | (cp >> 6 & 0x3f)),
-    p[3] = (char)(0x80 | (cp & 0x3f));
-    return 4;
-}
-
 /* The string that starts at js[i] decoded in place (a decoded escape is never longer than its source), the text at js + i + 1; *len its length. 0 when the string is malformed: a bad escape, a raw control
  * character, no closing quote. A lone surrogate becomes U+FFFD; \u0000 is dropped. */
 static int up_unjson(char *js, unsigned n, unsigned i, unsigned *len) {
@@ -328,7 +311,7 @@ static int up_unjson(char *js, unsigned n, unsigned i, unsigned *len) {
                     cp = 0xfffd;
             } else if (cp >= 0xdc00 && cp < 0xe000)
                 cp = 0xfffd;
-            if (cp) w += up_utf8(js + w, cp);
+            if (cp) w += m1_utf8_put(js + w, cp);
             break;
         }
         default:

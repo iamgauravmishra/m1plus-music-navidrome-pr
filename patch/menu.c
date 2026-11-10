@@ -139,7 +139,7 @@ static void *mn_find(void *win, const char *base, unsigned i) {
 /* Row w at y (shown) or parked at y 0 and hidden. */
 static void mn_put(void *w, int y, int on) {
     widget_move(w, 0, on ? y : 0);
-    pod_show(w, on);
+    m1_show(w, on);
 }
 
 static void mn_place(void *w, unsigned pos, int on) { /* ... at position pos of the 52 px rows */
@@ -308,8 +308,8 @@ static void mn_section(void *win, const char *name, int on) {
     was = widget_get_visible(sec);
     if (!was && !on)
         return; /* still hidden: nothing to do (a visible section is arranged again: its height may have changed) */
-    pod_show(sec, on);
-    if (!mn_arrange(win, 0)) pod_show(sec, was);
+    m1_show(sec, on);
+    if (!mn_arrange(win, 0)) m1_show(sec, was);
 }
 
 void menu_shelf(void *win, int on) { mn_section(win, "pod_shelf", on); }

@@ -126,7 +126,7 @@ static int ly_text(int i, char *buf) {
     void *c = widget_get_child(ly.src, (unsigned)i);
     buf[0] = 0;
     /* (a line over LY_BUF - 1 bytes is cut: at most LY_LINES_MAX rows of it are drawn anyway) */
-    if (!c || pod_text_utf8(c, buf, LY_BUF) < 0) {
+    if (!c || m1_text_utf8(c, buf, LY_BUF) < 0) {
         buf[0] = 0;
         return 0;
     }
@@ -708,9 +708,9 @@ static int ly_on_touch(void *ctx, void *e) {
                          LY_COAST_MS); /* a touch within 200 ms of a move that started is no tap (gestures.md) */
     } else if (type == EVT_POINTER_MOVE && ly.down) {
         if (!ly.moved) {
-            if (pod_abs(y - ly.sy) >= LY_TAP_PX && pod_abs(y - ly.sy) > pod_abs(x - ly.sx))
+            if (m1_abs(y - ly.sy) >= LY_TAP_PX && m1_abs(y - ly.sy) > m1_abs(x - ly.sx))
                 ly.moved = 1, ly.browse = 1, ly.ly = y;
-            else if (pod_abs(x - ly.sx) >= LY_TAP_PX)
+            else if (m1_abs(x - ly.sx) >= LY_TAP_PX)
                 ly.down = 0; /* sideways: the slide view's, and its abort ends the touch for us too */
         } else {
             ly.man += y - ly.ly;
@@ -720,7 +720,7 @@ static int ly_on_touch(void *ctx, void *e) {
         }
     } else if (type == EVT_POINTER_UP && ly.down) {
         ly.down = 0;
-        if (!ly.moved && ly.tapok && pod_abs(x - ly.sx) < LY_TAP_PX && pod_abs(y - ly.sy) < LY_TAP_PX) ly_tap(x, y);
+        if (!ly.moved && ly.tapok && m1_abs(x - ly.sx) < LY_TAP_PX && m1_abs(y - ly.sy) < LY_TAP_PX) ly_tap(x, y);
     } else if (type == EVT_POINTER_ABORT) {
         ly.down = 0;
     }
@@ -736,8 +736,8 @@ static void ly_label(void *w) {
 }
 
 void ly_stop(void) {
-    if (ly.timer) timer_remove(ly.timer);
-    if (ly.dtimer) timer_remove(ly.dtimer);
+    m1_timer_stop(&ly.timer);
+    m1_timer_stop(&ly.dtimer);
     memset(&ly, 0, sizeof ly);
 }
 

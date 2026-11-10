@@ -61,8 +61,8 @@ falling back to the playing cover file. The full file key hashes at most 512 KiB
 A same-length replacement under the same track/source without an observed busy state can
 remain undetected until the track changes.
 
-`pod_tone` maps maximum channel value to 32..192 and retains 23/25 of saturation;
-black uses `#202020`. `pod_tone_get/put` caches 64 album tones in RAM, shared with
+`m1_tone` maps maximum channel value to 32..192 and retains 23/25 of saturation;
+black uses `#202020`. `m1_tone_get/put` caches 64 album tones in RAM, shared with
 the [album page](album-page.md). A failed style update preserves the previous color.
 
 `img_playcover`'s own `EVT_AFTER_PAINT` blends a precomputed 12 × 12 corner mask
@@ -71,7 +71,7 @@ without the payload the cover is square.
 
 ## Status bar
 
-`pod_bar_tint` and `pod_bar_black` in `patch/common.c` share one owner between
+`m1_bar_tint` and `m1_bar_black` in `patch/common.c` share one owner between
 Now Playing and the album page. Only the owning window can restore black.
 The bar uses the page's top-row tone, darkened until white text keeps at least 4.5:1 contrast.
 It is found by the `system_bar` type; no widget pointer is cached.

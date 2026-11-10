@@ -141,6 +141,8 @@ int pn_classify(const char *text, char *id, unsigned size);
 /* Start the search for the UTF-8 term: the guards, the old thumbnails removed, one worker (the query, then the artwork of each result one by one). 0 when it runs; PN_BUSY when a worker runs (the page waits and asks again). */
 int pn_search(const char *term);
 int pn_job_busy(void); /* a search or preview worker is running */
+/* The options every request of ours sets on a libcurl easy handle (redirect hops, connect and total time-outs in seconds): see patch/pcnet.c. */
+void pn_easy_net(void *h, int redirs, int connect_s, int total_s);
 int pn_search_state(
     void); /* PN_S_*: the query runs / its answer is in and the artwork follows / the worker has ended */
 int pn_search_code(

@@ -165,7 +165,7 @@ def put_tones(m, songs, picks, mdl):
     tones, found = [(200, 90, 60), (60, 120, 200), (90, 190, 120)], []
     for t, title in zip(tones, titles):
         artist = next(s['artist'] for s in songs if s['album'] == title)
-        m.call(PSYMS['pod_tone_put'], a0=key_of(artist, title), a1=tone_word(t), count=100000)
+        m.call(PSYMS['m1_tone_put'], a0=key_of(artist, title), a1=tone_word(t), count=100000)
         found.append(t)
     return found
 

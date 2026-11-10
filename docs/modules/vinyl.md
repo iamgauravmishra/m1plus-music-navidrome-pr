@@ -134,7 +134,7 @@ and the hardware keys call, already pinned for the Pod (`IPOD_PINS`: `prev_quick
 
 `vn_first` (a 50 ms one-shot) makes the first full draw and starts `vn_tick` at **50 ms while anything moves** (playing, the record slowing, the arm
 swinging) and **500 ms at rest**, changed in place with `timer_modify`. Removed on `EVT_WINDOW_TO_BG`, added again on `TO_FG`; destroy removes it and frees the
-nine bitmaps. While the screen is off (`pod_screen_lit`) a tick reads and draws nothing and the interval is `POD_DARK_MS` (1 s); the first lit tick catches up
+nine bitmaps. While the screen is off (`m1_screen_lit`) a tick reads and draws nothing and the interval is `POD_DARK_MS` (1 s); the first lit tick catches up
 (a tick's step is capped at `VN_DT_MAX`, 100 ms). A page opened dark waits for the light. Nothing here stops the stock screen-off (by construction; on the checklist).
 
 ### Cost

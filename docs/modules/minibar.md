@@ -39,7 +39,7 @@ in `offsets.inc`. Tests check the shared geometry: `test/pod/minibar.py`. Previe
   is shown; `mb_pad` also sets `virtual_h` at once and keeps `yoffset` inside the new range when the bar goes. `test/pod/pulldown.py` section 6 runs demo's own
   relayout under Unicorn (shown, `menu_arrange` again, repeated relayouts, hidden) for four saved menus; `test/pod/minibar.py` checks the hit tests: the pill takes the
   touch over a row under it, the row just above it is reached. A menu of 8 rows (416 px; the default menu is 6 rows, 312 px, and does not scroll) scrolls 48 px with the bar up.
-- Cover: four `MB_ART_R` px corners rounded **in the bitmap's alpha** (`pod_corner_fill`, the table of Now Playing's corners), so they show the pill in any state.
+- Cover: four `MB_ART_R` px corners rounded **in the bitmap's alpha** (`m1_corner_fill`, the table of Now Playing's corners), so they show the pill in any state.
 - `pod_mb_title` / `pod_mb_artist`: `hscroll_label`s (`ellipses`, `only_parent_focus`: their parent is never focused, so they never scroll;
   `sensitive=false`), Inter Medium (the one font; see Fonts). **Contrast, worst case behind the glass**: a white row label right under the translucent fill
   (the glass over pure white is about `#555555`): the white title keeps 7.4:1, the artist (`#D0D0D0`) 4.8:1 (`test/pod/minibar.py` asks for 7:1 and 4.5:1 over every text pixel
@@ -133,7 +133,7 @@ called when that found no navbar or list).
   playing track (`np_cover_file` / `COVER_SRC`, as Now Playing reads it) - demo writes it a little after the track changes, so for `MB_SETTLE`
   (3) ticks the file's hash (`np_file_key`) is read again and the cover redone if it changed (a file being made, `COVER_SRC` 1, is skipped
   and not counted), 3. the stock placeholder disc `p_default`, else flat grey. Box filter (`cc_box`).
-- **Touch**: the card -> `pod_on_player` (`on_backtoplayer_onclick`, the menu's Now Playing row); play / pause -> `playpause_quick_click()` then the
+- **Touch**: the card -> `m1_on_player` (`on_backtoplayer_onclick`, the menu's Now Playing row); play / pause -> `playpause_quick_click()` then the
   glyph is read again; next -> `next_quick_click(e, 0)` (the click's own event: stock reads its time and ignores a click within 1 s of the last
   one, the same debounce the lock screen has) then `mb_work`.
 

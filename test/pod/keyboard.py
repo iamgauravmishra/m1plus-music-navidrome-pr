@@ -665,8 +665,6 @@ def zh_opened(setting=True, dictionary=True, **kw):
     return m
 
 
-
-
 def setting_tests(ctx):
     expect = ctx.expect
     ENG = PY.ENGINE_PTR
@@ -911,7 +909,6 @@ def zh_tests(ctx):
     expect(not strip_on(m) and field(m) == '', 'the separator with nothing typed does nothing')
 
 
-
 def zh_search_tests(ctx):
     expect = ctx.expect
     # 5. Search with pinyin pending: it is committed first, as its first candidate
@@ -957,7 +954,6 @@ def zh_search_tests(ctx):
     for _ in range(4): r = m.call(fn, a0=0, count=4000000)
     expect(not strip_on(m) and r == 0 and field(m) == '', 'when the pinyin and the text are both gone the repeat ends')
     ptr(m, 'kb_del', 'up', x, y)
-
 
 
 def zh_limit_tests(ctx):
@@ -1367,7 +1363,3 @@ def refocus_tests(ctx):
 
 
 SECTIONS = [base_tests, name_tests, password_tests, refocus_tests, gap_tests, asset_tests, setting_tests, zh_tests, zh_search_tests, zh_limit_tests, strip_tests, hit_tests, lang_gap_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for s in SECTIONS: s(ctx)

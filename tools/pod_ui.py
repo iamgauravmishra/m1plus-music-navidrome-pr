@@ -1341,7 +1341,7 @@ def build_album_page(page):
 
 
 def play_header(y):
-    """The album page's Shuffle disc and Play pill for a playlist's header on the Songs page (patch/common.c pod_pill_place): (the content view's widgets, hidden and insensitive until patch/songs.c sg_pills shows them; the hidden label the pill's text is painted with).
+    """The album page's Shuffle disc and Play pill for a playlist's header on the Songs page (patch/common.c m1_pill_place): (the content view's widgets, hidden and insensitive until patch/songs.c sg_pills shows them; the hidden label the pill's text is painted with).
     y is the 44 px buttons' top (PH_BTN_Y); the glyph is placed for the English text and the payload centres it for the language."""
     o = OFFSETS
     pair = o['AH_PILL_GLYPH'] + o['AH_PILL_GAP'] + AB_PLAY_TEXT_W

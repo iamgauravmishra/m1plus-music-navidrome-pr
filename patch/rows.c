@@ -48,14 +48,14 @@ static void *find_title(void *row, unsigned count, void **text) {
     for (i = 0; i < count; i++) {
         void *child = widget_get_child(row, i);
         if (!child) continue;
-        if (pod_is_type(child, "hscroll_label")) {
+        if (m1_is_type(child, "hscroll_label")) {
             *text = child;
             return child;
         }
         n = widget_count_children(child);
         for (j = 0; j < n && j < ROW_MAX_CHILDREN; j++) {
             void *label = widget_get_child(child, j);
-            if (pod_is_type(label, "hscroll_label")) {
+            if (m1_is_type(label, "hscroll_label")) {
                 *text = child;
                 return label;
             }
@@ -92,16 +92,16 @@ static int compact_row_layout(void *layout, void *row) {
             n = widget_count_children(text);
             for (j = 0; j < n && j < ROW_MAX_CHILDREN; j++) {
                 void *line = widget_get_child(text, j);
-                if (pod_is_type(line, "hscroll_label")) {
+                if (m1_is_type(line, "hscroll_label")) {
                     fit(line, (width < 0 ? 0 : width) - I(line, W_X));
                     hscroll_label_set_only_focus(line, 1);
-                } else if (pod_is_type(line, "view")) {
+                } else if (m1_is_type(line, "view")) {
                     fit(line, (width < 0 ? 0 : width) - I(line, W_X));
                 }
             }
         }
     }
-    list_item = pod_is_type(row, "list_item") && I(row, W_H) > 2 * ROW_SEPARATOR;
+    list_item = m1_is_type(row, "list_item") && I(row, W_H) > 2 * ROW_SEPARATOR;
     if (list_item) {
         h = I(row, W_H);
         I(row, W_H) = h - ROW_SEPARATOR;
@@ -112,7 +112,7 @@ static int compact_row_layout(void *layout, void *row) {
         for (i = 0; i < count; i++) {
             void *child = widget_get_child(row, i);
             if (!child || !widget_get_visible(child)) continue;
-            if (pod_is_type(child, "image") && I(child, W_W) == ROW_ART && I(child, W_X) == 0)
+            if (m1_is_type(child, "image") && I(child, W_W) == ROW_ART && I(child, W_X) == 0)
                 widget_move(child, ROW_ART_INSET, I(child, W_Y));
             break;
         }
@@ -122,11 +122,11 @@ static int compact_row_layout(void *layout, void *row) {
         for (j = 0; j < n && j < ROW_MAX_CHILDREN; j++) {
             void *view = widget_get_child(text, j), *last = (void *)0;
             unsigned k, m;
-            if (!pod_is_type(view, "view")) continue;
+            if (!m1_is_type(view, "view")) continue;
             m = widget_count_children(view);
             for (k = 0; k < m && k < ROW_MAX_CHILDREN; k++) {
                 void *c = widget_get_child(view, k);
-                if (pod_is_type(c, "hscroll_label")) last = c;
+                if (m1_is_type(c, "hscroll_label")) last = c;
             }
             if (last) {
                 fit(last, I(view, W_W) - I(last, W_X));
@@ -182,7 +182,7 @@ __attribute__((used, retain)) void rows_track_icon(void *img, const char *name) 
     row = P(img, W_PARENT);
     n = row ? widget_count_children(row) : 0;
     /* where the marker sits: last in the flow, but before a chevron button the row ends with (Artists, Genres, Composers) */
-    end = n > 2 && pod_is_type(widget_get_child(row, n - 1), "button") ? n - 2 : n - 1;
+    end = n > 2 && m1_is_type(widget_get_child(row, n - 1), "button") ? n - 2 : n - 1;
     if (playing && n > 1) {
         /* The playing row's marker: not the red disc at the left but a small wave at the right end, so every title starts
          * at the same margin. The same widget, last in the row's flow (after the text, which the layout narrows by its

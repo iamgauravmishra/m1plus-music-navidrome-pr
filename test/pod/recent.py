@@ -40,8 +40,6 @@ SHELF_NAMES = pod_ui.SH_NAMES
 OPEN_ALBUM = pod.FUNCTIONS['loadAlbumList'][2]
 
 
-
-
 def tile_x(i): return GRID_MARGIN + i % GRID_COLS * (GRID_COVER + GRID_GAP)       # cell i's x
 def cell_y(i): return SH_TOP + i // GRID_COLS * PITCH                                   # its top in the shelf
 
@@ -975,7 +973,6 @@ def grid_and_tap_tests(ctx):
     expect(m.opened() == [(O['CLASS_ALBUMS'], row_of[1])], 'with the mini bar up a tap on a tile opens its album')
 
 
-
 def refresh_and_fallback_tests(ctx):
     """The menu in front again, the Settings switch, every failure's fallback, the Home instance only, recording, the album's identity and cover key."""
     expect = ctx.expect
@@ -1368,7 +1365,3 @@ def refresh_and_fallback_tests(ctx):
 
 
 SECTIONS = [file_and_layout_tests, grid_and_tap_tests, refresh_and_fallback_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

@@ -535,7 +535,7 @@ static int vn_volume(void) { /* the status bar's label_volume text, read only (n
     int v = 0, i;
     if (!lab) return 0;
     buf[0] = 0;
-    pod_text_utf8(lab, buf, sizeof buf);
+    m1_text_utf8(lab, buf, sizeof buf);
     for (i = 0; buf[i] >= '0' && buf[i] <= '9' && i < 4; ++i) v = v * 10 + buf[i] - '0';
     return v;
 }
@@ -748,7 +748,7 @@ static void vn_update(int force) {
  * The timer, the window's events
  */
 static unsigned vn_want_ms(void) {
-    return !pod_screen_lit() ? POD_DARK_MS : vn_moving() ? VN_PLAY_MS : VN_IDLE_MS;
+    return !m1_screen_lit() ? POD_DARK_MS : vn_moving() ? VN_PLAY_MS : VN_IDLE_MS;
 } /* screen off: a slow check, no visual work (docs/modules/vinyl.md "Idle power") */
 
 static void vn_retime(void) {
@@ -765,7 +765,7 @@ static int vn_tick(const void *timer) {
         vn.timer = 0;
         return RET_OK;
     }
-    if (pod_screen_lit())
+    if (m1_screen_lit())
         vn_update(0); /* dark: nothing drawn, nothing read; the first lit tick catches up (dt is capped) */
     vn_retime();
     return RET_REPEAT;
@@ -775,7 +775,7 @@ static int vn_first(const void *timer) {
     (void)timer;
     vn.timer = 0;
     if (!vn.win || !vn.fg) return RET_OK;
-    if (!pod_screen_lit()) { /* opened with the screen off: the first full draw waits for the light */
+    if (!m1_screen_lit()) { /* opened with the screen off: the first full draw waits for the light */
         vn.timer = timer_add(vn_first, (void *)0, POD_DARK_MS);
         return RET_OK;
     }
@@ -785,10 +785,7 @@ static int vn_first(const void *timer) {
     return RET_OK;
 }
 
-static void vn_unarm(void) {
-    if (vn.timer) timer_remove(vn.timer);
-    vn.timer = 0;
-}
+static void vn_unarm(void) { m1_timer_stop(&vn.timer); }
 
 static void vn_release(void) { /* the touch is over (or never was): a key held is let go */
     int was = vn.pressed;

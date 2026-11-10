@@ -113,8 +113,6 @@ def open_grid(m, count=20000000):
     return list(m.calls)
 
 
-
-
 def scroll_of(m):
     """The page's scroll offset: the scroll_view's yoffset."""
     return m.s32(m.widgets['albums_scrollview'] + SC_YOFF)
@@ -128,7 +126,7 @@ def paint(m):
     m.blits.clear(); m.texts.clear(); m.measures.clear(); m.fills.clear(); m.text_styles.clear(); m.draw_oy.clear()
     m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
     m.oy_after = m.s32(m.canvas + O['CANVAS_OY'])
-    m.chevs = [b for b in m.blits if m.bitmaps[b[0]][1:] == CHEV_PX]   # the list rows' chevron (pod_make_chevron) is drawn with the covers: set apart
+    m.chevs = [b for b in m.blits if m.bitmaps[b[0]][1:] == CHEV_PX]   # the list rows' chevron (m1_make_chevron) is drawn with the covers: set apart
     return [b for b in m.blits if b not in m.chevs], list(m.texts)
 
 
@@ -1141,7 +1139,7 @@ def toggle_tests(ctx):
         expect(not [c for c in m.calls if c[0] in ('navigator_back', 'window_close', 'widget_destroy', 'stock_resume', 'navigator_to_with_context')]
                and m.fs.get(ALBUMS_FILE) == mode, 'and the Albums page stays underneath, untouched, its mode unchanged')
     m.calls = []
-    m.call(PSYMS['pod_on_back'], count=2000000)
+    m.call(PSYMS['m1_on_back'], count=2000000)
     expect(('navigator_back',) in [c[:1] for c in m.calls] and 'window_open' not in m.names(), 'Back is the navigator\'s: it returns to the page below')
 
 
@@ -1310,8 +1308,6 @@ def stock_widget_tests(ctx):
 # The background cache build (the shared worker of patch/covercache.c, started by the page a moment after it is up)
 
 def key_of(i): return album_key(f'Artist {i}', f'Album {i}')
-
-
 
 
 def scan_all(m, limit=200):
@@ -1610,11 +1606,6 @@ def shown(m):
     """The album titles in the list's rows, top to bottom."""
     blits, texts = paint(m)
     return [t[0] for t, sty in sorted(zip(texts, m.text_styles), key=lambda p: p[0][1][1]) if sty == 'label_row_title']
-
-
-def vis(m, name):
-    w = m.widgets[name]
-    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
 
 
 def ticks(m): return [vis(m, f'vs_tick{i}')[0] for i in range(VS_SORTS)]
@@ -1921,7 +1912,6 @@ def title_tests(ctx):
         expect(content_h(m) == end + (RGAP + 2 * PITCH if mode == 'grid' else RGAP + 4 * ROW), f'{mode}: the scoped content starts under the title and the pills ({content_h(m)})')
 
 
-
 FAKE_PIC = '/mnt/mmc/.m1plus/subsonic/covers/fa000001-168.jpg'   # (the fake source's picture file of its artist)
 
 
@@ -1971,7 +1961,7 @@ def fake_albums_machine(n=6, grid=True, cached=False, caps=7):
     m.fake_rows = [m.record(album=f'Fake Album {i}', artist=f'Fake Artist {i}', path=f'nd://al{i}', rid=-3 - i) for i in range(n)]
     m.fake_state = 0   # what src->state answers (LS_ST_*)
     m.fake_pic = -1   # what src->cover answers for an artist's picture (key 0): 1 there, 0 asked, -1 none
-    m.top_main = m.window   # pod_is_top: the page is in front (the shared cover poll only runs then)
+    m.top_main = m.window   # m1_is_top: the page is in front (the shared cover poll only runs then)
     Machine.widget(m, 'al_spin')
     st = m.alloc(60)
     m.u.mem_write(st, bytes(60)); m.setword(st, m.cstr('fake')); m.setword(st + 48, caps)
@@ -2264,8 +2254,6 @@ def src_tests(ctx):
                f'a source in {"Year" if mode == 3 else "Recently Added"}{" (reversed)" if rev else ""}: its own records\' order, no song query ({got})')
 
 
-
-
 AZ_RAIL, AZ_HEAD = '/mnt/data/m1plus/appearance-index-rail', '/mnt/data/m1plus/appearance-headers'   # the Index Rail and Section Headers switches (both on by default)
 HDR = O['SG_HDR_H']
 AZ_TITLES = ['1999', 'Abbey Road', 'Aja', 'Bitches Brew', 'Blue', 'Cheap Trick', 'Dookie', 'Dookie Two', 'Zeta']   # the Title order: the sections # A B C D Z
@@ -2459,7 +2447,6 @@ def az_tests(ctx):
     expect(content_h(m) == az_model(0)[2] and vis(m, 'sg_rail') == (1, 1), 'the switches are read when the page opens: a change meanwhile waits for the next open')
 
 
-
 def loading_tests(ctx):
     """A source's Albums page (all, and an artist's) before its list is there: the state decides. LOADING is the one spinner and nothing else (the large title stays); FAILED / OFFLINE say why;
     READY is "No albums"; a list with rows is never asked; the rows arriving remove the spinner."""
@@ -2492,6 +2479,3 @@ def loading_tests(ctx):
 
 
 SECTIONS = [layout_tests, taps_list_tests, toggle_tests, stock_widget_tests, background_build_tests, foreground_loader_tests, card_asset_tests, sort_card_tests, reverse_tests, title_tests, az_tests, src_tests, loading_tests, nextalbum_tests]   # tools/check.py runs each as its own task
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

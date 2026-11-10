@@ -369,7 +369,3 @@ def width_tests(ctx):
 
 
 SECTIONS = [entry_tests, tap_tests, sheet_tests, select_tests, unsub_tests, export_tests, import_tests, off_tests, width_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

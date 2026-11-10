@@ -26,6 +26,7 @@
 #include "peqout.h"
 #include "pccover.h"
 #include "radio.h"
+#include "fnv.h"
 
 #define RD_NAME_KEEP 120
 
@@ -475,7 +476,7 @@ int rd_fav_toggle(const rd_list_t *l, int i) {
     if (favs.truncated || (found < 0 && favs.n >= RD_MAX)) ok = 0;
     text =
         ok ? rd_m3u_make(&favs, -1, found, found < 0 ? l : (const rd_list_t *)0, i, -1, RD_MAX + 1, &len) : (char *)0;
-    ok = text != 0 && pod_card_write(RD_DIR, RD_FAVS, RD_FAVS_TMP, text, len, (const void *)0, 0) == 0;
+    ok = text != 0 && m1_card_write(RD_DIR, RD_FAVS, RD_FAVS_TMP, text, len, (const void *)0, 0) == 0;
     free(text);
     added = found < 0;
     rd_list_free(&favs);
@@ -532,7 +533,7 @@ int rd_fav_import(int *full) {
     memset(&favs, 0, sizeof favs);
     memset(&f, 0, sizeof f);
     if (!names) return -1;
-    if (!pod_card_mounted()) {
+    if (!m1_card_mounted()) {
         free(names);
         return -1;
     }
@@ -593,7 +594,7 @@ int rd_fav_import(int *full) {
         }
     }
     rd_list_free(&f);
-    if (ok && added) ok = pod_card_write(RD_DIR, RD_FAVS, RD_FAVS_TMP, out, len, (const void *)0, 0) == 0;
+    if (ok && added) ok = m1_card_write(RD_DIR, RD_FAVS, RD_FAVS_TMP, out, len, (const void *)0, 0) == 0;
     free(out);
     free(names);
     rd_list_free(&favs);
@@ -789,10 +790,7 @@ static void rd_begin(void) {
     if (r != 1) rd_apply(RD_EV_FAILSTART);
 }
 
-static void rd_timer_off(void) {
-    if (rd.timer) timer_remove(rd.timer);
-    rd.timer = 0;
-}
+static void rd_timer_off(void) { m1_timer_stop(&rd.timer); }
 
 void rd_stop(void) {
     rd_apply(RD_EV_STOP);
@@ -986,16 +984,7 @@ static int rd_fetch_once(void) {
     curl_easy_setopt(h, CURLOPT_WRITEDATA, (void *)0);
     curl_easy_setopt(h, CURLOPT_NOPROGRESS, 0);
     curl_easy_setopt(h, CURLOPT_XFERINFOFUNCTION, rd_fetch_xfer);
-    curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1);
-    curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1);
-    curl_easy_setopt(h, CURLOPT_MAXREDIRS, 5);
-    curl_easy_setopt(h, CURLOPT_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
-    curl_easy_setopt(h, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
-    curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT, 10);
-    curl_easy_setopt(h, CURLOPT_TIMEOUT, 30);
-    curl_easy_setopt(h, CURLOPT_USERAGENT, "M1PlusMusic/1.0 (https://github.com/imfing/m1plus-mod)");
-    curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING, "");
-    curl_easy_setopt(h, CURLOPT_CAINFO, PN_CA); /* verification stays on: no SSL_VERIFY option is ever set */
+    pn_easy_net(h, 5, 10, 30); /* (verification stays on) */
     rc = curl_easy_perform(h);
     curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &fx.http);
     fx.code = fx.http;
@@ -1093,8 +1082,7 @@ static struct {
 } lg __attribute__((section(".scratch")));
 
 unsigned rd_logo_hash(const char *url) {
-    unsigned h = 2166136261u;
-    for (; *url; ++url) h = (h ^ (unsigned char)*url) * 16777619u;
+    unsigned h = m1_fnv(2166136261u, url);
     return h ? h : 1;
 }
 
@@ -1174,17 +1162,8 @@ static void *rd_logo_worker(void *unused) {
         curl_easy_setopt(h, CURLOPT_WRITEDATA, (void *)0);
         curl_easy_setopt(h, CURLOPT_NOPROGRESS, 0);
         curl_easy_setopt(h, CURLOPT_XFERINFOFUNCTION, rd_logo_xfer);
-        curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1);
-        curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1);
-        curl_easy_setopt(h, CURLOPT_MAXREDIRS, 3);
-        curl_easy_setopt(h, CURLOPT_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
-        curl_easy_setopt(h, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
         curl_easy_setopt(h, CURLOPT_FAILONERROR, 1);
-        curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT, 5);
-        curl_easy_setopt(h, CURLOPT_TIMEOUT, 10);
-        curl_easy_setopt(h, CURLOPT_USERAGENT, "M1PlusMusic/1.0 (https://github.com/imfing/m1plus-mod)");
-        curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING, "");
-        curl_easy_setopt(h, CURLOPT_CAINFO, PN_CA);
+        pn_easy_net(h, 3, 5, 10);
         rc = curl_easy_perform(h);
         curl_easy_cleanup(h);
     }
@@ -1252,7 +1231,7 @@ int rd_logo_start(const char *url) {
         (strncasecmp(url, "http://", 7) && strncasecmp(url, "https://", 8)))
         return 0;
     hash = rd_logo_hash(url);
-    if (rd_logo_file(hash, path, sizeof path) != 0 || !pod_card_mounted()) return 0;
+    if (rd_logo_file(hash, path, sizeof path) != 0 || !m1_card_mounted()) return 0;
     if (pn_busy() || pn_dl_running() || pn_job_busy() || get_wifisignal() <= 0 ||
         (unsigned)time((long *)0) < PN_MIN_EPOCH || access(PN_CA, F_OK))
         return 0;

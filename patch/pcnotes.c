@@ -7,6 +7,7 @@
 #include "podcasts.h"
 #include "pcfeed.h"
 #include "pcnotes.h"
+#include "common.h"
 
 #define PNO_CHUNK 1024
 static const char pno_head[] = "M1PLUS-NOTES 1\n";
@@ -35,10 +36,7 @@ int pno_save(const char *path, const char *tmp, const struct pf_parser *pp) {
                 at += (unsigned)w;
         }
     }
-    ok = ok && fsync(fd) == 0;
-    if (fd >= 0) ok = close(fd) == 0 && ok;
-    if (ok && rename(tmp, path)) ok = 0;
-    if (!ok) unlink(tmp);
+    ok = fd >= 0 && m1_commit(fd, ok, tmp, path);
     free(line);
     return ok;
 }

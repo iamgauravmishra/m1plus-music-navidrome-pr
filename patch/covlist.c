@@ -161,8 +161,7 @@ static int cv_on_up(void *ctx, void *e) {
     cv.down = 0;
     cv_set_press(0);
     if (r < 0 || !e || !cv.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - cv.down_x) < CV_TAP_PX && pod_abs(I(e, PE_Y) - cv.down_y) < CV_TAP_PX &&
-        cv_row_of(e) == r) {
+    if (m1_abs(I(e, PE_X) - cv.down_x) < CV_TAP_PX && m1_abs(I(e, PE_Y) - cv.down_y) < CV_TAP_PX && cv_row_of(e) == r) {
         unsigned d = cv.idx[r];
         if (cv.files)
             cv_file_ask(r);
@@ -201,8 +200,8 @@ int covlist_open(int kind, const unsigned short *idx, unsigned n) {
     cv.win = window_open("m1plus_covlist");
     if (!cv.win) return -1;
     widget_on(cv.win, EVT_DESTROY, cv_on_destroy, (void *)0);
-    pod_bind(cv.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(cv.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(cv.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(cv.win, "btn_backtoplayer", m1_on_player, (void *)0);
     cv.view = widget_lookup(cv.win, "view_grid", 1);
     cv.sv = widget_lookup(cv.win, "covlist_scrollview", 1);
     cv.status = widget_lookup(cv.win, "label_status", 1);

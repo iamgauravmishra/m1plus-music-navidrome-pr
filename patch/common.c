@@ -5,14 +5,15 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "common.h"
+#include "utf8.h"
 #include "radio.h"
 #include "shot.h"
 #include "covercache.h"
 
 /* The library scan's folder walk (tools/pod.py SCAN_SITE, docs/modules/payload.md hook 5): stock skips a directory entry when strcmp(name, ".") is 0 (and then ".." and a list of
- * system folders); the call is replaced by `jal pod_scan_dir`, whose delay slot still loads a1 = ".". A hidden folder (a name starting with '.') counts as a match, so
+ * system folders); the call is replaced by `jal m1_scan_dir`, whose delay slot still loads a1 = ".". A hidden folder (a name starting with '.') counts as a match, so
  * /mnt/mmc/.m1plus/ (our cache, covers and downloads) never joins Songs and Albums; anything else is stock's strcmp. (q2-pod's ringnav_scan_dir.) */
-__attribute__((noinline)) int pod_scan_dir(const char *name, const char *dot) {
+__attribute__((noinline)) int m1_scan_dir(const char *name, const char *dot) {
     return name[0] == '.' ? 0 : strcmp(name, dot);
 }
 
@@ -20,7 +21,7 @@ __attribute__((noinline)) int pod_scan_dir(const char *name, const char *dot) {
  * its out_size argument before reading it, counts the whole encoding and writes all of it), so a long lyric line or tag overran the caller's stack buffer. This reads the wide
  * text (widget_get_text) and encodes it here: a text that does not fit is cut at a character boundary, buf is always NUL terminated (size >= 1). Returns the length the whole
  * text needs (snprintf's), so the text fitted when the result is below size; -1 when the widget has no text (buf is then empty). A code point beyond U+10FFFF or a surrogate is U+FFFD. */
-int pod_text_utf8(void *widget, char *buf, unsigned size) {
+int m1_text_utf8(void *widget, char *buf, unsigned size) {
     const unsigned *t = widget ? widget_get_text(widget) : (const unsigned *)0;
     unsigned n = 0, w = 0, c, len, cut = 0;
     char e[4];
@@ -29,17 +30,7 @@ int pod_text_utf8(void *widget, char *buf, unsigned size) {
     if (!t) return -1;
     for (; (c = *t) != 0; ++t) {
         if (c > 0x10ffff || (c >= 0xd800 && c < 0xe000)) c = 0xfffd;
-        if (c < 0x80) {
-            e[0] = (char)c, len = 1;
-        } else if (c < 0x800) {
-            e[0] = (char)(0xc0 | c >> 6), e[1] = (char)(0x80 | (c & 0x3f)), len = 2;
-        } else if (c < 0x10000) {
-            e[0] = (char)(0xe0 | c >> 12), e[1] = (char)(0x80 | (c >> 6 & 0x3f)), e[2] = (char)(0x80 | (c & 0x3f)),
-            len = 3;
-        } else {
-            e[0] = (char)(0xf0 | c >> 18), e[1] = (char)(0x80 | (c >> 12 & 0x3f)),
-            e[2] = (char)(0x80 | (c >> 6 & 0x3f)), e[3] = (char)(0x80 | (c & 0x3f)), len = 4;
-        }
+        len = m1_utf8_put(e, c);
         /* (room for the character and the NUL; once one does not fit, the rest only counts) */
         if (!cut && w + len < size) {
             unsigned k;
@@ -55,7 +46,7 @@ int pod_text_utf8(void *widget, char *buf, unsigned size) {
 
 /* The n bytes at in with each %XX (hex digits of either case) decoded to its byte, into out (size bytes, never written past, always NUL terminated; size >= 1). A '%' not followed
  * by two hex digits stays as it is. Stops when the next byte does not fit (a cut can split a UTF-8 character: the caller trims). Returns the length written. */
-unsigned pod_url_decode(char *out, unsigned size, const char *in, unsigned n) {
+unsigned m1_url_decode(char *out, unsigned size, const char *in, unsigned n) {
     unsigned o = 0, i;
     if (!size) return 0;
     for (i = 0; i < n && o + 1 < size; ++i) {
@@ -78,10 +69,10 @@ unsigned pod_url_decode(char *out, unsigned size, const char *in, unsigned n) {
     return o;
 }
 
-int pod_screen_lit(void) { return *(volatile unsigned char *)BACKLIGHT_STATUS != 0; }
+int m1_screen_lit(void) { return *(volatile unsigned char *)BACKLIGHT_STATUS != 0; }
 
 /* Whether the card is mounted: its mount point is another file system than the one it is in (an unmounted /mnt/mmc is a plain directory on the internal flash). */
-int pod_card_mounted(void) {
+int m1_card_mounted(void) {
     unsigned a[32], b[32];
     memset(a, 0, sizeof a);
     memset(b, 0, sizeof b);
@@ -90,29 +81,47 @@ int pod_card_mounted(void) {
              a[9] == b[9]); /* f_type, f_fsid (MIPS o32 statfs words 0, 8, 9): the same, nothing mounted */
 }
 
+static int m1_write_all(int fd, const void *data, unsigned n) {
+    unsigned at = 0;
+    while (at < n) {
+        int w = write(fd, (const char *)data + at, n - at);
+        if (w <= 0) return 0;
+        at += (unsigned)w;
+    }
+    return 1;
+}
+
+int m1_commit(int fd, int ok, const char *tmp, const char *path) {
+    ok = ok && fsync(fd) == 0;
+    ok = close(fd) == 0 && ok;
+    if (ok && rename(tmp, path) != 0) ok = 0;
+    if (!ok) unlink(tmp);
+    return ok;
+}
+
+int m1_save(const char *path, const char *tmp, unsigned mode, const void *data, unsigned n) {
+    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, mode);
+    return fd >= 0 && m1_commit(fd, m1_write_all(fd, data, n), tmp, path);
+}
+
 /* The one writer of the payload's card files: CARD_DIR then dir made (EEXIST is fine; a failure shows in the open), a then b (either may
  * be empty) into tmp, fsync, rename onto path, fsync of dir. 0 on success; -1, and nothing written, while the card is not mounted. */
-int pod_card_write(const char *dir, const char *path, const char *tmp, const void *a, unsigned na, const void *b,
-                   unsigned nb) {
+int m1_card_write(const char *dir, const char *path, const char *tmp, const void *a, unsigned na, const void *b,
+                  unsigned nb) {
     int fd, ok, d;
-    if (!pod_card_mounted()) return -1; /* never write to the internal flash under the mount point */
+    if (!m1_card_mounted()) return -1; /* never write to the internal flash under the mount point */
     mkdir(CARD_DIR, 0755);
     if (strcmp(dir, CARD_DIR)) mkdir(dir, 0755);
     fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) return -1;
-    ok = (!na || write(fd, a, na) == (int)na) && (!nb || write(fd, b, nb) == (int)nb) && fsync(fd) == 0;
-    ok = (close(fd) == 0) && ok;
-    if (!ok || rename(tmp, path) != 0) {
-        unlink(tmp);
-        return -1;
-    }
+    if (!m1_commit(fd, m1_write_all(fd, a, na) && m1_write_all(fd, b, nb), tmp, path)) return -1;
     d = open(dir, O_RDONLY, 0);
     if (d < 0) return -1;
     ok = fsync(d) == 0;
     return (close(d) == 0 && ok) ? 0 : -1;
 }
 
-int pod_on_back(void *ctx, void *e) {
+int m1_on_back(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     navigator_back();
@@ -120,25 +129,25 @@ int pod_on_back(void *ctx, void *e) {
 }
 
 /* Every Now Playing entry of our pages: Radio's page while a station plays, else stock's player (the trampoline: the hook on stock's handler would decide again). */
-void pod_open_now_playing(void) {
+void m1_open_now_playing(void) {
     if (!rn_open_if_active()) stock_backtoplayer_trampoline((void *)0, (void *)0);
 }
 
-int pod_on_player(void *ctx, void *e) {
+int m1_on_player(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    pod_open_now_playing();
+    m1_open_now_playing();
     return RET_OK;
 }
 
-int pod_is_type(void *w, const char *type) {
+int m1_is_type(void *w, const char *type) {
     const char *t = w ? widget_get_type(w) : (const char *)0;
     return t && strcmp(t, type) == 0;
 }
 
 /* The topmost opened window called name in the window manager is brought to the front the way stock brings the player back (window_manager_switch_to, nothing closed, Back returns to where the user came from).
  * Stock's navigator_to opens a page that has no single_instance property afresh each time, so a page left in the stack (the top-right Now Playing button restacks the player over it) would be stacked twice. */
-void *pod_restack_window(const char *name) {
+void *m1_restack_window(const char *name) {
     void *wm = window_manager();
     unsigned n;
     if (!wm) return (void *)0;
@@ -156,16 +165,16 @@ void *pod_restack_window(const char *name) {
 /* A stock page opened the way the stock lists would, without stacking a second window of a page that has no single_instance property: the opened window is restacked, else navigator_to(path).
  * window is NULL for a page that must be opened afresh because its init starts or reads something that a restack does not redo: stock's restack sends EVT_WINDOW_TO_FG (0x12d) to the page and EVT_WINDOW_TO_BG (0x12c) to the window it leaves, and
  * only a new open runs init. Wi-Fi (init 0x4b1048 calls wifi_scan on every open, its 0x12d handler 0x4b0a34 only rebuilds the list), Bluetooth (its 0x12c handler 0x4a2a20 calls btStopSearch, its 0x12d handler 0x4a3a28 does not restart discovery, init 0x4a411c does) are opened afresh. */
-int pod_open_stock(const char *path, const char *window) {
-    if (window && pod_restack_window(window)) return RET_OK;
+int m1_open_stock(const char *path, const char *window) {
+    if (window && m1_restack_window(window)) return RET_OK;
     return navigator_to(path);
 }
 
 /* The navbar's small title of a page with a large heading: shown once the heading has scrolled away, i.e. the scroll offset has reached SG_COLLAPSE, or, on a page whose
  * heading is a header's name (a playlist, a podcast show), `head` (the offset the name has gone at). The page ORs in its own conditions (select mode, no scroll events ...). */
-int pod_title_gone(int off, int head) { return off >= (head ? head : SG_COLLAPSE); }
+int m1_title_gone(int off, int head) { return off >= (head ? head : SG_COLLAPSE); }
 
-char *pod_read_file(const char *path, unsigned cap, unsigned *n) {
+char *m1_read_file(const char *path, unsigned cap, unsigned *n) {
     char *buf;
     int fd = open(path, O_RDONLY, 0), got = 0, r;
     if (fd < 0) return (char *)0;
@@ -180,7 +189,7 @@ char *pod_read_file(const char *path, unsigned cap, unsigned *n) {
     return buf;
 }
 
-unsigned pod_sel_all(unsigned char *sel, unsigned count, unsigned nsel) {
+unsigned m1_sel_all(unsigned char *sel, unsigned count, unsigned nsel) {
     unsigned i;
     memset(sel, 0, (count + 7) / 8);
     if (nsel >= count) return 0;
@@ -188,21 +197,26 @@ unsigned pod_sel_all(unsigned char *sel, unsigned count, unsigned nsel) {
     return count;
 }
 
-void pod_show(void *w, int on) {
+void m1_timer_stop(unsigned *t) {
+    if (*t) timer_remove(*t);
+    *t = 0;
+}
+
+void m1_show(void *w, int on) {
     if (!w) return;
     widget_set_visible(w, on, 0);
     widget_set_sensitive(w, on);
 }
 
 /* Show or hide the small title w when `on` differs from *cur. */
-void pod_title_set(void *w, int *cur, int on) {
+void m1_title_set(void *w, int *cur, int on) {
     if (on == *cur) return;
     *cur = on;
     if (w) widget_set_visible(w, on, 0);
 }
 
 /* A translated "%d songs" with the number put where the translation has its %d. The table's text is never a printf format. */
-void pod_fmt(char *out, unsigned size, const char *f, int n) {
+void m1_fmt(char *out, unsigned size, const char *f, int n) {
     char digits[12];
     unsigned o = 0, d = 0, i;
     for (i = (unsigned)(n < 0 ? 0 : n); d == 0 || i; i /= 10) digits[d++] = (char)('0' + i % 10);
@@ -216,7 +230,7 @@ void pod_fmt(char *out, unsigned size, const char *f, int n) {
     out[o] = 0;
 }
 
-void *pod_bind(void *win, const char *name, int (*fn)(void *, void *), const void *ctx) {
+void *m1_bind(void *win, const char *name, int (*fn)(void *, void *), const void *ctx) {
     void *w = widget_lookup(win, name, 1);
     if (w && fn) widget_on(w, EVT_CLICK, fn, (void *)ctx);
     return w;
@@ -226,7 +240,7 @@ void *pod_bind(void *win, const char *name, int (*fn)(void *, void *), const voi
  * (NP_V_MAX - NP_V_MIN) / 255 for the brightest channel v; every channel keeps NP_SAT_NUM / NP_SAT_DEN of its distance
  * from v (a grey stays grey). A black cover is the neutral tone. With NP_V_MAX 192 white text keeps 4.5:1 under the
  * gradients of both pages (test/pod/nowplaying.py, test/pod/albumpage.py). */
-__attribute__((noinline)) unsigned pod_tone(unsigned r, unsigned g, unsigned b) {
+__attribute__((noinline)) unsigned m1_tone(unsigned r, unsigned g, unsigned b) {
     unsigned v = r > g ? r : g, c[3], i, vt;
     if (b > v) v = b;
     if (!v) return NP_NEUTRAL;
@@ -242,7 +256,7 @@ __attribute__((noinline)) unsigned pod_tone(unsigned r, unsigned g, unsigned b) 
 #define POD_LUM(r, g, b) (2126u * (r) * (r) + 7152u * (g) * (g) + 722u * (b) * (b))
 static void *bar_owner __attribute__((section(".scratch")));
 
-__attribute__((noinline)) unsigned pod_bar_color(unsigned color) {
+__attribute__((noinline)) unsigned m1_bar_color(unsigned color) {
     unsigned r = color & 255, g = color >> 8 & 255, b = color >> 16 & 255;
     while (POD_LUM(r, g, b) > NP_BAR_LUM_MAX) r = r * 15 >> 4, g = g * 15 >> 4, b = b * 15 >> 4;
     return pal_not_role(0xff000000u | r | g << 8 | b << 16);
@@ -254,7 +268,7 @@ static void *bar_find(void) {
     if (!wm) return (void *)0;
     for (n = widget_count_children(wm), i = 0; i < n; ++i) {
         w = widget_get_child(wm, i);
-        if (pod_is_type(w, "system_bar")) return w; /* the navbar is "system_bar_bottom" */
+        if (m1_is_type(w, "system_bar")) return w; /* the navbar is "system_bar_bottom" */
     }
     return (void *)0;
 }
@@ -270,31 +284,31 @@ static int bar_set(unsigned color) {
     return 1;
 }
 
-__attribute__((noinline)) int pod_bar_tint(void *win, unsigned color) {
-    if (!win || !bar_set(pod_bar_color(color))) return 0; /* a failed call keeps what the bar has (and owes) */
+__attribute__((noinline)) int m1_bar_tint(void *win, unsigned color) {
+    if (!win || !bar_set(m1_bar_color(color))) return 0; /* a failed call keeps what the bar has (and owes) */
     bar_owner = win;
     return 1;
 }
 
-__attribute__((noinline)) void pod_bar_black(void *win) {
+__attribute__((noinline)) void m1_bar_black(void *win) {
     if (!win || bar_owner != win) return;
     bar_owner = (void *)0;
     bar_set(NP_BAR_STOCK);
 }
 
-__attribute__((noinline)) int pod_is_top(void *win) {
+__attribute__((noinline)) int m1_is_top(void *win) {
     void *wm = window_manager();
     return win && wm && window_manager_get_top_main_window(wm) == win;
 }
 
-/* The tone cache: album key (cc_album_key) -> pod_tone word, RAM only, fixed size, least recently used out. Both pages look
+/* The tone cache: album key (cc_album_key) -> m1_tone word, RAM only, fixed size, least recently used out. Both pages look
  * an album up before they decode a cover; a miss is decoded once and inserted. A key is never 0 (0 marks a free entry). */
 static struct {
     unsigned key, tone, used;
 } tone_tab[TONE_CACHE_N] __attribute__((section(".scratch")));
 static unsigned tone_clock __attribute__((section(".scratch")));
 
-__attribute__((noinline)) int pod_tone_get(unsigned key, unsigned *tone) {
+__attribute__((noinline)) int m1_tone_get(unsigned key, unsigned *tone) {
     unsigned i;
     if (!key) return 0;
     for (i = 0; i < TONE_CACHE_N; ++i)
@@ -306,7 +320,7 @@ __attribute__((noinline)) int pod_tone_get(unsigned key, unsigned *tone) {
     return 0;
 }
 
-__attribute__((noinline)) void pod_tone_put(unsigned key, unsigned tone) {
+__attribute__((noinline)) void m1_tone_put(unsigned key, unsigned tone) {
     unsigned i, at = 0;
     if (!key) return;
     for (i = 0; i < TONE_CACHE_N; ++i) {
@@ -323,21 +337,20 @@ __attribute__((noinline)) void pod_tone_put(unsigned key, unsigned tone) {
     tone_tab[at].key = key, tone_tab[at].tone = tone, tone_tab[at].used = ++tone_clock;
 }
 
-__attribute__((noinline)) unsigned pod_alpha(unsigned y, unsigned a_top, unsigned a_bot, unsigned rows) {
+__attribute__((noinline)) unsigned m1_alpha(unsigned y, unsigned a_top, unsigned a_bot, unsigned rows) {
     if (y >= rows - 1) return a_bot;
     return a_top + ((a_bot - a_top) * y + (rows - 1) / 2) / (rows - 1);
 }
 
-__attribute__((noinline)) unsigned pod_shade(unsigned color, unsigned y, unsigned a_top, unsigned a_bot,
-                                             unsigned rows) {
-    unsigned keep = 255 - pod_alpha(y, a_top, a_bot, rows);
+__attribute__((noinline)) unsigned m1_shade(unsigned color, unsigned y, unsigned a_top, unsigned a_bot, unsigned rows) {
+    unsigned keep = 255 - m1_alpha(y, a_top, a_bot, rows);
     return pal_not_role((color & 255) * keep / 255 | (color >> 8 & 255) * keep / 255 << 8 |
                         (color >> 16 & 255) * keep / 255 << 16);
 }
 
 /* The coverage of the area outside a quarter circle of radius r in the corner square of r pixels (the circle's centre at
  * the square's inner corner), 0..255: each pixel is sampled 8 x 8 times. */
-__attribute__((noinline)) void pod_corner_fill(unsigned char *tab, unsigned r) {
+__attribute__((noinline)) void m1_corner_fill(unsigned char *tab, unsigned r) {
     unsigned x, y, i, j, n, c = 2 * 8 * r;
     for (y = 0; y < r; ++y)
         for (x = 0; x < r; ++x) {
@@ -350,14 +363,14 @@ __attribute__((noinline)) void pod_corner_fill(unsigned char *tab, unsigned r) {
         }
 }
 
-__attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *tab, unsigned r, unsigned side,
-                                           unsigned color, int row0, unsigned a_top, unsigned a_bot, unsigned rows) {
+__attribute__((noinline)) void m1_corners(void *canvas, const unsigned char *tab, unsigned r, unsigned side,
+                                          unsigned color, int row0, unsigned a_top, unsigned a_bot, unsigned rows) {
     unsigned k, x, y;
     for (k = 0; k < 4; ++k)
         for (y = 0; y < r; ++y) {
             unsigned ly = k & 2 ? side - 1 - y : y;
             int row = row0 + (int)ly;
-            unsigned shade = pod_shade(color, row < 0 ? 0 : (unsigned)row, a_top, a_bot, rows);
+            unsigned shade = m1_shade(color, row < 0 ? 0 : (unsigned)row, a_top, a_bot, rows);
             for (x = 0; x < r; ++x) {
                 unsigned a = tab[y * r + x];
                 if (!a) continue;
@@ -367,7 +380,7 @@ __attribute__((noinline)) void pod_corners(void *canvas, const unsigned char *ta
         }
 }
 
-void pod_pill_place(pod_pill_t *p, int y) {
+void m1_pill_place(m1_pill_t *p, int y) {
     const unsigned *text = widget_get_text(p->ptext);
     float w = text && *text ? widget_measure_text(p->ptext, text) : 0.0f;
     int tw = (int)(w + 0.999f), x;
@@ -377,7 +390,7 @@ void pod_pill_place(pod_pill_t *p, int y) {
     p->tx = x + AH_PILL_GLYPH + AH_PILL_GAP, p->tw = tw + AB_TEXT_SLACK;
 }
 
-void pod_pill_paint(const pod_pill_t *p, void *canvas, int y) {
+void m1_pill_paint(const m1_pill_t *p, void *canvas, int y) {
     const unsigned *text = widget_get_text(p->ptext);
     unsigned n = 0;
     int rect[4];
@@ -389,7 +402,7 @@ void pod_pill_paint(const pod_pill_t *p, void *canvas, int y) {
 
 /* The pills: the glyph and the label centred as a pair SG_PILL_GAP apart (the flat pills of the Songs, Folders and artist pages, the select bars'): AWTK puts the glyph in a
  * square as high as the button at margin_left and the text at the square's end plus the spacer. Moved from patch/songs.c. */
-void pod_centre_pill(void *btn, int pw) {
+void m1_centre_pill(void *btn, int pw) {
     static const char *const key[5] = {"normal:", "pressed:", "over:", "focused:", "disable:"};
     static const char *const prop[5] = {"margin_left", "icon_at", "margin_right", "spacer", "text_align_h"};
     const unsigned *text = widget_get_text(btn);
@@ -438,7 +451,7 @@ void pod_centre_pill(void *btn, int pw) {
  * (the stock unselect / selected images: ink 2 .. 23, a circle of radius SG_MARK_INK centred in the square; 8 x 8 samples a pixel),
  * so only the ring and what it holds are drawn. Over the Songs page's black it looks as before. */
 #define SG_MARK_INK 11
-void *pod_make_mark(void *win, const char *name) {
+void *m1_make_mark(void *win, const char *name) {
     unsigned *px, x, y, i, j, n, c = 8 * SG_MARK, rr = 2 * 8 * SG_MARK_INK;
     void *b = bitmap_create_ex(SG_MARK, SG_MARK, SG_MARK * 4, BITMAP_RGBA8888);
     int ok;
@@ -484,7 +497,7 @@ static int pod_seg2(int px, int py, int ax, int ay, int bx,
     return cx * cx + cy * cy;
 }
 
-void *pod_make_cross(void) {
+void *m1_make_cross(void) {
     unsigned *px;
     int x, y, i, j, n, d, e;
     void *b = bitmap_create_ex(POD_CROSS, POD_CROSS, POD_CROSS * 4, BITMAP_RGBA8888);
@@ -511,7 +524,7 @@ void *pod_make_cross(void) {
     return b;
 }
 
-void *pod_make_chevron(void) {
+void *m1_make_chevron(void) {
     unsigned *px;
     int x, y, i, j, n, d;
     void *b = bitmap_create_ex(POD_CHEV_W, POD_CHEV_H, POD_CHEV_W * 4, BITMAP_RGBA8888);
@@ -556,7 +569,7 @@ static unsigned pod_isqrt(unsigned v) {
     return s;
 }
 
-void pod_capsule(void *canvas, int view_h, int x, int y, int w, int h, int r, unsigned c) {
+void m1_capsule(void *canvas, int view_h, int x, int y, int w, int h, int r, unsigned c) {
     int i, top, bottom;
     unsigned a;
     if (r > h / 2) r = h / 2;
@@ -589,13 +602,13 @@ void pod_capsule(void *canvas, int view_h, int x, int y, int w, int h, int r, un
     }
 }
 
-void pod_segmented(void *canvas, int view_h, int x, int y, int w, int h, int n, int sel, void *st_on, void *st_off,
-                   const unsigned *const *label, const int *len) {
+void m1_segmented(void *canvas, int view_h, int x, int y, int w, int h, int n, int sel, void *st_on, void *st_off,
+                  const unsigned *const *label, const int *len) {
     int seg = (w - 2 * SEG_PAD) / n, k, rect[4];
     if (n < 1) return;
-    pod_capsule(canvas, view_h, x, y, w, h, h / 2, SEG_TRACK);
-    pod_capsule(canvas, view_h, x + SEG_PAD + sel * seg, y + SEG_PAD, sel == n - 1 ? w - 2 * SEG_PAD - sel * seg : seg,
-                h - 2 * SEG_PAD, (h - 2 * SEG_PAD) / 2, SEG_THUMB);
+    m1_capsule(canvas, view_h, x, y, w, h, h / 2, SEG_TRACK);
+    m1_capsule(canvas, view_h, x + SEG_PAD + sel * seg, y + SEG_PAD, sel == n - 1 ? w - 2 * SEG_PAD - sel * seg : seg,
+               h - 2 * SEG_PAD, (h - 2 * SEG_PAD) / 2, SEG_THUMB);
     /* a short hairline between two segments that are both unselected (none next to the thumb) */
     for (k = 1; k < n; ++k)
         if (k - 1 != sel && k != sel && y + h / 4 >= 0 && y + h - h / 4 <= view_h) {

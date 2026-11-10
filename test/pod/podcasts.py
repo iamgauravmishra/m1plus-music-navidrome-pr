@@ -870,8 +870,6 @@ def cells(m, off=0):
     return out
 
 
-
-
 def open_tests(ctx):
     """The page opens on the shows: no widget per row, the handlers, the covers one a tick, the empty states."""
     expect = ctx.expect
@@ -1384,7 +1382,3 @@ def tag_tests(ctx):
 
 
 SECTIONS = [when_tests, width_tests, tag_tests, text_tests, scan_tests, ring_tests, resume_tests, speed_tests, order_tests, strip_tests, cover_tests, open_tests, level_tests, touch_tests, lifecycle_tests, asset_tests, integration_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

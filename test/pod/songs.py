@@ -229,11 +229,6 @@ def pixel(m, bmp, x, y):
     return struct.unpack('<I', m.u.mem_read(data + (y * w + x) * 4, 4))[0]
 
 
-def vis(m, name):
-    w = m.widgets[name]
-    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
-
-
 def is_shown(m, name): return m.props.get((m.widgets[name], 'visible'), 0) == 1   # (a widget the asset builds hidden: never shown unless the page showed it)
 
 
@@ -245,11 +240,6 @@ def tap(m, x, y, dx=0, dy=0):
     """A tap on the content view at content-view point (x, y) (window coordinates of the list: y counted from the list's top, the scroll offset not included)."""
     touch(m, 'down', x, SCREEN_Y0 + y, 'sg_on_down')
     touch(m, 'up', x + dx, SCREEN_Y0 + y + dy, 'sg_on_up', 1080)
-    return list(m.calls)
-
-
-def click(m, name):
-    m.click(name, count=900000000)
     return list(m.calls)
 
 
@@ -2115,7 +2105,7 @@ def src_tests(ctx):
     # covers: from the source's file; a cover that is asked for is looked for again
     titles = ['Aa', 'Bb']
     m = list_machine(['Stock'], cached=False)
-    m.top_main = m.window   # pod_is_top: the page is in front (the shared cover poll only runs then)
+    m.top_main = m.window   # m1_is_top: the page is in front (the shared cover poll only runs then)
     recs = src_records(m, titles)
     src = fake_source(m, {LS_SONGS: recs}, ask=True)
     key = album_key('Artist 0', 'Album 0')
@@ -2241,7 +2231,3 @@ def src_dsd_tests(ctx):
 
 
 SECTIONS = [asset_tests, open_and_paint_tests, touch_tests, rail_tests, switch_tests, order_search_and_stale_tests, collapse_and_select_tests, loader_tests, big_library_tests, lists_tests, src_tests, src_marks_tests, src_dsd_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

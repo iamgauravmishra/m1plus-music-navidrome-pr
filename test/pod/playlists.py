@@ -92,7 +92,7 @@ class LabelMachine(SelectMachine):
         """A lib_src_t of fake_pl_ functions (a `jr ra` each at a trapped address) over the machine's playlists (self.playlists, self.playlist_songs): list, rec_id, play, cover (the
         cache file by key: 1 present, 0 asked while the key is in fake_ask, else -1), gen (fake_gen). Calls land in self.fake_calls."""
         self.fake_calls, self.fake_ask, self.fake_gen = [], set(), 5
-        self.top_main = self.window   # pod_is_top: the page is in front (the shared cover poll only runs then)
+        self.top_main = self.window   # m1_is_top: the page is in front (the shared cover poll only runs then)
         self.fake_song_ret = -1   # what songs_open_src_in answers: -1 (the page did not open, the playlist plays), 0 (opened)
         self.fake_state_all = 0   # what src->state(LS_PLAYLISTS, NULL) answers (LS_ST_*)
         self.fake_no_list, self.playlist_counts = set(), {}   # playlists whose tracks are not cached yet, and the sync's songCounts
@@ -282,11 +282,6 @@ def glass_users(expect):
     for base, _, files in os.walk(ui_root):
         users += [os.path.relpath(os.path.join(base, f), ui_root) for f in files if f.endswith('.bin') and b'pl_glass' in open(os.path.join(base, f), 'rb').read()]
     expect(sorted(users) == ['default/raw/ui/m1plus_podcasts.bin', 'default/raw/ui/m1plus_update.bin'], f'pl_glass is used by the two dialogs that borrow its card (the Podcasts refresh, the Software Update download popup) only ({users})')
-
-
-def vis(m, name):
-    w = m.widgets[name]
-    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
 
 
 def glyph(m):
@@ -1297,10 +1292,6 @@ def stock_tests(ctx):
     # no playlists: the title goes with the empty grid, as the Albums page's empty state
     m = PM([]); open_page(m)
     expect(vis(m, 'view_grid') == (0, 0) and m.props.get((m.widgets['label_title'], 'visible'), 0) == 0, 'the empty page hides the grid and its title; the small title stays hidden')
-
-
-def run(ctx):
-    for s in SECTIONS: s(ctx)
 
 
 SECTIONS = [stock_tests, src_tests]

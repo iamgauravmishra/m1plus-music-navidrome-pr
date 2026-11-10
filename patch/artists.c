@@ -75,7 +75,7 @@ extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination th
     (LIST_TEXT_X + \
      LIST_TEXT_W_CHEV) /* the names are cut here (278), the chevron at AR_CHEV_X: the list-row spec; both move left by az_inset while the rail is shown (x 252 and 262) */
 #define AR_CHEV_X LIST_CHEV_X
-#define AR_CHEV_W POD_CHEV_W /* the chevron's bitmap, made by pod_make_chevron (patch/common.c) */
+#define AR_CHEV_W POD_CHEV_W /* the chevron's bitmap, made by m1_make_chevron (patch/common.c) */
 #define AR_CHEV_H POD_CHEV_H
 #define AR_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
 #define MAX_ARTISTS 20000 /* one byte of rank and four of order each, no widget: bounded by the stock list's own size */
@@ -228,7 +228,7 @@ static void ar_title_text(const char *key) {
 
 /* The small title is the navbar's once the large one has scrolled away; the fade is for rows passing under the bar (patch/songs.c sg_title_update). */
 static void ar_title_update(void) {
-    pod_title_set(ar.title, &ar.title_on, ar.noscroll || pod_title_gone(az_off(&ar.al), 0));
+    m1_title_set(ar.title, &ar.title_on, ar.noscroll || m1_title_gone(az_off(&ar.al), 0));
     if (ar.fade) {
         widget_set_visible(ar.fade, az_off(&ar.al) > 0, 0);
         widget_set_sensitive(ar.fade, 0);
@@ -322,7 +322,7 @@ static int ar_next_photo(void) {
     for (r = lo; r <= hi; ++r) {
         int d;
         if (!ar_wants(r)) continue;
-        d = pod_abs(az_row_y(&ar.al, r) - az_off(&ar.al) + AR_ROW / 2 - GRID_VIEW_H / 2);
+        d = m1_abs(az_row_y(&ar.al, r) - az_off(&ar.al) + AR_ROW / 2 - GRID_VIEW_H / 2);
         if (d < bd) bd = d, best = r;
     }
     return best;
@@ -485,7 +485,7 @@ static int ar_on_up(void *ctx, void *e) {
     ar.down = 0;
     ar_set_press(0);
     if (a < 0 || !e || !ar.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - ar.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - ar.down_y) < SC_DRAG_PX &&
+    if (m1_abs(I(e, PE_X) - ar.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - ar.down_y) < SC_DRAG_PX &&
         ar_item_of(e) == a)
         ar_open((unsigned)a);
     return RET_OK;
@@ -541,9 +541,9 @@ static int ar_on_bg(void *ctx, void *e) {
 static int ar_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (ar.photo_timer) timer_remove(ar.photo_timer);
-    if (ar.retry_timer) timer_remove(ar.retry_timer);
-    if (ar.gen_timer) timer_remove(ar.gen_timer);
+    m1_timer_stop(&ar.photo_timer);
+    m1_timer_stop(&ar.retry_timer);
+    m1_timer_stop(&ar.gen_timer);
     ls_spin_end(ar.spin);
     ls_cover_end(&ar.cp);
     if (ar.artists) deque_destroy(ar.artists);
@@ -607,10 +607,10 @@ static void ar_load(int keep) {
     h = ar.count ? ar.al.content : GRID_VIEW_H;
     widget_resize(ar.view, AR_W, h);
     widget_set_prop_int(ar.sv, "virtual_h", h);
-    pod_show(ar.list,
-             ar.count != 0 ||
-                 ar.src != (const lib_src_t *)0); /* (a source's page keeps the large title when it has no rows) */
-    pod_show(ar.status, ar.count == 0 && !(st == LS_ST_LOADING && ar.spin));
+    m1_show(ar.list,
+            ar.count != 0 ||
+                ar.src != (const lib_src_t *)0); /* (a source's page keeps the large title when it has no rows) */
+    m1_show(ar.status, ar.count == 0 && !(st == LS_ST_LOADING && ar.spin));
     if (!ar.count) widget_set_tr_text(ar.status, ar.src ? ls_empty_key(st, "No artists") : "Update Local Music first");
     ls_spin(ar.spin, st == LS_ST_LOADING && ar.count == 0 && ar.spin != (void *)0);
     if (!ar.count) widget_set_prop_int(ar.sv, "yoffset", 0);
@@ -638,7 +638,7 @@ static void ar_card(int on) { vs_menu(&ar.vs, on, 0, ar.rev, !ar.src && *(volati
 static int ar_on_gen(const void *unused) {
     (void)unused;
     if (ar.view && ar.src && ar.src->gen(ar.src) != ar.gen && !ar.down && !ar.press && !ar.vs.on &&
-        !grid_moving(ar.sv) && pod_is_top(ar.win)) {
+        !grid_moving(ar.sv) && m1_is_top(ar.win)) {
         unsigned g = ar.src->gen(ar.src);
         void *list;
         unsigned n;
@@ -724,8 +724,8 @@ static int ar_open_page(int home, const lib_src_t *src) {
         return h ? pod_home_open(h) : -1;
     }
     widget_on(ar.win, EVT_DESTROY, ar_on_destroy, (void *)0);
-    pod_bind(ar.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(ar.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(ar.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(ar.win, "btn_backtoplayer", m1_on_player, (void *)0);
     ar.list = widget_lookup(ar.win, "artists_listview", 1);
     ar.sv = widget_lookup(ar.win, "artists_scrollview", 1);
     ar.view = widget_lookup(ar.win, "view_grid", 1);
@@ -743,7 +743,7 @@ static int ar_open_page(int home, const lib_src_t *src) {
     ar.al.rail = widget_lookup(ar.win, "sg_rail", 1);
     ar.al.bubble = widget_lookup(ar.win, "sg_bubble", 1);
     ar.al.bubble_letter = widget_lookup(ar.win, "sg_bubble_letter", 1);
-    pod_bind(ar.win, "btn_more", ar_on_more, (void *)0);
+    m1_bind(ar.win, "btn_more", ar_on_more, (void *)0);
     if (!ar.list || !ar.sv || !ar.view || !ar.status || !ar.st_title || !ar.al.st_hdr || !ar.al.st_rail ||
         !ar.al.st_rail_on || !ar.al.rail || !ar.al.bubble || !ar.al.bubble_letter) {
         int h = ar.home;
@@ -779,7 +779,7 @@ static int ar_open_page(int home, const lib_src_t *src) {
     }
     ar.rev = set_read(ar_sort_file(0), '0') == 'a';
     az_make_disc(&ar.al);
-    ar.chev = pod_make_chevron();
+    ar.chev = m1_make_chevron();
     ar.noscroll = !widget_on(ar.sv, EVT_SCROLL, ar_on_scroll, (void *)0) ||
                   !widget_on(ar.sv, EVT_SCROLL_END, ar_on_scroll, (void *)0);
     if (ar.noscroll && ar.title)

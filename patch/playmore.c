@@ -100,13 +100,13 @@ static void pm_arrange(void) {
         void *r = pm.row[pm_page[set][i]];
         used[pm_page[set][i]] = 1;
         widget_move(r, 0, (int)i * PM_ROW_H);
-        pod_show(r, 1);
+        m1_show(r, 1);
     }
     for (i = 0; i < PM_ROWS;
          i++) { /* parked under the shown rows: nothing it could shadow if a hit test did look at it */
         if (used[i]) continue;
         widget_move(pm.row[i], 0, h);
-        pod_show(pm.row[i], 0);
+        m1_show(pm.row[i], 0);
     }
     for (i = 0; i < n; i++) widget_restack(pm.row[pm_page[set][i]], k++);
     if (pm.page ==
@@ -192,14 +192,14 @@ static int pm_on_art(void *ctx, void *e) {
 
 /* Sleep Timer (the row is pod_sleep, page 2): the stock Settings > Power page (powermanager_page: the Sleep Timer switch and its hour / minute selectors), opened over Now Playing. The page has no single_instance property,
  * so a plain navigator_to stacks a new one every time. The pile-up needs the page's top-right Now Playing button, which restacks the player and leaves the Power page under it, and then reopening Sleep Timer; a plain
- * Back closes the page. A Power window already in the stack is brought to the front (pod_open_stock, which restacks as the Settings tiles do); otherwise stock's open. The restacked page refreshes itself: stock's restack delivers
+ * Back closes the page. A Power window already in the stack is brought to the front (m1_open_stock, which restacks as the Settings tiles do); otherwise stock's open. The restacked page refreshes itself: stock's restack delivers
  * EVT_WINDOW_TO_FG, and the handler the page's init bound for it (0x4a9b2c) runs the page refresh (0x4a9924: switch and selectors from the timer), so nothing here refreshes it (pinned in tools/pod.py PLAYMORE_PINS).
  * Back (0x4a91d0) saves the picker values and calls navigator_back; with Now Playing directly below the page that returns to Now Playing. The page FIRST, the sheet closed once it is up (a window below the top one);
  * a page that cannot open leaves the sheet. */
 static int pm_on_sleep(void *ctx, void *e) {
     (void)e;
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
-    if (pod_open_stock("systemset/powermanager_page", "powermanager_page") != RET_OK) return RET_OK;
+    if (m1_open_stock("systemset/powermanager_page", "powermanager_page") != RET_OK) return RET_OK;
     window_close(ctx);
     return RET_OK;
 }

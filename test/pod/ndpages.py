@@ -30,14 +30,6 @@ DOTS = '•' * 4
 KB_PASS_MAX_ = 127   # patch/keyboard.h KB_PASS_MAX
 
 
-def undo(s):
-    """A mocked text as the user reads it: UTF-8 bytes read as latin-1 (the payload's own strings come back twice over from the mocked translation)."""
-    for _ in range(2):
-        try: s = s.encode('latin-1').decode('utf-8')
-        except (UnicodeDecodeError, UnicodeEncodeError): break
-    return s
-
-
 def opened(conf=True, **kw):
     """The page open over a card with the PR's conf file (or none)."""
     m = SB.machine(conf=conf)
@@ -327,7 +319,7 @@ def server_login_open(ctx):
     for i in range(3):
         m = login(row=i)
         expect(('window_open', 'm1plus_ndlogin') in m.hist and not keyboards(m) and fld(m) == (24, 56 + 48 * i), f'row {i} opens the Sign In page, no keyboard page, the field on row {i}')
-        expect(m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['pod_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['pod_on_player'], 'Back (cancel) and Now Playing are the stock ones')
+        expect(m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['m1_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['m1_on_player'], 'Back (cancel) and Now Playing are the stock ones')
     m = login(row=0)
     expect(text(m, 'kb_text') == SB.URL, 'the address row shows the saved address')
     expect(shown(m, 'nl_v1') == 1 and said(m, 'nl_v1') == 'alice' and shown(m, 'nl_h1') == 0 and shown(m, 'nl_v2') == 1 and said(m, 'nl_v2') == DOTS and SB.PASSWORD not in ''.join(m.wtext.values()),
@@ -1000,7 +992,7 @@ def root_footer(ctx):
 
 
 def root_collapse(ctx):
-    """The large title scrolls away and the navbar's small title takes over from SG_COLLAPSE (pod_title_gone); the fade shows while scrolled; no scroll events: the title stays; no server: no collapse."""
+    """The large title scrolls away and the navbar's small title takes over from SG_COLLAPSE (m1_title_gone); the fade shows while scrolled; no scroll events: the title stays; no server: no collapse."""
     expect = ctx.expect
     SC_YOFF = O['SC_YOFF']
     m = root_opened(fresh=True)
@@ -1214,9 +1206,4 @@ def root(ctx):
     for f in (root_asset, root_rows, root_status, root_progress, root_footer, root_collapse, root_more, root_search, root_empty, root_offline, root_life, root_strings): f(ctx)
 
 
-
 SECTIONS = [server, root]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

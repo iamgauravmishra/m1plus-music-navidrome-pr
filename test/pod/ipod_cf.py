@@ -382,7 +382,3 @@ def i18n_tests(ctx):
 
 
 SECTIONS = [enter_tests, wheel_tests, anim_tests, track_tests, life_tests, i18n_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

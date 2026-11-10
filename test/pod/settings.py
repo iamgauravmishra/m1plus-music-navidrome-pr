@@ -302,7 +302,3 @@ def stock_tests(ctx):
 
 
 SECTIONS = [layout_tests, stock_tests, about_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

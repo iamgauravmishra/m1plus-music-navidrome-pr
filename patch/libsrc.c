@@ -315,7 +315,7 @@ int ls_cover_tick(const void *arg) {
         int n = 0;
         if (!p) continue;
         live = 1;
-        if (!pod_screen_lit() || !pod_is_top(p->win)) continue;
+        if (!m1_screen_lit() || !m1_is_top(p->win)) continue;
         if (p->pend) {
             p->pend = 0, p->idle = 0;
             if (++p->polls > LS_COVER_POLLS) { /* the one give-up rule */

@@ -11,7 +11,7 @@ and OUTDIR/podcasts-search2.png (the four capsule states, the caption marker).
 
 WORKDIR is a built tree (work/mod-release): the font (measured with the stb model of tools/stb_raster.py: advance + 1 px a glyph), the glass navbar pieces and
 the menu glass come from it and from tools/mod_icons.py (Lucide). The page tint is the album page's: tone() of the cover's average colour (mod_nowplaying.tone)
-under the black gradient of mod_icons.ah_tint_alpha, the status bar darkened as bar_color does (patch/common.c pod_bar_color). Sizes follow the other previews (rows of
+under the black gradient of mod_icons.ah_tint_alpha, the status bar darkened as bar_color does (patch/common.c m1_bar_color). Sizes follow the other previews (rows of
 patch/offsets.inc, 16 px margins, the Albums grid's 144 px cells). Covers: All-In's real logo and synthetic stand-ins. Not pixel-exact AWTK.
 """
 import argparse, os, re, sys
@@ -33,7 +33,7 @@ def average(im):
 
 
 def bar_color(tone):
-    """patch/common.c pod_bar_color of the page's window row 0 (the tone under the overlay's first alpha): darkened until the
+    """patch/common.c m1_bar_color of the page's window row 0 (the tone under the overlay's first alpha): darkened until the
     status bar's white glyphs keep 4.5:1. Returns (the bar's colour, the page's row 0 colour)."""
     row0 = tuple(v * (255 - M.ah_tint_alpha(0)) // 255 for v in tone); r, g, b = row0
     while 2126 * r * r + 7152 * g * g + 722 * b * b > O['NP_BAR_LUM_MAX']: r, g, b = r * 15 >> 4, g * 15 >> 4, b * 15 >> 4

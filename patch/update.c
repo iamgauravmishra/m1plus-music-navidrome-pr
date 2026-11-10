@@ -195,10 +195,10 @@ static void up_apply(const up_view_t *v) {
     if (t) widget_set_text_utf8(up.text, v->text);
     if (p) widget_set_text_utf8(up.pill, v->pill);
     if (p2) widget_set_text_utf8(up.pill2, v->pill2);
-    pod_show(up.icon, g);
-    pod_show(up.text, t);
-    pod_show(up.pill, p);
-    pod_show(up.pill2, p2);
+    m1_show(up.icon, g);
+    m1_show(up.text, t);
+    m1_show(up.pill, p);
+    m1_show(up.pill2, p2);
     up.act = v->act;
     up.act2 = v->act2;
     widget_invalidate_force(up.win, (void *)0);
@@ -229,8 +229,8 @@ static void up_popup(void) {
         widget_set_sensitive(up.pd_cancel, !up.cancelling);
     }
     if (on != up.pop) {
-        pod_show(up.pd_scrim, on);
-        pod_show(up.pd_card, on);
+        m1_show(up.pd_scrim, on);
+        m1_show(up.pd_card, on);
         if (on) widget_set_sensitive(up.pd_cancel, !up.cancelling);
         up.pop = on;
     }
@@ -267,10 +267,10 @@ static void up_start(void) {
 
 /* The page's block cleared (visible=false and sensitive=false: glyph, texts, both pills) while a stock dialog is up: the dialog is translucent, so the page behind would show through it. up_sync puts it back. */
 static void up_hide_block(void) {
-    pod_show(up.icon, 0);
-    pod_show(up.text, 0);
-    pod_show(up.pill, 0);
-    pod_show(up.pill2, 0);
+    m1_show(up.icon, 0);
+    m1_show(up.text, 0);
+    m1_show(up.pill, 0);
+    m1_show(up.pill2, 0);
     widget_set_visible(up.title, 0, 0);
 }
 
@@ -372,7 +372,7 @@ static int up_on_cancel(void *ctx, void *e) {
 
 static int up_on_back(void *ctx, void *e) {
     if (up.pop) return up_on_cancel(ctx, e); /* Back under the popup is its Cancel */
-    return pod_on_back(ctx, e);
+    return m1_on_back(ctx, e);
 }
 
 static int up_on_fg(void *ctx, void *e) {
@@ -392,7 +392,7 @@ static int up_on_bg(void *ctx, void *e) {
 static int up_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != up.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
-    if (up.timer) timer_remove(up.timer);
+    m1_timer_stop(&up.timer);
     if (pn_up_state() == PN_U_CHECKING || pn_up_state() == PN_U_DOWNLOADING)
         pn_cancel(); /* the worker ends by itself and removes its .part */
     if (!pn_job_busy() && pn_dl_waiting() && !pn_dl_running()) pn_dl_start();
@@ -444,20 +444,20 @@ int update_open(void) {
     widget_on(up.win, EVT_DESTROY, up_on_destroy, up.win);
     widget_on(up.win, EVT_WINDOW_TO_FG, up_on_fg, (void *)0);
     widget_on(up.win, EVT_WINDOW_TO_BG, up_on_bg, (void *)0);
-    pod_bind(up.win, "btn_return", up_on_back, (void *)0);
-    pod_bind(up.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(up.win, "btn_return", up_on_back, (void *)0);
+    m1_bind(up.win, "btn_backtoplayer", m1_on_player, (void *)0);
     up.icon = widget_lookup(up.win, "up_icon", 1);
     up.title = widget_lookup(up.win, "up_title", 1);
     up.text = widget_lookup(up.win, "up_text", 1);
-    up.pill = pod_bind(up.win, "up_pill", up_on_pill, (void *)0);
-    up.pill2 = pod_bind(up.win, "up_pill2", up_on_pill2, (void *)0);
+    up.pill = m1_bind(up.win, "up_pill", up_on_pill, (void *)0);
+    up.pill2 = m1_bind(up.win, "up_pill2", up_on_pill2, (void *)0);
     up.pd_scrim = widget_lookup(up.win, "up_pd_scrim", 1);
     up.pd_card = widget_lookup(up.win, "up_pd_card", 1);
     up.pd_title = widget_lookup(up.win, "up_pd_title", 1);
     up.pd_name = widget_lookup(up.win, "up_pd_name", 1);
     up.pd_count = widget_lookup(up.win, "up_pd_count", 1);
     up.pd_fill = widget_lookup(up.win, "up_pd_fill", 1);
-    up.pd_cancel = pod_bind(up.win, "up_pd_cancel", up_on_cancel, (void *)0);
+    up.pd_cancel = m1_bind(up.win, "up_pd_cancel", up_on_cancel, (void *)0);
     if (!up.icon || !up.title || !up.text || !up.pill || !up.pill2 || !up.pd_scrim || !up.pd_card || !up.pd_title ||
         !up.pd_name || !up.pd_count || !up.pd_fill || !up.pd_cancel) {
         navigator_back(); /* an asset that is not ours: the destroy handler frees what exists */

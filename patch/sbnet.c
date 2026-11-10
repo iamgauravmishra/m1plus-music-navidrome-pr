@@ -3,6 +3,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "sbnet.h"
+#include "utf8.h"
 #include "common.h"
 #include "curlopts.h"
 
@@ -52,18 +53,8 @@ static int sbn_hex(unsigned c) {
 }
 
 static int sbn_put(char *out, unsigned cap, unsigned *used, unsigned c) {
-    unsigned n = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : 4;
-    if (*used + n >= cap) return 0;
-    if (n == 1)
-        out[(*used)++] = (char)c;
-    else if (n == 2)
-        out[(*used)++] = (char)(0xc0 | (c >> 6)), out[(*used)++] = (char)(0x80 | (c & 63));
-    else if (n == 3)
-        out[(*used)++] = (char)(0xe0 | (c >> 12)), out[(*used)++] = (char)(0x80 | (c >> 6 & 63)),
-        out[(*used)++] = (char)(0x80 | (c & 63));
-    else
-        out[(*used)++] = (char)(0xf0 | (c >> 18)), out[(*used)++] = (char)(0x80 | (c >> 12 & 63)),
-        out[(*used)++] = (char)(0x80 | (c >> 6 & 63)), out[(*used)++] = (char)(0x80 | (c & 63));
+    if (*used + m1_utf8_len(c) >= cap) return 0;
+    *used += m1_utf8_put(out + *used, c);
     return 1;
 }
 
@@ -867,20 +858,13 @@ static int sbn_fixed_equal(const char *field, unsigned cap, const char *value) {
 static int sbn_resume_save(const sbn_sink_t *sink, const char *path) {
     sbn_resume_t meta;
     char tmp[360];
-    int fd, ok;
     if (sbn_len(sink->identity) >= sizeof meta.identity || snprintf(tmp, sizeof tmp, "%s.tmp", path) >= (int)sizeof tmp)
         return 0;
     memset(&meta, 0, sizeof meta);
     memcpy(meta.magic, "SBRES1\0\0", sizeof meta.magic);
     memcpy(meta.identity, sink->identity, sbn_len(sink->identity));
     memcpy(meta.etag, sink->etag, sbn_len(sink->etag));
-    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0600);
-    if (fd < 0) return 0;
-    ok = write(fd, &meta, sizeof meta) == (int)sizeof meta && fsync(fd) == 0;
-    if (close(fd) != 0) ok = 0;
-    if (ok && rename(tmp, path) == 0) return 1;
-    unlink(tmp);
-    return 0;
+    return m1_save(path, tmp, 0600, &meta, sizeof meta);
 }
 
 /* The saved ETag for this identity into etag (128 bytes); 1 when there is a valid record. */
@@ -915,7 +899,7 @@ int sbn_download(const char *url, const char *part, const char *final, const cha
     unsigned free_kb = 0;
     *resumable_out = -1;
     etag[0] = 0;
-    if (!pod_card_mounted() || !pn_free_kb("/mnt/mmc", &free_kb)) {
+    if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &free_kb)) {
         sink->werr = SBN_W_CARD;
         return -1;
     }
@@ -926,7 +910,7 @@ int sbn_download(const char *url, const char *part, const char *final, const cha
     if (snprintf(validator, sizeof validator, "%s.etag", part) >= (int)sizeof validator) return -1;
     fd = open(part, O_RDWR | O_CREAT, 0644);
     if (fd < 0) {
-        sink->werr = pod_card_mounted() ? SBN_W_IO : SBN_W_CARD;
+        sink->werr = m1_card_mounted() ? SBN_W_IO : SBN_W_CARD;
         return -1;
     }
     offset = lseek(fd, 0, 2);
@@ -1014,11 +998,11 @@ int sbn_download(const char *url, const char *part, const char *final, const cha
         resumable = 0;
     if (resumable && fd >= 0 && fsync(fd) < 0) resumable = 0;
     if (resumable && sink->written == 0 && offset == 0) resumable = 0;
-    if (resumable && pod_card_mounted())
+    if (resumable && m1_card_mounted())
         *resumable_out = 1;
     else {
         *resumable_out = 0;
-        if (pod_card_mounted()) {
+        if (m1_card_mounted()) {
             unlink(part);
             unlink(validator);
         }

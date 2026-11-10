@@ -126,13 +126,13 @@ static void mb_hide(void) {
     mb.rkey = 0;
     mb.rlogo = 0;
     mb.art.settle = 0;
-    pod_show(mb.bar, 0);
+    m1_show(mb.bar, 0);
     mb_pad(0);
 }
 
 static void mb_show(void) {
     mb_pad(1);
-    pod_show(mb.bar, 1);
+    m1_show(mb.bar, 1);
     widget_invalidate_force(mb.bar, (void *)0);
     mb.shown = 1;
 }
@@ -160,7 +160,7 @@ static void mb_labels(void *t) {
 unsigned *mb_art_begin(mb_art_t *a) {
     if (!a->bmp) {
         a->bmp = bitmap_create_ex(MB_ART, MB_ART, MB_ART * 4, BITMAP_RGBA8888);
-        if (a->bmp) pod_corner_fill(a->corner, MB_ART_R);
+        if (a->bmp) m1_corner_fill(a->corner, MB_ART_R);
     }
     return a->bmp ? (unsigned *)bitmap_lock_buffer_for_write(a->bmp) : (unsigned *)0;
 }
@@ -510,8 +510,8 @@ static void mb_glyph(void) {
     }
     if (playing == mb.playing) return;
     mb.playing = playing;
-    pod_show(mb.play, !playing);
-    pod_show(mb.pause, playing);
+    m1_show(mb.play, !playing);
+    m1_show(mb.pause, playing);
     widget_invalidate_force(mb.card, (void *)0); /* the whole pill, not the glyph's rectangle (see the blur) */
 }
 
@@ -610,9 +610,9 @@ static int mb_tick(const void *timer) {
         mb.timer = 0;
         return RET_OK;
     }
-    want = pod_screen_lit() ? MB_TICK_MS : POD_DARK_MS;
+    want = m1_screen_lit() ? MB_TICK_MS : POD_DARK_MS;
     if (mb.timer && mb.interval != want && timer_modify(mb.timer, want) == RET_OK) mb.interval = want;
-    if (!pod_screen_lit()) {
+    if (!m1_screen_lit()) {
         if (recent_note(cc_playing())) mb.recent_pending = 1;
         return RET_REPEAT;
     }
@@ -627,7 +627,7 @@ static int mb_first(const void *timer) {
     mb.timer = timer_add(mb_tick, (void *)0, MB_TICK_MS);
     mb.interval = MB_TICK_MS;
     if (mb.timer) {
-        if (pod_screen_lit())
+        if (m1_screen_lit())
             mb_work();
         else if (recent_note(cc_playing()))
             mb.recent_pending = 1;
@@ -635,10 +635,7 @@ static int mb_first(const void *timer) {
     return RET_OK;
 }
 
-static void mb_unarm(void) {
-    if (mb.timer) timer_remove(mb.timer);
-    mb.timer = 0;
-}
+static void mb_unarm(void) { m1_timer_stop(&mb.timer); }
 
 static void mb_stop(void) {
     mb_unarm();
@@ -703,7 +700,7 @@ static int mb_on_play(void *ctx, void *e) {
 /* The card: radio Now Playing while the bar shows the radio (also in Error, which stock's entry hook does not take), else Now Playing as the menu's row opens it. */
 static int mb_on_card(void *ctx, void *e) {
     if (mb.radio && rn_open() == 0) return RET_OK;
-    return pod_on_player(ctx, e);
+    return m1_on_player(ctx, e);
 }
 
 /* next_quick_click reads the event's time (it ignores a click within a second of the last); the click's own event is

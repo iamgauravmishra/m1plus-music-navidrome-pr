@@ -211,10 +211,10 @@ static int al_coff(void) { return al_off() - al_top(); }
 
 /* The navbar's fade (an insensitive image, built hidden) is for rows passing under the bar: shown while the list is scrolled, hidden at rest, where the
  * first row would be darkened by it. Visible and sensitive move together (never a touch target). No fade widget = nothing happens. The small title
- * is the navbar's once the large one has scrolled away (pod_title_gone, the rule every large-title page shares); without the scroll events it stays. */
+ * is the navbar's once the large one has scrolled away (m1_title_gone, the rule every large-title page shares); without the scroll events it stays. */
 static void al_fade(void) {
-    pod_title_set(al.small, &al.title_on,
-                  al.noscroll || pod_title_gone(al_off(), al.head ? AL_HEAD_COLLAPSE - al_gone() : 0));
+    m1_title_set(al.small, &al.title_on,
+                 al.noscroll || m1_title_gone(al_off(), al.head ? AL_HEAD_COLLAPSE - al_gone() : 0));
     if (!al.fade) return;
     widget_set_visible(al.fade, al_off() > 0, 0);
     widget_set_sensitive(al.fade, 0);
@@ -399,7 +399,7 @@ static int al_next_load(void) {
             top = az_row_y(&al.az, a) - s, h = LIST_ROW_H;
         else
             top = GRID_ROW_GAP + a / GRID_COLS * PITCH - s, h = CELL_H;
-        d = pod_abs(top + h / 2 - GRID_VIEW_H / 2);
+        d = m1_abs(top + h / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + h <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -459,22 +459,10 @@ static void al_head_load(void) {
     al_layout(0);
 }
 
-/* The scroll_view is moving: a finger is dragging it (pressed and past the drag threshold), or its scroll animator (the fling) is running.
- * A decode is a few ms on the UI thread and the next touch would wait behind it, so the loader decodes nothing meanwhile: the rows show the
- * placeholder disc. (scroll_view_t pressed / dragged / wa and the animator's state and widget: patch/scroll.c reads the same.) */
-static int al_moving(void) { return grid_moving(al.sv); }
-
 /* Arms the loader if there is something to load and it is not running. */
 static void al_kick(void) {
     if (al.fg && !al.more_timer && al.view && (al.noscroll || (al.circ && !al.hdr_done) || al_next_load() >= 0))
         al.more_timer = timer_add(al_on_load, (void *)0, AL_MORE_MS);
-}
-
-/* The way the content went since the loader last looked. */
-static void al_dir(void) {
-    int s = al_off();
-    if (s != al.seen) al.dir = s > al.seen ? 1 : -1;
-    al.seen = s;
 }
 
 static int al_on_load(const void *unused) {
@@ -482,8 +470,9 @@ static int al_on_load(const void *unused) {
     (void)unused;
     al.more_timer = 0;
     if (!al.view || !al.fg) return RET_OK;
-    al_dir();
-    if (al_moving()) { /* nothing is decoded while it moves: look again next tick (the polling ends with the page, or when nothing is left to load) */
+    grid_dir(al_off(), &al.seen, &al.dir);
+    if (grid_moving(
+            al.sv)) { /* nothing is decoded while it moves: look again next tick (the polling ends with the page, or when nothing is left to load) */
         al_kick();
         return RET_OK;
     }
@@ -511,7 +500,7 @@ static int al_on_scroll(void *ctx, void *e) {
     (void)e;
     if (!al.view) return RET_OK;
     al_fade();
-    al_dir();
+    grid_dir(al_off(), &al.seen, &al.dir);
     al_kick();
     return RET_OK;
 }
@@ -585,8 +574,7 @@ static void al_pic_wait(void) {
 
 /* The page's build set released: a running worker is cancelled (joined if it has finished, else left to exit on its own, cc_build_stop). */
 static void al_build_end(void) {
-    if (al.build_timer) timer_remove(al.build_timer);
-    al.build_timer = 0;
+    m1_timer_stop(&al.build_timer);
     if (al.own) cc_build_stop();
     al.own = 0;
     al.scanning = 0;
@@ -711,8 +699,8 @@ static int al_on_up(void *ctx, void *e) {
     al.down = 0;
     if (al.list) al_set_press(0);
     if (a < 0 || !e || !al.view) return RET_OK;
-    dx = pod_abs(I(e, PE_X) - al.down_x);
-    dy = pod_abs(I(e, PE_Y) - al.down_y);
+    dx = m1_abs(I(e, PE_X) - al.down_x);
+    dy = m1_abs(I(e, PE_Y) - al.down_y);
     if (dx < AL_TAP_PX && dy < AL_TAP_PX && al_item_of(e) == a) {
         int row = (int)(al.order ? al.order[a] : (unsigned)a); /* the stock row */
         if (al.src) { /* a source's album: its album page; an artist's All Songs tile: the source's songs of that artist */
@@ -750,8 +738,7 @@ static int al_on_bg(void *ctx, void *e) {
     az_rail_end(&al.az);
     al_on_abort(ctx, e);
     al.fg = 0;
-    if (al.more_timer) timer_remove(al.more_timer);
-    al.more_timer = 0;
+    m1_timer_stop(&al.more_timer);
     return RET_OK;
 }
 
@@ -817,8 +804,8 @@ static int al_on_shuffle(void *ctx, void *e) {
 static int al_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (al.more_timer) timer_remove(al.more_timer);
-    if (al.gen_timer) timer_remove(al.gen_timer);
+    m1_timer_stop(&al.more_timer);
+    m1_timer_stop(&al.gen_timer);
     ls_cover_end(&al.cp);
     ls_spin_end(al.spin);
     al_build_end(); /* the timer removed, the worker cancelled (cc_build_stop) */
@@ -840,8 +827,8 @@ static void al_rail(void) {
     if (al.list)
         az_rail_fit(&al.az, GRID_VIEW_H);
     else {
-        pod_show(al.az.rail, 0);
-        pod_show(al.az.bubble, 0);
+        m1_show(al.az.rail, 0);
+        m1_show(al.az.bubble, 0);
     }
 }
 
@@ -984,8 +971,7 @@ static void al_recheck_done(void) {
 static void al_set_mode(int list) {
     int first = al_first(), max;
     al_stop_scroll();
-    if (al.more_timer) timer_remove(al.more_timer);
-    al.more_timer = 0;
+    m1_timer_stop(&al.more_timer);
     az_rail_end(&al.az);
     al.list = list, al.press = 0, al.down = 0, al.dir = 1;
     grid_drop(&al.g); /* the tiles were made for the other shape */
@@ -1012,8 +998,7 @@ static void al_resort(void) {
     al.order = al_order();
     if (!al.view || !al.g.tiles) return;
     al_stop_scroll();
-    if (al.more_timer) timer_remove(al.more_timer);
-    al.more_timer = 0;
+    m1_timer_stop(&al.more_timer);
     al_build_end();
     al.scanned = 0;
     al.press = 0, al.down = 0, al.dir = 1;
@@ -1078,16 +1063,16 @@ static int al_begin(void) {
         return 0;
     }
     if (al.pills) { /* under the large title: the pills as the Songs page's (the label and glyph centred as a pair), shown and live */
-        pod_bind(al.win, "btn_play", al_on_play, (void *)0);
-        pod_bind(al.win, "btn_shuffle", al_on_shuffle, (void *)0);
-        pod_centre_pill(al.btn_play, AL_PLAY_W);
-        pod_centre_pill(al.btn_shuffle, AL_SHUFFLE_W);
+        m1_bind(al.win, "btn_play", al_on_play, (void *)0);
+        m1_bind(al.win, "btn_shuffle", al_on_shuffle, (void *)0);
+        m1_centre_pill(al.btn_play, AL_PLAY_W);
+        m1_centre_pill(al.btn_shuffle, AL_SHUFFLE_W);
         if (al.head) { /* the pills sit under the name */
             widget_move(al.btn_play, AL_PLAY_X, AL_HEAD_PILL_Y - al_gone());
             widget_move(al.btn_shuffle, AL_SHUFFLE_X, AL_HEAD_PILL_Y - al_gone());
         }
-        pod_show(al.btn_play, 1);
-        pod_show(al.btn_shuffle, 1);
+        m1_show(al.btn_play, 1);
+        m1_show(al.btn_shuffle, 1);
     }
     al.g.az = &al.az; /* (list rows lie below the headers) */
     al_shape(al.list);
@@ -1134,10 +1119,10 @@ static void al_empty(void) {
     int st = LS_ST_READY;
     if (al.src && !al.count && al.src->state)
         st = al.src->state(al.src, LS_ALBUMS, al.artist_row ? deque_at(al.artist_row, 0) : (void *)0);
-    pod_show(al.view, al.src != (const lib_src_t *)0 && !al.count);
-    pod_show(al.status, !(st == LS_ST_LOADING && al.spin));
+    m1_show(al.view, al.src != (const lib_src_t *)0 && !al.count);
+    m1_show(al.status, !(st == LS_ST_LOADING && al.spin));
     ls_spin(al.spin, st == LS_ST_LOADING && al.spin != (void *)0);
-    if (al.az_ok) pod_show(al.az.rail, 0), pod_show(al.az.bubble, 0); /* (nothing to index) */
+    if (al.az_ok) m1_show(al.az.rail, 0), m1_show(al.az.bubble, 0); /* (nothing to index) */
     widget_set_tr_text(al.status, al.count                  ? "Not enough memory"
                                   : al.artist_row || al.src ? ls_empty_key(st, "No albums")
                                                             : "Update Local Music first");
@@ -1169,8 +1154,8 @@ static void al_src_reload(void) {
             al_empty();
             return;
         }
-        pod_show(al.status, 0);
-        pod_show(al.view, 1);
+        m1_show(al.status, 0);
+        m1_show(al.view, 1);
         return;
     }
     al_stop_scroll();
@@ -1179,7 +1164,7 @@ static void al_src_reload(void) {
     grid_placeholder(&al.g);
     al_sections();
     if (n)
-        pod_show(al.status, 0), pod_show(al.view, 1);
+        m1_show(al.status, 0), m1_show(al.view, 1);
     else
         al_empty();
     al_size();
@@ -1219,10 +1204,10 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     al.artist_row = artist_row, al.scope = scope;
     al.src = src == &lib_stock ? (const lib_src_t *)0 : src; /* (the stock source is no source: today's code) */
     widget_on(al.win, EVT_DESTROY, al_on_destroy, (void *)0);
-    pod_bind(al.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(al.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    pod_bind(al.win, "btn_coverflow", al_on_cover, (void *)0);
-    pod_bind(al.win, "btn_more", al_on_more, (void *)0);
+    m1_bind(al.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(al.win, "btn_backtoplayer", m1_on_player, (void *)0);
+    m1_bind(al.win, "btn_coverflow", al_on_cover, (void *)0);
+    m1_bind(al.win, "btn_more", al_on_more, (void *)0);
     al.btn = widget_lookup(al.win, "btn_more", 1);
     al.view = widget_lookup(al.win, "view_grid", 1);
     al.sv = widget_lookup(al.win, "albums_scrollview", 1);
@@ -1266,12 +1251,12 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     al.az.bubble = widget_lookup(al.win, "sg_bubble", 1);
     al.az.bubble_letter = widget_lookup(al.win, "sg_bubble_letter", 1);
     al.az_ok = al.az.st_hdr && al.az.st_rail && al.az.st_rail_on && al.az.rail && al.az.bubble && al.az.bubble_letter;
-    pod_show(al.status, 0);
+    m1_show(al.status, 0);
     al.small = widget_lookup(al.win, "label_title", 1);
     al.big = widget_lookup(al.win, "al_title", 1);
     if (!(ls_caps(al.src) &
           LS_CAP_COVERFLOW)) { /* no Cover Flow for this source: its button goes and the "..." takes the capsule's left cap (the Artists page's), with the title running to it */
-        pod_show(widget_lookup(al.win, "btn_coverflow", 1), 0);
+        m1_show(widget_lookup(al.win, "btn_coverflow", 1), 0);
         if (al.btn) {
             widget_set_prop_str(al.btn, "style:normal:icon", "pod_nav_more");
             widget_set_prop_str(al.btn, "style:over:icon", "pod_nav_more");
@@ -1299,8 +1284,8 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
         az_fit(al.small, name);
         if (al.head) { /* the name under the circle, centred (22 px), in place of the large title */
             az_fit(al.name_lbl, name);
-            pod_show(al.name_lbl, 1);
-            pod_show(al.big, 0);
+            m1_show(al.name_lbl, 1);
+            m1_show(al.big, 0);
             if (!al.circ) widget_move(al.name_lbl, PH_NAME_X, AL_NAME_Y - PH_SHIFT);
         }
     } else {

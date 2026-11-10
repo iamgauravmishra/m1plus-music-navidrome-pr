@@ -244,7 +244,3 @@ def parse(ctx):
 
 
 SECTIONS = [parser_tests, parse]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

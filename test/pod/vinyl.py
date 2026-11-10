@@ -86,7 +86,7 @@ class VM(Machine):
         elif name == 'get_playtimeandlength':
             if self.pt: self.setword(a0, self.pt[0]); self.setword(a1, self.pt[1])
             ret = 1 if self.pt else 0
-        elif name == 'widget_get_text':   # the volume label's wide text (pod_text_utf8 encodes it)
+        elif name == 'widget_get_text':   # the volume label's wide text (m1_text_utf8 encodes it)
             ret = self.alloc(4 * len(self.volume) + 4); self.u.mem_write(ret, struct.pack(f'<{len(self.volume) + 1}I', *map(ord, self.volume), 0))
         elif name == 'widget_get_prop_str':
             ret = self.cstr(self.battery_img) if self.read_cstr(a1) == 'image' else a2
@@ -329,8 +329,6 @@ def model(ang, arm, label_src=None, playkey=0, pressed=K_NONE, rec_base_=None, t
             for x in range(x0, x1):
                 out[y * W + x] = base[y * W + x] if cell < 0 else keys[(y - O['VN_BAND_Y0']) * KW + cell + x - x0]
     return out
-
-
 
 
 def ndiff(a, b):
@@ -1026,10 +1024,6 @@ def life_tests(ctx):
     m2.timers = []; m2.calls = []
     expect(m2.open() == 0 and ('window_open', 'm1plus_vinyl') in m2.calls, 'the state is clean: it opens again')
     expect(not any('click' in n.lower() and n not in ('playpause_quick_click', 'next_quick_click', 'prev_quick_click') for n in m2.names()), 'no click sound')
-
-
-def run(ctx):
-    for fn in SECTIONS: fn(ctx)
 
 
 def server_cover_tests(ctx):

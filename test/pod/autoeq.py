@@ -213,7 +213,6 @@ def tap_row(m, r):
     return m.calls
 
 
-def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
 def said(m, name='label_status'): return S.said(m, name)
 def vis(m, name): return m.props.get((m.widgets[name], 'visible'))
 
@@ -828,7 +827,3 @@ def perf_tests(ctx):
 
 
 SECTIONS = [parse_tests, search_tests, search2_tests, net_tests, list_tests, rows_tests, names_tests, fail_tests, glyph_tests, ui_tests, perf_tests]
-
-
-def run(ctx):
-    for s in SECTIONS: s(ctx)

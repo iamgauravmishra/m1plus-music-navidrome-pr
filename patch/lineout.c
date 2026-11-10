@@ -25,7 +25,7 @@ static void lo_sync(void *parent, int kill) {
     int on = !kill && cc_build_active();
     if (!bar) return;
     ind = widget_lookup(bar, SYNC_IND, 1);
-    if (ind && !widget_get_visible(ind) != !on) pod_show(ind, on);
+    if (ind && !widget_get_visible(ind) != !on) m1_show(ind, on);
 }
 
 /* The hooks (tools/pod.py LINEOUT_SITES): stock's widget_set_text_utf8(label, text), then the pill swap. */
@@ -42,11 +42,11 @@ int lo_set_text(void *label, const char *text) {
     pill = widget_lookup(parent, LO_PILL, 0);
     if (!pill) return r; /* no pill in this bar: stock's "LO" text stays */
     if (text && text[0] == 'L' && text[1] == 'O' && !text[2] && !kill) {
-        pod_show(label, 0);
-        pod_show(pill, 1);
+        m1_show(label, 0);
+        m1_show(pill, 1);
     } else {
-        pod_show(label, 1);
-        pod_show(pill, 0);
+        m1_show(label, 1);
+        m1_show(pill, 0);
     }
     return r;
 }

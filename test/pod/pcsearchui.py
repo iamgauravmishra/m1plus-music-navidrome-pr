@@ -70,14 +70,7 @@ def opened(imp=False, site=None, subs=True, setting=None):
 
 def flags(m, n): return m.props.get((m.widgets[n], 'visible'), 1), m.props.get((m.widgets[n], 'sensitive'), 1)
 def icon(m, n, st='normal'): return m.props.get((m.widgets[n], f'style:{st}:icon'))
-def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
 def moves(m, n): return [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[n]]
-def undo(s):
-    """A mocked text as the user reads it: UTF-8 bytes read as latin-1 (the payload's own strings come back twice over from the mocked translation)."""
-    for _ in range(2):
-        try: s = s.encode('latin-1').decode('utf-8')
-        except (UnicodeDecodeError, UnicodeEncodeError): break
-    return s
 
 
 def text(m, n): return undo(m.wtext.get(m.widgets[n], ''))
@@ -733,7 +726,3 @@ def field_tests(ctx):
 
 
 SECTIONS = [entry_tests, search_tests, input_tests, preview_tests, job_tests, off_tests, width_tests, field_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

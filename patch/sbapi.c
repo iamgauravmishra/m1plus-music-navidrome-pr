@@ -18,6 +18,7 @@
 #include "covercache.h"
 #include "sbnet.h"
 #include "sbapi.h"
+#include "fnv.h"
 
 extern int pn_free_kb(const char *path, unsigned *kb);
 
@@ -156,11 +157,7 @@ static int sba_same(const char *x, const char *y) {
     return *x == *y;
 }
 
-static unsigned sba_fnv(const char *s) {
-    unsigned h = 2166136261u;
-    while (*s) h = (h ^ (unsigned char)*s++) * 16777619u;
-    return h;
-}
+static unsigned sba_fnv(const char *s) { return m1_fnv(2166136261u, s); }
 
 static unsigned sba_hash2(const char *s) {
     unsigned h = 5381;
@@ -277,7 +274,7 @@ static int sba_wopen(sba_w_t *w, const char *path, unsigned kind, unsigned rowsi
     sba_head_t h;
     unsigned kb = 0;
     w->fd = -1;
-    if (!pod_card_mounted()) return SBA_STORAGE;
+    if (!m1_card_mounted()) return SBA_STORAGE;
     sba_dirs();
     if (pn_free_kb(SBA_DIR, &kb) && kb < SBA_CACHE_RESERVE_KB) return SBA_CARDFULL;
     sba_copy(w->path, sizeof w->path, path);
@@ -311,7 +308,7 @@ static int sba_wcommit(sba_w_t *w) {
     int ok = fsync(w->fd) == 0;
     ok = close(w->fd) == 0 && ok;
     w->fd = -1;
-    if (ok && !pod_card_mounted()) ok = 0;
+    if (ok && !m1_card_mounted()) ok = 0;
     if (ok && rename(w->tmp, w->path)) ok = 0;
     if (!ok) unlink(w->tmp);
     return ok ? SBA_OK : SBA_STORAGE;
@@ -331,16 +328,9 @@ static int sba_wlist(const char *path, unsigned kind, unsigned rowsize, unsigned
 
 /* A small text file (the conf, sync.txt) atomically, mode given. */
 static int sba_wtext(const char *path, const char *tmp, const char *text, unsigned n, unsigned mode) {
-    int fd, ok;
-    if (!pod_card_mounted()) return SBA_STORAGE;
+    if (!m1_card_mounted()) return SBA_STORAGE;
     mkdir(CARD_DIR, 0755);
-    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, mode);
-    if (fd < 0) return SBA_STORAGE;
-    ok = sbn_write_all(fd, text, n) && fsync(fd) == 0;
-    ok = close(fd) == 0 && ok;
-    if (ok && rename(tmp, path)) ok = 0;
-    if (!ok) unlink(tmp);
-    return ok ? SBA_OK : SBA_STORAGE;
+    return m1_save(path, tmp, mode, text, n) ? SBA_OK : SBA_STORAGE;
 }
 
 /* The id (the struct's first member) of the row a walk is on. */
@@ -354,7 +344,7 @@ static int sba_track_flag(const char *path, const char *id, int on) {
     sba_track_t *rows;
     unsigned n, i, row0 = 0, changed = 0;
     int fd, bad = 0;
-    if (!pod_card_mounted()) return -1;
+    if (!m1_card_mounted()) return -1;
     fd = open(path, O_RDWR, 0);
     if (fd < 0) return 0;
     if (!sba_head(fd, SBK_TRACK, sizeof *rows, &n, (unsigned *)0)) {
@@ -498,7 +488,7 @@ void sba_retire_old(void) {
         "/mnt/mmc/.m1plus/navidrome-view.tmp",
     };
     unsigned i;
-    if (sba_retired_done || !pod_card_mounted()) return;
+    if (sba_retired_done || !m1_card_mounted()) return;
     sba_retired_done = 1;
     for (i = 0; i < sizeof files / sizeof files[0]; i++)
         if (access(files[i], 0) == 0) unlink(files[i]);
@@ -513,7 +503,7 @@ static void sba_conf_load(void) {
     char text[SBA_CONF_MAX + 1];
     unsigned i, n, p1 = 0, p2 = 0;
     int fd, r;
-    if (sba.loaded || !pod_card_mounted()) return;
+    if (sba.loaded || !m1_card_mounted()) return;
     sba.loaded = 1;
     sba.url[0] = sba.user[0] = sba.auth[0] = 0;
     fd = open(SBA_CONF, O_RDONLY, 0);
@@ -685,18 +675,18 @@ int sba_conf_password_set(const char *password) {
 int sba_conf_clear(void) {
     int bad = 0;
     sba_cancel();
-    if (pod_card_mounted() && access(SBA_CONF, 0) == 0 && unlink(SBA_CONF)) bad = 1;
+    if (m1_card_mounted() && access(SBA_CONF, 0) == 0 && unlink(SBA_CONF)) bad = 1;
     unlink(SBA_CONF ".tmp");
     sba.loaded = 1;
     sba.url[0] = sba.user[0] = 0;
     memset(sba.auth, 0, sizeof sba.auth);
-    if (pod_card_mounted()) sba_cache_clear();
+    if (m1_card_mounted()) sba_cache_clear();
     return bad ? SBA_STORAGE : SBA_OK;
 }
 
 /* The conditions for the server at `url` (the saved one, or a trial login's). */
 static int sba_guard_for(const char *url) {
-    if (!pod_card_mounted()) return SBA_STORAGE;
+    if (!m1_card_mounted()) return SBA_STORAGE;
     if (get_wifisignal() <= 0) return SBA_NOWIFI;
     if (sbn_https(url)) {
         if ((unsigned)time((long *)0) < SBA_MIN_EPOCH) return SBA_NOCLOCK;
@@ -706,7 +696,7 @@ static int sba_guard_for(const char *url) {
 }
 
 int sba_guard(void) {
-    if (!pod_card_mounted()) return SBA_STORAGE;
+    if (!m1_card_mounted()) return SBA_STORAGE;
     if (!sba_configured()) return SBA_NOCONF;
     return sba_guard_for(sba.url);
 }
@@ -827,7 +817,7 @@ static int sba_reply_code(const sbn_sink_t *s) {
 
 /* 0 to go on, SBA_CANCELLED when the page cancelled or the conf was cleared, SBA_STORAGE when the card is gone: checked before a cache file is committed. */
 static int sba_stop(const sba_wk_t *w) {
-    return sba.cancel != w->mine ? SBA_CANCELLED : pod_card_mounted() ? 0 : SBA_STORAGE;
+    return sba.cancel != w->mine ? SBA_CANCELLED : m1_card_mounted() ? 0 : SBA_STORAGE;
 }
 
 /* A response's rows into a file; the parse functions are patch/sbparse.c's. */
@@ -1065,7 +1055,7 @@ static int sba_run_cover(sba_wk_t *w, const char *cover) {
     if (sba_cover_path(path, sizeof path, cover)) return SBA_PARSE;
     have = sba_cover_have(cover);
     if (have) return have > 0 ? SBA_OK : SBA_NOTFOUND;
-    if (!pod_card_mounted()) return SBA_STORAGE;
+    if (!m1_card_mounted()) return SBA_STORAGE;
     sba_dirs();
     if (pn_free_kb(SBA_DIR, &kb) && kb < SBA_CACHE_RESERVE_KB) return SBA_CARDFULL;
     snprintf(extra, sizeof extra, "&size=%u", SBA_COVER_PX);
@@ -1782,7 +1772,7 @@ static int sba_bg_step(sba_wk_t *w, sbn_sink_t *sink) {
     unsigned v[4], now;
     int r;
     if (!sba.bg_want) return sba_bg_stop();
-    if (!w || !sink || !pod_card_mounted() || !sba.url[0]) return sba_bg_stop();
+    if (!w || !sink || !m1_card_mounted() || !sba.url[0]) return sba_bg_stop();
     if (bg.loaded && bg.cancel0 != sba.cancel) sba_bg_reset(); /* Sign Out or another server meanwhile */
     if (sba_dl_busy()) { /* a download goes first */
         sba_bg_pub(0, 0, 0);

@@ -41,8 +41,6 @@ def land(col, row):
     return row, H - 1 - col
 
 
-
-
 class TM(Machine):
     """The machine plus what the page calls that the shared mocks do not know: the player's status, the playing time, the quick clicks, the status bar, the font
     (real advances of the shipped font when `font` is set, else the shared block mock) and the invalidate's rectangle."""
@@ -89,7 +87,7 @@ class TM(Machine):
         elif name == 'get_playtimeandlength':
             if self.pt: self.setword(a0, self.pt[0]); self.setword(a1, self.pt[1])
             ret = 1 if self.pt else 0
-        elif name == 'widget_get_text':   # the volume label's wide text (pod_text_utf8 encodes it)
+        elif name == 'widget_get_text':   # the volume label's wide text (m1_text_utf8 encodes it)
             ret = self.alloc(4 * len(self.volume) + 4); self.u.mem_write(ret, struct.pack(f'<{len(self.volume) + 1}I', *map(ord, self.volume), 0))
         elif name == 'widget_get_prop_str':
             prop = self.read_cstr(a1)
@@ -1094,10 +1092,4 @@ def symmetry_tests(ctx):
     expect(480 % 4 == 0 and (A.CASS[0] - 5) % 4 == 0, 'the knurl grid starts at x 0 and 480 is a whole number of cells: the cells mirror about x 240')
 
 
-def run(ctx):
-    for fn in SECTIONS: fn(ctx)
-
-
 SECTIONS = [number_tests, symmetry_tests, asset_tests, theme_tests, setting_tests, draw_tests, reel_tests, hub_tests, mark_tests, status_tests, live_tests, touch_tests, idle_touch_tests, life_tests, paint_tests]
-
-

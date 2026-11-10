@@ -76,7 +76,7 @@ the builder 0x52c5e8), USB mode (its Back and DAC settings are the glass discs o
 
 ## Small titles
 
-Every page with a large heading (Songs and its lists incl. Recently Added, Artists, Genres, Composers, Folders, Radio, Podcasts' Shows / Downloads / Subscriptions / Saved) shows the navbar's small title by one rule, `pod_title_gone(off, head)` (`patch/common.c`): once the scroll offset reaches `SG_COLLAPSE` (46); a page whose heading is a header's name passes its threshold (a playlist `PH_COLLAPSE` 204, a podcast show `hdr->collapse`). `pod_title_set` shows or hides the label. The large title is `SG_TITLE_X` 12, `SG_TITLE_W` 296 wide, 32 px, on every page. The small title runs from `NAV_TITLE_X` 58 to the leftmost button and is always cut with an ellipsis (`az_fit`), never hidden for width. Each page adds its own conditions (select mode, empty list, no scroll events).
+Every page with a large heading (Songs and its lists incl. Recently Added, Artists, Genres, Composers, Folders, Radio, Podcasts' Shows / Downloads / Subscriptions / Saved) shows the navbar's small title by one rule, `m1_title_gone(off, head)` (`patch/common.c`): once the scroll offset reaches `SG_COLLAPSE` (46); a page whose heading is a header's name passes its threshold (a playlist `PH_COLLAPSE` 204, a podcast show `hdr->collapse`). `m1_title_set` shows or hides the label. The large title is `SG_TITLE_X` 12, `SG_TITLE_W` 296 wide, 32 px, on every page. The small title runs from `NAV_TITLE_X` 58 to the leftmost button and is always cut with an ellipsis (`az_fit`), never hidden for width. Each page adds its own conditions (select mode, empty list, no scroll events).
 
 ## Glass navbars on our pages
 

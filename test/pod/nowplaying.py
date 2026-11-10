@@ -103,7 +103,7 @@ class NowMachine(Machine):
         elif name == 'widget_set_text_utf8':   # the labels keep their text (the info page is read back)
             t = self.read_cstr(a1); self.calls.append(('widget_set_text_utf8', a0, t)); ret = 1 if a0 in self.set_fail else 0
             if not ret: self.texts[a0] = t
-        elif name == 'widget_get_text':   # the label's wide text (32 bit code points; NULL for a label without one, or while get_ret is set: a failed read); the payload encodes it (pod_text_utf8)
+        elif name == 'widget_get_text':   # the label's wide text (32 bit code points; NULL for a label without one, or while get_ret is set: a failed read); the payload encodes it (m1_text_utf8)
             t = self.texts.get(a0); self.calls.append(('widget_get_text', a0)); ret = 0
             if a0 in self.wide and not self.get_ret:   # raw code points (a test of bad ones: no surrogate survives a Python str)
                 cps = self.wide[a0]; ret = self.alloc(4 * len(cps) + 4); self.u.mem_write(ret, struct.pack(f'<{len(cps) + 1}I', *cps, 0))
@@ -617,16 +617,16 @@ def run(ctx):
            'a page built over a live one: black for the old one, then the new one tints')
     m.calls = []; m.top_main = WIN + 0x100; m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
     expect(not m.bar_calls(), 'and the old page\'s late destroy does not undo it')
-    # hand-over with the album page (pod_bar_tint / pod_bar_black: only the owner restores)
+    # hand-over with the album page (m1_bar_tint / m1_bar_black: only the owner restores)
     ALBUM = WIN + 0x200
     m = tinted(); m.bar_styles.clear()
-    expect(m.call(PSYMS['pod_bar_tint'], a0=ALBUM, a1=0x00112233) == 1 and len(m.bar_styles) == 1, 'the album page takes the bar over from Now Playing')
+    expect(m.call(PSYMS['m1_bar_tint'], a0=ALBUM, a1=0x00112233) == 1 and len(m.bar_styles) == 1, 'the album page takes the bar over from Now Playing')
     m.fire(O['EVT_WINDOW_TO_BG']); m.call(PSYMS['np_on_destroy'], a0=WIN, a1=0)
     expect(len(m.bar_styles) == 1 and m.bar_color() != BLACK, 'Now Playing\'s late background event and destroy (Back) leave the album page\'s colour alone')
-    m = tinted(); m.bar_styles.clear(); m.call(PSYMS['pod_bar_tint'], a0=ALBUM, a1=0x00112233); m.bar_styles.clear(); m.tick(); m.tick()
+    m = tinted(); m.bar_styles.clear(); m.call(PSYMS['m1_bar_tint'], a0=ALBUM, a1=0x00112233); m.bar_styles.clear(); m.tick(); m.tick()
     expect(not m.bar_styles, 'ticks while the album page owns the bar do not take it back (the page is not the top window)')
     m = tinted(); m.fire(O['EVT_WINDOW_TO_BG']); m.bar_styles.clear()
-    m.call(PSYMS['pod_bar_tint'], a0=ALBUM, a1=0x00112233); m.fire(O['EVT_WINDOW_TO_FG'])
+    m.call(PSYMS['m1_bar_tint'], a0=ALBUM, a1=0x00112233); m.fire(O['EVT_WINDOW_TO_FG'])
     expect(len(m.bar_styles) == 2 and m.bar_color() == word_of(bar_model(mn.tone(200, 40, 40))), 'and Now Playing takes it back when it comes to the front again')
 
     # the tone cache (patch/common.c): a changed cover of a known album is not decoded again

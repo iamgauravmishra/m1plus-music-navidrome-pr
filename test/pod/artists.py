@@ -310,11 +310,6 @@ def pick(m, row, count=20000000):
     return m.click(f'vs_item{row}', count=count)
 
 
-def vis(m, name):
-    w = m.widgets[name]
-    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
-
-
 def page_tests(expect, cover_asset):
     """The Artists page in the Songs page's manner: one painted content view in the stock list, section letters with a pinned header, the compact A-Z rail, the
     large title that collapses into the navbar, the rows' touch; the asset; Genres and Composers share all of it (genre_composer_tests)."""
@@ -569,7 +564,7 @@ def page_tests(expect, cover_asset):
     expect(shown(m4) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'] and 'navigator_back' not in m4.names(), 'a page without the titles still lists')
 
     # 32. Back leaves the Artists page; closing it frees its copy and bitmaps. An empty library: the message, no list. A broken asset: leave.
-    m.call(PSYMS['pod_on_back'], count=200000)
+    m.call(PSYMS['m1_on_back'], count=200000)
     expect('navigator_back' in m.names(), 'Back on the Artists page goes back')
     m.call(PSYMS['ar_on_destroy'], count=2000000)
     expect('deque_destroy' in m.names() and sum(1 for c in m.calls if c[0] == 'bitmap_destroy') == 3, 'closing the Artists page frees its list and its bitmaps (the rail disc, the chevron, the circle placeholder)')
@@ -604,8 +599,6 @@ def shown(m):
         for t, (x, y, w, h) in texts:
             if x in (TEXT_X, NAME_X): names[y + off] = t
     return [names[y] for y in sorted(names)]
-
-
 
 
 def sort_model(names):
@@ -856,7 +849,7 @@ def genre_composer_tests(ctx):
         m.click('vs_item4', count=20000000)
         expect(m.word(pod.DATA['ARTIST_TYPE'][0]) == at and not [c for c in m.calls if c[0] in ('write_int_config', 'loadLocalClassList')],
                f'{label}: a stray click on a hidden Show row changes no setting and queries nothing')
-        m.call(PSYMS['pod_on_back'], count=200000)
+        m.call(PSYMS['m1_on_back'], count=200000)
         expect('navigator_back' in m.names(), f'{label}: Back goes back')
         m.call(PSYMS['ar_on_destroy'], count=200000)
         expect('deque_destroy' in m.names(), f'{label}: closing frees the copy')
@@ -1036,7 +1029,7 @@ def scoped_albums_tests(ctx):
     expect(('window_open', 'm1plus_cover') in m.calls and la and la[0][3] == 'Miles Davis' and ('widget_set_text_utf8', m.widgets['label_title'], 'Miles Davis') in m.calls,
            'the Cover Flow button opens Cover Flow scoped to the same artist')
     expect(m.fs.get('/mnt/data/m1plus/albums-view') == b'1\n', 'Cover Flow is never stored as the mode: the file still says grid')
-    m.call(PSYMS['pod_on_back'], count=2000000)
+    m.call(PSYMS['m1_on_back'], count=2000000)
     m.calls = []
     m.call(PSYMS['al_on_destroy'], count=2000000)
     expect(m.names().count('deque_destroy') >= 2, 'closing frees the album list and the artist row')
@@ -1102,8 +1095,6 @@ def scoped_albums_tests(ctx):
     m = artists_machine(); m.call(open_, count=5000000); m.calls = []
     m.call(PSYMS['ar_open'], a0=0, count=8000000)
     expect(('window_open', 'm1plus_albums') in m.calls and ('window_open', 'm1plus_cover') in m.calls, 'the Albums window will not open: Cover Flow on the artist')
-
-
 
 
 SORT_FILE = '/mnt/data/m1plus/albums-sort'
@@ -1445,7 +1436,7 @@ def fake_ar_source(m, names, caps=0):
     """A lib_src_t made in the machine's memory (docs/modules/subsonic.md "The seam"), its list, rec_id and gen trapped to Python: list(LS_ARTISTS) gives a fresh deque of the names
     (synthetic ids -2, -3, ...; a name None = no list), gen returns m.fake_ar_gen, and albums_open_src is trapped too (fake_ar_albums). Returns the struct's address."""
     m.fake_ar_gen, m.fake_ar_names, m.fake_ar_hook_ret = 1, list(names), 0
-    m.top_main = m.window   # pod_is_top: the page is in front
+    m.top_main = m.window   # m1_is_top: the page is in front
     addrs = {}
     m.fake_ar_state = 0   # what src->state answers (LS_ST_*)
     m.fake_ar_pic = {}   # name -> src->cover's answer for that artist: 1 the file is there (SRC_PIC % name), 0 asked (on its way), -1 none (the default)
@@ -2235,7 +2226,3 @@ def scoped_plain_tests(ctx):
 
 
 SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, source_tests, source_photo_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

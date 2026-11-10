@@ -18,7 +18,7 @@ Window 320 x 450 (the numbers are `patch/search.h`; `pod_search.py` mirrors them
 
 * **Field** (x 12, y 8, 250 x 36, radius 18, `#1C1C1E`): the keyboard's own field widgets (`kb_field`, `kb_mag`, `kb_hint`, `kb_text`, `kb_caret`, `kb_clear`) with the page's text x (36) and room (178),
   so the keyboard code measures, cuts with an ellipsis and moves the caret exactly as on its own page. The placeholder is `Search`. A tap on the field (a pointer-up on `kb_field`) shows the keyboard.
-* **X** (`btn_return`, x 270, 46 x 44 touch, drawing `se_close`: a flat 36 px disc in the field's grey (#1C1C1E, pressed #3A3A3C) with a white 13 px x, as high as the field and on its centre line; the 42 px glass disc of the navbars looked larger than the 36 px field beside it): Back (`pod_on_back`). The hardware Back key does the same.
+* **X** (`btn_return`, x 270, 46 x 44 touch, drawing `se_close`: a flat 36 px disc in the field's grey (#1C1C1E, pressed #3A3A3C) with a white 13 px x, as high as the field and on its centre line; the 42 px glass disc of the navbars looked larger than the 36 px field beside it): Back (`m1_on_back`). The hardware Back key does the same.
 * **Chips** (`se_chips`, y 52, 34 high): each chip is as wide as its text plus 14 px a side, 6 px apart from x 12 (`PS.chip_layout`, texts measured in the 16 px chip font at open: the page's
   language); with the five of English the row is wider than the screen, so it **scrolls sideways** (a drag of 6 px, clamped to the ends; a tap selects). The selected chip is a light grey pill
   (`se_chip_hl`, `#E5E5EA`, radius 15, a view behind, moved under the chip) with dark text (`label_chip_on`); the others are white text. The texts are painted by the row's
@@ -26,7 +26,7 @@ Window 320 x 450 (the numbers are `patch/search.h`; `pod_search.py` mirrors them
 * **Line** under the chips (y 88, `#2C2C2E`), then the **list** (y 90 to the window's bottom): a stock `list_view` > `scroll_view` holding ONE content view that paints the rows itself (the Artists
   page's pattern; the keyboard covers the list's lower part, so with it up the content is padded by the pad's height and the list scrolls clear of it).
 * **Rows** (60 px, no headers): a 44 px thumbnail at x 12 (**round for an artist**, 4 px corners for an album, a song and a playlist), the title (21 px white) and the grey line (18 px, `#AAAAAA`)
-  from x 68, a chevron (the Artists page's, `pod_make_chevron`) at x 288 on artists, albums and playlists and none on songs, and a hairline from x 68 to 310 under every row. The grey line is
+  from x 68, a chevron (the Artists page's, `m1_make_chevron`) at x 288 on artists, albums and playlists and none on songs, and a hairline from x 68 to 310 under every row. The grey line is
   `Artist`, `Album · <artist>`, `Song · <artist>` or `Playlist` (translated; the album word is the stock key `album`).
 * **Thumbnails** use the covers we already have and are loaded lazily: an album's and a song's is the Cover Flow cache file of its artist + album (`cc_album_key`, `cc_url`; a song whose own file is
   missing takes the library album of that name's, `cc_cover_key`), an artist's the cover of the first album of theirs that has one, a playlist's and anything without a file the stock placeholder disc (`p_default`),
@@ -45,7 +45,7 @@ The text is trimmed (spaces, tabs); an empty one is ignored. An entry that folds
 * **Storage:** `/mnt/data/m1plus/search-history` (`SEARCH_RECENT_FILE`, patch/home.h; `.tmp` beside it, `home_write_atomic`): UTF-8, one query per line, newest first, each a `\n` end, at most 63 bytes a line. It is read once when the page opens
   (`se_rec_load`); a file that is oversized, has more than 5 lines, an empty line, a line of 64 bytes or more, a control character or a repeat (by the same fold) is **no history at all** and is left as it is until the next save. A failed write keeps the old file.
 * **Shown** when the field has no terms and nothing is listed (`se.rm`, set by `se_layout`): the list view is the same content view, now painting `se_paint_recent`: a header `Recently Searched` (grey, 18 px, in a `SE_REC_HEAD_H` 40 px band,
-  x 16), then rows `SE_REC_ROW_H` 50 px high: the query (white, 21 px, the results' title style, cut with an ellipsis at `SE_REC_TEXT_END` 262), an x (`pod_make_cross`, a 12 px grey stroke drawn like the chevron, no image file, centre x 292) and the
+  x 16), then rows `SE_REC_ROW_H` 50 px high: the query (white, 21 px, the results' title style, cut with an ellipsis at `SE_REC_TEXT_END` 262), an x (`m1_make_cross`, a 12 px grey stroke drawn like the chevron, no image file, centre x 292) and the
   hairline from x 16. Texts are the grid's tiles (`se.rt`, cut once). Nothing is shown with no history: the page stays blank as before. No Clear button.
 * **Touch** (the same press / lift rule as the results, `SC_DRAG_PX`, the press must start and end in the same row **and the same zone**): the x zone is `SE_REC_X` 266 .. +44 px (44 x 50 px); a tap there removes the entry (`se_rec_remove`, the file is rewritten, the list laid out again;
   nothing is searched). A tap elsewhere on a row puts the query into the field and the keyboard's text (`keyboard_set_text`, patch/keyboard.c, as if typed) and applies it at once (no debounce); it does not save or reorder. The header and the air

@@ -588,9 +588,6 @@ def tick(m, name='pg_tick'):
     return m.call(PSYMS[name], a0=0, count=40000000)
 
 
-def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
-
-
 def page_tests(ctx):
     """The Show level opened from Feeds: a tap queues, a tap cancels, the lines say what is going on; the Downloads row; the refresh pausing the downloads."""
     expect = ctx.expect
@@ -821,7 +818,3 @@ def width_tests(ctx):
 
 
 SECTIONS = [queue_tests, transfer_tests, resume_tests, failure_tests, control_tests, refresh_tests, page_tests, refresh_page_tests, awake_tests, width_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

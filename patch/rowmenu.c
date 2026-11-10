@@ -49,8 +49,8 @@ void rowmenu_close(rowmenu_t *rm) {
     rm->add = (rowmenu_add_fn)0;
     if (rm->rows) deque_destroy(rm->rows);
     rm->rows = (void *)0;
-    pod_show(rm->scrim, 0);
-    pod_show(rm->card, 0);
+    m1_show(rm->scrim, 0);
+    m1_show(rm->card, 0);
     rm->src = (const lib_src_t *)0;
 }
 
@@ -190,20 +190,20 @@ int rowmenu_bind(rowmenu_t *rm, void *win) {
     int i, ok;
     memset(rm, 0, sizeof *rm);
     rm->win = win;
-    rm->scrim = pod_bind(win, "rm_scrim", rm_on_scrim, rm);
+    rm->scrim = m1_bind(win, "rm_scrim", rm_on_scrim, rm);
     rm->card = widget_lookup(win, "rm_card", 1);
     ok = rm->scrim && rm->card;
     for (i = 0; i < RM_ROWS; ++i) {
         rm->slot[i].rm = rm, rm->slot[i].k = i;
-        rm->item[i] = pod_bind(win, ITEMS[i], rm_on_item, &rm->slot[i]);
+        rm->item[i] = m1_bind(win, ITEMS[i], rm_on_item, &rm->slot[i]);
         ok = ok && rm->item[i];
     }
     rm->fav_label = widget_lookup(win, "rm_label3", 1);
     rm->fav_icon = widget_lookup(win, "rm_icon3", 1);
     rm->dl_label = widget_lookup(win, "rm_label2", 1);
     rm->dl_icon = widget_lookup(win, "rm_icon2", 1);
-    pod_show(rm->scrim, 0);
-    pod_show(rm->card, 0);
+    m1_show(rm->scrim, 0);
+    m1_show(rm->card, 0);
     if (!ok) return 0;
     rm->dots = rm_make_dots(win);
     rm->on = rm->dots != (void *)0;
@@ -267,7 +267,7 @@ int rowmenu_open_src(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add, cons
     if (rm->fav_label) widget_set_tr_text(rm->fav_label, rm->fav ? "Undo Favorite" : "Favorite");
     if (rm->fav_icon) widget_set_prop_str(rm->fav_icon, "image", rm->fav ? "rm_ic_unfav" : "rm_ic_fav");
     rm->rows = d, rm->row = row, rm->add = add, rm->open = 1;
-    pod_show(rm->scrim, 1);
-    pod_show(rm->card, 1);
+    m1_show(rm->scrim, 1);
+    m1_show(rm->card, 1);
     return 1;
 }

@@ -743,8 +743,8 @@ static void se_layout(void) {
     widget_resize(se.view, 320, h);
     widget_set_prop_int(se.sv, "virtual_h", h);
     if (off > h - SE_LIST_H) widget_set_prop_int(se.sv, "yoffset", h - SE_LIST_H);
-    pod_show(se.list, se.nrows != 0 || se.rm);
-    pod_show(se.status, se.nrows == 0 && se.nterms != 0 && !se.srch);
+    m1_show(se.list, se.nrows != 0 || se.rm);
+    m1_show(se.status, se.nrows == 0 && se.nterms != 0 && !se.srch);
     if (se.nrows == 0 && se.nterms != 0) {
         if (se.src && se.rc != SBA_OK && se.rc != SBA_CANCELLED)
             widget_set_text_utf8(
@@ -1007,7 +1007,7 @@ static int se_on_chips(void *ctx, void *e) {
         se.chip_down = 1, se.chip_drag = 0, se.chip_dx = pt[0], se.chip_sx0 = se.chip_sx;
     } else if (type == EVT_POINTER_MOVE && se.chip_down) {
         int dx = pt[0] - se.chip_dx;
-        if (!se.chip_drag && pod_abs(dx) >= SE_DRAG) se.chip_drag = 1;
+        if (!se.chip_drag && m1_abs(dx) >= SE_DRAG) se.chip_drag = 1;
         if (se.chip_drag) {
             se.chip_sx = se.chip_sx0 - dx;
             if (se.chip_sx > mx) se.chip_sx = mx;
@@ -1175,7 +1175,7 @@ static int se_on_up(void *ctx, void *e) {
     se.down = 0, se.pressing = 0;
     se_set_press(0);
     if (a < 0 || !e || !se.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - se.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - se.down_y) < SC_DRAG_PX &&
+    if (m1_abs(I(e, PE_X) - se.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - se.down_y) < SC_DRAG_PX &&
         se_item_of(e) == a && se.hitx == se.dx) {
         if (se.rm)
             se_rec_tap(a, se.dx);
@@ -1354,7 +1354,7 @@ static int se_on_destroy(void *ctx, void *e) {
     ls_cover_end(&se.cp);
     if (se.py) pinyin_release(); /* the engine's megabyte goes back with the page */
     free(se.hz);
-    if (se.timer) timer_remove(se.timer);
+    m1_timer_stop(&se.timer);
     se_free_data();
     grid_free(&se.ga);
     grid_free(&se.gb);
@@ -1379,7 +1379,7 @@ static int se_open(int scope, const lib_src_t *src) {
         return -1;
     }
     widget_on(se.win, EVT_DESTROY, se_on_destroy, (void *)0);
-    pod_bind(se.win, "btn_return", pod_on_back, (void *)0);
+    m1_bind(se.win, "btn_return", m1_on_back, (void *)0);
     se.list = widget_lookup(se.win, "se_listview", 1);
     se.sv = widget_lookup(se.win, "se_scrollview", 1);
     se.view = widget_lookup(se.win, "view_grid", 1);
@@ -1393,8 +1393,8 @@ static int se_open(int scope, const lib_src_t *src) {
     se.st_chip = widget_lookup(se.win, "label_chip", 1);
     se.st_chip_on = widget_lookup(se.win, "label_chip_on", 1);
     se.rows = calloc(SE_MAX_ROWS, sizeof *se.rows);
-    se.chev = pod_make_chevron();
-    se.cross = pod_make_cross();
+    se.chev = m1_make_chevron();
+    se.cross = m1_make_cross();
     if (!se.rows || !se.list || !se.sv || !se.view || !se.status || !se.chips || !se.chl || !se.field || !se.st_title ||
         !se.st_sub || !se.st_chip || !se.st_chip_on || !grid_init(&se.ga, se.win, SE_TILES, SE_ART, SE_ART / 2) ||
         !grid_init(&se.gb, se.win, SE_TILES, SE_ART, SE_ART_R)) {
@@ -1423,8 +1423,8 @@ static int se_open(int scope, const lib_src_t *src) {
     se_chips_setup();
     se.chip = se.lo;
     se_chip_fx();
-    pod_show(se.list, 0);
-    pod_show(se.status, 0);
+    m1_show(se.list, 0);
+    m1_show(se.status, 0);
     se_rec_load();
     se_layout();
     se.wait = 1; /* the library is read once the page has been shown */

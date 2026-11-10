@@ -166,16 +166,6 @@ def tap(m, x, y, dx=0, dy=0):
     return list(m.calls)
 
 
-def click(m, name):
-    m.click(name, count=900000000)
-    return list(m.calls)
-
-
-def vis(m, name):
-    w = m.widgets[name]
-    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
-
-
 def row_y(i): return HDR + i * ROW
 
 
@@ -460,7 +450,7 @@ def cover_tests(ctx):
     expect(m.bar_styles()[-1] == BAR_BLACK, 'the page goes to the background: the bar is black again')
     m.fire(FG)
     expect(m.bar_styles()[-1] == bar_model(RED) and len(m.bar_styles()) == 3, 'back in front: the bar is the page\'s colour again')
-    m.call(PSYMS['pod_bar_tint'], a0=0x1234, a1=0xff112233, count=200000)   # another page (Now Playing) takes the bar
+    m.call(PSYMS['m1_bar_tint'], a0=0x1234, a1=0xff112233, count=200000)   # another page (Now Playing) takes the bar
     n = len(m.bar_styles())
     m.fire(BG)
     expect(len(m.bar_styles()) == n, 'the bar is another page\'s now: a late background event leaves it alone (one owner)')
@@ -468,9 +458,9 @@ def cover_tests(ctx):
     # the tone cache: the album again tints at once, from RAM
     m2 = album_machine(cover='file'); r, calls = open_album(m2)
     expect(len([c for c in calls if c[0] == 'widget_load_image' and c[1].endswith('.jpg')]) == 2, 'a fresh machine has an empty cache')
-    pk = PSYMS['pod_tone_get']
+    pk = PSYMS['m1_tone_get']
     tone_cache = m2.call(pk, a0=m2.key, a1=m2.alloc(8), count=200000)
-    expect(tone_cache == 1, 'the tone was remembered for the album (pod_tone_put)')
+    expect(tone_cache == 1, 'the tone was remembered for the album (m1_tone_put)')
     m2.call(PSYMS['ab_on_destroy'], count=4000000)
     m2.images.pop('file://' + m2.cover_path); m2.present.discard(m2.cover_path); m2.files.pop(m2.cover_path)
     m2.windows.clear(); m2.styled.clear(); m2.calls = []
@@ -659,8 +649,6 @@ def play_tests(ctx):
     m.call(PSYMS['ab_on_destroy'], count=4000000)
 
 
-
-
 def select_tests(ctx):
     """8. Select mode: the glass toggle, Add, Delete and Cancel in place of Back and the capsule; the marks; Delete and Add on the stock selection vector."""
     expect = ctx.expect
@@ -839,7 +827,7 @@ def fake_machine(**kw):
     ret, wp = kw.pop('cover_ret', 1), kw.pop('with_playing', False)
     m = album_machine(album='Fake Album', artist='Fake Artist', **kw)   # (the cover cache file is the fake album's)
     m.__class__ = FakeAP
-    m.top_main = m.window   # pod_is_top: the page is in front (the shared cover poll only runs then)
+    m.top_main = m.window   # m1_is_top: the page is in front (the shared cover poll only runs then)
     return m.fake_src(cover_ret=ret, with_playing=wp)
 
 
@@ -1262,7 +1250,3 @@ def more_tests(ctx):
 
 
 SECTIONS = [asset_tests, open_tests, header_tests, cover_tests, rows_tests, play_tests, select_tests, source_tests, loading_tests, marks_tests, dsd_tests, nextalbum_tests, more_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

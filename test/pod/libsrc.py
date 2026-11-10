@@ -210,7 +210,3 @@ def poll_tests(ctx):
 
 
 SECTIONS = [list_tests, extras_tests, play_tests, poll_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

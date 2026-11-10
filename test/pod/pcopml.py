@@ -25,15 +25,6 @@ def sample(name): return open(os.path.join(DATA, name), 'rb').read()
 def collapse(s): return ' '.join(s.replace('\xa0', ' ').split())
 
 
-def cut(s, cap):
-    out, n = '', 0
-    for ch in s:
-        b = len(ch.encode('utf-8'))
-        if n + b > cap - 1: break
-        out, n = out + ch, n + b
-    return out
-
-
 def url_ok(u): return u.startswith(('http://', 'https://')) and len(u) > (7 if u.startswith('http:') else 8) and ' ' not in u and len(u.encode()) <= URL - 1
 
 
@@ -356,7 +347,3 @@ def export_tests(ctx):
 
 
 SECTIONS = [real_tests, syntax_tests, limit_tests, cuts_tests, fuzz_tests, import_tests, export_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

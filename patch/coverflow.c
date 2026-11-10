@@ -40,6 +40,7 @@
 #include "covercache.h"
 #include "nextalbum.h"
 #include "common.h"
+#include "fnv.h"
 
 /* patch/songs.c: our Songs page on all the artist's (or composer's: scope CLASS_COMPOSERS) songs; -1 when it did not open */
 extern int songs_open_artist(void *artist, unsigned scope);
@@ -371,10 +372,7 @@ static unsigned key_at(unsigned i) {
 
 /* The cache is built by the shared worker (patch/covercache.c, cc_build_*): its thread touches no widget, deque or
  * image manager; this page only polls its counters from its own timer. */
-static void stop_timer(void) {
-    if (cf.timer) timer_remove(cf.timer);
-    cf.timer = 0;
-}
+static void stop_timer(void) { m1_timer_stop(&cf.timer); }
 
 /* This page's job set released: a running worker is cancelled (joined if it has finished, else left to exit on its own, cc_build_stop). */
 static void build_end(void) {
@@ -383,7 +381,7 @@ static void build_end(void) {
 }
 
 static void fx_close(void) {
-    if (fx.load_timer) timer_remove(fx.load_timer);
+    m1_timer_stop(&fx.load_timer);
     if (fx.frame) bitmap_destroy(fx.frame);
     free(fx.tex);
     memset(&fx, 0, sizeof fx);
@@ -511,7 +509,7 @@ static int resident(int a) { /* the slot holding album a, or -1 */
     return -1;
 }
 
-static int distance(int a, int c) { /* along the shelf */ return pod_abs(a - c); }
+static int distance(int a, int c) { /* along the shelf */ return m1_abs(a - c); }
 
 /* Album a decoded into a free slot, else into the farthest unwanted one (CF_SLOTS > CF_WANTED: there is one). */
 static void fx_load(int a, int c, int n) {
@@ -781,10 +779,7 @@ static int unrubber(int off, int h) {
     return off;
 }
 
-static void snap_stop(void) {
-    if (cf.snap_timer) timer_remove(cf.snap_timer);
-    cf.snap_timer = 0;
-}
+static void snap_stop(void) { m1_timer_stop(&cf.snap_timer); }
 
 /* The offset reached its target: commit it as the stock widget does (offset back to 0 and
  * value - offset / h; the target is within the shelf), and the captions follow. */
@@ -841,7 +836,7 @@ static void snap(int albums) {
     snap_stop();
     cf.snap_from = offset();
     cf.snap_to = bound(albums) * h;
-    d = pod_abs(cf.snap_to - cf.snap_from);
+    d = m1_abs(cf.snap_to - cf.snap_from);
     if (!d || h <= 0) {
         snap_land();
         return;
@@ -865,8 +860,8 @@ static void tap(int x) {
     int d = x - g->cx, a, b, far;
     pose(g, CF_ONE, &p1);
     a = project(g, &p1, -8 * g->art), b = project(g, &p1, 8 * g->art);
-    far = 16 * pod_abs(d) > (a > b ? a : b) ? 2 : 1; /* past the first cover's drawn outer edge (1/16 px) */
-    if (pod_abs(d) < g->art / 2) { /* the centre cover */
+    far = 16 * m1_abs(d) > (a > b ? a : b) ? 2 : 1; /* past the first cover's drawn outer edge (1/16 px) */
+    if (m1_abs(d) < g->art / 2) { /* the centre cover */
         if (!offset()) open_album(value());
         return;
     }
@@ -894,9 +889,9 @@ static int drag_px(void) { return cf.land ? CFL_DRAG_PX : DRAG_PX; }
  * travel beyond it), the shelf under the finger, the sample. */
 static void track(int x, int y, int t) {
     int dx = x - cf.down_x, dy = y - cf.down_y;
-    if (pod_abs(dx) > cf.reach) cf.reach = pod_abs(dx);
-    if (pod_abs(dy) > cf.reach) cf.reach = pod_abs(dy);
-    if (!cf.active && pod_abs(dx) >= DRAG_START && pod_abs(dx) >= pod_abs(dy))
+    if (m1_abs(dx) > cf.reach) cf.reach = m1_abs(dx);
+    if (m1_abs(dy) > cf.reach) cf.reach = m1_abs(dy);
+    if (!cf.active && m1_abs(dx) >= DRAG_START && m1_abs(dx) >= m1_abs(dy))
         cf.active = 1, cf.origin = cf.down_x + (dx > 0 ? DRAG_START : -DRAG_START);
     if (cf.active) {
         int h = stride(), off = cf.base_off + (x - cf.origin) * h / drag_px();
@@ -985,7 +980,7 @@ static void layout(void) {
 static void artist_nav(void) {
     void *title = widget_lookup(cf.win, "label_title", 1), *np = widget_lookup(cf.win, "btn_backtoplayer", 1);
     if (!cf.scoped) return;
-    pod_show(cf.songs, has_songs());
+    m1_show(cf.songs, has_songs());
     if (has_songs() && np) {
         widget_set_prop_str(np, "style:normal:icon", "ah_nav_play");
         widget_set_prop_str(np, "style:over:icon", "ah_nav_play");
@@ -1000,9 +995,9 @@ static void artist_nav(void) {
  * (it commits an index; the touch layer drives it, bounded). */
 static void to_covers(void) {
     cf.screen = CF_COVERS;
-    pod_show(cf.status, 0);
-    pod_show(cf.cancel, 0);
-    pod_show(cf.covers, 1); /* the captions are never hidden, and stay insensitive (the asset): they
+    m1_show(cf.status, 0);
+    m1_show(cf.cancel, 0);
+    m1_show(cf.covers, 1); /* the captions are never hidden, and stay insensitive (the asset): they
                          * lie over the frame's black bottom rows, so its touch layer gets the touch */
     artist_nav();
     if (!cf.built) {
@@ -1091,11 +1086,11 @@ static int on_songs(void *ctx, void *e) {
  * later opens resume where a cancel left off).
  */
 /* The centre album's key as 8 lowercase hex digits and a newline, in a file of the card's own (the keys belong to the card's
- * library, so the file stays on it), written by pod_card_write. Only with the card mounted. */
+ * library, so the file stays on it), written by m1_card_write. Only with the card mounted. */
 static void position_save(unsigned key) {
     char text[16];
     snprintf(text, sizeof text, "%08x\n", key);
-    pod_card_write(CARD_DIR, POSITION_FILE, POSITION_FILE ".tmp", text, 9, (const void *)0, 0);
+    m1_card_write(CARD_DIR, POSITION_FILE, POSITION_FILE ".tmp", text, 9, (const void *)0, 0);
 }
 
 /* The saved key: exactly 8 hex digits and an optional newline; anything else, a missing file or the card not mounted is 0. */
@@ -1103,7 +1098,7 @@ static unsigned position_load(void) {
     char text[16];
     unsigned key = 0;
     int fd, n, i;
-    if (!pod_card_mounted()) return 0;
+    if (!m1_card_mounted()) return 0;
     fd = open(POSITION_FILE, O_RDONLY, 0);
     if (fd < 0) return 0;
     n = read(fd, text, sizeof text);
@@ -1204,9 +1199,7 @@ static void pick_start(void) {
  * library per 24 scans). Open addressing, at most half full: a slot holds a library row + 1. */
 #define IDX_MIN 24
 static unsigned nc_hash(const char *s) { /* FNV-1a over the ASCII-folded bytes (cc_nocase's equality) */
-    unsigned h = 2166136261u;
-    for (; *s; ++s) h = (h ^ (unsigned)(*s >= 'A' && *s <= 'Z' ? *s + 32 : (unsigned char)*s)) * 16777619u;
-    return h;
+    return m1_fnv_fold(2166136261u, s);
 }
 
 static unsigned *name_index(void *all, unsigned m, unsigned *mask) {
@@ -1282,9 +1275,9 @@ static int start_build(void);
 
 static void show_preparing(void) {
     cf.screen = CF_PREPARING;
-    pod_show(cf.covers, 0);
-    pod_show(cf.status, 1);
-    pod_show(cf.cancel, 1);
+    m1_show(cf.covers, 0);
+    m1_show(cf.status, 1);
+    m1_show(cf.cancel, 1);
     widget_set_tr_text(cf.status, "Preparing covers...");
 }
 
@@ -1394,7 +1387,7 @@ static int on_volkey(void *ctx, void *e) {
     if (type != EVT_KEY_DOWN) return RET_OK;
     if (*(volatile int *)ROTATEMODE == 1) key = key == KEY_VOL_UP ? KEY_VOL_DOWN : KEY_VOL_UP;
     h = stride();
-    if (!pod_screen_lit() || cf.screen != CF_COVERS || !shelf_up() || cf.dragging || h <= 0 || !volkeys_on())
+    if (!m1_screen_lit() || cf.screen != CF_COVERS || !shelf_up() || cf.dragging || h <= 0 || !volkeys_on())
         return RET_OK;
     /* from the destination of a running snap (so quick presses add up), else from the committed album; bound() stops at the ends */
     snap((cf.snap_timer ? cf.snap_to / h : 0) + (key == KEY_VOL_DOWN ? -1 : 1));
@@ -1410,28 +1403,28 @@ static int open_page(void) {
     widget_on(cf.win, EVT_DESTROY, on_destroy, (void *)0);
     widget_on(cf.win, EVT_KEY_DOWN, on_volkey, (void *)0);
     widget_on(cf.win, EVT_KEY_UP, on_volkey, (void *)0);
-    pod_bind(cf.win, "btn_return", on_back, (void *)0);
-    pod_bind(cf.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(cf.win, "btn_return", on_back, (void *)0);
+    m1_bind(cf.win, "btn_backtoplayer", m1_on_player, (void *)0);
     cf.covers = widget_lookup(cf.win, "view_covers", 1);
     cf.name = widget_lookup(cf.win, "label_album", 1);
     cf.artist = widget_lookup(cf.win, "label_artist", 1);
     cf.status = widget_lookup(cf.win, "label_status", 1);
-    cf.cancel = pod_bind(cf.win, "btn_cancel", on_cancel, (void *)0);
-    cf.songs = pod_bind(cf.win, "btn_songs", on_songs, (void *)0); /* in the asset, hidden; the artist page shows it */
+    cf.cancel = m1_bind(cf.win, "btn_cancel", on_cancel, (void *)0);
+    cf.songs = m1_bind(cf.win, "btn_songs", on_songs, (void *)0); /* in the asset, hidden; the artist page shows it */
     if (!cf.covers || !cf.name || !cf.artist || !cf.status || !cf.cancel) {
         navigator_back(); /* an asset that is not ours: leave rather than work on half a page */
         return -1;
     }
-    pod_show(cf.status, 0);
-    pod_show(cf.cancel, 0);
+    m1_show(cf.status, 0);
+    m1_show(cf.cancel, 0);
     return 0;
 }
 
 /* n albums loaded: their covers (after building the missing art), else `empty` or "too large". */
 static int open_covers(int n, const char *empty) {
     if (n <= 0 || n > MAX_ALBUMS) {
-        pod_show(cf.covers, 0);
-        pod_show(cf.status, 1);
+        m1_show(cf.covers, 0);
+        m1_show(cf.status, 1);
         widget_set_text_utf8(cf.name, "");
         widget_set_text_utf8(cf.artist, "");
         widget_set_tr_text(cf.status, n > 0 ? "Library too large" : empty);

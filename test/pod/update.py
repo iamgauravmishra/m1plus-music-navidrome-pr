@@ -200,8 +200,6 @@ def download(m):
     return r
 
 
-
-
 def check_tests(ctx):
     expect = ctx.expect
     site = Site('1.0.1')
@@ -660,7 +658,3 @@ def notes_check_tests(ctx):
 
 
 SECTIONS = [parse_tests, redirect_tests, build_tests, info_tests, check_tests, dev_tests, channel_tests, download_tests, notes_parse_tests, notes_check_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

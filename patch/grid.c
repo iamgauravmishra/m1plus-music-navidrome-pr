@@ -14,7 +14,7 @@ void grid_shape(grid_t *g, int side, int round, int blend) {
     if (round > GRID_MAX_ROUND) round = GRID_MAX_ROUND;
     if (round < 0) round = 0;
     g->side = side, g->round = round, g->blend = blend;
-    if (round) pod_corner_fill(g->corner, (unsigned)round);
+    if (round) m1_corner_fill(g->corner, (unsigned)round);
 }
 
 int grid_init(grid_t *g, void *win, int n, int side, int round) {
@@ -135,6 +135,11 @@ grid_tile_t *grid_find(grid_t *g, int a) {
     for (i = 0; i < g->n; ++i)
         if (g->tiles[i].album == a + 1) return &g->tiles[i];
     return (grid_tile_t *)0;
+}
+
+void grid_dir(int off, int *seen, int *dir) {
+    if (off != *seen) *dir = off > *seen ? 1 : -1;
+    *seen = off;
 }
 
 int grid_moving(void *sv) {
@@ -364,7 +369,7 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
             g->az
                 ? az_inset((const az_t *)g->az)
                 : 0; /* the A-Z rail's footprint (patch/azlist.c): hairline end, chevron and text end move left by it */
-    if (chev && !g->chev) g->chev = pod_make_chevron();
+    if (chev && !g->chev) g->chev = m1_make_chevron();
     for (r = r0; r <= r1; ++r) {
         grid_tile_t *t = tile_of(ctx, r);
         int y = grid_row_y(g, r) - off;

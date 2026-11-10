@@ -162,7 +162,7 @@ def run(ctx):
     ref = mod_icons.pod_chevron((0x8A,) * 3)
     expect(chev['right_arrow'].size == (13, 22) and chev['right_arrow'].crop((3, 3, 13, 19)).tobytes() == ref.tobytes() and chev['right_arrow'].getbbox() is not None
            and Image.open(os.path.join(mod_icons.PNG, 'pod_chev.png')).convert('RGBA').tobytes() == ref.tobytes(),
-           'right_arrow (13 x 22, the glyph right aligned: ink at 3..13) and pod_chev are pixel for pixel the shared chevron of patch/common.c pod_make_chevron')
+           'right_arrow (13 x 22, the glyph right aligned: ink at 3..13) and pod_chev are pixel for pixel the shared chevron of patch/common.c m1_make_chevron')
     # the Settings rows' icons: Now Playing's wave is the navbar button's glyph (Lucide audio-lines), Shanling Home's mark is cut
     # from the pinned stock shutdown screen (the committed disc is what the derivation makes), the rest are existing mappings
     glyphs = {n: g for n, g, _ in mod_icons.GLYPHS}

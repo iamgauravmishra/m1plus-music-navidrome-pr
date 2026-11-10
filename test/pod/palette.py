@@ -1133,16 +1133,16 @@ def findings_tests(ctx):
             expect(ok, f'{ac} {bgmode!r}: the tone #333334 stays a tone (#333333), not the pressed row; #FFFFFE stays white-ish; others as they are ({t1:#x} {t2:#x})')
     m = LM(b'1\n', acc=b'1\n', hook=True)
     m.on_top('playing_page')
-    expect(m.call(PSYMS['pod_shade'], a0=0x343333, a1=0, a2=0, a3=0, count=20000) == 0x333333 and m.call(PSYMS['pod_bar_color'], a0=0xff343333, count=20000) == 0xff333333,
-           'pod_shade and pod_bar_color (the corners, the status bar) never answer a role colour either')
+    expect(m.call(PSYMS['m1_shade'], a0=0x343333, a1=0, a2=0, a3=0, count=20000) == 0x333333 and m.call(PSYMS['m1_bar_color'], a0=0xff343333, count=20000) == 0xff333333,
+           'm1_shade and m1_bar_color (the corners, the status bar) never answer a role colour either')
     # finding 2: the corners
     def corners(page, ac, bg):
-        """pod_corners(canvas, tab, r 2, side 4, colour 0x191919, row0 0, a_top 0, a_bot 0, rows 100) over a page: the fill colours it paints (a full-coverage 2 x 2 corner at each of the four corners)."""
+        """m1_corners(canvas, tab, r 2, side 4, colour 0x191919, row0 0, a_top 0, a_bot 0, rows 100) over a page: the fill colours it paints (a full-coverage 2 x 2 corner at each of the four corners)."""
         c = LM(bg, acc=ac, hook=True)
         t = c.alloc(16); c.u.mem_write(t, bytes([255] * 16))
         for k, v in enumerate((0x191919, 0, 0, 0, 100)): c.setword(STACK + 16 + 4 * k, v)
         c.on_top(page); c.fills = []
-        c.call(PSYMS['pod_corners'], a0=0x7000a000, a1=t, a2=2, a3=4, count=200000)
+        c.call(PSYMS['m1_corners'], a0=0x7000a000, a1=t, a2=2, a3=4, count=200000)
         return [f[0] for f in c.fills]
     raw = 0xff191919
     expect(corners('playing_page', b'4\n', b'1\n') == [raw] * 16, 'Tinted + Teal on Now Playing: the corners are painted in the unwashed shade (they match the cover tone behind them)')
@@ -1216,7 +1216,3 @@ def press_tests(ctx):
 
 
 SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, tinted_tests, findings_tests, rest_glyph_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

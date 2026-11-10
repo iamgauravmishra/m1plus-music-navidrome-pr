@@ -456,7 +456,7 @@ static const char *fo_text(void) {
 } /* the root list says "Folders" (the stock title is the singular), a folder its name */
 
 static void fo_title_update(void) {
-    pod_title_set(fo.title, &fo.title_on, fo.noscroll || fo.select || !fo.nvis || pod_title_gone(fo_off(), 0));
+    m1_title_set(fo.title, &fo.title_on, fo.noscroll || fo.select || !fo.nvis || m1_title_gone(fo_off(), 0));
     /* The navbar's fade (an insensitive image, built hidden) is for rows passing under the bar: shown while the list is scrolled, hidden at rest, where it would darken
      * the large title. Never a touch target. */
     if (fo.fade) {
@@ -471,7 +471,7 @@ static void fo_head(void) { /* the navbar's title: "N Selected" in select mode, 
         az_fit(fo.title, fo_text());
         return;
     }
-    pod_fmt(buf, sizeof buf, TR("%d Selected"), (int)fo.nsel);
+    m1_fmt(buf, sizeof buf, TR("%d Selected"), (int)fo.nsel);
     widget_set_text_utf8(fo.title, buf);
 }
 
@@ -533,8 +533,8 @@ static void fo_load(int keep) {
     }
     fo_order();
     if (!fo_root()) vs_offer(&fo.vs, fo_offers()); /* (the root has no card) */
-    pod_show(fo.view, fo.nvis != 0);
-    pod_show(fo.status, fo.nvis == 0);
+    m1_show(fo.view, fo.nvis != 0);
+    m1_show(fo.status, fo.nvis == 0);
     if (!fo.nvis) widget_set_tr_text(fo.status, nomem ? "Not enough memory" : "Empty folder");
     fo_pills();
     fo_size();
@@ -555,7 +555,7 @@ static void fo_load(int keep) {
 static int fo_on_stale(const void *unused) {
     (void)unused;
     fo.stale_timer = 0;
-    if (fo.view && fo.g.tiles && !fo_valid() && pod_is_top(fo.win)) {
+    if (fo.view && fo.g.tiles && !fo_valid() && m1_is_top(fo.win)) {
         folder_reload();
         fo_load(1);
     }
@@ -649,11 +649,11 @@ static void fo_menu(int on);
 static void fo_cap(void) {
     int sel = !fo.select && !fo_root(), np = !fo.select;
     const char *img = sel ? "ah_nav_play" : "ah_nav_np";
-    pod_show(fo.btn_more, sel && !fo_direct());
-    pod_show(fo.btn_select, sel && fo_direct());
+    m1_show(fo.btn_more, sel && !fo_direct());
+    m1_show(fo.btn_select, sel && fo_direct());
     if (!sel && fo.menu) fo_menu(0);
     widget_resize(fo.title, (fo.select ? SG_SELALL_X : sel ? NAV_VIEW_X : FO_TITLE_END_NP) - NAV_TITLE_X, 22);
-    pod_show(fo.np, np);
+    m1_show(fo.np, np);
     if (fo.np) {
         widget_set_prop_str(fo.np, "style:normal:icon", img);
         widget_set_prop_str(fo.np, "style:over:icon", img);
@@ -668,8 +668,8 @@ static void fo_select(int on) {
     if (fo.sel) memset(fo.sel, 0, (fo.count + 7) / 8);
     fo.press = fo.down = 0;
     fo_cap();
-    pod_show(fo.btn_selall, on);
-    pod_show(fo.bar, on);
+    m1_show(fo.btn_selall, on);
+    m1_show(fo.bar, on);
     fo_pills();
     widget_set_prop_str(fo.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
     widget_set_prop_str(fo.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
@@ -869,7 +869,7 @@ static int fo_on_up(void *ctx, void *e) {
     fo.down = 0;
     fo_set_press(0);
     if (a < 0 || !e || !fo.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - fo.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - fo.down_y) < SC_DRAG_PX &&
+    if (m1_abs(I(e, PE_X) - fo.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - fo.down_y) < SC_DRAG_PX &&
         fo_item_of(e) == a && (unsigned)a < fo.nvis)
         fo_tap(a);
     return RET_OK;
@@ -932,7 +932,7 @@ static int fo_on_destroy(void *ctx, void *e) {
     int i;
     (void)ctx;
     (void)e;
-    if (fo.stale_timer) timer_remove(fo.stale_timer);
+    m1_timer_stop(&fo.stale_timer);
     grid_free(&fo.g);
     for (i = 0; i < 2; ++i)
         if (fo.mark[i]) bitmap_destroy(fo.mark[i]);
@@ -977,15 +977,15 @@ static int fo_open_page(void) {
     fo.win = window_open(FO_ASSET);
     if (!fo.win) return -1;
     widget_on(fo.win, EVT_DESTROY, fo_on_destroy, (void *)0);
-    fo.back = pod_bind(fo.win, "btn_return", fo_on_back, (void *)0);
-    fo.np = pod_bind(fo.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    fo.btn_more = pod_bind(fo.win, "btn_more", fo_on_more, (void *)0);
-    fo.btn_select = pod_bind(fo.win, "btn_select", fo_on_more, (void *)0);
-    fo.btn_selall = pod_bind(fo.win, "btn_selall", fo_on_selall, (void *)0);
-    fo.btn_play = pod_bind(fo.win, "btn_play", fo_on_play, (void *)0);
-    fo.btn_shuffle = pod_bind(fo.win, "btn_shuffle", fo_on_shuffle, (void *)0);
-    fo.btn_add = pod_bind(fo.win, "sg_add", fo_on_add, (void *)0);
-    fo.btn_del = pod_bind(fo.win, "sg_del", fo_on_delete, (void *)0);
+    fo.back = m1_bind(fo.win, "btn_return", fo_on_back, (void *)0);
+    fo.np = m1_bind(fo.win, "btn_backtoplayer", m1_on_player, (void *)0);
+    fo.btn_more = m1_bind(fo.win, "btn_more", fo_on_more, (void *)0);
+    fo.btn_select = m1_bind(fo.win, "btn_select", fo_on_more, (void *)0);
+    fo.btn_selall = m1_bind(fo.win, "btn_selall", fo_on_selall, (void *)0);
+    fo.btn_play = m1_bind(fo.win, "btn_play", fo_on_play, (void *)0);
+    fo.btn_shuffle = m1_bind(fo.win, "btn_shuffle", fo_on_shuffle, (void *)0);
+    fo.btn_add = m1_bind(fo.win, "sg_add", fo_on_add, (void *)0);
+    fo.btn_del = m1_bind(fo.win, "sg_del", fo_on_delete, (void *)0);
     fo.title = widget_lookup(fo.win, "label_title", 1);
     fo.big = widget_lookup(fo.win, "sg_title", 1);
     fo.fade = widget_lookup(fo.win, "img_nb_fade", 1); /* optional */
@@ -1010,16 +1010,16 @@ static int fo_open_page(void) {
         fo.sort = c >= '0' && c <= '2' ? c - '0' : c >= 'a' && c <= 'c' ? c - 'a' : 0;
         fo.rev = c >= 'a' && c <= 'c';
     }
-    pod_centre_pill(fo.btn_play, SG_PILL_W);
-    pod_centre_pill(fo.btn_shuffle, SG_PILL_W);
-    pod_centre_pill(fo.btn_add, SG_BAR_PILL_W);
-    pod_centre_pill(fo.btn_del, SG_BAR_PILL_W);
-    fo.mark[0] = pod_make_mark(fo.win, "unselect");
-    fo.mark[1] = pod_make_mark(fo.win, "selected");
+    m1_centre_pill(fo.btn_play, SG_PILL_W);
+    m1_centre_pill(fo.btn_shuffle, SG_PILL_W);
+    m1_centre_pill(fo.btn_add, SG_BAR_PILL_W);
+    m1_centre_pill(fo.btn_del, SG_BAR_PILL_W);
+    fo.mark[0] = m1_make_mark(fo.win, "unselect");
+    fo.mark[1] = m1_make_mark(fo.win, "selected");
     if (!fo.mark[0] || !fo.mark[1])
         fo.mark[0] = fo.mark[1] =
             (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
-    fo.chev = pod_make_chevron();
+    fo.chev = m1_make_chevron();
     for (i = 0; i < FO_ICONS; ++i) fo.ic[i] = fo_bitmap(fo.win, FO_ICON_NAME[i]);
     fo.noscroll = !widget_on(fo.sv, EVT_SCROLL, fo_on_scroll, (void *)0) ||
                   !widget_on(fo.sv, EVT_SCROLL_END, fo_on_scroll, (void *)0);
@@ -1035,8 +1035,8 @@ static int fo_open_page(void) {
     widget_on(fo.view, EVT_AFTER_PAINT, fo_on_paint, (void *)0);
     if (!grid_init(&fo.g, fo.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&fo.g);
-        pod_show(fo.view, 0);
-        pod_show(fo.status, 1);
+        m1_show(fo.view, 0);
+        m1_show(fo.status, 1);
         widget_set_tr_text(fo.status, "Not enough memory");
         return 0;
     }

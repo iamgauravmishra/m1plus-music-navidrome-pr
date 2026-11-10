@@ -735,10 +735,10 @@ LYRICS_PINS = (   # (address, stock word, what it proves): the stock lyric rows 
     (0x676bb8, 0x24020002, 'window_base_on_event, EVT_WINDOW_WILL_OPEN: v0 = 2 (WINDOW_STAGE_CREATED) ...'), (0x676bc8, 0xae220094, '... stored as the window\'s stage'),
     (0x676bd4, 0x0411beff, 'window_base_on_event, EVT_WINDOW_WILL_OPEN: bal widget_update_style_recursive (every widget\'s style resolved, after the window theme is loaded): from stage 2 a measure is in the asked style'),
 )
-# The library scan's folder walk (patch/common.c pod_scan_dir, docs/modules/payload.md hook 5): toolsLoadAllFile (0x5efd98) lists each folder with the function at 0x5ea364 (readdir
+# The library scan's folder walk (patch/common.c m1_scan_dir, docs/modules/payload.md hook 5): toolsLoadAllFile (0x5efd98) lists each folder with the function at 0x5ea364 (readdir
 # loop, 0x5ea600); for a directory entry (d_type 4, name in s0) it skips "." with `strcmp(name, ".")` (0x5ea6a8), ".." and a list of system folders (lost+found, System Volume
 # Information, RECYCLER, $RECYCLE.BIN, .LOST.DIR, .fseventsd, .Spotlight-V100, .Trashes); a zero result goes back to readdir (0x5ea600). Every other dot-folder is walked. The
-# strcmp call is replaced by `jal pod_scan_dir` (q2-pod's SCAN_DIRS): the delay slot still loads a1 = ".", a0 = the name. Not on the boot path (tools/reach.py): the scan runs from
+# strcmp call is replaced by `jal m1_scan_dir` (q2-pod's SCAN_DIRS): the delay slot still loads a1 = ".", a0 = the name. Not on the boot path (tools/reach.py): the scan runs from
 # the Update Local Music item and the other scan callers only.
 # The Library query filter (patch/pcmodel.c pc_library_query / pc_sorted_query, docs/modules/payload.md hook 6): the two functions every songtable select goes through, hooked at their PIC prologues
 # (q2-pod's toolsQueryDbTable / toolsQueryDbTableAndSort hooks). Both take (db, sql, row callback, sort) in a0..a3 and use no stack arguments.
@@ -1713,7 +1713,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=pd_open_settings', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=sba_parse_tracks', '--undefined=sba_parse_albums', '--undefined=sba_parse_artists', '--undefined=sba_parse_playlists', '--undefined=sba_parse_ping',   # (sbparse.c until sbapi.c calls them)
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
-            '--undefined=bc_timed_open', '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=pod_na_site', '--undefined=na_next_key', '--undefined=na_set_cur', '--undefined=na_cur', '--undefined=na_active', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=tidal_kb_focus', '--undefined=pod_eq_site', '--undefined=pod_lock_site', '--undefined=pf_items', '--undefined=pf_seen', '--undefined=so_play_src', '--undefined=lib_navidrome', '--undefined=sba_songs_window', '--undefined=sbs_playing', '--undefined=sbs_track']   # (pf_items, pf_seen: accessors of the parser the tests read; so_play_src, albums_open_src: the library seam, no caller yet)
+            '--undefined=bc_timed_open', '--undefined=m1_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=pod_na_site', '--undefined=na_next_key', '--undefined=na_set_cur', '--undefined=na_cur', '--undefined=na_active', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=tidal_kb_focus', '--undefined=pod_eq_site', '--undefined=pod_lock_site', '--undefined=pf_items', '--undefined=pf_seen', '--undefined=so_play_src', '--undefined=lib_navidrome', '--undefined=sba_songs_window', '--undefined=sbs_playing', '--undefined=sbs_track']   # (pf_items, pf_seen: accessors of the parser the tests read; so_play_src, albums_open_src: the library seam, no caller yet)
     keep += ['--undefined=' + n for n in ND_KEEP]   # (the Navidrome data layer has no caller until the pages land: patch/sbapi.h; the tests call these)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
@@ -1903,7 +1903,7 @@ def patch_demo(raw, payload, ps, demo_path):
     hook(patched, QUERY_DB, QUERY_DB_PROLOGUE, ps['pc_library_query'], 'toolsQueryDbTable')
     hook(patched, QUERY_SORT, QUERY_SORT_PROLOGUE, ps['pc_sorted_query'], 'toolsQueryDbTableAndSort')
     check(all(BASE <= ps[n] < BASE + len(payload) for n in ('pc_library_query', 'pc_sorted_query')), 'query hook symbol outside payload')
-    target6 = ps['pod_scan_dir']
+    target6 = ps['m1_scan_dir']
     check(BASE <= target6 < BASE + len(payload), 'scan hook symbol outside payload')
     struct.pack_into('<I', patched, fileoff(patched, SCAN_SITE), jal(target6, SCAN_SITE))
     target8 = ps['bp_capacity']
@@ -1993,7 +1993,7 @@ def main():
         'hook_backtoplayer': {'addr': BACKTOPLAYER, 'target': ps['rn_backtoplayer']},
         'hook_id3': {'addr': ID3_SITE, 'target': ps['pc_id3_path']},
         'hook_query': {'addr': QUERY_DB, 'target': ps['pc_library_query']}, 'hook_sorted_query': {'addr': QUERY_SORT, 'target': ps['pc_sorted_query']},
-        'hook_scan': {'addr': SCAN_SITE, 'target': ps['pod_scan_dir']},
+        'hook_scan': {'addr': SCAN_SITE, 'target': ps['m1_scan_dir']},
         'hook_battery': {'addr': BATTERY_SITE, 'target': ps['bp_capacity']},
         'hook_wifihub': {'addr': WIFIHUB_SITE, 'target': ps['wifi_hub_open']},
         'hook_idle': {'addr': IDLE_SITE, 'target': ps['bc_timed_open']},

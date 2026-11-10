@@ -30,7 +30,7 @@ doctor:
 	$(RUN) tools/doctor.py
 test: lint
 	$(RUN) tools/check.py $(if $(TEST),--test "$(TEST)",--tests-only) $(if $(JOBS),--jobs "$(JOBS)") $(if $(PERF),--perf)
-dev: lint
+dev: lint format-check
 	$(RUN) tools/check.py --dev $(if $(JOBS),--jobs "$(JOBS)")
 preview:
 	$(RUN) tools/preview.py --build "$(BUILD)"
@@ -40,7 +40,7 @@ ota-serve:
 	$(RUN) tools/ota_server.py serve $(if $(PORT),--port "$(PORT)")
 ota:
 	$(RUN) tools/ota_server.py push --build "$(BUILD)" $(if $(PORT),--server "http://127.0.0.1:$(PORT)")
-check: lint
+check: lint format-check
 	$(RUN) tools/check.py $(if $(JOBS),--jobs "$(JOBS)")
 accept:
 	$(RUN) tools/check.py --update $(if $(JOBS),--jobs "$(JOBS)")

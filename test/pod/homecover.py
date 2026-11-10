@@ -409,8 +409,7 @@ def clear_tests(ctx):
         return m, [ART + '/' + nm for nm in names]
 
     def unlinks(m): return [c[1] for c in m.calls if c[0] == 'unlink' and c[1] not in (REQ, STAMP)]
-    def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
-
+    
     # Yes: the confirm, the request dropped at once, then ticks of at most 32 unlinks; the toast at the end.
     m, paths = machine()
     m.call(PSYMS['clear_ask'], count=3000000)
@@ -1390,7 +1389,3 @@ def reset_tests(ctx):
 
 
 SECTIONS = [tests, dots_tests, pill_tests, rebuild_tests, check_tests, resume_tests, clear_tests, cache_tests, covlist_tests, files_tests, unsupported_tests, reset_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

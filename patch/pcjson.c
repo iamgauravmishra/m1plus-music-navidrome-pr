@@ -4,6 +4,7 @@
  */
 #include "offsets.inc"
 #include "pcjson.h"
+#include "utf8.h"
 
 typedef struct {
     const unsigned char *s, *e;
@@ -42,24 +43,13 @@ static int pj_hex4(const unsigned char *s, const unsigned char *e) {
 
 /* One code point as UTF-8 into the string, whole or not at all: the first one that does not fit (the NUL has its byte) ends what is kept, so the result is always a prefix cut on a character boundary. */
 static void pj_put(pj_out_t *o, unsigned cp) {
-    unsigned len = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
-    char *d;
+    unsigned len = m1_utf8_len(cp);
     if (!o->out || o->cut) return;
     if (o->n + len + 1 > o->cap) {
         o->cut = 1;
         return;
     }
-    d = o->out + o->n;
-    if (len == 1)
-        d[0] = (char)cp;
-    else if (len == 2)
-        d[0] = (char)(0xc0 | cp >> 6), d[1] = (char)(0x80 | (cp & 0x3f));
-    else if (len == 3)
-        d[0] = (char)(0xe0 | cp >> 12), d[1] = (char)(0x80 | (cp >> 6 & 0x3f)), d[2] = (char)(0x80 | (cp & 0x3f));
-    else
-        d[0] = (char)(0xf0 | cp >> 18), d[1] = (char)(0x80 | (cp >> 12 & 0x3f)), d[2] = (char)(0x80 | (cp >> 6 & 0x3f)),
-        d[3] = (char)(0x80 | (cp & 0x3f));
-    o->n += len;
+    o->n += m1_utf8_put(o->out + o->n, cp);
 }
 
 /* The string whose opening quote is at p->s, decoded into o: \" \\ \/ and the escapes of a control character (a space), \uXXXX (a surrogate pair is one character; a lone surrogate, \u0000 and a \u

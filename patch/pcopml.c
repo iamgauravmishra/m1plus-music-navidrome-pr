@@ -5,6 +5,7 @@
 #include "offsets.inc"
 #include "podcasts.h"
 #include "pcopml.h"
+#include "utf8.h"
 
 typedef unsigned char uc;
 
@@ -41,26 +42,15 @@ static const uc *po_find(const uc *s, const uc *e, const char *w) {
 
 /* One code point as UTF-8 into the value, whole or not at all: the first that does not fit ends what is kept (so a cut is on a character boundary). A url that does not fit is bad. */
 static void po_put(po_o_t *o, unsigned cp) {
-    unsigned len = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
-    char *d;
+    unsigned len = m1_utf8_len(cp);
     if (!o->out || o->cut) return;
     if (o->n + len + 1 > o->cap) {
         o->cut = 1;
         if (o->url) o->bad = 1;
         return;
     }
-    d = o->out + o->n;
-    if (len == 1)
-        d[0] = (char)cp;
-    else if (len == 2)
-        d[0] = (char)(0xc0 | cp >> 6), d[1] = (char)(0x80 | (cp & 0x3f));
-    else if (len == 3)
-        d[0] = (char)(0xe0 | cp >> 12), d[1] = (char)(0x80 | (cp >> 6 & 0x3f)), d[2] = (char)(0x80 | (cp & 0x3f));
-    else
-        d[0] = (char)(0xf0 | cp >> 18), d[1] = (char)(0x80 | (cp >> 12 & 0x3f)), d[2] = (char)(0x80 | (cp >> 6 & 0x3f)),
-        d[3] = (char)(0x80 | (cp & 0x3f));
-    o->n += len;
-    d[len] = 0;
+    o->n += m1_utf8_put(o->out + o->n, cp);
+    o->out[o->n] = 0;
 }
 
 /* A decoded character into a value. White space and control characters: in a title one space between words (none at the ends); in a url leading ones are dropped and a later one makes it bad. */

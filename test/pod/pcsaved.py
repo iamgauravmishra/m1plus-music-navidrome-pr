@@ -87,7 +87,3 @@ def empty_tests(ctx):
 
 
 SECTIONS = [row_tests, level_tests, empty_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

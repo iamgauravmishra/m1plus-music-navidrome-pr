@@ -116,14 +116,6 @@ class UM(PCN.NM):
     def confirms(self): return [undo(c[1]) for c in self.hist if c[0] == 'confirm']
 
 
-def undo(s):
-    """A mocked text as the user reads it: UTF-8 bytes read as latin-1 (the payload's own strings come back twice over from the mocked translation)."""
-    for _ in range(2):
-        try: s = s.encode('latin-1').decode('utf-8')
-        except (UnicodeDecodeError, UnicodeEncodeError): break
-    return s
-
-
 def trl(loc, key):
     """The text of key in language loc as the page would put it, with nothing substituted."""
     return key if loc == 'en_US' else pod_i18n.TEXT[key][pod_i18n.table_for(loc)] if key in pod_i18n.TEXT else key
@@ -241,7 +233,7 @@ def flow_tests(ctx):
     expect(r == 0 and ('window_open', 'm1plus_update') in m.calls and names.count('timer_add') == 1 and [c for c in m.calls if c[0] == 'timer_add'] == [('timer_add', PSYMS['up_tick'], 250)] and not m.thread,
            f'open: the page and one 250 ms timer, no worker yet ({r})')
     expect(all((m.widgets[n], EVT_CLICK) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'up_pill', 'up_pill2', 'up_pd_cancel')) and (m.window, EVT_DESTROY) in m.bound and (m.window, EVT_FG) in m.bound
-           and (m.window, EVT_BG) in m.bound and m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['up_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['pod_on_player'],
+           and (m.window, EVT_BG) in m.bound and m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['up_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['m1_on_player'],
            'Back (the page\'s: under the popup it is Cancel), Now Playing, both pills, the popup\'s Cancel, destroy and the window\'s front/back events are bound')
     expect(any(c == ('label_set_line_wrap', m.widgets['up_text'], 1) for c in m.calls), 'the explanation label wraps its text')
     v = m.view()
@@ -724,7 +716,7 @@ def notes_flow_tests(ctx):
     m = notes_page(with_notes())
     names = [c[0] for c in m.hist]
     expect(('window_open', 'm1plus_relnotes') in m.hist and 'pthread_create' not in names and 'timer_add' not in names, 'the pill opens the notes page: no thread, no timer, no request')
-    expect(m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['pod_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['pod_on_player'], 'Back goes back, Now Playing is the update page\'s own handler')
+    expect(m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['m1_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['m1_on_player'], 'Back goes back, Now Playing is the update page\'s own handler')
     expect(len(m.curl_site.nreqs) == 1, 'the notes come from the check, nothing more is fetched')
     texts = rn_paint(m)
     head = [t for t in texts if t[0] == 'label_head']
@@ -817,7 +809,3 @@ def notes_lang_tests(ctx):
 
 
 SECTIONS = [asset_tests, flow_tests, confirm_tests, popup_tests, again_tests, reopen_tests, background_tests, fail_tests, state_tests, wait_tests, life_tests, notes_asset_tests, notes_flow_tests, notes_scroll_tests, notes_lang_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

@@ -257,7 +257,7 @@ static struct {
         subtile; /* pod_ic_subtile (the Subscriptions row's tile), decoded the same way once the Shows level first paints */
     void *savetile; /* pod_ic_savetile (the Saved row's tile) */
     void *srchtile; /* pod_ic_discovertile (the Search row's tile) */
-    void *chev; /* the shared list chevron (pod_make_chevron), made on first use */
+    void *chev; /* the shared list chevron (m1_make_chevron), made on first use */
     pg_cell_t *cells; /* PG_CELLS layouts of the Show level's cells */
     pg_hdr_t *hdr; /* the Show header's layout */
     pd_t *
@@ -1082,7 +1082,7 @@ static void pg_sprite(void *canvas, int sx, int sy, int w, int h, int x, int y) 
 
 /* The shared list chevron (POD_CHEV_W x POD_CHEV_H) at (x, y) of the view. */
 static void pg_chev(void *canvas, int x, int y) {
-    if (!pg.chev) pg.chev = pod_make_chevron();
+    if (!pg.chev) pg.chev = m1_make_chevron();
     pg_blit_from(canvas, pg.chev, 0, 0, POD_CHEV_W, POD_CHEV_H, x, y);
 }
 
@@ -1156,8 +1156,8 @@ static void pg_paint_fade(void *canvas) {
     for (y = 0; y < PG_FADE_H; ++y)
         if (alpha[y])
             az_fill(canvas, 0, y, y + 1, PG_W,
-                    ((unsigned)alpha[y] << 24) | (pg.tint ? pod_shade(pg.tint, (unsigned)(PG_LIST_Y + y), AH_TINT_A_TOP,
-                                                                      AH_TINT_A_BOT, AH_TINT_ROWS)
+                    ((unsigned)alpha[y] << 24) | (pg.tint ? m1_shade(pg.tint, (unsigned)(PG_LIST_Y + y), AH_TINT_A_TOP,
+                                                                     AH_TINT_A_BOT, AH_TINT_ROWS)
                                                           : 0));
 }
 
@@ -1660,8 +1660,8 @@ static void pg_paint_disc(void *canvas) {
     if (n) pg_paint_text_at(canvas, pg.st[ST_META], w, n, PP_LINE_X, PDL_LINE_Y - off, PG_W - 2 * PP_LINE_X, PP_LINE_H);
     len[0] = pg_wide(lw[0], 48, TR("Shows")), len[1] = pg_wide(lw[1], 48, TR("Episodes"));
     label[0] = lw[0], label[1] = lw[1];
-    pod_segmented(canvas, GRID_VIEW_H, DC_SEG_X, DC_SEG_Y - off, DC_SEG_W, DC_SEG_H, 2, pg.dtab, pg.st[ST_LATEST],
-                  pg.st[ST_LATESTW], label, len);
+    m1_segmented(canvas, GRID_VIEW_H, DC_SEG_X, DC_SEG_Y - off, DC_SEG_W, DC_SEG_H, 2, pg.dtab, pg.st[ST_LATEST],
+                 pg.st[ST_LATESTW], label, len);
     pg_span(&r0, &r1);
     if (r1 < r0) return;
     grid_list_paint(canvas, &pg.g, pg.st_title, pg.st_sub, r0, r1, off - DC_TOP, GRID_VIEW_H, pg.press, DC_SHIFT, 1,
@@ -1745,8 +1745,8 @@ static void pg_art(grid_t *g, grid_tile_t *t, const pc_show_t *s) {
 
 /* ---------------------------------------------------------------------------
  * The Show page's tint: the album page's (docs/modules/album-page.md "Cover tint", "Status bar"; patch/albumpage.c) on this window, with the same functions and assets: the window's bg_color is the
- * tone (pod_tone) of the cover's average colour under the black gradient image ah_tint (the window's first child, img_ah_tint, shown only now), so the list over it is transparent; the status bar takes
- * the window's row 0 (pod_bar_tint, pod_bar_black: the one owner of the bar) while the page is in front and tinted; the tone cache (pod_tone_get / pod_tone_put, shared with the album page and Now
+ * tone (m1_tone) of the cover's average colour under the black gradient image ah_tint (the window's first child, img_ah_tint, shown only now), so the list over it is transparent; the status bar takes
+ * the window's row 0 (m1_bar_tint, m1_bar_black: the one owner of the bar) while the page is in front and tinted; the tone cache (m1_tone_get / m1_tone_put, shared with the album page and Now
  * Playing) remembers it per show. A show without a cover picture stays black. The state is the page's: it is cleared when another level shows, when the page is behind another and when it is destroyed.
  */
 static void pg_win_color(unsigned color) {
@@ -1758,14 +1758,14 @@ static void pg_win_color(unsigned color) {
 
 static void pg_bar_apply(void) {
     if (pg.tint_on && pg.fg && pg.level == L_EPS && !pg.det &&
-        pod_bar_tint(pg.win, pod_shade(pg.tint, 0, AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS)))
+        m1_bar_tint(pg.win, m1_shade(pg.tint, 0, AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS)))
         pg.bar_ours = 1; /* a failed call keeps what the bar has (and owes) */
 }
 
 __attribute__((noinline)) static void pg_bar_black(void) {
     if (!pg.bar_ours) return;
     pg.bar_ours = 0;
-    pod_bar_black(pg.win);
+    m1_bar_black(pg.win);
 }
 
 static unsigned pg_tone_raw __attribute__((section(
@@ -1812,32 +1812,32 @@ static void pg_tint_clear(void) {
 static void pg_tint_open(void) {
     unsigned tone;
     pg.tint_key = cc_key_of("Podcasts", pg.shows[pg.sel].dir);
-    if (pod_tone_get(pg.tint_key, &tone)) pg_tint_set(tone);
+    if (m1_tone_get(pg.tint_key, &tone)) pg_tint_set(tone);
 }
 
 /* The tint from the header's cover, once it is a real picture (the placeholder disc and a refused picture leave the page black): cc_decode box-averages the centred square to one pixel, as the
- * album page's poll does, pod_tone makes the tone of it. */
+ * album page's poll does, m1_tone makes the tone of it. */
 static void pg_tint_cover(void) {
     char url[PC_FILE * 2 + 60];
     unsigned px, tone;
     if (pg.tint_on || pg.level != L_EPS || !pg.hg.tiles || pg.hg.tiles[0].art != 1) return;
     if (pg_has_tone_url(&pg.shows[pg.sel], url, sizeof url) && cc_decode(pg.win, url, 1, 1, 1, &px)) {
-        tone = pod_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
-        pod_tone_put(pg.tint_key, tone);
+        tone = m1_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
+        m1_tone_put(pg.tint_key, tone);
         pg_tint_set(tone);
     }
 }
 
 /* The navbar's small title: shown once the large title (the Shows, Downloads, Subscriptions and Saved levels: SG_COLLAPSE, as every large-title page) or the Show level's header name has scrolled
- * away (pod_title_gone); in select mode it has its own: "N Selected". The search level's title is Apple Podcasts, always (empty and with results): it has no large title to scroll away. */
+ * away (m1_title_gone); in select mode it has its own: "N Selected". The search level's title is Apple Podcasts, always (empty and with results): it has no large title to scroll away. */
 static void pg_title_show(void) {
     if (pg.title) widget_set_visible(pg.title, pg.collapsed || pg.select || pg.level == L_SRCH, 0);
 }
 
 static void pg_collapse(void) {
     int c = pg.level == L_EPS
-                ? !pg.det && pg.hdr && pod_title_gone(pg_off(), pg.hdr->collapse)
-                : (pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC) && pod_title_gone(pg_off(), 0);
+                ? !pg.det && pg.hdr && m1_title_gone(pg_off(), pg.hdr->collapse)
+                : (pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC) && m1_title_gone(pg_off(), 0);
     if (c != pg.collapsed) {
         pg.collapsed = c;
         pg_title_show();
@@ -1924,7 +1924,7 @@ static int pg_on_load(const void *unused) {
     int idx, kind;
     (void)unused;
     pg.load_timer = 0;
-    if (!pg.win || !pg.fg || !pg.g.tiles || !pod_screen_lit()) return RET_OK;
+    if (!pg.win || !pg.fg || !pg.g.tiles || !m1_screen_lit()) return RET_OK;
     if (pg.level == L_SHOWS) {
         kind = pg_home_next(&idx);
         if (kind == 1) {
@@ -2005,8 +2005,8 @@ static void pg_title(const char *key, const char *text) {
 
 static void pg_empty(const char *key) {
     widget_move(pg.status, 20, 180);
-    pod_show(pg.view, 0);
-    pod_show(pg.status, 1);
+    m1_show(pg.view, 0);
+    m1_show(pg.status, 1);
     widget_set_tr_text(pg.status, key);
 }
 
@@ -2091,9 +2091,9 @@ static void pg_nav(void) {
         cap = more || find || globe,
         gx = NAV_VIEW_X - (more ? NAV_VIEW_W : 0); /* the pieces are right-aligned to Now Playing, 46 apart */
     const char *img = cap ? "ah_nav_play" : "ah_nav_np", *mimg = globe && more ? "pod_nav_moremid" : "pod_nav_more";
-    pod_show(pg.btn_more, more);
-    pod_show(pg.find, find);
-    pod_show(pg.btn_globe, globe);
+    m1_show(pg.btn_more, more);
+    m1_show(pg.find, find);
+    m1_show(pg.btn_globe, globe);
     if (globe) widget_move(pg.btn_globe, gx, 0); /* [Globe | Now Playing], [Globe | ... | NP] or [... | NP] */
     if (pg.btn_more) {
         widget_set_prop_str(pg.btn_more, "style:normal:icon", mimg);
@@ -2104,7 +2104,7 @@ static void pg_nav(void) {
     if (pg.sf)
         widget_set_visible(pg.sf, pg.level == L_SRCH,
                            0); /* (insensitive for life: a touch on the field goes to the content view) */
-    pod_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC);
+    m1_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC);
     if (pg.title &&
         !pg.select) { /* the small title ends before the leftmost button, cut with an ellipsis (pg_head sets the text again at the new width) */
         widget_resize(pg.title, (globe ? gx : more || find ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W) - NAV_TITLE_X, 22);
@@ -2274,8 +2274,8 @@ static void pg_load_shows(int keep) {
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg.rev = pc_rev();
     pg_title("Podcasts", (const char *)0);
-    pod_show(pg.view, 1);
-    pod_show(pg.status, 0);
+    m1_show(pg.view, 1);
+    m1_show(pg.status, 0);
     // clang-format off: a translation key stays on one line (test/pod/i18n.py reads the source)
     if (!pg.nshows) pg_empty("No podcasts. Copy a folder for each show into Podcasts on the card, or put subscriptions.txt there and choose Import from Card in the menu at the top right.");
     // clang-format on
@@ -2524,13 +2524,13 @@ static void pg_dls_apply(void) {
     int max;
     pg_ord_build();
     if (!pg.nrows && (pg.subs || !pg.dscan_on)) {
-        pod_show(
+        m1_show(
             pg.view,
             1); /* (the large title and the storage line stay, the hint is painted under them: the first frame is the last) */
-        pod_show(pg.status, 0);
+        m1_show(pg.status, 0);
     } else {
-        pod_show(pg.view, 1);
-        pod_show(pg.status, 0);
+        m1_show(pg.view, 1);
+        m1_show(pg.status, 0);
     }
     pg_size();
     max = pg_content() - GRID_VIEW_H;
@@ -2650,8 +2650,8 @@ static void pg_open_show_with(int si, int off, pc_ep_t *all, int m) {
     pg_hdr_make();
     pg_title((const char *)0, pg.shows[si].title);
     pg_nav();
-    pod_show(pg.view, 1);
-    pod_show(pg.status, 0);
+    m1_show(pg.view, 1);
+    m1_show(pg.status, 0);
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_shape(&pg.hg, PS_ART, PS_ART_R,
                1); /* (the corners are cut in the alpha: the page's tint shows through them) */
@@ -2698,7 +2698,7 @@ static void pg_eps_shown(void) {
     pg_det_refind(); /* (the episode page stays on its episode, wherever the list put it) */
     pg_cells_drop();
     pg_hdr_make();
-    pod_show(pg.status, 0);
+    m1_show(pg.status, 0);
     pg_size();
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;
@@ -2735,7 +2735,7 @@ static void pg_srch_rows_reset(void) {
 /* The status line under the field (the label of the empty states), or none. */
 static void pg_srch_hint(const char *text) {
     pg.htext = text;
-    pod_show(pg.status, 0);
+    m1_show(pg.status, 0);
 }
 
 /* What the level shows for the state: the field's texts, the status line (Loading... while a preview is fetched, Searching..., No results, the failure's words) or the rows of the answer. */
@@ -2791,7 +2791,7 @@ static void pg_load_search(int fresh) {
     pg.from_search = pg.pv_disc = 0;
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg_nav();
-    pod_show(pg.view, 1);
+    m1_show(pg.view, 1);
     if (pg.sf_hint) widget_set_tr_text(pg.sf_hint, "Search Apple Podcasts");
     pg_srch_rows_reset();
     pg.sgen = pn_search_gen();
@@ -3131,7 +3131,7 @@ static void pg_subscribe(void) {
 /* The status line under the control (the label of the empty states), or none. */
 static void pg_disc_hint(const char *text) {
     pg.htext = text;
-    pod_show(pg.status, 0);
+    m1_show(pg.status, 0);
 }
 
 /* What the level shows for the state of the chart in view: its rows, or the status line (Loading... while it is asked for, the failure's words, No results). */
@@ -3233,7 +3233,7 @@ static void pg_load_disc(int fresh) {
     pg_title((const char *)0, TR("Discover"));
     pg_srch_rows_reset();
     pg_nav();
-    pod_show(pg.view, 1);
+    m1_show(pg.view, 1);
     pg_disc_apply();
     widget_set_prop_int(pg.sv, "yoffset", pg.doff[pg.dtab]);
     pg_collapse();
@@ -3436,13 +3436,13 @@ static void pg_select(int on) {
     memset(pg.pick, 0, sizeof pg.pick);
     pg.ncan = on ? pg_sel_scan(1) : 0;
     pg.press = pg.down = 0;
-    pod_show(pg.btn_more, 0);
-    pod_show(pg.np, !on);
-    pod_show(pg.btn_selall, on);
-    pod_show(pg.bar, on);
-    pod_show(pg.del, on && !(pg.level == L_DLS &&
-                             pg.subs)); /* the bar's one pill: Delete, or on the Subscriptions page Unsubscribe */
-    pod_show(pg.unsubp, on && pg.level == L_DLS && pg.subs);
+    m1_show(pg.btn_more, 0);
+    m1_show(pg.np, !on);
+    m1_show(pg.btn_selall, on);
+    m1_show(pg.bar, on);
+    m1_show(pg.del, on && !(pg.level == L_DLS &&
+                            pg.subs)); /* the bar's one pill: Delete, or on the Subscriptions page Unsubscribe */
+    m1_show(pg.unsubp, on && pg.level == L_DLS && pg.subs);
     if (pg.title && on)
         widget_resize(pg.title, SG_SELALL_X - NAV_TITLE_X,
                       22); /* (leaving select mode, pg_nav sets the width of the level) */
@@ -3535,8 +3535,8 @@ static int pg_on_back(void *ctx, void *e) {
 #define PG_DLG_MS 200
 
 static void pg_dlg_show(int on) {
-    pod_show(pg.dlg_scrim, on);
-    pod_show(pg.dlg_card, on);
+    m1_show(pg.dlg_scrim, on);
+    m1_show(pg.dlg_card, on);
     pg.dlg = on;
 }
 
@@ -3621,7 +3621,7 @@ static void pg_dlg_finish(void) {
 static int pg_dlg_tick(const void *timer) {
     (void)timer;
     if (!pg.win || !pg.fg || !pg.dlg ||
-        !pod_screen_lit()) { /* behind another page, closed, or dark: no visual work; the page's tick starts this again */
+        !m1_screen_lit()) { /* behind another page, closed, or dark: no visual work; the page's tick starts this again */
         pg.dlg_timer = 0;
         return RET_OK;
     }
@@ -4010,8 +4010,8 @@ static void pg_dls_back(void) {
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_placeholder(&pg.g);
     pg_title(pg.saved ? "Saved" : "Downloads", (const char *)0);
-    pod_show(pg.view, 1);
-    pod_show(pg.status, 0);
+    m1_show(pg.view, 1);
+    m1_show(pg.status, 0);
     if (pg.saved) { /* the episode may have been unsaved (or saved) since: the page is made again, at the offset it was left */
         pg_load_downloads(0);
         pg.want_off = off;
@@ -4160,8 +4160,8 @@ static const char *const pg_row_id[PG_SHEET_ROWS] = {"speed",     "refresh", "se
 static void pg_sheet_close(void) {
     if (!pg.sheet) return;
     pg.sheet = SH_NONE;
-    pod_show(pg.sh_scrim, 0);
-    pod_show(pg.sh_card, 0);
+    m1_show(pg.sh_scrim, 0);
+    m1_show(pg.sh_card, 0);
 }
 
 /* The grey value of row i (a value label v: 0 speed, 1 refresh), right aligned to x PS_SHEET_VALUE_R, in the room the row's label leaves (the label keeps its whole text), cut with an ellipsis by
@@ -4192,18 +4192,18 @@ static void pg_sheet_rows(const int *rows, int n) {
         for (k = 0; k < n; ++k)
             if (rows[k] == i) at = k;
         if (at < 0) {
-            pod_show(pg.sh_row[i], 0);
+            m1_show(pg.sh_row[i], 0);
             continue;
         }
         widget_move(pg.sh_row[i], 0, at * PM_ROW_H);
-        pod_show(pg.sh_row[i], 1);
+        m1_show(pg.sh_row[i], 1);
         widget_set_visible(pg.sh_hr[i], at > 0, 0);
     }
     widget_move(pg.sh_card, 0, AH_WIN_H - h);
     widget_resize(pg.sh_card, PG_W, h);
     widget_set_prop_str(pg.sh_card, "style:normal:bg_image", glass[n]);
-    pod_show(pg.sh_scrim, 1);
-    pod_show(pg.sh_card, 1);
+    m1_show(pg.sh_scrim, 1);
+    m1_show(pg.sh_card, 1);
 }
 
 static int pg_any_unplayed(void) {
@@ -4610,7 +4610,7 @@ static int pg_on_up(void *ctx, void *e) {
     pg.down = 0;
     pg_set_press(0);
     if (!a || !e || !pg.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - pg.down_x) >= PG_TAP_PX || pod_abs(I(e, PE_Y) - pg.down_y) >= PG_TAP_PX) return RET_OK;
+    if (m1_abs(I(e, PE_X) - pg.down_x) >= PG_TAP_PX || m1_abs(I(e, PE_Y) - pg.down_y) >= PG_TAP_PX) return RET_OK;
     same = pg_hit(e, &part2);
     if (pg.select) {
         if (a > 0 && same == a - 1) pg_toggle_pick(same); /* a tap marks and unmarks; a drag marks nothing */
@@ -4646,11 +4646,11 @@ static int pg_tick(const void *timer) {
         return RET_OK;
     }
     pc_note(cc_playing());
-    if (pod_screen_lit() && !pg.load_timer && pg_load_pending())
+    if (m1_screen_lit() && !pg.load_timer && pg_load_pending())
         pg_kick(); /* the screen is back on: the covers go on (the loader does nothing in the dark) */
-    if (pg.dlg && pod_screen_lit())
+    if (pg.dlg && m1_screen_lit())
         pg_dlg_arm(); /* the screen is back on: the dialog's own timer stopped while it was dark */
-    if (pod_screen_lit() && pg.level == L_SHOWS) {
+    if (m1_screen_lit() && pg.level == L_SHOWS) {
         if (!pg.dlg && pn_gen() != pg.gen)
             pg_load_shows(
                 1); /* the worker moved on (a show finished, a download came or went) or it ended: the files are read again, the covers and the place stay (not under the refresh dialog: every finished show would scan every folder again; pg_dlg_finish reads them once) */
@@ -4674,9 +4674,9 @@ static int pg_tick(const void *timer) {
         }
     }
     if (pg.sdone || pg.sback) pg_srch_pending();
-    if (pod_screen_lit() && pg.level == L_SRCH) pg_srch_sync();
-    if (pod_screen_lit() && pg.level == L_DISC) pg_disc_sync();
-    if (pod_screen_lit() && pg.level == L_EPS && !pg.preview &&
+    if (m1_screen_lit() && pg.level == L_SRCH) pg_srch_sync();
+    if (m1_screen_lit() && pg.level == L_DISC) pg_disc_sync();
+    if (m1_screen_lit() && pg.level == L_EPS && !pg.preview &&
         !pg.dlg) { /* (not under the refresh dialog: it reads the show again when it closes; the preview is no folder) */
         if (pn_gen() != pg.gen && !pg.select)
             pg_reload_eps(); /* (not while rows are marked: the marks are of these rows) a download started, finished or failed: the episodes are read again (a finished one is a file now) */
@@ -4686,7 +4686,7 @@ static int pg_tick(const void *timer) {
             pg_redraw();
         }
     }
-    if (pod_screen_lit() &&
+    if (m1_screen_lit() &&
         pg.level ==
             L_DLS) { /* the Downloads level: the rows again when the worker's state moved, the lines for a step of progress */
         if (pn_gen() != pg.gen && !pg.select) {
@@ -4702,12 +4702,12 @@ static int pg_tick(const void *timer) {
             pg_redraw();
         }
     }
-    if (pod_screen_lit() && pg.level == L_EPS &&
+    if (m1_screen_lit() && pg.level == L_EPS &&
         pc_rev() != pg.rev) { /* a place or a mark changed: the pills and the badges are painted again */
         pg.rev = pc_rev();
         pg_redraw();
     }
-    if (pg.rpend && (pg.level == L_SHOWS || (pg.level == L_EPS && pg.rone)) && pod_screen_lit() && !pn_dl_running() &&
+    if (pg.rpend && (pg.level == L_SHOWS || (pg.level == L_EPS && pg.rone)) && m1_screen_lit() && !pn_dl_running() &&
         !pn_busy()) {
         int only_new = pg.rpend - 1,
             one = pg.rone; /* the downloads have paused: the refresh the user asked for starts */
@@ -4728,7 +4728,7 @@ static int pg_awake_tick(const void *timer) {
     }
     if (pn_dl_running()) reset_poweroptions_timer(1, 1, 0);
     if (pg.rpend && !pn_dl_running() && !pn_busy() &&
-        (!(pg.level == L_SHOWS || (pg.level == L_EPS && pg.rone)) || !pg.fg || !pod_screen_lit()))
+        (!(pg.level == L_SHOWS || (pg.level == L_EPS && pg.rone)) || !pg.fg || !m1_screen_lit()))
         pg.rpend = pg.rone = 0; /* the page is not there to open the refresh's dialog: the downloads go on */
     if (!pg.rpend && pn_dl_waiting() && !pn_dl_running()) pn_dl_start();
     if (!pn_dl_count() && !pg.rpend) {
@@ -4763,13 +4763,13 @@ static int pg_on_fg(void *ctx, void *e) {
     if (pg.level == L_DISC && !pg.loading)
         pg_load_disc(0); /* (the region may have been changed in Settings meanwhile) */
     if (pg.dlg &&
-        pod_screen_lit()) { /* the dialog was up when another page came in front: it is still right (or closes at its first tick) */
+        m1_screen_lit()) { /* the dialog was up when another page came in front: it is still right (or closes at its first tick) */
         pg_dlg_update();
         pg_dlg_arm();
     }
     if (pg.level ==
         L_SHOWS) { /* a refresh may have ended, an episode played on, while another page was in front (dark: the next lit tick does it) */
-        if (pod_screen_lit())
+        if (m1_screen_lit())
             pg_load_shows(1);
         else
             pg.gen = pn_gen() - 1;
@@ -4795,10 +4795,9 @@ static int pg_on_bg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     pg.fg = 0;
-    if (pg.timer) timer_remove(pg.timer);
-    if (pg.load_timer) timer_remove(pg.load_timer);
-    if (pg.dlg_timer) timer_remove(pg.dlg_timer);
-    pg.timer = pg.load_timer = pg.dlg_timer = 0;
+    m1_timer_stop(&pg.timer);
+    m1_timer_stop(&pg.load_timer);
+    m1_timer_stop(&pg.dlg_timer);
     pg.down = 0;
     pg.press = 0;
     pg_bar_black(); /* the status bar is black again while another page is in front (it tints it itself) */
@@ -4809,9 +4808,9 @@ static int pg_on_bg(void *ctx, void *e) {
 static int pg_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (pg.timer) timer_remove(pg.timer);
-    if (pg.load_timer) timer_remove(pg.load_timer);
-    if (pg.dlg_timer) timer_remove(pg.dlg_timer);
+    m1_timer_stop(&pg.timer);
+    m1_timer_stop(&pg.load_timer);
+    m1_timer_stop(&pg.dlg_timer);
     if (pg.awake)
         timer_remove(
             pg.awake); /* the downloads go on while the device is awake; nothing keeps it awake without this window */
@@ -4851,11 +4850,11 @@ static int pg_on_destroy(void *ctx, void *e) {
 static void pg_sheet_bind(void) {
     char name[40];
     int i, ok = 1;
-    pg.sh_scrim = pod_bind(pg.win, "pg_sh_scrim", pg_on_sheet_scrim, (void *)0);
+    pg.sh_scrim = m1_bind(pg.win, "pg_sh_scrim", pg_on_sheet_scrim, (void *)0);
     pg.sh_card = widget_lookup(pg.win, "pg_sh_card", 1);
     for (i = 0; i < PG_SHEET_ROWS; ++i) {
         snprintf(name, sizeof name, "pg_sh_%s", pg_row_id[i]);
-        pg.sh_row[i] = pod_bind(pg.win, name, pg_on_sheet_row, (const void *)(unsigned)(i + 1));
+        pg.sh_row[i] = m1_bind(pg.win, name, pg_on_sheet_row, (const void *)(unsigned)(i + 1));
         snprintf(name, sizeof name, "pg_sh_%s_tx", pg_row_id[i]);
         pg.sh_tx[i] = widget_lookup(pg.win, name, 1);
         snprintf(name, sizeof name, "pg_sh_%s_hr", pg_row_id[i]);
@@ -4880,8 +4879,8 @@ int podcasts_open(void) {
     pg.win = window_open("m1plus_podcasts");
     if (!pg.win) return -1;
     widget_on(pg.win, EVT_DESTROY, pg_on_destroy, (void *)0);
-    pg.back = pod_bind(pg.win, "btn_return", pg_on_back, (void *)0);
-    pod_bind(pg.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    pg.back = m1_bind(pg.win, "btn_return", pg_on_back, (void *)0);
+    m1_bind(pg.win, "btn_backtoplayer", m1_on_player, (void *)0);
     pg.view = widget_lookup(pg.win, "view_grid", 1);
     pg.sv = widget_lookup(pg.win, "podcasts_scrollview", 1);
     pg.status = widget_lookup(pg.win, "label_status", 1);
@@ -4896,23 +4895,23 @@ int podcasts_open(void) {
     pg.dlg_name = widget_lookup(pg.win, "pod_pd_name", 1);
     pg.dlg_count = widget_lookup(pg.win, "pod_pd_count", 1);
     pg.dlg_fill = widget_lookup(pg.win, "pod_pd_fill", 1);
-    pg.dlg_cancel = pod_bind(pg.win, "pod_pd_cancel", pg_on_cancel, (void *)0);
+    pg.dlg_cancel = m1_bind(pg.win, "pod_pd_cancel", pg_on_cancel, (void *)0);
     /* select mode's widgets: optional (without them the sheets' Select rows never show) */
-    pg.btn_selall = pod_bind(pg.win, "btn_selall", pg_on_selall, (void *)0);
-    pg.del = pod_bind(pg.win, "pg_del", pg_on_delete, (void *)0);
-    pg.unsubp = pod_bind(pg.win, "pg_unsubp", pg_on_unsubs, (void *)0);
+    pg.btn_selall = m1_bind(pg.win, "btn_selall", pg_on_selall, (void *)0);
+    pg.del = m1_bind(pg.win, "pg_del", pg_on_delete, (void *)0);
+    pg.unsubp = m1_bind(pg.win, "pg_unsubp", pg_on_unsubs, (void *)0);
     pg.bar = widget_lookup(pg.win, "pg_bar", 1);
     pg.tint_img =
         widget_lookup(pg.win, "img_ah_tint",
                       1); /* the Show page's widgets: without the sheet or the tint the page works without them */
-    pg.btn_more = pod_bind(pg.win, "btn_more", pg_on_more, (void *)0);
+    pg.btn_more = m1_bind(pg.win, "btn_more", pg_on_more, (void *)0);
     pg.sf = widget_lookup(pg.win, "ps_field", 1);
     pg.sf_hint = widget_lookup(pg.win, "ps_hint", 1);
     pg.sf_text = widget_lookup(pg.win, "ps_text", 1);
     pg.sf_clear = widget_lookup(pg.win, "ps_clear", 1);
     pg.sfok = pg.sf && pg.sf_hint && pg.sf_text; /* without the field the page has no search */
-    pg.find = pod_bind(pg.win, "btn_search", pg_on_find, (void *)0); /* the Discover level's magnifier */
-    pg.btn_globe = pod_bind(pg.win, "btn_globe", pg_on_globe, (void *)0);
+    pg.find = m1_bind(pg.win, "btn_search", pg_on_find, (void *)0); /* the Discover level's magnifier */
+    pg.btn_globe = m1_bind(pg.win, "btn_globe", pg_on_globe, (void *)0);
     if (!pg.find || !pg.btn_globe) pg.sfok = 0; /* (a Discover level without the way to the search is not made) */
     pg.searchon = pg.sfok ? pcsearch_setting() : 0;
     for (i = 0; i < ST_N; ++i) {
@@ -4941,11 +4940,11 @@ int podcasts_open(void) {
     pg.dord = pg.ord ? pg.ord + PG_DLS_MAX : (unsigned short *)0;
     pg.sv_h = calloc(PG_DLD_MAX, sizeof *pg.sv_h);
     pg.sv_d = calloc(PG_DLD_MAX, sizeof *pg.sv_d);
-    if (pg.del) pod_centre_pill(pg.del, PL_BAR_PILL_W);
-    if (pg.unsubp) pod_centre_pill(pg.unsubp, PL_BAR_PILL_W);
+    if (pg.del) m1_centre_pill(pg.del, PL_BAR_PILL_W);
+    if (pg.unsubp) m1_centre_pill(pg.unsubp, PL_BAR_PILL_W);
     pc_root(pg.root);
-    pg.mark[0] = pod_make_mark(pg.win, "unselect");
-    pg.mark[1] = pod_make_mark(pg.win, "selected");
+    pg.mark[0] = m1_make_mark(pg.win, "unselect");
+    pg.mark[1] = m1_make_mark(pg.win, "selected");
     if (!pg.mark[1] && pg.mark[0]) bitmap_destroy(pg.mark[0]), pg.mark[0] = (void *)0;
     pg.fg = 1;
     pg.noscroll = !widget_on(pg.sv, EVT_SCROLL, pg_on_scroll, (void *)0) ||

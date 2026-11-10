@@ -111,7 +111,7 @@ static unsigned next_number(char *path, unsigned n) {
 /* Whether the card is mounted (its mount point is another file system than the one it is in) and has room for the file. */
 static int storage_ok(unsigned bytes) {
     unsigned a[32];
-    if (!pod_card_mounted()) return 0;
+    if (!m1_card_mounted()) return 0;
     mkdir(SHOT_DIR, 0755);
     if (access(SHOT_DIR, F_OK) || statfs(SHOT_DIR, a)) return 0;
     return (unsigned long long)a[7] * a[1] >=
@@ -143,13 +143,7 @@ static int write_bmp(const unsigned char *fb, unsigned w, unsigned h, unsigned l
         }
         ok = write(fd, row, stride) == (int)stride;
     }
-    ok = ok && fsync(fd) == 0;
-    ok = (close(fd) == 0) && ok;
-    if (!ok || rename(SHOT_TMP, path)) {
-        unlink(SHOT_TMP); /* no partial file */
-        return R_FAIL;
-    }
-    return R_OK;
+    return m1_commit(fd, ok, SHOT_TMP, path) ? R_OK : R_FAIL; /* (no partial file) */
 }
 
 /* Read the panel: its format from the driver, the visible buffer mapped read-only, written out. */
@@ -243,8 +237,7 @@ void shot_start(void) {
     if (sh.phase == SH_COUNT) {
         sh.phase = SH_ASK_CANCEL;
         if (pod_confirm(TR("Cancel the screenshot?")) && sh.phase == SH_ASK_CANCEL) {
-            if (sh.timer) timer_remove(sh.timer);
-            sh.timer = 0;
+            m1_timer_stop(&sh.timer);
             finish();
         } else if (sh.phase == SH_ASK_CANCEL)
             sh.phase = SH_COUNT;

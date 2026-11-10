@@ -180,7 +180,7 @@ def search_layout(n):
 
 
 def capsule(x, y, w, h, r, c):
-    """The rectangles patch/common.c pod_capsule fills for a capsule w x h at (x, y), corner radius r (at most half the height), colour c (a color_t word): [(colour, x, y, w, h)]. Each corner row is inset by the circle's chord on the
+    """The rectangles patch/common.c m1_capsule fills for a capsule w x h at (x, y), corner radius r (at most half the height), colour c (a color_t word): [(colour, x, y, w, h)]. Each corner row is inset by the circle's chord on the
     row's middle, in 1/256 px; the pixel at the end is lit by what the circle leaves of it (the colour's alpha scaled by 255 - the fraction), the rows between the corners are one fill."""
     import math
     r = max(0, min(r, h // 2, w // 2))
@@ -201,7 +201,7 @@ def capsule(x, y, w, h, r, c):
 
 
 def segmented(x, y, w, h, n, sel):
-    """The segmented control patch/common.c pod_segmented paints (docs/modules/ui-rules.md "Segmented control"): the track and the thumb as (x, y, w, h, radius), the hairlines between unselected segments (x, y, w, h), and each
+    """The segmented control patch/common.c m1_segmented paints (docs/modules/ui-rules.md "Segmented control"): the track and the thumb as (x, y, w, h, radius), the hairlines between unselected segments (x, y, w, h), and each
     segment's box (x, w). Colours are SEG_TRACK, SEG_THUMB and SEG_SEP of patch/offsets.inc."""
     o, pad = O, O['SEG_PAD']
     seg = (w - 2 * pad) // n

@@ -87,9 +87,6 @@ def flags(m, name):
     return m.props.get((m.widgets[name], 'visible'), 1), m.props.get((m.widgets[name], 'sensitive'), 1)
 
 
-def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
-
-
 def refg(m):
     """The page goes behind another and comes back (the events the window gets): the Shows level is read again."""
     for ev in ('EVT_WINDOW_TO_BG', 'EVT_WINDOW_TO_FG'):
@@ -838,7 +835,3 @@ def caption_tests(ctx):
 
 
 SECTIONS = [layout_tests, title_tests, line_tests, cont_tests, library_tests, grid_tests, caption_tests, sheet_tests, gone_tests, empty_tests, width_tests, off_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

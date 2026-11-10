@@ -153,7 +153,7 @@ int pd_open_settings(const char *name) {
     int ret;
     for (i = 0; i < 2 && strcmp(name, PD_SET[i].nav); i++) {
     }
-    if (i < 2 && pod_restack_window(PD_SET[i].window)) {
+    if (i < 2 && m1_restack_window(PD_SET[i].window)) {
         *PD_SET[i].flag = 1;
         return RET_OK;
     }

@@ -647,5 +647,4 @@ def busy_tests(ctx):
     expect(fn(m, 'pn_art_again', 2) == PN['NOWIFI'], 'the guards run for a part too')
 
 
-def run(ctx):
-    for f in (json_tests, job_tests, lyrics_tests, failure_tests, busy_tests, cancel_tests, pick_tests, rebuild_tests): f(ctx)
+SECTIONS = [json_tests, job_tests, lyrics_tests, failure_tests, busy_tests, cancel_tests, pick_tests, rebuild_tests]

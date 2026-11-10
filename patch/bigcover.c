@@ -119,7 +119,7 @@ static void bc_finish(void) {
 /* Ask the worker for the track's art. Whether it is running; busy or not yet allowed: nothing is changed (the next tick retries). */
 static void bc_start_job(const char *path) {
     int busy, src = bc_src(path);
-    if (*path != '/' || !src || !np_cover_file(&busy) || busy || cc_build_busy() || !pod_screen_lit()) return;
+    if (*path != '/' || !src || !np_cover_file(&busy) || busy || cc_build_busy() || !m1_screen_lit()) return;
     unlink(BC_TMP), unlink(BC_TMP ".tmp");
     if (!cc_build_open(1, CC_MISSING)) return;
     if (cc_build_add_aspect(path, BC_TMP, BC_SIZE, src) != 1 || !cc_build_start()) {
@@ -213,7 +213,7 @@ static int bc_on_paint(void *ctx, void *e) {
 /* The page is over (or replaced): the job goes, the timer, the files and the bitmap. */
 static void bc_stop(void) {
     bc_drop();
-    if (bc.timer) timer_remove(bc.timer);
+    m1_timer_stop(&bc.timer);
     if (bc.bmp) bitmap_destroy(bc.bmp);
     memset(&bc, 0, sizeof bc);
 }
@@ -245,7 +245,7 @@ static void bc_start(void *win) {
     if (!bc.timer ||
         !widget_on(bc.img, EVT_AFTER_PAINT, bc_on_paint,
                    (void *)0)) { /* the page stays stock; the destroy handler finds no window of ours any more */
-        if (bc.timer) timer_remove(bc.timer);
+        m1_timer_stop(&bc.timer);
         memset(&bc, 0, sizeof bc);
         return;
     }

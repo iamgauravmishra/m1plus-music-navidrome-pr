@@ -7,7 +7,8 @@ without a device. Modelled on q2-pod's test/patch.py.
 
 Requires unicorn (venv) and a workdir built by tools/build.py (its podbuild/manifest.json).
 Usage: uv run python -I test/patch.py WORKDIR [MODULE[/SECTION]...]     (default: every module; SECTION: one function of
-the module's SECTIONS list, which its run(ctx) runs in order and tools/check.py runs as separate tasks)
+the module's SECTIONS list, run in order for the whole module and as separate tasks by tools/check.py; a module without
+the list has a run(ctx))
 """
 import importlib.util, os, sys, time
 
@@ -36,7 +37,9 @@ def main():
         mod, _, section = name.partition('/')
         m = load(f'podtest_{mod}', os.path.join(HERE, 'pod', mod + '.py'))
         if section: next(f for f in m.SECTIONS if f.__name__ == section)(ctx)
-        else: m.run(ctx)
+        elif hasattr(m, 'run'): m.run(ctx)
+        else:
+            for f in m.SECTIONS: f(ctx)
         print(f'{name:10} {ctx.passed - before[0]:4} passed, {ctx.failed - before[1]} failed  {time.time() - t:5.1f}s')
     print(f'{ctx.passed} passed, {ctx.failed} failed  ({time.time() - t0:.1f}s)')
     sys.exit(1 if ctx.failed else 0)

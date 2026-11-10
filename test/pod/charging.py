@@ -267,7 +267,3 @@ def settings_tests(ctx):
 
 
 SECTIONS = [limit_tests, hold_tests, release_tests, settings_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

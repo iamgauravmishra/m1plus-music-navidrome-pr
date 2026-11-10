@@ -355,7 +355,3 @@ def engine_tests(ctx):
 
 
 SECTIONS = [engine_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for s in SECTIONS: s(ctx)

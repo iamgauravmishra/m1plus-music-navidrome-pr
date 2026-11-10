@@ -13,6 +13,7 @@
 #include "i18n.h"
 #include "home.h"
 #include "podcasts.h"
+#include "fnv.h"
 
 #define I(r, off) (*(int *)((char *)(r) + (off)))
 
@@ -99,8 +100,7 @@ static unsigned pm_num(const char *s, unsigned n) {
 }
 
 unsigned pc_hash(const char *s) {
-    unsigned h = FNV_SEED;
-    for (; *s; ++s) h = (h ^ (unsigned)pm_lc((unsigned char)*s)) * 16777619u;
+    unsigned h = m1_fnv_fold(FNV_SEED, s);
     return h | !h;
 }
 
@@ -422,7 +422,7 @@ static int pm_summary(const char *root, pc_show_t *s) {
     s->hash = pc_hash(s->dir);
     pm_cpy(s->title, PC_TITLE, s->dir);
     if (pm_join(path, sizeof path, root, s->dir, ".episodes") &&
-        (buf = pod_read_file(path, PM_META_MAX, &n)) != (char *)0) {
+        (buf = m1_read_file(path, PM_META_MAX, &n)) != (char *)0) {
         s->newest = pm_newest_pub(
             buf, n); /* the entries' dates: a downloaded file's own date is the download's, not the episode's */
         has_eps = s->newest != 0; /* (entries with no date: the files' dates, as the merge takes them) */
@@ -455,7 +455,7 @@ static int pm_summary(const char *root, pc_show_t *s) {
     }
     closedir(d);
     if (!has_eps) s->newest = file_newest;
-    if (pm_join(path, sizeof path, root, s->dir, ".show") && (buf = pod_read_file(path, 4096, &n)) != (char *)0) {
+    if (pm_join(path, sizeof path, root, s->dir, ".show") && (buf = m1_read_file(path, 4096, &n)) != (char *)0) {
         pc_parse_show(buf, n, s);
         free(buf);
     }
@@ -678,7 +678,7 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
     }
     nf = pm_files(root, show->dir, files, PM_MAX_FILES);
     if (pm_join(path, sizeof path, root, show->dir, ".episodes") &&
-        (buf = pod_read_file(path, PM_META_MAX, &got)) != (char *)0) {
+        (buf = m1_read_file(path, PM_META_MAX, &got)) != (char *)0) {
         nm = pc_parse_eps(buf, got, work, PC_MAX_EPS);
         free(buf);
     }
@@ -854,7 +854,7 @@ void pc_flush(void) {
     unsigned head[2];
     if (!pm.dirty || !pm.s) return;
     head[0] = 0x31524350u, head[1] = pm.n;
-    if (pod_card_write(PM_STATE_DIR, PM_RING_FILE, PM_RING_TMP, head, 8, pm.s, pm.n * (unsigned)sizeof *pm.s) == 0)
+    if (m1_card_write(PM_STATE_DIR, PM_RING_FILE, PM_RING_TMP, head, 8, pm.s, pm.n * (unsigned)sizeof *pm.s) == 0)
         pm.dirty = 0; /* a failed write is tried again with the next change */
     pcs.save_ms = time_now_ms();
 }
@@ -1045,7 +1045,7 @@ static int pm_tab_set(int k, unsigned show, unsigned value) {
         at = t->w[1] - 1;
     }
     t->w[2 + 2 * at] = show, t->w[3 + 2 * at] = value;
-    if (pod_card_write(PM_STATE_DIR, pm_tab_file(k), pm_tab_tmp(k), t->w, 8, t->w + 2, t->w[1] * 8) == 0) return 1;
+    if (m1_card_write(PM_STATE_DIR, pm_tab_file(k), pm_tab_tmp(k), t->w, 8, t->w + 2, t->w[1] * 8) == 0) return 1;
     memcpy(t->w, saved, sizeof saved); /* not saved: the old table stays */
     return 0;
 }

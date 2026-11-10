@@ -144,11 +144,6 @@ def tap(m, x, y, dx=0, dy=0):
     return list(m.calls)
 
 
-def click(m, name):
-    m.click(name, count=900000000)
-    return list(m.calls)
-
-
 def tick(m):
     r = m.call(PSYMS['qp_on_tick'], count=900000000)
     return r, list(m.calls)
@@ -1135,7 +1130,3 @@ def server_tests(ctx):
 
 
 SECTIONS = [asset_tests, open_tests, header_tests, rows_tests, loader_tests, episode_tests, collab_tests, server_tests, cmap_tests, scroll_tests, play_tests, mode_tests, tick_tests, shuffle_tests, clear_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

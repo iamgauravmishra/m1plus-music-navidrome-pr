@@ -40,15 +40,6 @@ FEED_WSJ = SU.WSJ
 NYT_OPINION = 1548604447   # the show of the first episode of the sample Top Episodes (its url is .../id1548604447?i=1000799878707)
 
 
-def cut(s, cap):
-    out, n = '', 0
-    for ch in s:
-        b = len(ch.encode('utf-8'))
-        if n + b > cap - 1: break
-        out, n = out + ch, n + b
-    return out
-
-
 def oracle(raw, episodes):
     """[(id, name, author, art)] the documented way, by json.loads: the show's "id" (digits, a string), or for an episode the digits after /id in its url; "" for none; strings cut at their field's size."""
     out = []
@@ -388,8 +379,6 @@ def level(**kw):
     return m
 
 
-
-
 def rows(m, off=0):
     return SU.level_rows(m, off)
 
@@ -489,7 +478,7 @@ def flags(m, n): return SU.flags(m, n)
 
 
 def segmented_tests(ctx):
-    """The shared painter (patch/common.c pod_segmented, pod_capsule) for any number of segments: the track and the thumb of each selection against tools/pod_show.py segmented / capsule, a hairline between two segments
+    """The shared painter (patch/common.c m1_segmented, m1_capsule) for any number of segments: the track and the thumb of each selection against tools/pod_show.py segmented / capsule, a hairline between two segments
     that are both unselected and none beside the thumb, the labels centred in their segments (dark on the thumb), nothing painted outside the view's rows."""
     expect = ctx.expect
     m = SU.opened()
@@ -504,7 +493,7 @@ def segmented_tests(ctx):
     for sel in range(5):
         for a, v in enumerate((w, h, 5, sel, on, off, lbl, lens)): m.setword(STACK + 16 + 4 * a, v)
         m.fills.clear(); m.texts.clear(); m.text_styles.clear()
-        m.call(PSYMS['pod_segmented'], a0=m.canvas, a1=400, a2=x, a3=y, count=40000000)
+        m.call(PSYMS['m1_segmented'], a0=m.canvas, a1=400, a2=x, a3=y, count=40000000)
         S = pod_show.segmented(x, y, w, h, 5, sel)
         fset = set(m.fills)
         track, thumb = pod_show.capsule(*S['track'][:4], S['track'][4], O_['SEG_TRACK']), pod_show.capsule(*S['thumb'][:4], S['thumb'][4], O_['SEG_THUMB'])
@@ -522,11 +511,11 @@ def segmented_tests(ctx):
     # a view that ends inside the shape: no row outside it is painted
     for a, v in enumerate((w, h, 5, 2, on, off, lbl, lens)): m.setword(STACK + 16 + 4 * a, v)
     m.fills.clear(); m.texts.clear()
-    m.call(PSYMS['pod_segmented'], a0=m.canvas, a1=y + 20, a2=x, a3=y, count=40000000)
+    m.call(PSYMS['m1_segmented'], a0=m.canvas, a1=y + 20, a2=x, a3=y, count=40000000)
     expect(m.fills and all(f[2] + f[4] <= y + 20 for f in m.fills) and not m.texts, 'rows below view_h are cut: no fill ends past it, and a label that is not wholly inside is not drawn')
     m.fills.clear()
     for a, v in enumerate((w, h, 5, 2, on, off, lbl, lens)): m.setword(STACK + 16 + 4 * a, v)
-    m.call(PSYMS['pod_segmented'], a0=m.canvas, a1=400, a2=x, a3=-20, count=40000000)
+    m.call(PSYMS['m1_segmented'], a0=m.canvas, a1=400, a2=x, a3=-20, count=40000000)
     expect(m.fills and all(f[2] >= 0 for f in m.fills), 'rows above the view are cut too')
 
 
@@ -1007,7 +996,3 @@ def asset_tests(ctx):
 
 
 SECTIONS = [json_tests, episode_json_tests, pf_iso_tests, net_tests, failure_tests, layout_tests, segmented_tests, switch_tests, tap_tests, episode_tests, notavail_tests, state_tests, width_tests, asset_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

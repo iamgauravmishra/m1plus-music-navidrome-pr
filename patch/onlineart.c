@@ -322,7 +322,7 @@ static void oa_es_apply(const oa_es_t *s) {
         oa_vis(oa.l_status, 0);
         oa_vis(oa.es_icon, 0);
         oa_vis(oa.es_text, 0);
-        pod_show(oa.retry, 0);
+        m1_show(oa.retry, 0);
         return;
     }
     y = OA_ES_CENTRE - ((g ? OA_ES_ICON + OA_ES_ICON_GAP : 0) + OA_ES_TITLE_H +
@@ -349,7 +349,7 @@ static void oa_es_apply(const oa_es_t *s) {
     oa_vis(oa.es_icon, g);
     oa_vis(oa.l_status, 1);
     oa_vis(oa.es_text, t);
-    pod_show(oa.retry, p);
+    m1_show(oa.retry, p);
 }
 
 /* The content view's height for what it shows, the list told so, the offset kept inside. */
@@ -371,13 +371,13 @@ static void oa_resize(void) {
 /* The widgets of the mode. */
 static void oa_modes(void) {
     int m = oa.mode;
-    pod_show(oa.chips, m == 0);
-    pod_show(oa.sep, m != 1);
-    pod_show(oa.list, m != 1);
-    pod_show(oa.dc, m == 1);
-    pod_show(oa.l_head, m == 2);
-    pod_show(oa.l_sub, m == 2);
-    if (m != 2) pod_show(oa.lpill, 0);
+    m1_show(oa.chips, m == 0);
+    m1_show(oa.sep, m != 1);
+    m1_show(oa.list, m != 1);
+    m1_show(oa.dc, m == 1);
+    m1_show(oa.l_head, m == 2);
+    m1_show(oa.l_sub, m == 2);
+    if (m != 2) m1_show(oa.lpill, 0);
     if (m != 0) oa_es_apply((const oa_es_t *)0);
 }
 
@@ -391,16 +391,16 @@ static void oa_sync(void) {
         const char *hint = oa.saving || (oa.pend >= 0 && oa.ready) ? "" : oa.hint_code ? oa_word(oa.hint_code) : "";
         int on = oa.ready;
         widget_set_text_utf8(oa.l_hint, hint);
-        pod_show(oa.l_hint, *hint != 0);
+        m1_show(oa.l_hint, *hint != 0);
         widget_set_text_utf8(oa.pill, oa.saving || oa.pend >= 0 ? TR("Saving…")
                                       : oa.replace              ? TR("Replace Cover")
                                                                 : TR("Use This Cover"));
-        pod_show(oa.pill, on);
+        m1_show(oa.pill, on);
     } else {
         const char *err = oa.save_failed ? oa_word(PN_STORAGE) : (const char *)0;
         if (err) widget_set_text_utf8(oa.l_sub, err);
         widget_set_text_utf8(oa.lpill, oa.exists ? TR("Replace Lyrics") : TR("Save Lyrics"));
-        pod_show(oa.lpill, oa.lw != (unsigned *)0 && oa.nln > 0);
+        m1_show(oa.lpill, oa.lw != (unsigned *)0 && oa.nln > 0);
         oa_resize();
     }
     oa_redraw();
@@ -526,8 +526,8 @@ static void oa_cover_open(int i) {
     widget_set_text_utf8(oa.l_name, name);
     widget_set_text_utf8(oa.l_artist, artist);
     widget_set_text_utf8(oa.l_source, pn_art_source(i) == PN_SRC_DEEZER ? "Deezer" : "iTunes");
-    pod_show(oa.pill, 0);
-    pod_show(oa.l_hint, 0);
+    m1_show(oa.pill, 0);
+    m1_show(oa.l_hint, 0);
     grid_drop(&oa.gd);
     grid_placeholder(&oa.gd);
     oa_dtile()->art = 2;
@@ -671,7 +671,7 @@ static int oa_on_back(void *ctx, void *e) {
         oa_leave();
         return RET_OK;
     }
-    return pod_on_back(ctx, e);
+    return m1_on_back(ctx, e);
 }
 
 /* ---------------------------------------------------------------------------
@@ -984,7 +984,7 @@ static int oa_on_up(void *ctx, void *e) {
     oa_unpress();
     if (a < 0 || !e || !oa.view || oa.mode) return RET_OK;
     oa_local(e, &x, &y);
-    if (pod_abs(x - oa.down_x) >= SC_DRAG_PX || pod_abs(y - oa.down_y) >= SC_DRAG_PX || oa_item_at(x, y) != a)
+    if (m1_abs(x - oa.down_x) >= SC_DRAG_PX || m1_abs(y - oa.down_y) >= SC_DRAG_PX || oa_item_at(x, y) != a)
         return RET_OK;
     if (oa.fail[oa.chip] || (oa.want >> oa.chip & 1)) return RET_OK;
     if (oa.chip == 0)
@@ -1032,7 +1032,7 @@ static int oa_on_save(void *ctx, void *e) {
 static int oa_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != oa.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
-    if (oa.timer) timer_remove(oa.timer);
+    m1_timer_stop(&oa.timer);
     if (pn_job_busy())
         pn_cancel(); /* the worker ends by itself; its scratch files are removed by the next lookup */
     else
@@ -1115,8 +1115,8 @@ int onlineart_open(void) {
         return -1;
     }
     widget_on(oa.win, EVT_DESTROY, oa_on_destroy, oa.win);
-    pod_bind(oa.win, "btn_return", oa_on_back, (void *)0);
-    pod_bind(oa.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(oa.win, "btn_return", oa_on_back, (void *)0);
+    m1_bind(oa.win, "btn_backtoplayer", m1_on_player, (void *)0);
     oa.chips = widget_lookup(oa.win, "oa_chips", 1);
     oa.chl = widget_lookup(oa.win, "oa_chip_hl", 1);
     oa.sep = widget_lookup(oa.win, "oa_sep", 1);
@@ -1141,9 +1141,9 @@ int onlineart_open(void) {
     oa.st_badge = widget_lookup(oa.win, "label_badge", 1);
     oa.st_badge_on = widget_lookup(oa.win, "label_badge_on", 1);
     oa.st_line = widget_lookup(oa.win, "label_line", 1);
-    oa.lpill = pod_bind(oa.win, "oa_lsave", oa_on_save, (void *)0);
-    oa.pill = pod_bind(oa.win, "oa_save", oa_on_use, (void *)0);
-    oa.retry = pod_bind(oa.win, "oa_es_retry", oa_on_retry, (void *)0);
+    oa.lpill = m1_bind(oa.win, "oa_lsave", oa_on_save, (void *)0);
+    oa.pill = m1_bind(oa.win, "oa_save", oa_on_use, (void *)0);
+    oa.retry = m1_bind(oa.win, "oa_es_retry", oa_on_retry, (void *)0);
     if (!oa.chips || !oa.chl || !oa.sep || !oa.list || !oa.sv || !oa.view || !oa.l_status || !oa.l_hint || !oa.l_head ||
         !oa.l_sub || !oa.dc || !oa.dc_art || !oa.l_name || !oa.l_artist || !oa.l_source || !oa.st_title || !oa.st_sub ||
         !oa.st_chip || !oa.st_chip_on || !oa.st_badge || !oa.st_badge_on || !oa.st_line || !oa.lpill || !oa.pill ||
@@ -1169,9 +1169,9 @@ int onlineart_open(void) {
     oa_chips_setup();
     oa_badge_width();
     oa_chip_fx();
-    pod_show(oa.l_hint, 0);
-    pod_show(oa.pill, 0);
-    pod_show(oa.lpill, 0);
+    m1_show(oa.l_hint, 0);
+    m1_show(oa.pill, 0);
+    m1_show(oa.lpill, 0);
     oa_modes();
     oa_sync();
     oa.timer = timer_add(oa_tick, (void *)0, OA_TICK_MS);

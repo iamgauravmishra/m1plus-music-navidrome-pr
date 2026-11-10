@@ -29,8 +29,6 @@ SET_KEYS = ['Shuffle', 'Repeat', 'Appearance']
 PANE = (O['IP_PANE_X'], 0, O['IP_PANE_W'], O['IP_SCREEN_H'])
 
 
-
-
 def ip_lerp(a, b, i, n):
     """patch/ipod.c ip_lerp: the colour a .. b (r | g << 8 | b << 16) at i of n - 1, C's truncating division."""
     def ch(k):
@@ -1974,7 +1972,3 @@ def server_cover_tests(ctx):
 
 
 SECTIONS = [angle_tests, asset_tests, menu_tests, open_tests, paint_tests, wheel_tests, feel_tests, tap_tests, nav_tests, stale_tests, playing_indicator_tests, music_menu_tests, root_shortcut_tests, now_row_tests, menu_padding_tests, rich_rows_tests, row_art_tests, playlist_art_tests, now_material_tests, classic_material_tests, split_menu_tests, pane_tests, server_cover_tests, shuffle_tests, settings_tests, i18n_tests, appearance_tests, transition_tests, fresh_art_tests, pane_sharp_tests, reference_nav_tests, shadow_slide_tests, now_steady_tests, podcasts_tests, podcasts_pane_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

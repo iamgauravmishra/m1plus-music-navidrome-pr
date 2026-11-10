@@ -164,7 +164,7 @@ class BM(Machine):
 
 
 def corner_coverage(r):
-    """patch/common.c pod_corner_fill: r x r bytes, the coverage (0..255) outside a quarter circle of radius r centred on the square's inner corner."""
+    """patch/common.c m1_corner_fill: r x r bytes, the coverage (0..255) outside a quarter circle of radius r centred on the square's inner corner."""
     c, out = 16 * r, []
     for y in range(r):
         for x in range(r):

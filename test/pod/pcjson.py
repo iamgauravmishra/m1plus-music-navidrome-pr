@@ -10,16 +10,6 @@ REC = 4 + NAME + AUTHOR + URL + 2 * ART
 REGION, SIZE = 0x30000000, 0x40000   # the input and the output each get a mapped region ending where a page is unmapped
 
 
-def cut(s, cap):
-    """At most cap - 1 bytes of s, whole characters only."""
-    out, n = '', 0
-    for ch in s:
-        b = len(ch.encode('utf-8'))
-        if n + b > cap - 1: break
-        out, n = out + ch, n + b
-    return out
-
-
 def oracle(text, cap=None):
     """[(id, name, author, feed, art)] the documented way: the results that have a name or a feed, strings cut at their field's size (a url that does not fit is none)."""
     d = json.loads(text)
@@ -256,7 +246,3 @@ def fuzz_tests(ctx):
 
 
 SECTIONS = [real_tests, string_tests, field_tests, depth_tests, truncation_tests, fuzz_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

@@ -42,8 +42,8 @@ static unsigned dur_sum(const dur_ent_t *e, unsigned n) {
 
 /* The file into ln.tab; anything wrong with it reads as an empty table. */
 static void dur_read(void) {
-    long size = pod_card_mounted() ? cc_file_size(DUR_FILE)
-                                   : 0; /* no card, or the computer holds it (USB mode): no table, nothing read */
+    long size = m1_card_mounted() ? cc_file_size(DUR_FILE)
+                                  : 0; /* no card, or the computer holds it (USB mode): no table, nothing read */
     unsigned char *buf;
     unsigned n, i, *h;
     int fd, got = 0, r = 1;
@@ -97,7 +97,7 @@ static unsigned dur_clears __attribute__((section(".scratch")));
 unsigned dur_epoch(void) { return dur_clears; }
 
 void dur_clear(void) {
-    if (pod_card_mounted()) unlink(DUR_FILE), unlink(DUR_TMP); /* (never touch the mount point while the card is out) */
+    if (m1_card_mounted()) unlink(DUR_FILE), unlink(DUR_TMP); /* (never touch the mount point while the card is out) */
     ++dur_clears;
     free(ln.seen);
     ln.seen = (unsigned char *)0;
@@ -115,7 +115,7 @@ void dur_stat_open(void) {
     long size;
     int fd;
     memset(&ds, 0, sizeof ds);
-    if (!pod_card_mounted()) return; /* no card, or the computer holds it (USB mode) */
+    if (!m1_card_mounted()) return; /* no card, or the computer holds it (USB mode) */
     fd = open(DUR_FILE, O_RDONLY, 0);
     if (fd < 0) return;
     if (read(fd, h, DUR_HDR) == DUR_HDR && h[0] == DUR_MAGIC) {
@@ -182,8 +182,8 @@ static int dur_write(void) {
     h[0] = DUR_MAGIC, h[1] = ln.n,
     h[2] = dur_sum(
         ln.tab,
-        ln.n); /* (pod_card_write: CARD_DIR made, DUR_TMP, fsync, rename; -1 and nothing written while the card is out) */
-    return pod_card_write(CARD_DIR, DUR_FILE, DUR_TMP, h, DUR_HDR, ln.tab, ln.n * (unsigned)sizeof *ln.tab);
+        ln.n); /* (m1_card_write: CARD_DIR made, DUR_TMP, fsync, rename; -1 and nothing written while the card is out) */
+    return m1_card_write(CARD_DIR, DUR_FILE, DUR_TMP, h, DUR_HDR, ln.tab, ln.n * (unsigned)sizeof *ln.tab);
 }
 
 /* Shell sort by key (stable enough: equal keys are one file measured twice, with one answer). */
@@ -327,11 +327,11 @@ void dur_text(char *out, unsigned size, unsigned sec) {
     h = m / 60;
     m %= 60;
     if (!h) {
-        pod_fmt(out, size, TR(m == 1 ? "%d minute" : "%d minutes"), (int)m);
+        m1_fmt(out, size, TR(m == 1 ? "%d minute" : "%d minutes"), (int)m);
         return;
     }
     if (!m) {
-        pod_fmt(out, size, TR(h == 1 ? "%d hour" : "%d hours"), (int)h);
+        m1_fmt(out, size, TR(h == 1 ? "%d hour" : "%d hours"), (int)h);
         return;
     }
     dur_subst2(out, size,

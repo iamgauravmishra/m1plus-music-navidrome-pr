@@ -276,7 +276,3 @@ def state_tests(ctx):
 
 
 SECTIONS = [asset_tests, songs_view_tests, album_view_tests, data_tests, state_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

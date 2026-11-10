@@ -48,7 +48,7 @@ static void rn_color(void *w, unsigned color) {
 }
 
 /* The window's tone from a decoded logo: the average of its pixels that are neither white ground nor black (transparency); none of them, or none at all: Now Playing's neutral grey. The same
- * tone rule as Now Playing and the album page (pod_tone, patch/common.c). */
+ * tone rule as Now Playing and the album page (m1_tone, patch/common.c). */
 static unsigned rn_tone(const unsigned *px, unsigned n) {
     unsigned long r = 0, g = 0, b = 0;
     unsigned i, k = 0;
@@ -60,7 +60,7 @@ static unsigned rn_tone(const unsigned *px, unsigned n) {
         r += cr, g += cg, b += cb, ++k;
     }
     if (k < n / 50 || !k) return NP_NEUTRAL;
-    return pod_tone((unsigned)(r / k), (unsigned)(g / k), (unsigned)(b / k));
+    return m1_tone((unsigned)(r / k), (unsigned)(g / k), (unsigned)(b / k));
 }
 
 #define RN_LOGO 192 /* the logo's size: the largest the cache keeps (PV_SIZE) */
@@ -177,7 +177,7 @@ static int rn_tick(const void *unused) {
         rn.timer = 0;
         return RET_OK;
     }
-    if (pod_screen_lit() && pod_is_top(rn.win)) rn_refresh();
+    if (m1_screen_lit() && m1_is_top(rn.win)) rn_refresh();
     return RET_REPEAT;
 }
 
@@ -241,10 +241,10 @@ static int rn_on_next(void *ctx, void *e) {
  */
 static void rn_sheet_close(void) {
     rn.sheet = 0;
-    pod_show(rn.sh_scrim, 0);
-    pod_show(rn.sh_card, 0);
-    pod_show(rn.sh_row, 0);
-    pod_show(rn.sh_info, 0);
+    m1_show(rn.sh_scrim, 0);
+    m1_show(rn.sh_card, 0);
+    m1_show(rn.sh_row, 0);
+    m1_show(rn.sh_info, 0);
 }
 
 static int rn_on_more(void *ctx, void *e) {
@@ -264,10 +264,10 @@ static int rn_on_more(void *ctx, void *e) {
     widget_move(rn.sh_card, 0, AH_WIN_H - 2 * PM_ROW_H);
     widget_resize(rn.sh_card, 320, 2 * PM_ROW_H);
     widget_set_prop_str(rn.sh_card, "style:normal:bg_image", "pc_sheet2");
-    pod_show(rn.sh_row, 1);
-    pod_show(rn.sh_info, 1);
-    pod_show(rn.sh_scrim, 1);
-    pod_show(rn.sh_card, 1);
+    m1_show(rn.sh_row, 1);
+    m1_show(rn.sh_info, 1);
+    m1_show(rn.sh_scrim, 1);
+    m1_show(rn.sh_card, 1);
     return RET_OK;
 }
 
@@ -303,7 +303,7 @@ static int rn_on_sheet_info(void *ctx, void *e) {
 static int rn_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != rn.win) return RET_OK;
-    if (rn.timer) timer_remove(rn.timer);
+    m1_timer_stop(&rn.timer);
     if (rn.logo) bitmap_destroy(rn.logo);
     memset(&rn, 0, sizeof rn);
     return RET_OK;
@@ -312,29 +312,29 @@ static int rn_on_destroy(void *ctx, void *e) {
 /* Radio's Now Playing: the station the engine has. 0 once it is up (or was), -1 when it could not open. */
 int rn_open(void) {
     void *back;
-    if (rn.win && pod_is_top(rn.win) && widget_is_window_opened(rn.win)) return 0;
+    if (rn.win && m1_is_top(rn.win) && widget_is_window_opened(rn.win)) return 0;
     if (rn.win) { /* closing (destroyed later) or under another window: let it go, its late EVT_DESTROY finds rn.win changed */
         if (widget_is_window_opened(rn.win)) window_close(rn.win);
-        if (rn.timer) timer_remove(rn.timer);
+        m1_timer_stop(&rn.timer);
         if (rn.logo) bitmap_destroy(rn.logo);
     }
     memset(&rn, 0, sizeof rn);
     rn.win = window_open(RN_ASSET);
     if (!rn.win) return -1;
     widget_on(rn.win, EVT_DESTROY, rn_on_destroy, rn.win);
-    back = pod_bind(rn.win, "btn_return", rn_on_back, (void *)0);
-    rn.play = pod_bind(rn.win, "btn_play", rn_on_play, (void *)0);
+    back = m1_bind(rn.win, "btn_return", rn_on_back, (void *)0);
+    rn.play = m1_bind(rn.win, "btn_play", rn_on_play, (void *)0);
     rn.fav = widget_lookup(rn.win, "btn_fav", 1); /* (hidden: Add to / Remove from My Stations lives in the sheet) */
-    rn.more = pod_bind(rn.win, "rn_more", rn_on_more, (void *)0);
-    rn.sh_scrim = pod_bind(rn.win, "rd_sh_scrim", rn_on_sheet_scrim, (void *)0);
+    rn.more = m1_bind(rn.win, "rn_more", rn_on_more, (void *)0);
+    rn.sh_scrim = m1_bind(rn.win, "rd_sh_scrim", rn_on_sheet_scrim, (void *)0);
     rn.sh_card = widget_lookup(rn.win, "rd_sh_card", 1);
-    rn.sh_row = pod_bind(rn.win, "rd_sh_add", rn_on_sheet_row, (void *)0);
+    rn.sh_row = m1_bind(rn.win, "rd_sh_add", rn_on_sheet_row, (void *)0);
     rn.sh_ic = widget_lookup(rn.win, "rd_sh_add_ic", 1);
     rn.sh_tx = widget_lookup(rn.win, "rd_sh_add_tx", 1);
     rn.sh_hr = widget_lookup(rn.win, "rd_sh_add_hr", 1);
-    rn.sh_info = pod_bind(rn.win, "rd_sh_info", rn_on_sheet_info, (void *)0);
+    rn.sh_info = m1_bind(rn.win, "rd_sh_info", rn_on_sheet_info, (void *)0);
     rn.sh_info_hr = widget_lookup(rn.win, "rd_sh_info_hr", 1);
-    if (!pod_bind(rn.win, "btn_prev", rn_on_prev, (void *)0) || !pod_bind(rn.win, "btn_next", rn_on_next, (void *)0))
+    if (!m1_bind(rn.win, "btn_prev", rn_on_prev, (void *)0) || !m1_bind(rn.win, "btn_next", rn_on_next, (void *)0))
         back = (void *)0;
     rn.title = widget_lookup(rn.win, "rn_title", 1);
     rn.artist = widget_lookup(rn.win, "rn_artist", 1);

@@ -133,7 +133,7 @@ static void dm_copy(char *out, unsigned size, const char *s) {
 
 static int dm_read(const char *path, void *buf, unsigned max) {
     int fd, n;
-    if (!pod_card_mounted())
+    if (!m1_card_mounted())
         return -1; /* no card: no mix (an unmounted /mnt/mmc is a directory on the internal flash) */
     fd = open(path, O_RDONLY, 0);
     if (fd < 0) return -1;
@@ -981,12 +981,12 @@ static int dm_ph_album(job_t *j) {
         const char *file;
         j->pos++;
         if (!j->alb[i]) return 1;
-        if (pod_tone_get(j->alb[i], &tone))
+        if (m1_tone_get(j->alb[i], &tone))
             j->tone[j->ntone++] = tone & 0xffffff;
         else if (dm.win && (file = cc_url(url, j->alb[i])) != (const char *)0 &&
                  cc_decode(dm.win, file, 1, 1, 1, &px)) {
-            tone = pod_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
-            pod_tone_put(j->alb[i], tone);
+            tone = m1_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
+            m1_tone_put(j->alb[i], tone);
             j->tone[j->ntone++] = tone & 0xffffff;
         }
         return 1;
@@ -1096,7 +1096,7 @@ static int dm_save_art(const job_t *j) {
     hdr[4] = DM_W & 255, hdr[5] = DM_W >> 8, hdr[6] = DM_H & 255, hdr[7] = DM_H >> 8;
     memcpy(hdr + 8, &j->aseed, 4);
     memcpy(hdr + 12, &ck, 4);
-    return pod_card_write(MIX_DIR, MIX_ART_FILE, MIX_ART_TMP, hdr, DM_ART_HEAD, j->px, DM_W * DM_H * 2);
+    return m1_card_write(MIX_DIR, MIX_ART_FILE, MIX_ART_TMP, hdr, DM_ART_HEAD, j->px, DM_W * DM_H * 2);
 }
 
 /* The art file read back into the card's bitmap; 1 when it is whole and was made for the mix's art seed. */
@@ -1160,7 +1160,7 @@ static int dm_ph_commit(job_t *j) {
             dm_put(&o, end,
                    "\n"); /* (every path was checked by dm_path_ok in the copy phase: the file holds them all) */
     *o = 0;
-    if (pod_card_write(MIX_DIR, MIX_FILE, MIX_TMP, buf, (unsigned)(o - buf), (const void *)0, 0) != 0) return 0;
+    if (m1_card_write(MIX_DIR, MIX_FILE, MIX_TMP, buf, (unsigned)(o - buf), (const void *)0, 0) != 0) return 0;
     dm_save_art(
         j); /* (after the mix file: a failed mix file leaves yesterday's art file alone; a failed art file costs the next start a re-render) */
     if (!dm_load())
@@ -1658,17 +1658,14 @@ static void dm_apply(void) {
 /* A mix is wanted: the switch is on and the day has no mix yet (or Regenerate asked for one). A day that failed is not tried again before the next day. */
 static int dm_need(void) {
     unsigned today;
-    if (!dm.on || !pod_card_mounted()) return 0; /* no card, no mix */
+    if (!dm.on || !m1_card_mounted()) return 0; /* no card, no mix */
     if (dm_regen_req) return 1;
     today = dm_today();
     if (!today || dm.fail_day == today) return 0;
     return !dm.have || dm.day != today;
 }
 
-static void dm_unarm(void) {
-    if (dm.timer) timer_remove(dm.timer);
-    dm.timer = 0;
-}
+static void dm_unarm(void) { m1_timer_stop(&dm.timer); }
 
 static int dm_tick(const void *timer);
 
@@ -1682,7 +1679,7 @@ static void dm_kick(void) {
         ms = waited >= DM_START_MS ? DM_TICK_MS : DM_START_MS - waited; /* never inside the boot guard's window */
     } else
         return;
-    if (!pod_screen_lit() && ms < POD_DARK_MS) ms = POD_DARK_MS;
+    if (!m1_screen_lit() && ms < POD_DARK_MS) ms = POD_DARK_MS;
     dm.timer = timer_add(dm_tick, (void *)0, ms);
 }
 
@@ -1708,7 +1705,7 @@ static int dm_tick(const void *timer) {
     (void)timer;
     dm.timer = 0; /* this one ends with the return */
     if (!dm.win || !dm.fg) return RET_OK;
-    if (pod_screen_lit()) dm_work();
+    if (m1_screen_lit()) dm_work();
     dm_kick();
     return RET_OK;
 }
@@ -1778,7 +1775,7 @@ void dailymix_start(void *win) {
         dm_stop(); /* a handler that was registered finds no window of ours any more */
         return;
     }
-    pod_corner_fill(dm.corner, DM_R);
+    m1_corner_fill(dm.corner, DM_R);
     dm.t0 = (unsigned)time_now_ms();
     dm.on = dailymix_setting();
     dm.have = dm_load();
@@ -1812,7 +1809,7 @@ static struct {
     unsigned day; /* the mix's day (the Updated line) */
     void *art; /* the art (RGBA, DP_W x DP_ART_H) */
     unsigned tint, grey, accent; /* 0x00BBGGRR */
-    unsigned barc; /* the art's top row (0x00BBGGRR): the status bar's colour, darkened by pod_bar_color */
+    unsigned barc; /* the art's top row (0x00BBGGRR): the status bar's colour, darkened by m1_bar_color */
     int barok, bar; /* the window's foreground and background events are registered; the bar's colour is ours */
     int laid, glyph_x, text_x, text_w;
     unsigned tl[DM_TEXT], sl[DM_TEXT], ul[DM_TEXT], pl[DM_TEXT];
@@ -2140,7 +2137,7 @@ static int dp_next_load(void) {
         int top, d;
         if (t && t->art) continue;
         top = DP_ROWS_Y + a * LIST_ROW_H - s;
-        d = pod_abs(top + LIST_ROW_H / 2 - DP_VIEW_H / 2);
+        d = m1_abs(top + LIST_ROW_H / 2 - DP_VIEW_H / 2);
         if (top >= DP_VIEW_H || top + LIST_ROW_H <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -2149,17 +2146,9 @@ static int dp_next_load(void) {
 
 static int dp_on_load(const void *unused);
 
-static int dp_moving(void) { return grid_moving(dp.sv); }
-
 static void dp_kick(void) {
     if (!dp.more_timer && dp.view && (dp.noscroll || dp_next_load() >= 0))
         dp.more_timer = timer_add(dp_on_load, (void *)0, DP_MORE_MS);
-}
-
-static void dp_dir(void) {
-    int s = dp_off();
-    if (s != dp.seen) dp.dir = s > dp.seen ? 1 : -1;
-    dp.seen = s;
 }
 
 static int dp_on_load(const void *unused) {
@@ -2167,8 +2156,8 @@ static int dp_on_load(const void *unused) {
     (void)unused;
     dp.more_timer = 0;
     if (!dp.view) return RET_OK;
-    dp_dir();
-    if (dp_moving()) { /* nothing is decoded while it moves: look again next tick */
+    grid_dir(dp_off(), &dp.seen, &dp.dir);
+    if (grid_moving(dp.sv)) { /* nothing is decoded while it moves: look again next tick */
         dp_kick();
         return RET_OK;
     }
@@ -2186,7 +2175,7 @@ static int dp_on_scroll(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!dp.view) return RET_OK;
-    dp_dir();
+    grid_dir(dp_off(), &dp.seen, &dp.dir);
     dp_kick();
     return RET_OK;
 }
@@ -2237,8 +2226,7 @@ static int dp_on_up(void *ctx, void *e) {
     dp.down = 0;
     dp_set_press(0);
     if (a < 0 || !e || !dp.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - dp.down_x) < DP_TAP_PX && pod_abs(I(e, PE_Y) - dp.down_y) < DP_TAP_PX &&
-        dp_item_of(e) == a)
+    if (m1_abs(I(e, PE_X) - dp.down_x) < DP_TAP_PX && m1_abs(I(e, PE_Y) - dp.down_y) < DP_TAP_PX && dp_item_of(e) == a)
         dp_play(cc_str(dp.rows[a].raw, REC_PATH), 0);
     return RET_OK;
 }
@@ -2252,18 +2240,18 @@ static int dp_on_abort(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The status bar takes the colour of the art's top row (darkened for its white glyphs, pod_bar_color) while the page is in front, as the album page and Now
- * Playing tint it; the stock black comes back when the page goes to the background or closes, and only while the bar is still ours (pod_bar_black: Now Playing
+/* The status bar takes the colour of the art's top row (darkened for its white glyphs, m1_bar_color) while the page is in front, as the album page and Now
+ * Playing tint it; the stock black comes back when the page goes to the background or closes, and only while the bar is still ours (m1_bar_black: Now Playing
  * opened by Play keeps its own colour). Only when both window events are registered, so every way out restores it. */
 static void dp_bar_apply(void) {
-    if (dp.win && dp.barok && pod_bar_tint(dp.win, dp.barc))
+    if (dp.win && dp.barok && m1_bar_tint(dp.win, dp.barc))
         dp.bar = 1; /* a failed call keeps what the bar has (and owes) */
 }
 
 static void dp_bar_black(void) {
     if (!dp.bar) return;
     dp.bar = 0;
-    pod_bar_black(dp.win);
+    m1_bar_black(dp.win);
 }
 
 /* The Add disc's playlist: "<Daily Mix> <the mix's day as YYYY-MM-DD>", one per mix. */
@@ -2416,7 +2404,7 @@ static int dp_on_shuffle(void *ctx, void *e) {
 /* Everything the page holds is freed. A window that is already gone (or never was ours) is not this page: the destroy event carries the window it was registered on. */
 static void dp_release(void) {
     unsigned i;
-    if (dp.more_timer) timer_remove(dp.more_timer);
+    m1_timer_stop(&dp.more_timer);
     grid_free(&dp.g);
     if (dp.art) bitmap_destroy(dp.art);
     for (i = 0; i < dp.n; ++i) dm_rec_free(&dp.rows[i]);
@@ -2481,7 +2469,7 @@ static int dp_open(void) {
         return -1;
     }
     widget_on(dp.win, EVT_DESTROY, dp_on_destroy, dp.win);
-    pod_bind(dp.win, "btn_return", pod_on_back, (void *)0);
+    m1_bind(dp.win, "btn_return", m1_on_back, (void *)0);
     dp.lv = widget_lookup(dp.win, "dp_listview", 1);
     dp.sv = widget_lookup(dp.win, "dp_scrollview", 1);
     dp.view = widget_lookup(dp.win, "view_dm", 1);

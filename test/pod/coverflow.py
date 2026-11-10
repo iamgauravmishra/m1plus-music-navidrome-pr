@@ -1131,7 +1131,3 @@ def volkeys_tests(ctx):
 
 
 SECTIONS = [page_tests, volkeys_tests, keyroute_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

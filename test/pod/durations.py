@@ -762,7 +762,3 @@ def measured_tests(ctx):
 
 
 SECTIONS = [table_tests, card_tests, cue_tests, probe_tests, text_tests, album_tests, footer_tests, home_tests, clear_tests, measured_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

@@ -35,8 +35,6 @@ OFF, _o = {}, 0
 for _n, _s in _FIELDS: OFF[_n] = _o; _o += _s
 
 
-
-
 def state(m, name, i=0):
     """A word of the payload's page state."""
     return m.s32(PSYMS['se'] + OFF[name] + 4 * i)
@@ -219,9 +217,6 @@ def fold_tests(ctx):
     s = 'é' * 200
     expect(len(fold(m, s, 17)) in (16, 17), 'two-letter folds never write past the room')
     expect('a' in fold(m, '\xc3a\xe2\x82b'), 'invalid UTF-8 does not hang and keeps the letters')
-
-
-
 
 
 def found(q):
@@ -1369,7 +1364,3 @@ def src_tests(ctx):
 
 
 SECTIONS = [recent_tests, fold_tests, query_tests, pinyin_tests, rank_tests, incremental_tests, page_tests, chips_tests, scope_tests, chip_cover_tests, live_tests, tap_tests, perf_tests, loader_tests, entry_tests, return_tests, embed_tests, asset_tests, src_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for s in SECTIONS: s(ctx)

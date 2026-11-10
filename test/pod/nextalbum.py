@@ -674,7 +674,3 @@ def pin_tests(ctx):
 
 
 SECTIONS = [setting_tests, row_tests, note_tests, page_tests, arm_tests, next_tests, load_tests, end_tests, chain_tests, scoped_tests, refusal_tests, gapless_tests, pin_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

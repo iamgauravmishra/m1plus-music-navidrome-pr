@@ -14,7 +14,7 @@
  * (patch/minibar.c, the Home menu in front) and Now Playing's tick (patch/nowplaying.c). The album's IDENTITY is its title, ASCII case
  * folded (rc_id: the stock list groups albums by title alone), compared with the most recent one held in RAM first: nothing is read or
  * written while it is the same. An empty album tag is not recorded. A new album goes to the front of RECENT_FILE, an album already in
- * it moves there, at most RC_MAX are kept, and the file (on the card, pod_card_write) is written only then, from a fresh read of it (a card swap never carries a list over). The file (tools/pod_recent.py is the
+ * it moves there, at most RC_MAX are kept, and the file (on the card, m1_card_write) is written only then, from a fresh read of it (a card swap never carries a list over). The file (tools/pod_recent.py is the
  * model the tests compare with), strictly validated when read (anything else is an empty list):
  *     M1R2\n
  *     <id 8 hex>\t<cover key 8 hex>\t<0|1>\t<album>\t<artist>\t<path>\n      (one line per album, the most recent first)
@@ -44,6 +44,7 @@
 #include "common.h"
 #include "grid.h"
 #include "podcasts.h"
+#include "fnv.h"
 
 #if SH_TILES != GRID_COLS * SH_ROWS || SH_TILES != RC_MAX
 #error the shelf shows every album the file keeps: SH_TILES = GRID_COLS * SH_ROWS = RC_MAX
@@ -127,7 +128,7 @@ static void rc_load(void) {
     unsigned i, j, key, ckey;
     rc.n = 0;
     rc.loaded = 1;
-    if (!pod_card_mounted()) return; /* the list belongs to the card: no card, no list */
+    if (!m1_card_mounted()) return; /* the list belongs to the card: no card, no list */
     fd = open(RECENT_FILE, O_RDONLY, 0);
     if (fd < 0) return;
     n = read(fd, buf, sizeof buf);
@@ -174,7 +175,7 @@ static void rc_puthex(char **o, const char *end, unsigned v) {
     rc_put(o, end, hex);
 }
 
-/* The list as the file holds it, on the card (pod_card_write); 0 when it was written. */
+/* The list as the file holds it, on the card (m1_card_write); 0 when it was written. */
 static int rc_save(void) {
     char buf[RC_FILE_MAX + 1], *o = buf;
     const char *end = buf + RC_FILE_MAX;
@@ -193,7 +194,7 @@ static int rc_save(void) {
         rc_put(&o, end, "\n");
     }
     *o = 0;
-    return pod_card_write(CARD_DIR, RECENT_FILE, RECENT_TMP, buf, (unsigned)(o - buf), (const void *)0, 0);
+    return m1_card_write(CARD_DIR, RECENT_FILE, RECENT_TMP, buf, (unsigned)(o - buf), (const void *)0, 0);
 }
 
 /* s into out (size bytes with the NUL), control bytes as spaces, cut before a UTF-8 continuation byte that would be split. */
@@ -212,9 +213,7 @@ static void rc_copy(char *out, unsigned size, const char *s) {
  * "select id,album,songer,fileurl from %s group by album COLLATE NOCASE") groups albums by title alone, NOCASE, whatever the artists of
  * the tracks are, so this is the same album exactly when the stock list has one row for both: a compilation's every track is one album. */
 static unsigned rc_id(const char *album) {
-    unsigned h = FNV_SEED;
-    for (; *album; ++album)
-        h = (h ^ (unsigned char)((unsigned char)*album - 'A' < 26u ? *album + 32 : *album)) * 16777619u;
+    unsigned h = m1_fnv_fold(FNV_SEED, album);
     return h | !h;
 }
 
@@ -245,7 +244,7 @@ int recent_note(void *t) {
     if (!*album) return 0; /* an untagged album is not recorded */
     key = rc_id(album);
     if (rc.loaded && rc.n && rc.ent[0].key == key) return 0; /* the common case: nothing changed, nothing read */
-    if (!pod_card_mounted()) return 0; /* the list lives on the card: no card, nothing recorded */
+    if (!m1_card_mounted()) return 0; /* the list lives on the card: no card, nothing recorded */
     rc_load(); /* a change is rare: start from what the card in the slot holds now, never from a list kept from another card */
     if (rc.n && rc.ent[0].key == key) return 0;
     for (at = 0; at < rc.n && rc.ent[at].key != key; ++at) {
@@ -354,10 +353,7 @@ static int rc_next(void) {
 /* ---------------------------------------------------------------------------
  * The timer: a one-shot after start, then one tile per tick until none is left
  */
-static void rc_unarm(void) {
-    if (rc.timer) timer_remove(rc.timer);
-    rc.timer = 0;
-}
+static void rc_unarm(void) { m1_timer_stop(&rc.timer); }
 
 /* The one thing the timer does: the next waiting tile's cover. 1 while another waits. */
 static int rc_work(void) {
@@ -374,7 +370,7 @@ static int rc_tick(const void *timer) {
         rc.timer = 0;
         return RET_OK;
     }
-    if (!pod_screen_lit()) {
+    if (!m1_screen_lit()) {
         rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
         return RET_OK;
     }
@@ -389,7 +385,7 @@ static int rc_dark(const void *timer) {
     (void)timer;
     rc.timer = 0;
     if (!rc.win || !rc.fg) return RET_OK;
-    if (!pod_screen_lit()) {
+    if (!m1_screen_lit()) {
         rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
     } else if (rc_next() >= 0) {
         rc.timer = timer_add(rc_tick, (void *)0, RC_TICK_MS);
@@ -404,7 +400,7 @@ static int rc_first(const void *timer) {
     if (!rc.win || !rc.fg) return RET_OK;
     rc.warm = 1;
     if (rc_next() < 0) return RET_OK;
-    if (!pod_screen_lit())
+    if (!m1_screen_lit())
         rc.timer = timer_add(rc_dark, (void *)0, POD_DARK_MS);
     else {
         rc.timer = timer_add(rc_tick, (void *)0, RC_TICK_MS);

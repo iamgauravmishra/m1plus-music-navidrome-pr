@@ -205,7 +205,7 @@ static int sinfo_tick(const void *unused) {
         sinfo.timer = 0;
         return RET_OK;
     }
-    if (!pod_screen_lit() || !pod_is_top(sinfo.win)) return RET_REPEAT;
+    if (!m1_screen_lit() || !m1_is_top(sinfo.win)) return RET_REPEAT;
     sinfo_status(now, sizeof now);
     if (strcmp(now, sinfo.stat)) {
         sinfo_stat_block();
@@ -218,7 +218,7 @@ static int sinfo_tick(const void *unused) {
 static int sinfo_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != sinfo.win) return RET_OK;
-    if (sinfo.timer) timer_remove(sinfo.timer);
+    m1_timer_stop(&sinfo.timer);
     sinfo_free();
     memset(&sinfo, 0, sizeof sinfo);
     return RET_OK;
@@ -228,7 +228,7 @@ int sinfo_open(void) {
     const rd_list_t *l = rd_list();
     int at = rd_at();
     char name[RD_NAME_MAX + 1], url[1100], info[300];
-    if (sinfo.win && pod_is_top(sinfo.win) && widget_is_window_opened(sinfo.win)) return 0;
+    if (sinfo.win && m1_is_top(sinfo.win) && widget_is_window_opened(sinfo.win)) return 0;
     if (!l->n || at >= l->n) return -1;
     snprintf(name, sizeof name, "%s", rd_name(l, at));
     snprintf(url, sizeof url, "%s", rd_url(l, at));
@@ -236,15 +236,15 @@ int sinfo_open(void) {
     if (sinfo
             .win) { /* closing (destroyed later) or under another window: let it go, its late EVT_DESTROY finds sinfo.win changed */
         if (widget_is_window_opened(sinfo.win)) window_close(sinfo.win);
-        if (sinfo.timer) timer_remove(sinfo.timer);
+        m1_timer_stop(&sinfo.timer);
         sinfo_free();
     }
     memset(&sinfo, 0, sizeof sinfo);
     sinfo.win = window_open("m1plus_radioinfo");
     if (!sinfo.win) return -1;
     widget_on(sinfo.win, EVT_DESTROY, sinfo_on_destroy, sinfo.win);
-    pod_bind(sinfo.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(sinfo.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(sinfo.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(sinfo.win, "btn_backtoplayer", m1_on_player, (void *)0);
     sinfo.sv = widget_lookup(sinfo.win, "ri_scrollview", 1);
     sinfo.view = widget_lookup(sinfo.win, "ri_view", 1);
     sinfo.fade = widget_lookup(sinfo.win, "img_nb_fade", 1);

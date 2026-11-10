@@ -84,7 +84,8 @@ def shuffle_page():
                 if any(r.action == pod_pages.ACT_SHUFFLE for r in p.rows))
 
 
-def shuffle_tests(expect, menu):
+def shuffle_tests(ctx):
+    expect, menu = ctx.expect, ctx.page
     play = PSYMS['shuffle_play']
     spi, page = shuffle_page()
     rows0 = PSYMS[f'pod_rows_{spi}']
@@ -342,7 +343,8 @@ def hook(m, mode): return m.call(PSYMS['sh_set_mode'], a0=mode, count=900000000)
 def load(m, h, pos, cls=0xf001): return m.call(PSYMS['sh_load_playlist'], a0=h, a1=pos, a2=cls, count=900000000)
 
 
-def apple_tests(expect):
+def apple_tests(ctx):
+    expect = ctx.expect
     SH, OR, RO, RA = O['MODE_SHUFFLE'], O['MODE_ORDER'], O['MODE_REPEAT_ONE'], O['MODE_REPEAT_ALL']
     GAPLESS, GSET = pod.DATA['MCL_PRELOAD'][0], pod.DATA['MCL_GAPLESS'][0]   # the preload state word, the Gapless setting byte
 
@@ -774,6 +776,4 @@ def shuffle_page_tests(expect, menu, spi, page):
     expect(all(f'pod_row{i // 2}' in h for i, h in enumerate(hits)), f'a tap on each row (and on its icon) reaches that row ({hits})')
 
 
-def run(ctx):
-    shuffle_tests(ctx.expect, ctx.page)
-    apple_tests(ctx.expect)
+SECTIONS = [shuffle_tests, apple_tests]

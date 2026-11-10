@@ -21,6 +21,7 @@
 #include "sbapi.h"
 #include "sbsrc.h"
 #include "shot.h"
+#include "fnv.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
@@ -59,12 +60,7 @@ static struct {
 /* ---------------------------------------------------------------------------
  * Small helpers
  */
-static unsigned nl_fnv(const char *a, const char *b) {
-    unsigned h = 2166136261u;
-    while (*a) h = (h ^ (unsigned char)*a++) * 16777619u;
-    while (*b) h = (h ^ (unsigned char)*b++) * 16777619u;
-    return h | 1u;
-}
+static unsigned nl_fnv(const char *a, const char *b) { return m1_fnv(m1_fnv(2166136261u, a), b) | 1u; }
 
 static void nl_copy(char *out, unsigned cap, const char *s) {
     unsigned n = strlen(s);
@@ -700,7 +696,7 @@ static int nl_download_all(void *list) {
     }
     if (queued) nl_awake_arm(); /* the tick holds the device awake while the files come */
     if (code == SBA_QFULL && queued) { /* the ones that fit are on their way: say how many */
-        pod_fmt(msg, sizeof msg, TR("Downloading %d, queue full"), (int)queued);
+        m1_fmt(msg, sizeof msg, TR("Downloading %d, queue full"), (int)queued);
         pod_toast(msg);
     } else if (code == SBA_QFULL)
         pod_toast(TR("Download queue is full"));
@@ -709,7 +705,7 @@ static int nl_download_all(void *list) {
     else if (queued == 1)
         pod_toast(TR("Downloading 1 song"));
     else if (queued) {
-        pod_fmt(msg, sizeof msg, TR("Downloading %d songs"), (int)queued);
+        m1_fmt(msg, sizeof msg, TR("Downloading %d songs"), (int)queued);
         pod_toast(msg);
     } else
         pod_toast(TR("Already downloaded"));

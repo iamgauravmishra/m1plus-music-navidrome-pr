@@ -372,7 +372,6 @@ def split_tests(ctx):
     expect(bad == 0, f'120 random configurations split as the model says ({bad} differ)')
 
 
-
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------- the supplicant
 
 class Supp:
@@ -611,7 +610,7 @@ def asset_tests(ctx):
     expect(len(wifi_rows) == 1 and wifi_rows[0].action == pod_pages.ACT_STOCK and wifi_rows[0].arg == pod_pages.STOCK_WIFI == 0 and pod_pages.STOCK_PAGES[0][0] == 'systemset/wifi_page',
            'Settings > Wi-Fi is still the stock row (its value shows On / Off), arg 0')
     src = open(os.path.join(ROOT, 'patch', 'm1plus.c')).read()
-    expect(re.search(r'row->action == ACT_STOCK\) \{\s*if \(row->arg == 0 /\* STOCK_WIFI \*/ && wifipage_open\(\) == 0\)\s*return RET_OK;[^\n]*\n[\s\S]{0,400}?pod_open_stock\(\s*POD_STOCK\[row->arg\]\.name,\s*POD_STOCK\[row->arg\]\.window\)', src),
+    expect(re.search(r'row->action == ACT_STOCK\) \{\s*if \(row->arg == 0 /\* STOCK_WIFI \*/ && wifipage_open\(\) == 0\)\s*return RET_OK;[^\n]*\n[\s\S]{0,400}?m1_open_stock\(\s*POD_STOCK\[row->arg\]\.name,\s*POD_STOCK\[row->arg\]\.window\)', src),
            'the row opens our page, and the stock page where it will not open')
     expect(not any(k.startswith('ACT_') and 'WIFI' in k for k in vars(pod_pages)), 'no action id was added (the Wi-Fi row is the stock row) and the Developer page has no Wi-Fi switch')
     # the texts in every language
@@ -1020,7 +1019,7 @@ def pass_tests(ctx):
     m.tap(f'wf_row{m.idx("Sam’s iPhone")}')
     expect(('window_open', 'm1plus_wifipass') in m.hist and m.cmds() == [] and not any(c[0] == 'dialog' for c in m.sock), 'a secured network that is not saved opens the password page and sends nothing')
     expect(m.text('wk_line') == enc('Enter the password for “Sam’s iPhone”') and m.visible('wk_err') == 0 and m.key('kb_go') == 'Join' and go_state(m) == (0, 'disable'), f'the line names the network in UTF-8, no error, the action key reads Join and is dimmed: {m.text("wk_line")!r}')
-    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['pod_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['pod_on_player'], 'Back (cancel) and Now Playing are the stock ones')
+    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['m1_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['m1_on_player'], 'Back (cancel) and Now Playing are the stock ones')
     expect(kkeys(m).get('q') == 0 and m.visible('kb_shift') and not m.visible('kb_lang') if 'kb_lang' in m.widgets else True, 'the pad starts on the lowercase page')
     ktype(m, 'ab c')
     expect(m.text('kb_text') == enc('••••') and go_state(m) == (0, 'disable'), 'one dot a character, the space too; four characters: Join still dimmed')
@@ -1137,8 +1136,6 @@ def close_win(m, name):
     m.call(fn, a0=c, a1=0)
 
 
-
-
 def backs(m): return sum(1 for c in m.hist if c[0] == 'navigator_back')
 
 
@@ -1230,7 +1227,7 @@ def other_tests(ctx):
     m = start(typed=False)
     expect(('window_open', 'm1plus_wifiother') in m.hist and not any(c[0] == 'dialog' for c in m.sock) and m.cmds() == [] and m.key('kb_go') == 'Next' and go_state(m) == (0, 'disable'),
            'Other... opens the page: no stock dialog, nothing sent, the action key reads Next and is dimmed')
-    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['pod_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['pod_on_player'], 'Back (cancel) and Now Playing are the stock ones')
+    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['m1_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['m1_on_player'], 'Back (cancel) and Now Playing are the stock ones')
     expect(fld(m) == (100, 56) and m.text('kb_hint') == 'Network Name' and m.text('wo_sec_v') == 'WPA2/WPA3' and m.visible('wo_card1b') == 1 and m.visible('wo_card1a') == 0 and m.visible('wo_hair') == 1 and m.visible('wo_pass_l') == 1
            and shown_(m, 'wo_eye') == (1, 1) and shown_(m, 'wo_hit_pass') == (1, 1) and m.visible('wo_err') == 0 and m.visible('wo_name_h') == 0 and m.visible('wo_name_v') == 0 and m.text('wo_pass_v') in (None, ''),
            'WPA2/WPA3 by default: the field on the Name row with its placeholder, Security and Password in the tall card, nothing else on show')
@@ -1843,7 +1840,7 @@ def life_tests(ctx):
     expect(opened(m) == -1 and ('navigator_back',) in m.hist, 'no timer: back out, -1')
     # Back and Now Playing are the stock ones
     m = page(); opened(m)
-    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['pod_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['pod_on_player'], 'Back and Now Playing')
+    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['m1_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['m1_on_player'], 'Back and Now Playing')
     # no card, no files: SAVE_CONFIG failing leaves the network usable
     m = page(); opened(m); m.supp.failed = {'SAVE_CONFIG'}; m.supp.log = []
     m.tap(f'wf_row{m.idx("Cafe Open")}')
@@ -2010,7 +2007,3 @@ def review_tests(ctx):
 
 
 SECTIONS = [text_tests, security_tests, scan_tests, split_tests, ctrl_tests, asset_tests, layout_tests, action_tests, pass_tests, other_tests, info_tests, switch_tests, timer_tests, life_tests, hub_tests, files_tests, review_tests]
-
-
-def run(ctx):
-    for s in SECTIONS: s(ctx)

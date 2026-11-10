@@ -211,9 +211,9 @@ def art(tones, seed, w=DM_W, h=DM_H):
         a64 += 1
 
 
-# ---- the card's rounded corners (patch/grid.c grid_round, patch/common.c pod_corner_fill) ----------------------------------------------------
+# ---- the card's rounded corners (patch/grid.c grid_round, patch/common.c m1_corner_fill) ----------------------------------------------------
 def corner_cover(r):
-    """The coverage (0..255) outside a quarter circle of radius r in the r x r corner square: each pixel sampled 8 x 8 (pod_corner_fill)."""
+    """The coverage (0..255) outside a quarter circle of radius r in the r x r corner square: each pixel sampled 8 x 8 (m1_corner_fill)."""
     c, tab = 2 * 8 * r, []
     for y in range(r):
         for x in range(r):

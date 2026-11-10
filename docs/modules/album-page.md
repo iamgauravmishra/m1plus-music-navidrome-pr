@@ -38,7 +38,7 @@ list so an enclosing view cannot intercept the whole navigation band.
 | Album | Centered 22 px white at y 224 |
 | Artist | Centered 18 px grey at y 247 |
 | Metadata | 15 px at y 267: year and track count, or track count alone |
-| Playback | Shuffle target 44 × 44 at x 42 with a 40 px disc (the pill's height); Play target 180 × 44 at x 96 (12 px after the disc); y 292. A playlist's page (the Songs page with its header) copies this group (`patch/common.c` `pod_pill_place` / `pod_pill_paint`; [Songs](songs.md)) |
+| Playback | Shuffle target 44 × 44 at x 42 with a 40 px disc (the pill's height); Play target 180 × 44 at x 96 (12 px after the disc); y 292. A playlist's page (the Songs page with its header) copies this group (`patch/common.c` `m1_pill_place` / `m1_pill_paint`; [Songs](songs.md)) |
 | Tracks | Number column, 19 px white title in a 22 px line 20 px down the 64 px row (`AB_TEXT_Y`, centred over the hairline), 20% white press fill, 13% white hairline. The playing track keeps its white title; a 12 px wave (`ah_wave`, `#EEEEEC`, four round bars, the rows' `np_row_playing` scaled; static) replaces its number, right-aligned in the number column and centred on the title's line (`AB_WAVE`) |
 | Footer | `ab_foot` (`13 tracks, 49 minutes`): 15 px `#AAAAAA` left-aligned label at x 12 (`AB_NUM_X`, the number column's left edge), `AB_FOOT_GAP` 14 px under the last row, 20 px high; only when the duration is known (52 px of content), else none |
 
@@ -50,7 +50,7 @@ Track numbers use a wider column from 100 onward. CUE titles use the file name.
 ## Album length
 
 The database has no duration: `time/time_end` are CUE offsets, 0 for ordinary files. File durations are measured once
-through stock's TagLib and kept on the card in `/mnt/mmc/.m1plus/durations` beside the cover cache (`patch/durations.c`, `DUR_FILE`; written by `pod_card_write`; no card or USB mode: no table, nothing measured, no duration shown; a card swapped while a page holds the table is not noticed):
+through stock's TagLib and kept on the card in `/mnt/mmc/.m1plus/durations` beside the cover cache (`patch/durations.c`, `DUR_FILE`; written by `m1_card_write`; no card or USB mode: no table, nothing measured, no duration shown; a card swapped while a page holds the table is not noticed):
 `taglib_file_new(path, 1)`, `taglib_file_audioproperties`, then `AudioProperties::length()` through vtable slot 3
 (`+0xc`, what libtag_c's `taglib_audioproperties_length` does; `demo` imports the first, second and `taglib_file_free`, not
 that one). `.iso` images are never opened, as stock never reads their properties. The design follows q2-pod's Long Songs
@@ -89,11 +89,11 @@ lengths cache (`patch/navigation.c`, `docs/internals.md#long-songs`).
 
 The page uses the 168 px Cover Flow cache; missing art starts one shared cache-worker
 job, polled at `AB_COVER_MS`, with a placeholder until ready.
-`pod_tone_get/put` supplies a 64-entry RAM-only LRU cache keyed by
+`m1_tone_get/put` supplies a 64-entry RAM-only LRU cache keyed by
 `cc_album_key` (artist + album FNV-1a). Each entry holds key, tone and use stamp:
 768 bytes total, no card writes.
 
-A cache miss averages the centered cover square and applies `pod_tone`.
+A cache miss averages the centered cover square and applies `m1_tone`.
 `ah_tint.png` overlays black alpha 64 at the top, rising to 200 at header row 345
 and held below it. No art, an empty cache marker or an All albums card leaves black.
 The gradient stays fixed while content scrolls.

@@ -7,6 +7,7 @@
 #include "stock.h"
 #include "scroll.h"
 #include "common.h"
+#include "utf8.h"
 #include "home.h"
 #include "azlist.h"
 
@@ -228,7 +229,7 @@ void az_rail_fit(az_t *az, int rail_h) {
         widget_move(az->rail, SG_RAIL_X, SG_LIST_Y + (rail_h - span) / 2 - SG_RAIL_PAD);
         widget_resize(az->rail, SG_RAIL_W, span + 2 * SG_RAIL_PAD);
     }
-    pod_show(az->rail, az->nsec > 0 && az->count && !az->norail);
+    m1_show(az->rail, az->nsec > 0 && az->count && !az->norail);
     az_redraw_rail(az);
 }
 
@@ -366,7 +367,7 @@ void az_make_disc(az_t *az) {
         bitmap_destroy(b);
         return;
     }
-    pod_corner_fill(tab, r);
+    m1_corner_fill(tab, r);
     for (y = 0; y < SG_RAIL_DISC * SG_RAIL_DISC; ++y) px[y] = SG_ACCENT;
     for (k = 0; k < 4; ++k)
         for (y = 0; y < r; ++y)
@@ -416,16 +417,7 @@ void az_fit(void *w, const char *text) {
     s[lo] = ELLIPSIS, s[lo + 1] = 0;
     for (i = 0; s[i]; ++i) { /* back to UTF-8 */
         c = s[i];
-        if (c < 0x80)
-            out[o++] = (char)c;
-        else if (c < 0x800)
-            out[o++] = (char)(0xc0 | c >> 6), out[o++] = (char)(0x80 | (c & 63));
-        else if (c < 0x10000)
-            out[o++] = (char)(0xe0 | c >> 12), out[o++] = (char)(0x80 | (c >> 6 & 63)),
-            out[o++] = (char)(0x80 | (c & 63));
-        else
-            out[o++] = (char)(0xf0 | c >> 18), out[o++] = (char)(0x80 | (c >> 12 & 63)),
-            out[o++] = (char)(0x80 | (c >> 6 & 63)), out[o++] = (char)(0x80 | (c & 63));
+        o += m1_utf8_put(out + o, c);
     }
     out[o] = 0;
     widget_set_text_utf8(w, out);

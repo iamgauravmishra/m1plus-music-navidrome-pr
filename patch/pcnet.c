@@ -211,7 +211,7 @@ int pn_status(unsigned feed, int *code, unsigned *fresh) {
 }
 
 int pn_guard(void) {
-    if (!pod_card_mounted()) return PN_STORAGE;
+    if (!m1_card_mounted()) return PN_STORAGE;
     if (get_wifisignal() <= 0) return PN_NOWIFI;
     if ((unsigned)time((long *)0) < PN_MIN_EPOCH) return PN_NOCLOCK;
     if (access(PN_CA, F_OK)) return PN_NOCERT;
@@ -221,24 +221,6 @@ int pn_guard(void) {
 /* ---------------------------------------------------------------------------
  * Files
  */
-
-/* data into path atomically: written to tmp, fsynced, renamed over path. 1 on success; a failure leaves no temp file. */
-static int pn_save(const char *path, const char *tmp, const char *data, unsigned n) {
-    unsigned at = 0;
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644), ok = fd >= 0;
-    while (ok && at < n) {
-        int w = write(fd, data + at, n - at);
-        if (w <= 0)
-            ok = 0;
-        else
-            at += (unsigned)w;
-    }
-    ok = ok && fsync(fd) == 0;
-    if (fd >= 0) ok = close(fd) == 0 && ok;
-    if (ok && rename(tmp, path)) ok = 0;
-    if (!ok) unlink(tmp);
-    return ok;
-}
 
 /* ---------------------------------------------------------------------------
  * The request
@@ -303,6 +285,22 @@ static int pn_xfer(void *user, long long dt, long long dn, long long ut, long lo
     return 0;
 }
 
+/* What every request of ours sets on its easy handle h, the podcast worker's and the radio's (patch/radio.c): no signals (a thread: no SIGALRM resolver time-outs), redirects followed up to
+ * redirs hops and only to http(s) (one to file:// or ftp:// is refused), the two time-outs in seconds, the app's name and address (LRCLIB asks for them), every encoding libcurl has
+ * (gzip: a 3 MB feed is 400 kB on the wire) and the CA bundle. Verification stays ON: no SSL_VERIFYPEER / SSL_VERIFYHOST option is ever set. */
+void pn_easy_net(void *h, int redirs, int connect_s, int total_s) {
+    curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1);
+    curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1);
+    curl_easy_setopt(h, CURLOPT_MAXREDIRS, redirs);
+    curl_easy_setopt(h, CURLOPT_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
+    curl_easy_setopt(h, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
+    curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT, connect_s);
+    curl_easy_setopt(h, CURLOPT_TIMEOUT, total_s);
+    curl_easy_setopt(h, CURLOPT_USERAGENT, "M1PlusMusic/1.0 (https://github.com/imfing/m1plus-mod)");
+    curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING, "");
+    curl_easy_setopt(h, CURLOPT_CAINFO, PN_CA);
+}
+
 /* A configured easy handle for url (NULL: no memory): every request of the worker, feed or picture, is made with these options. Verification stays ON: no SSL_VERIFYPEER / SSL_VERIFYHOST
  * option is ever set. */
 static void *pn_easy(const char *url, unsigned (*write_cb)(char *, unsigned, unsigned, void *), void *user, char *err,
@@ -317,22 +315,10 @@ static void *pn_easy(const char *url, unsigned (*write_cb)(char *, unsigned, uns
                      0); /* the transfer-info callback below: the dialog's progress and its Cancel */
     curl_easy_setopt(h, CURLOPT_XFERINFOFUNCTION, pn_xfer);
     curl_easy_setopt(h, CURLOPT_XFERINFODATA, xdata); /* 0: a refresh's request; the attempt of a download otherwise */
-    curl_easy_setopt(h, CURLOPT_NOSIGNAL, 1); /* a thread: no SIGALRM resolver time-outs */
-    curl_easy_setopt(h, CURLOPT_FOLLOWLOCATION, 1);
-    curl_easy_setopt(h, CURLOPT_MAXREDIRS, 16); /* tracking chains reach 8 hops (podtrac, Art19 through 4 counters) */
-    curl_easy_setopt(h, CURLOPT_PROTOCOLS, CURLPROTO_HTTP_HTTPS); /* a redirect to file:// or ftp:// is refused */
-    curl_easy_setopt(h, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
     curl_easy_setopt(h, CURLOPT_FAILONERROR, 1);
-    curl_easy_setopt(h, CURLOPT_CONNECTTIMEOUT, 20);
     curl_easy_setopt(h, CURLOPT_LOW_SPEED_LIMIT, 1000);
     curl_easy_setopt(h, CURLOPT_LOW_SPEED_TIME, 30);
-    curl_easy_setopt(h, CURLOPT_TIMEOUT, 120);
-    curl_easy_setopt(
-        h, CURLOPT_USERAGENT,
-        "M1PlusMusic/1.0 (https://github.com/imfing/m1plus-mod)"); /* LRCLIB asks for the app's name and its address */
-    curl_easy_setopt(h, CURLOPT_ACCEPT_ENCODING,
-                     ""); /* every encoding libcurl has (gzip: a 3 MB feed is 400 kB on the wire) */
-    curl_easy_setopt(h, CURLOPT_CAINFO, PN_CA);
+    pn_easy_net(h, 16, 20, 120); /* (16 hops: tracking chains reach 8, podtrac, Art19 through 4 counters) */
     return h;
 }
 
@@ -480,7 +466,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
         !pn_join(file, sizeof file, path, ".show", (const char *)0))
         return;
     memset(&s, 0, sizeof s);
-    buf = pod_read_file(file, PN_SHOW_MAX, &n);
+    buf = m1_read_file(file, PN_SHOW_MAX, &n);
     if (!buf) return;
     pc_parse_show(buf, n, &s);
     free(buf);
@@ -527,7 +513,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
                                s.desc, txt, PN_SHOW_MAX); /* modified= stays: it is the server's, of the copy we hold */
             pn_join(file, sizeof file, path, ".show", (const char *)0);
             pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
-            if (!pn_save(file, tmp, txt, n))
+            if (!m1_save(file, tmp, 0644, txt, n))
                 code = PN_STORAGE;
             else {
                 if (pn.part < 900) pn.part = 900;
@@ -546,12 +532,12 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
             code = PN_MEM;
         else {
             pn_join(file, sizeof file, path, ".episodes", (const char *)0);
-            old = pod_read_file(file, PN_EPS_MAX, &oldn);
+            old = m1_read_file(file, PN_EPS_MAX, &oldn);
             n = pf_render_episodes(p, path, old, oldn, eps, PN_EPS_MAX, &fresh);
             first = s.checked == 0;
             pn_notes(path, p);
             pn_join(tmp, sizeof tmp, path, ".episodes.tmp", (const char *)0);
-            if (!pn_save(file, tmp, eps, n))
+            if (!m1_save(file, tmp, 0644, eps, n))
                 code = PN_STORAGE;
             else { /* the show file: the feed's title the first time (the import wrote the host), its picture url; the time of this refresh */
                 pn_join(file, sizeof file, path, ".show", (const char *)0);
@@ -562,7 +548,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
                     modified, /* the new answer's Last-Modified; 0 (none sent) drops the key: the next request is unconditional */
                     pf_author(p)[0] ? pf_author(p) : s.author, pf_category(p)[0] ? pf_category(p) : s.category,
                     pf_summary(p)[0] ? pf_summary(p) : s.desc, eps, PN_EPS_MAX);
-                if (!pn_save(file, tmp, eps, n))
+                if (!m1_save(file, tmp, 0644, eps, n))
                     code = PN_STORAGE;
                 else {
                     if (pn.part < 900) pn.part = 900;
@@ -851,7 +837,7 @@ static int pn_dl_run(struct dx *d, const char *show, const char *name, unsigned 
         return PN_OK;
     }
     pn_join(eps_path, sizeof eps_path, d->dir, ".episodes", (const char *)0);
-    eps = pod_read_file(eps_path, PN_EPS_MAX, &n);
+    eps = m1_read_file(eps_path, PN_EPS_MAX, &n);
     i = eps && pf_find_episode(eps, n, name, url, sizeof url, &length);
     free(eps);
     if (!i || !(pn_starts(url, "http://") || pn_starts(url, "https://")))
@@ -1596,7 +1582,7 @@ const pn_lyr_t *pn_lyr_get(int i) { return i >= 0 && i < pn.ln ? &pn.lcand[pn.ls
 char *pn_lyr_text(int i, unsigned *n) {
     char path[PN_PATH];
     if (i < 0 || i >= pn.ln || !pn_lyr_path(pn.lslot[i], path, sizeof path)) return (char *)0;
-    return pod_read_file(path, PN_LRC_CAP, n);
+    return m1_read_file(path, PN_LRC_CAP, n);
 }
 
 int pn_art_full_path(int i, char *path, unsigned size) {
@@ -1715,7 +1701,7 @@ static int pn_lyr_add(void *ctx, const pj_lrc_t *r, const char *text) {
             return 1;
     }
     pn_art_dir();
-    if (!pn_lyr_path(slot, path, sizeof path) || !pn_save(path, PN_ART_DIR "/lyrics.tmp", text, n)) {
+    if (!pn_lyr_path(slot, path, sizeof path) || !m1_save(path, PN_ART_DIR "/lyrics.tmp", 0644, text, n)) {
         ++*(int *)ctx;
         return 1;
     }
@@ -1929,11 +1915,11 @@ static void *pn_kmain(void *arg) {
         }
         if (wrote && kind == 1 && pn.pkdir[0] && !pn.cancel && pn_art_side(pn.pkdir, side, sizeof side)) {
             unsigned n = 0;
-            char *data = pod_read_file(src, PN_PICK_CAP, &n);
+            char *data = m1_read_file(src, PN_PICK_CAP, &n);
             char stmp[PN_PATH];
             stmp[0] = 0;
             if (data && pn_join(stmp, sizeof stmp, pn.pkdir, ".cover.tmp", (const char *)0))
-                pn_save(side, stmp, data, n);
+                m1_save(side, stmp, 0644, data, n);
             free(data); /* (a folder that cannot be written keeps the cache's cover: the sidecar is the extra) */
         }
         if (wrote) code = PN_OK;
@@ -1980,8 +1966,8 @@ int pn_lyr_save(int i, const char *path) {
     char *data = pn_lyr_text(i, &n);
     int ok;
     tmp[0] = 0;
-    ok = data && pn_cat(tmp, sizeof tmp, path) && pn_cat(tmp, sizeof tmp, ".tmp") && pod_card_mounted() &&
-         pn_save(path, tmp, data, n);
+    ok = data && pn_cat(tmp, sizeof tmp, path) && pn_cat(tmp, sizeof tmp, ".tmp") && m1_card_mounted() &&
+         m1_save(path, tmp, 0644, data, n);
     free(data);
     return ok;
 }
@@ -2152,7 +2138,7 @@ int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir
     unsigned n, fresh = 0;
     int made = 0, ok = 0;
     if (!p || !pn.purl[0]) return PN_NOTFEED;
-    if (nshows >= PC_MAX_SHOWS || !pod_card_mounted()) return PN_STORAGE;
+    if (nshows >= PC_MAX_SHOWS || !m1_card_mounted()) return PN_STORAGE;
     eps = calloc(PN_EPS_MAX + 1, 1);
     if (!eps) return PN_MEM;
     (void)shows;
@@ -2177,12 +2163,12 @@ int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir
         goto done;
     n = pf_render_episodes(p, path, (const char *)0, 0, eps, PN_EPS_MAX, &fresh);
     pn_notes(path, p);
-    if (!pn_save(file, tmp, eps, n)) goto done;
+    if (!m1_save(file, tmp, 0644, eps, n)) goto done;
     pn_join(file, sizeof file, path, ".show", (const char *)0);
     pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
     n = pf_render_show(pf_title(p)[0] ? pf_title(p) : host, pn.purl, pf_image(p), (unsigned)time((long *)0), 0,
                        pf_author(p), pf_category(p), pf_summary(p), eps, PN_EPS_MAX);
-    if (!pn_save(file, tmp, eps, n)) goto done;
+    if (!m1_save(file, tmp, 0644, eps, n)) goto done;
     if (pn_join(cover, sizeof cover, path, "cover.jpg", (const char *)0))
         rename(PN_PREVIEW_COVER, cover); /* (no picture: the next refresh fetches it) */
     ok = 1;
@@ -2265,7 +2251,7 @@ static int pn_sub_one(struct pn_imp *im, char *line, const char *name) {
         return PN_SUB_SKIP;
     if (!access(file, F_OK)) return PN_SUB_SKIP; /* a folder of this name is already a subscription */
     n = pf_render_show(name && name[0] ? name : host, line, "", 0, 0, "", "", "", text, sizeof text);
-    if (!pn_save(file, tmp, text, n)) return PN_SUB_SKIP;
+    if (!m1_save(file, tmp, 0644, text, n)) return PN_SUB_SKIP;
     im->seen[im->nseen++] = hash;
     ++im->added, ++im->subs;
     return PN_SUB_ADDED;
@@ -2328,7 +2314,7 @@ static int pn_import_opml(struct pn_imp *im, const char *path) {
     int items = 0, complete = 1;
     po_t p;
     po_item_t *it;
-    buf = pod_read_file(path, PO_FILE_MAX, &n);
+    buf = m1_read_file(path, PO_FILE_MAX, &n);
     if (!buf) return 0;
     it = calloc(1, sizeof *it);
     if (it) {
@@ -2358,7 +2344,7 @@ int pn_import(const char *root, const pc_show_t *shows, int nshows) {
     if (!im) return -1;
     im->root = root, im->shows = shows, im->nshows = im->subs = nshows;
     if (pn_join(path, sizeof path, root, PN_IMPORT_FILE, (const char *)0) &&
-        (buf = pod_read_file(path, PN_URLS_MAX, &n)) != (char *)0) {
+        (buf = m1_read_file(path, PN_URLS_MAX, &n)) != (char *)0) {
         found = 1;
         pn_import_lines(im, buf, n);
         free(buf);
@@ -2381,8 +2367,8 @@ int pn_export(const char *root, const pc_show_t *shows, int nshows, int *count) 
     if (!text) return 0;
     len = po_render(shows, order, n, text, PO_EXPORT_MAX);
     if (len && pn_join(file, sizeof file, root, PN_EXPORT_FILE, (const char *)0) &&
-        pn_join(tmp, sizeof tmp, root, "." PN_EXPORT_FILE ".tmp", (const char *)0) && pod_card_mounted() &&
-        pn_save(file, tmp, text, len)) {
+        pn_join(tmp, sizeof tmp, root, "." PN_EXPORT_FILE ".tmp", (const char *)0) && m1_card_mounted() &&
+        m1_save(file, tmp, 0644, text, len)) {
         ok = 1;
         *count = n;
     }
@@ -2400,7 +2386,7 @@ int pn_unsubscribe(const char *root, const pc_show_t *s) {
         return 0;
     n = pf_render_show(s->title, "", s->image, s->checked, s->modified, s->author, s->category, s->desc, text,
                        sizeof text);
-    return pn_save(file, tmp, text, n);
+    return m1_save(file, tmp, 0644, text, n);
 }
 
 /* Unsubscribe from a show without its page (the Subscriptions page's Unsubscribe, once for each marked show; the Show page's sheet does the same for the show open): pn_unsubscribe, then the .part files and the queued

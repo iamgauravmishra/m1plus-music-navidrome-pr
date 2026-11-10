@@ -164,14 +164,6 @@ class AM(PCN.NM):
         self.chip(1); self.tap_row(r)
 
 
-def undo(s):
-    """A mocked text as the user reads it: UTF-8 bytes read as latin-1 (the payload's own strings come back twice over from the mocked translation)."""
-    for _ in range(2):
-        try: s = s.encode('latin-1').decode('utf-8')
-        except (UnicodeDecodeError, UnicodeEncodeError): break
-    return s
-
-
 def asset_tests(ctx):
     expect = ctx.expect
     tree = awtk_ui.parse(open(os.path.join(WORK, UI), 'rb').read())
@@ -279,7 +271,7 @@ def open_tests(ctx):
     expect(all((m.widgets[n], EVT_CLICK) in m.bound for n in ('btn_return', 'btn_backtoplayer', 'oa_save', 'oa_lsave', 'oa_es_retry')) and (m.window, EVT_DESTROY) in m.bound
            and all((m.view, e) in m.bound for e in (EVT_DOWN, EVT_UP, EVT_ABORT, EVT_PAINT)) and all((m.chips, e) in m.bound for e in (EVT_DOWN, EVT_UP, EVT_ABORT, EVT_PAINT)) and (m.widgets['oa_dc_art'], EVT_PAINT) in m.bound,
            'Back, Now Playing, both pills, the destroy, the content view\'s touches and paint, the chips\' and the cover\'s paint are bound')
-    expect(m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['oa_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['pod_on_player'], 'Back is the page\'s (a detail first), the disc the stock Now Playing')
+    expect(m.bound[(m.widgets['btn_return'], EVT_CLICK)][0] == PSYMS['oa_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], EVT_CLICK)][0] == PSYMS['m1_on_player'], 'Back is the page\'s (a detail first), the disc the stock Now Playing')
     expect(m.text('oa_status') == 'Searching…' and m.shown('oa_status') and m.shown('oa_chips') and m.shown('oa_listview') and m.shown('oa_sep') and not m.shown('oa_dc') and not m.shown('oa_dh_title') and not m.shown('oa_lsave'),
            'at once, on the Covers tab: "Searching…" over the empty list, the chips and the line, no detail')
     expect(('widget_move', m.widgets['oa_chip_hl'], PS.SE_CHIP_X, PS.SE_CHIP_Y) in m.calls and any(c[0] == 'widget_resize' and c[1] == m.widgets['oa_chip_hl'] and c[3] == PS.SE_CHIP_H for c in m.calls),
@@ -871,5 +863,4 @@ def again_tests(ctx):
     expect(m.thread and m.thread[0] == PSYMS['pn_amain'], 'with the Wi-Fi back the pill starts the lookup')
 
 
-def run(ctx):
-    for f in (asset_tests, open_tests, tabs_tests, status_tests, state_tests, again_tests, failure_tests, cover_tests, cover_failure_tests, lyrics_tests, life_tests): f(ctx)
+SECTIONS = [asset_tests, open_tests, tabs_tests, status_tests, state_tests, again_tests, failure_tests, cover_tests, cover_failure_tests, lyrics_tests, life_tests]

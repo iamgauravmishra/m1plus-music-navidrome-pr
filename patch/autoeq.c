@@ -492,8 +492,8 @@ static void ae_layout(void) {
         key = ae_word(ae.fail), msg = 1;
     else if (ae.nterms && !ae.nres)
         key = "No Results", msg = 1;
-    pod_show(ae.list, ae.nres != 0 || ae.phase == P_FAIL);
-    pod_show(ae.status, msg);
+    m1_show(ae.list, ae.nres != 0 || ae.phase == P_FAIL);
+    m1_show(ae.status, msg);
     if (key) widget_set_tr_text(ae.status, key);
 }
 
@@ -752,7 +752,7 @@ static int ae_on_down(void *ctx, void *e) {
 static int ae_on_up(void *ctx, void *e) {
     int a = ae.down - 1, drag, was = ae.pressing;
     (void)ctx;
-    drag = e && (pod_abs(I(e, PE_X) - ae.down_x) >= SC_DRAG_PX || pod_abs(I(e, PE_Y) - ae.down_y) >= SC_DRAG_PX);
+    drag = e && (m1_abs(I(e, PE_X) - ae.down_x) >= SC_DRAG_PX || m1_abs(I(e, PE_Y) - ae.down_y) >= SC_DRAG_PX);
     ae.pressing = 0;
     ae_set_press(0);
     if (!e || !ae.view || drag) {
@@ -838,7 +838,7 @@ static int ae_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     keyboard_detach();
-    if (ae.timer) timer_remove(ae.timer);
+    m1_timer_stop(&ae.timer);
     if (ae.running && pn_job_busy())
         pn_cancel(); /* the worker ends by itself; its part file is removed by the next job */
     if (!pn_job_busy() && pn_dl_waiting() && !pn_dl_running())
@@ -875,8 +875,8 @@ int autoeq_open(void) {
         return -1;
     }
     widget_on(ae.win, EVT_DESTROY, ae_on_destroy, (void *)0);
-    pod_bind(ae.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(ae.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(ae.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(ae.win, "btn_backtoplayer", m1_on_player, (void *)0);
     ae.list = widget_lookup(ae.win, "se_listview", 1);
     ae.sv = widget_lookup(ae.win, "se_scrollview", 1);
     ae.view = widget_lookup(ae.win, "view_grid", 1);
@@ -927,8 +927,8 @@ int autoeq_open(void) {
         ae.phase = P_LIST, ae.want = 1;
         keyboard_show(0);
     }
-    pod_show(ae.list, 0);
-    pod_show(ae.status, 0);
+    m1_show(ae.list, 0);
+    m1_show(ae.status, 0);
     ae_layout();
     if (ae.want) ae_kick();
     return 0;

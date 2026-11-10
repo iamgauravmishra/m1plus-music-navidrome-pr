@@ -17,7 +17,7 @@ def build(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     nb = navbar(page.title)
-    hidden(nb.children[0])   # the small title is hidden at rest and shown by patch/ndserver.c once the large one below has scrolled away (pod_title_gone)
+    hidden(nb.children[0])   # the small title is hidden at rest and shown by patch/ndserver.c once the large one below has scrolled away (m1_title_gone)
     root.children.append(nb)
     lv = stock_list([], True)
     sv = lv.children[0]

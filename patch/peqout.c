@@ -14,6 +14,7 @@
 #include "stock.h"
 #include "peq.h"
 #include "peqout.h"
+#include "common.h"
 #include "peqpage.h"
 
 static const char *const po_file[PO_N] = {PEQ_STATE_DIR "/playback-eq-headphones", PEQ_STATE_DIR "/playback-eq-lineout",
@@ -55,16 +56,9 @@ static int po_read(po_rec *r) {
 }
 
 static int po_write(const po_rec *r) {
-    int fd = open(PO_OUTPUT_FILE ".tmp", O_WRONLY | O_CREAT | O_TRUNC, 0644), ok;
-    if (fd < 0 && mkdir(PEQ_STATE_DIR, 0755) == 0) fd = open(PO_OUTPUT_FILE ".tmp", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return -1;
-    ok = write(fd, r, sizeof *r) == (int)sizeof *r && fsync(fd) == 0;
-    ok = close(fd) == 0 && ok;
-    if (!ok || rename(PO_OUTPUT_FILE ".tmp", PO_OUTPUT_FILE) != 0) {
-        unlink(PO_OUTPUT_FILE ".tmp");
-        return -1;
-    }
-    return 0;
+    int ok = m1_save(PO_OUTPUT_FILE, PO_OUTPUT_FILE ".tmp", 0644, r, sizeof *r);
+    if (!ok && mkdir(PEQ_STATE_DIR, 0755) == 0) ok = m1_save(PO_OUTPUT_FILE, PO_OUTPUT_FILE ".tmp", 0644, r, sizeof *r);
+    return ok ? 0 : -1;
 }
 
 int peqout_sync(int notify) {

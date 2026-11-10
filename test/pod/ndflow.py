@@ -147,7 +147,7 @@ def open_nd(m, row):
 def tick(m):
     """The page's gen timer once; the worker thread a request started is kept in m.thread."""
     m.thread = None
-    m.top_main = m.window   # pod_is_top: the page re-reads its list only while it is in front
+    m.top_main = m.window   # m1_is_top: the page re-reads its list only while it is in front
     m.call(PSYMS['ab_on_gen'], count=900000000)
 
 
@@ -190,7 +190,7 @@ def album(ctx):
     # 2. the header cover: the file the source names is decoded (a demo cover id, the Navidrome folder)
     expect(cover_file() not in m.fs and SA.state(m, SA.K['COVER'], COVER_ID)[0] == SA.ST['LOAD'] and m.thread, 'the page\'s own cover (refused behind the six covers) was asked for when the page read again')
     drain_all(m, m.thread)
-    m.top_main = m.window   # pod_is_top: the shared cover poll only runs for the page in front
+    m.top_main = m.window   # m1_is_top: the shared cover poll only runs for the page in front
     m.call(PSYMS['ls_cover_tick'], count=80000000)
     expect(cover_file() in m.fs, f'the cover was fetched into the Navidrome folder ({cover_file()})')
     blits = AP.paint(m)[0]
@@ -497,7 +497,3 @@ def state(ctx):
 
 
 SECTIONS = [album, gen, songs, artist_pl, state]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

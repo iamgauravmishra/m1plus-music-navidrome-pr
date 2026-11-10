@@ -24,6 +24,7 @@
 #include "home.h"
 #include "i18n.h"
 #include "keyboard.h"
+#include "utf8.h"
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 
@@ -131,24 +132,9 @@ static unsigned u16_to_u8(const unsigned short *s, char *out, unsigned cap) {
             cp = 0x10000 + ((cp - 0xd800) << 10) + (unsigned)(*s++ - 0xdc00);
         else if (cp >= 0xd800 && cp < 0xe000)
             cp = 0xfffd;
-        k = cp < 0x80 ? 1u : cp < 0x800 ? 2u : cp < 0x10000 ? 3u : 4u;
+        k = m1_utf8_len(cp);
         if (n + k + 1 > cap) break;
-        if (k == 1)
-            out[n] = (char)cp;
-        else if (k == 2) {
-            out[n] = (char)(0xc0 | (cp >> 6));
-            out[n + 1] = (char)(0x80 | (cp & 63));
-        } else if (k == 3) {
-            out[n] = (char)(0xe0 | (cp >> 12));
-            out[n + 1] = (char)(0x80 | ((cp >> 6) & 63));
-            out[n + 2] = (char)(0x80 | (cp & 63));
-        } else {
-            out[n] = (char)(0xf0 | (cp >> 18));
-            out[n + 1] = (char)(0x80 | ((cp >> 12) & 63));
-            out[n + 2] = (char)(0x80 | ((cp >> 6) & 63));
-            out[n + 3] = (char)(0x80 | (cp & 63));
-        }
-        n += k;
+        n += m1_utf8_put(out + n, cp);
     }
     out[n] = 0;
     return n;
@@ -227,7 +213,7 @@ static void kb_refresh(void) { /* the text and the caret */
         shown[0] = 0;
     widget_set_text_utf8(kb.text, shown);
     widget_set_visible(kb.hint, kb.len == 0, 0);
-    pod_show(kb.clear, kb.len != 0 && !(kb.flags & KB_PASSWORD));
+    m1_show(kb.clear, kb.len != 0 && !(kb.flags & KB_PASSWORD));
     widget_move(kb.caret, kb.tx + (kb.len ? w + 1 : 0), kb.cy);
     if (kb.embedded && kb.on_change) kb.on_change(kb.buf);
 }
@@ -290,7 +276,7 @@ static void kb_page(int page) {
                 if (geo != kb.geo) {
                     widget_move(kb.key[k], x, KB_PAD + r * KB_PITCH);
                     widget_resize(kb.key[k], w, KB_KH);
-                    pod_show(kb.key[k], 1);
+                    m1_show(kb.key[k], 1);
                 }
                 widget_set_text_utf8(kb.key[k], kb.lab[k]);
             }
@@ -299,12 +285,12 @@ static void kb_page(int page) {
     }
     kb.nkeys = k;
     if (geo != kb.geo)
-        for (r = k; r < KB_KEYS; ++r) pod_show(kb.key[r], 0);
+        for (r = k; r < KB_KEYS; ++r) m1_show(kb.key[r], 0);
     kb.geo = geo;
-    pod_show(kb.shift, page == P_LOWER &&
-                           !zh_page); /* the Chinese letter page has no shift: the pinyin separator takes its place */
-    pod_show(kb.shifton, page == P_UPPER);
-    pod_show(kb.sym, !letters || zh_page);
+    m1_show(kb.shift, page == P_LOWER &&
+                          !zh_page); /* the Chinese letter page has no shift: the pinyin separator takes its place */
+    m1_show(kb.shifton, page == P_UPPER);
+    m1_show(kb.sym, !letters || zh_page);
     if (!letters)
         widget_set_text_utf8(kb.sym, page == P_NUM ? "#+=" : "123");
     else if (zh_page)
@@ -317,7 +303,7 @@ static void kb_bottom(void) {
     int lang = kb.layers > 1, x = lang ? KB_LANG_X + KB_LANG_W + KB_GAP : KB_LANG_X;
     widget_move(kb.space, x, KB_ROW3_Y);
     widget_resize(kb.space, KB_GO_X - KB_GAP - x, KB_KH);
-    pod_show(kb.lang, lang);
+    m1_show(kb.lang, lang);
 }
 
 static void kb_lang_label(void) { /* the layer a tap goes to */
@@ -440,7 +426,7 @@ static void zh_render(void) {
     unsigned used = 0;
     if (!kb.strip) return;
     if (zh.src == S_NONE) {
-        pod_show(kb.strip, 0);
+        m1_show(kb.strip, 0);
         return;
     }
     if (zh.src == S_PINYIN) {
@@ -490,7 +476,7 @@ static void zh_render(void) {
             zh.slot[j] = 0;
         }
     zh_highlight(zh.hot);
-    pod_show(kb.strip, 1);
+    m1_show(kb.strip, 1);
 }
 
 static void zh_hide(void) { /* nothing to show: predictions or candidates off */
@@ -792,8 +778,7 @@ static int kb_repeat(const void *timer) {
 
 static void kb_stop(void) {
     kb.held = 0;
-    if (kb.timer) timer_remove(kb.timer);
-    kb.timer = 0;
+    m1_timer_stop(&kb.timer);
 }
 
 /* ---- events ---- */
@@ -1171,8 +1156,8 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
         return -1;
     }
     widget_on(kb.win, EVT_DESTROY, kb_on_destroy, kb.win);
-    pod_bind(kb.win, "btn_return", kb_on_back, (void *)0);
-    pod_bind(kb.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(kb.win, "btn_return", kb_on_back, (void *)0);
+    m1_bind(kb.win, "btn_backtoplayer", m1_on_player, (void *)0);
     if (title && title[0]) widget_set_text_utf8(kb.title, title);
     if (flags & KB_DONE) widget_set_tr_text(kb.go, "Done");
     return 0;
@@ -1263,8 +1248,8 @@ void keyboard_show(int on) {
         kb_unpop();
         kb_stop();
     }
-    pod_show(kb.pad, on);
-    pod_show(kb.strip, on && zh.src != S_NONE);
+    m1_show(kb.pad, on);
+    m1_show(kb.strip, on && zh.src != S_NONE);
     widget_set_visible(kb.caret, on, 0);
 }
 

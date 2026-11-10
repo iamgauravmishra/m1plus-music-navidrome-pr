@@ -1,5 +1,5 @@
-"""The library scan's folder walk (patch/common.c pod_scan_dir, tools/pod.py SCAN_SITE, docs/modules/payload.md hook 5): stock's folder lister (0x5ea364) skips a directory whose
-name is "." or ".." or a short list of system folders, and walks every other dot-folder. The build replaces its `jalr strcmp(name, ".")` (0x5ea6a8) by `jal pod_scan_dir`;
+"""The library scan's folder walk (patch/common.c m1_scan_dir, tools/pod.py SCAN_SITE, docs/modules/payload.md hook 5): stock's folder lister (0x5ea364) skips a directory whose
+name is "." or ".." or a short list of system folders, and walks every other dot-folder. The build replaces its `jalr strcmp(name, ".")` (0x5ea6a8) by `jal m1_scan_dir`;
 the stock code from the name test (0x5ea69c) runs for real under Unicorn, stock and built, and must skip every hidden folder in the build only. Modelled on q2-pod's
 ringnav_scan_dir test (test/patch.py)."""
 import os, struct
@@ -51,22 +51,22 @@ def scan_tests(ctx):
     built = m.data
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     # the build: the one word is a jal into the payload; the pinned words around it are stock's
-    expect(pod.SCAN_SITE == 0x5ea6a8 and w(stock_demo, SITE) == 0x0320f809 and w(built, SITE) >> 26 == 3 and (w(built, SITE) & 0x3ffffff) << 2 == PSYMS['pod_scan_dir'],
-           'the build replaced stock\'s `jalr t9` at 0x5ea6a8 by `jal pod_scan_dir`')
+    expect(pod.SCAN_SITE == 0x5ea6a8 and w(stock_demo, SITE) == 0x0320f809 and w(built, SITE) >> 26 == 3 and (w(built, SITE) & 0x3ffffff) << 2 == PSYMS['m1_scan_dir'],
+           'the build replaced stock\'s `jalr t9` at 0x5ea6a8 by `jal m1_scan_dir`')
     expect(all(w(stock_demo, a) == old and (a == SITE or w(built, a) == old) for a, old, _ in pod.SCAN_PINS),
            'every pinned word of the folder lister is stock\'s in the stock demo and unchanged in the build, but the site')
     expect(w(built, 0x5ea6ac) == 0x24a53ed4 and w(built, 0x5ea6b0) == 0x1040ffd3, 'the delay slot still loads a1 = "." and the branch on the result still goes back to readdir')
-    expect(MANIFEST['hook_scan'] == {'addr': SITE, 'target': PSYMS['pod_scan_dir']}, 'the manifest records the hook')
+    expect(MANIFEST['hook_scan'] == {'addr': SITE, 'target': PSYMS['m1_scan_dir']}, 'the manifest records the hook')
     # the stock code, stock and built
     stock = Walk(stock=True)
     for n in HIDDEN + SHOWN: expect(stock.test(n) == ('skip' if n == '.' else 'keep'), f'STOCK: {n!r} -> {stock.end} (this test skips "." only; ".." falls to the next test, which skips it)')
     for n in HIDDEN: expect(m.test(n) == 'skip', f'BUILT: the hidden folder {n!r} is skipped')
     for n in SHOWN: expect(m.test(n) == 'keep', f'BUILT: {n!r} is walked as before')
     # the payload function alone: stock's strcmp for any other name, 0 for a name that starts with a dot
-    f = lambda name, dot='.': m.call(PSYMS['pod_scan_dir'], a0=m.cstr(name), a1=m.cstr(dot), count=2000)
+    f = lambda name, dot='.': m.call(PSYMS['m1_scan_dir'], a0=m.cstr(name), a1=m.cstr(dot), count=2000)
     expect(f('.m1plus') == 0 and f('..') == 0 and f('.') == 0 and f('.x', 'zzz') == 0, 'a name starting with a dot returns 0 (a match)')
     expect(f('Music') != 0 and f('') != 0 and f('Music', 'Music') == 0 and f('.', '.') == 0, 'any other name returns strcmp(name, dot)')
-    m.call(PSYMS['pod_scan_dir'], a0=m.cstr('.m1plus'), a1=m.cstr('.'), count=2000)
+    m.call(PSYMS['m1_scan_dir'], a0=m.cstr('.m1plus'), a1=m.cstr('.'), count=2000)
     expect(m.calls == [] and m.icount < 12, f'a hidden name costs a few instructions and calls nothing ({m.icount})')
 
 

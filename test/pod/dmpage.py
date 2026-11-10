@@ -379,7 +379,7 @@ def run(ctx):
     payload_fns = set(PSYMS.values())
     timers = [c for c in calls if c[0] == 'timer_add' and c[1] in payload_fns]   # the payload's (the stock list_item's 30 ms press timer, list_item_cast+0x8c, runs in the Home tap too)
     expect([t[2] for t in timers] == [O['DP_MORE_MS']] and timers[0][1] == PSYMS['dp_on_load'], f'one page timer: the cover loader, {O["DP_MORE_MS"]} ms ({timers})')
-    expect(m.bound[(m.page['btn_return'], EVT_CLICK)][0] == PSYMS['pod_on_back'], 'the back disc is the stock back handler')
+    expect(m.bound[(m.page['btn_return'], EVT_CLICK)][0] == PSYMS['m1_on_back'], 'the back disc is the stock back handler')
     ld = [c[1] for c in calls if c[0] == 'loadLocalClassList']
     dq = [c for c in calls if c[0] == 'toolsQueryDbTable']
     expect(0xf001 not in ld and ld.count(0xf00b) == 1 and not {dm_t.CLS_FAV, 0xff13} & set(ld), f'the page does not read the library (loadLocalClassList 0xf001), only the album list for the cover keys and the playlist list once (is the mix saved?), no favourites, no playlist\'s songs ({[hex(x) for x in ld]})')
@@ -480,7 +480,7 @@ def run(ctx):
     expect(bars()[-1] == O['NP_BAR_STOCK'] and len(bars()) == 4, 'closed: the stock black is back')
     t = PG(); t.world(uniq, 12); t.boot(); nav, sbar = with_bar(t)
     t.card_tap()
-    t.call(PSYMS['pod_bar_tint'], a0=0x5a5a0000, a1=0x123456, count=200000)   # another page (Now Playing, opened by Play) takes the bar over
+    t.call(PSYMS['m1_bar_tint'], a0=0x5a5a0000, a1=0x123456, count=200000)   # another page (Now Playing, opened by Play) takes the bar over
     n_before = len(bars())
     t.fire_page_window(EVT_BG); t.fire_page_window(EVT_DESTROY)
     expect(len(bars()) == n_before, 'a page that lost the bar to the next one (Now Playing) never puts the black back over its colour')

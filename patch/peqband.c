@@ -225,7 +225,7 @@ static void bd_graph(void) {
 
 static void bd_title(void) {
     char text[48];
-    pod_fmt(text, sizeof text, TR("Band %d"), bd.band + 1);
+    m1_fmt(text, sizeof text, TR("Band %d"), bd.band + 1);
     widget_set_text_utf8(bd.title, text);
 }
 
@@ -387,8 +387,8 @@ static void bk_show_text(void) {
 
 static void bk_close(void) {
     bd.kopen = 0;
-    pod_show(bd.kscrim, 0);
-    pod_show(bd.kcard, 0);
+    m1_show(bd.kscrim, 0);
+    m1_show(bd.kcard, 0);
 }
 
 /* A digit or the point. */
@@ -489,14 +489,14 @@ static void bd_type(int r) {
                       : "0.1 \xe2\x80\x93 10");
     widget_set_text_utf8(bd.ktitle, r == 0 ? TR("Frequency") : r == 1 ? TR("Gain") : "Q");
     widget_set_text_utf8(bd.krange, range);
-    pod_show(bd.kunitk, r == 0);
+    m1_show(bd.kunitk, r == 0);
     widget_set_sensitive(bd.ksign, r == 1);
     peq_label_colors(bd.ksign, r == 1 ? "#FFFFFF" : "#5A5A5E");
     widget_set_text_utf8(bd.ksign, MINUS);
     bk_show_text();
     bd.kopen = 1;
-    pod_show(bd.kscrim, 1);
-    pod_show(bd.kcard, 1);
+    m1_show(bd.kscrim, 1);
+    m1_show(bd.kcard, 1);
 }
 
 static int bd_on_up(void *ctx, void *e) {
@@ -556,8 +556,8 @@ static int bd_on_next(void *ctx, void *e) {
  */
 static void bd_dialog(int on) {
     bd.dlg = on;
-    pod_show(bd.dscrim, on);
-    pod_show(bd.dcard, on);
+    m1_show(bd.dscrim, on);
+    m1_show(bd.dcard, on);
 }
 
 /* The way out the user asked for. */
@@ -565,7 +565,7 @@ static void bd_leave(void) {
     int how = bd.leave;
     bd.leave = 0;
     if (how == 2)
-        pod_open_now_playing();
+        m1_open_now_playing();
     else
         navigator_back();
 }
@@ -669,11 +669,11 @@ void peqband_opened(void *win) {
         if (widget_is_window_opened(old)) window_close(old);
     }
     memset(&bd, 0, sizeof bd);
-    pod_bind(
+    m1_bind(
         win, "btn_return", bd_on_back,
         (void
              *)0); /* (m1plus.c open_page leaves these two to this page; an asset that is not ours still gets its way out) */
-    pod_bind(win, "btn_backtoplayer", bd_on_player, (void *)0);
+    m1_bind(win, "btn_backtoplayer", bd_on_player, (void *)0);
     if (!p || pend_band < 0 || pend_band >= p->count) return;
     bd.graph = widget_lookup(win, "pod_graph", 1);
     bd.gtop = widget_lookup(win, "pod_gr_top", 1);
@@ -751,8 +751,8 @@ void peqband_opened(void *win) {
     widget_on(bd.kdone, EVT_CLICK, bd_on_kdone, (void *)0);
     widget_on(bd.kcancel, EVT_CLICK, bd_on_kcancel, (void *)0);
     widget_on(bd.kscrim, EVT_CLICK, bd_on_kcancel, (void *)0);
-    pod_bind(win, "btn_bprev", bd_on_prev, (void *)0);
-    pod_bind(win, "btn_bnext", bd_on_next, (void *)0);
+    m1_bind(win, "btn_bprev", bd_on_prev, (void *)0);
+    m1_bind(win, "btn_bnext", bd_on_next, (void *)0);
     widget_on(win, EVT_WINDOW_TO_FG, bd_on_fg, (void *)0);
     widget_on(win, EVT_DESTROY, bd_on_destroy, win);
     return;

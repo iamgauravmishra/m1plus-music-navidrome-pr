@@ -19,7 +19,7 @@ import preview_songs as PS
 O = PI.offsets()
 ROW, NAV = O['LIST_ROW_H'], PS.NAV
 TRACKS = ['So What', 'Freddie Freeloader', 'Blue in Green', 'All Blues', 'Flamenco Sketches', 'Flamenco Sketches (Alt)', 'So What (Alt)', 'Blue in Green (Alt)']
-TONE = (0x3A, 0x1E, 0x24)   # a cover's tone behind the album page (pod_tone of a red cover, approximately)
+TONE = (0x3A, 0x1E, 0x24)   # a cover's tone behind the album page (m1_tone of a red cover, approximately)
 
 
 ND_STATES = {   # a Navidrome row's sheet (patch/rowmenu.c rm_third): the third row and the star by the row's state

@@ -17,6 +17,7 @@
 #include "curlopts.h"
 #include "sbapi.h"
 #include "sbnet.h"
+#include "fnv.h"
 
 extern int pn_free_kb(const char *path, unsigned *kb);
 
@@ -355,7 +356,7 @@ static int sbd_edit(const char *remove_id, const char *row) {
         out += rn;
         buf[out++] = '\n';
     }
-    ok = pod_card_write(SBA_DIR, SBD_IDX, SBD_IDX_TMP, buf, out, (const void *)0, 0) == 0;
+    ok = m1_card_write(SBA_DIR, SBD_IDX, SBD_IDX_TMP, buf, out, (const void *)0, 0) == 0;
     if (ok) sbd_ix_set(buf, out);
     free(buf);
     free(text);
@@ -396,11 +397,7 @@ static int sbd_owner(const char *file, char *id, unsigned cap) {
 
 /* ---- the file name of a track (the PR's layout: <8 hex of the id>-<title>.<suffix>) ---- */
 
-static unsigned sbd_hash(const char *s) {
-    unsigned h = 2166136261u;
-    while (*s) h = (h ^ (unsigned char)*s++) * 16777619u;
-    return h;
-}
+static unsigned sbd_hash(const char *s) { return m1_fnv(2166136261u, s); }
 
 /* variant 0: "<hash>-<title>.<ext>"; n > 0: "<hash>-<title> (n+1).<ext>". 1 on success. */
 static int sbd_file_name(const sba_track_t *t, int variant, char *out, unsigned cap) {
@@ -528,7 +525,7 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     g = sba_guard();
     if (g) return g;
     if (sba_net_open(base, sizeof base, user, sizeof user, auth, sizeof auth) != SBA_OK) return SBA_NOCONF;
-    if (!pod_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
+    if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
     mkdir("/mnt/mmc/.m1plus", 0755);
     mkdir(SBA_MUSIC_DIR, 0775);
     /* the name: a free one, or the one an earlier download of this track left (the file is never overwritten) */
@@ -621,7 +618,7 @@ static void *sbd_main(void *arg) {
                 free(row);
             }
         }
-        if (code == SBA_OK && sba_is_dsd(t->suffix) && pod_card_mounted())
+        if (code == SBA_OK && sba_is_dsd(t->suffix) && m1_card_mounted())
             scanSpecFolder(SBA_MUSIC_DIR, 0); /* stock's library learns the new DSD file, as the PR does */
         sbd_lock();
         if (code == SBA_OK || code == SBA_CANCELLED)
@@ -663,7 +660,7 @@ int sba_dl_add(const sba_track_t *t) {
     sbd_unlock();
     g = sba_guard();
     if (g) return g;
-    if (!pod_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
+    if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
     if (kb <= SBA_RESERVE_KB || (t->size >> 10) > kb - SBA_RESERVE_KB) return SBA_CARDFULL;
     copy = (sba_track_t *)calloc(1, sizeof *copy);
     if (!copy) return SBA_MEM;
@@ -781,7 +778,7 @@ int sba_dl_path(const char *id, char *path, unsigned cap) {
     if (!id || !sbd_find(id, &e)) return 0;
     if (!sbd_path(full, sizeof full, e.file) || !sbd_file_ok(e.file)) return 0;
     if (access(full, 0) != 0) {
-        if (pod_card_mounted())
+        if (m1_card_mounted())
             sbd_edit(
                 id,
                 (const char
@@ -841,7 +838,7 @@ int sba_downloaded(sba_tracks_t *out) {
             continue;
         if (!sbd_exists(
                 file)) { /* deleted by hand: dropped below (some at a time; never while the card is out, when every file looks gone) */
-            if (ngone < 8 && pod_card_mounted()) sbd_set(gone[ngone++], SBA_ID, t->id);
+            if (ngone < 8 && m1_card_mounted()) sbd_set(gone[ngone++], SBA_ID, t->id);
             continue;
         }
         memcpy(&v[cnt++], t, sizeof *t);

@@ -600,7 +600,7 @@ def setting_tests(ctx):
 
     m = info_page()
     expect(('window_open', 'm1plus_lockinfo') in m.calls and not [c for c in m.calls if c[0] in ('navigator_to', 'navigator_to_with_context')], 'the instructions row opens our page m1plus_lockinfo, no stock page')
-    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['pod_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['pod_on_player'], 'Back goes back, Now Playing is the player')
+    expect(m.bound[(m.widgets['btn_return'], O['EVT_CLICK'])][0] == PSYMS['m1_on_back'] and m.bound[(m.widgets['btn_backtoplayer'], O['EVT_CLICK'])][0] == PSYMS['m1_on_player'], 'Back goes back, Now Playing is the player')
     texts = paint(m)
     head = [t for t in texts if t[0] == 'label_head']
     lines = [t for t in texts if t[0] == 'label_line']
@@ -881,7 +881,7 @@ def redirect_tests(ctx):
         for kill in (False, True):
             m = SF(stack)
             if kill: m.present.add(KILL)
-            m.call(PSYMS['pod_open_stock'], a0=m.cstr('systemset/display_page'), a1=m.cstr('display_page'), count=3000000)
+            m.call(PSYMS['m1_open_stock'], a0=m.cstr('systemset/display_page'), a1=m.cstr('display_page'), count=3000000)
             on_top = m.names_()[-1] == 'display_page' and m.names_().count('display_page') == 1
             m.calls = []; r = row(m, 2)
             want = (['systemset/screensaver_page'], []) if kill else ([], ['m1plus_lockscreen'])
@@ -889,7 +889,3 @@ def redirect_tests(ctx):
 
 
 SECTIONS = [hook_tests, layout_tests, life_tests, bar_tests, setting_tests, wallpaper_tests, redirect_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

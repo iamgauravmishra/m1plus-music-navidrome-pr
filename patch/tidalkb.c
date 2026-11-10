@@ -35,10 +35,7 @@ static struct {
     unsigned timer; /* the poll (0: none) */
 } tk __attribute__((section(".scratch")));
 
-static void tk_stop(void) {
-    if (tk.timer) timer_remove(tk.timer);
-    tk.timer = 0;
-}
+static void tk_stop(void) { m1_timer_stop(&tk.timer); }
 
 /* The pad's text changed: the stock edit holds it too (the search routine reads only the edit). */
 static void tk_on_change(const char *text) {
@@ -82,7 +79,7 @@ static void tk_on_go(void) {
 /* What stock wrote into the edit (a history row tap) is the bar's text from now on, and the pad goes. */
 static void tk_sync(void) {
     char cur[TK_TEXT * 4];
-    if (!tk.edit || pod_text_utf8(tk.edit, cur, sizeof cur) < 0 || !strcmp(cur, keyboard_text())) return;
+    if (!tk.edit || m1_text_utf8(tk.edit, cur, sizeof cur) < 0 || !strcmp(cur, keyboard_text())) return;
     keyboard_set_text(cur);
     keyboard_show(0);
 }

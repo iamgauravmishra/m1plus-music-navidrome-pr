@@ -507,7 +507,7 @@ def nav_tests(ctx):
     alpha = [mod_icons.nb_fade_alpha(y) for y in range(20)]
     expect([f[2] for f in fade] == [y for y in range(20) if alpha[y]] and [f[0] >> 24 for f in fade] == [a for a in alpha if a], 'scrolled: a 20 row fade whose alpha is nb_fade\'s eased curve')
     tone = tone_word_of(m)
-    expect(all(f[0] & 0xffffff == pod_shade(tone, 50 + f[2]) for f in fade), 'in the page\'s own colour (the tone under the gradient at those window rows), not black')
+    expect(all(f[0] & 0xffffff == m1_shade(tone, 50 + f[2]) for f in fade), 'in the page\'s own colour (the tone under the gradient at those window rows), not black')
     # select mode: the title is "N Selected", visible at the top; leaving it hides the small title again
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_select')
     expect(m.props.get((t, 'visible')) == 1 and flags(m, 'btn_more') == (0, 0), 'select mode shows its title and hides the "..."')
@@ -526,8 +526,8 @@ def nav_tests(ctx):
     expect(PCP.title_text(m) == 'Downloads' and flags(m, 'btn_more') == (1, 1) and 'btn_select' not in m.widgets, 'the Downloads page has the "..." (its sheet: Select, Delete Played Episodes) and no Select button')
 
 
-def pod_shade(tone, y):
-    """patch/common.c pod_shade: the colour 0x..BBGGRR as it shows on window row y under the album page's gradient."""
+def m1_shade(tone, y):
+    """patch/common.c m1_shade: the colour 0x..BBGGRR as it shows on window row y under the album page's gradient."""
     a = mod_icons.ah_tint_alpha(y)
     return (tone & 255) * (255 - a) // 255 | ((tone >> 8) & 255) * (255 - a) // 255 << 8 | ((tone >> 16) & 255) * (255 - a) // 255 << 16
 
@@ -610,7 +610,7 @@ def tint_tests(ctx):
     expect(m.bar_styles()[-1] == BAR_BLACK, 'the window is destroyed (the hardware Back key): the bar is black')
     m = page(); open_show(m)
     for _ in range(6): m.call(PSYMS['pg_on_load'], a0=0, count=40000000)
-    m.call(PSYMS['pod_bar_tint'], a0=0x1234, a1=0xff112233, count=200000)   # another page takes the bar
+    m.call(PSYMS['m1_bar_tint'], a0=0x1234, a1=0xff112233, count=200000)   # another page takes the bar
     n = len(m.bar_styles())
     m.call(m.bound[(m.window, BG)][0], a0=m.bound[(m.window, BG)][1], a1=0, count=2000000)
     expect(len(m.bar_styles()) == n, 'the bar is another page\'s now: this page\'s late background event leaves it alone (one owner)')
@@ -1062,7 +1062,3 @@ def screen_off_tests(ctx):
 
 
 SECTIONS = [asset_tests, layout_tests, cell_tests, tap_tests, latest_tests, order_tests, nav_tests, tint_tests, sheet_tests, mark_all_tests, refresh_tests, unsub_tests, wrap_tests, width_tests, screen_off_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

@@ -63,7 +63,3 @@ def scoped_tests(ctx):
 
 
 SECTIONS = [library_tests, scoped_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

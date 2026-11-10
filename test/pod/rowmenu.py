@@ -648,7 +648,3 @@ def source_tests(ctx):
 
 
 SECTIONS = [asset_tests, paint_tests, touch_tests, menu_tests, fav_info_tests, source_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

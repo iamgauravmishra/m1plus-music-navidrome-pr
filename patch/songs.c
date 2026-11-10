@@ -117,7 +117,7 @@ static struct {
     /* A playlist's header has the album page's Shuffle disc and Play pill instead of the library's two flat pills (btn_play, btn_shuffle): hd_play, hd_shuffle, and the pill's
      * glyph and hidden text label (sg_glyph, sg_play_text; the text is painted by the content view). Only one set is shown (sg_pills), the other is hidden and insensitive. */
     void *hd_play, *hd_shuffle;
-    pod_pill_t pill;
+    m1_pill_t pill;
     void *st_title, *st_sub; /* hidden labels whose styles are the text styles (the rail's and the header's are az's) */
     void *st_dim,
         *st_subdim; /* a source's rows that cannot play: the title's and the grey line's dim styles (NULL: drawn as the others) */
@@ -359,7 +359,7 @@ static void sg_prep(tile_t *t, int a) {
         CLASS_OFTEN) { /* Most Played: "12 plays · Artist" (the count first, a long artist is the part that is cut); REC_TRACK = plays - 1 */
         int plays = I(rec, REC_TRACK) + 1;
         char count[48];
-        pod_fmt(count, sizeof count, TR(plays == 1 ? "%d play" : "%d plays"), plays);
+        m1_fmt(count, sizeof count, TR(plays == 1 ? "%d play" : "%d plays"), plays);
         snprintf(buf, sizeof buf, "%s%s%s", count, sub[0] ? " \xc2\xb7 " : "", sub);
         sub = buf;
     }
@@ -459,7 +459,7 @@ static int rv_next_load(void) {
         tile_t *t = grid_find(&sg.rg, a);
         int top = RV_TOP + a / GRID_COLS * GRID_PITCH - s, d;
         if (t && t->art) continue;
-        d = pod_abs(top + GRID_CELL_H / 2 - GRID_VIEW_H / 2);
+        d = m1_abs(top + GRID_CELL_H / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + GRID_CELL_H <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -486,7 +486,7 @@ static void sg_paint_rows(void *canvas) {
         if (h) grid_blit(canvas, &sg.hg, h, PH_COVER_X, PH_COVER_Y - off, GRID_VIEW_H);
     }
     if (sg.head && !sg.wait)
-        pod_pill_paint(&sg.pill, canvas, PH_BTN_Y - off); /* a playlist's Play pill text, over its picture */
+        m1_pill_paint(&sg.pill, canvas, PH_BTN_Y - off); /* a playlist's Play pill text, over its picture */
     sg_span(&r0, &r1);
     if (sg.src && r1 - r0 > 31) r1 = r0 + 31;
     for (r = r0; r <= r1; ++r) {
@@ -575,7 +575,7 @@ static int sg_next_load(void) {
         tile_t *t = grid_find(&sg.g, a);
         int top = sg_row_y(a) - s, d;
         if (t && t->art) continue;
-        d = pod_abs(top + ROW / 2 - GRID_VIEW_H / 2);
+        d = m1_abs(top + ROW / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + ROW <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -584,8 +584,6 @@ static int sg_next_load(void) {
 
 static int sg_on_load(const void *unused);
 static void sg_cp_arm(void);
-
-static int sg_moving(void) { return grid_moving(sg.sv); }
 
 /* The playlist header's mosaic still to be made (one source a tick) and in view. */
 static int sg_head_pending(void) {
@@ -597,12 +595,6 @@ static void sg_kick(void) {
     if (!sg.more_timer && sg.view &&
         (sg.noscroll || (sg.rv ? rv_next_load() : sg_next_load()) >= 0 || sg_head_pending()))
         sg.more_timer = timer_add(sg_on_load, (void *)0, SG_MORE_MS);
-}
-
-static void sg_dir(void) {
-    int s = sg_off();
-    if (s != sg.seen) sg.dir = s > sg.seen ? 1 : -1;
-    sg.seen = s;
 }
 
 /* The cover of a tile: its own key's file, else the library album's (cc_cover_key); a tile with neither shows the placeholder. */
@@ -633,8 +625,8 @@ static int sg_on_load(const void *unused) {
     (void)unused;
     sg.more_timer = 0;
     if (!sg.view) return RET_OK;
-    sg_dir();
-    if (sg_moving()) { /* nothing is decoded while it moves: look again next tick */
+    grid_dir(sg_off(), &sg.seen, &sg.dir);
+    if (grid_moving(sg.sv)) { /* nothing is decoded while it moves: look again next tick */
         sg_kick();
         return RET_OK;
     }
@@ -670,8 +662,8 @@ static int sg_on_load(const void *unused) {
  * The navbar's title: the large title is in the content; once it has scrolled away the navbar shows the small one
  */
 static void sg_title_update(void) {
-    int on = sg.noscroll || sg.select || pod_title_gone(sg_off(), sg.head ? PH_COLLAPSE : 0);
-    pod_title_set(sg.title, &sg.title_on, on);
+    int on = sg.noscroll || sg.select || m1_title_gone(sg_off(), sg.head ? PH_COLLAPSE : 0);
+    m1_title_set(sg.title, &sg.title_on, on);
     /* The navbar's fade (an insensitive image, built hidden) is for rows passing under the bar: shown while the list is scrolled, hidden at rest, where
      * it would darken the large title (as the Albums and Playlists pages). Never a touch target. No fade widget = nothing happens. */
     if (sg.fade) {
@@ -704,8 +696,7 @@ static void sg_cp_ask(void) {
 static void sg_cp_arm(void) { ls_cover_poll(&sg.cp, sg.win, sg_cp_ask, (int (*)(void))0, (void (*)(void))0); }
 
 static void sg_build_end(void) {
-    if (sg.build_timer) timer_remove(sg.build_timer);
-    sg.build_timer = 0;
+    m1_timer_stop(&sg.build_timer);
     if (sg.own) cc_build_stop();
     sg.own = 0;
 }
@@ -806,10 +797,10 @@ static int sg_on_scroll(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!sg.view) return RET_OK;
-    sg_dir();
+    grid_dir(sg_off(), &sg.seen, &sg.dir);
     sg_title_update();
     sg_kick();
-    if (!sg.rv && pod_abs(sg_first() - sg.build_at) > SG_BUILD_MOVE && !sg_moving()) sg_build_later();
+    if (!sg.rv && m1_abs(sg_first() - sg.build_at) > SG_BUILD_MOVE && !grid_moving(sg.sv)) sg_build_later();
     return RET_OK;
 }
 
@@ -828,7 +819,7 @@ static const char *sg_name_text(void) { return sg.key ? TR(sg.key) : sg.name; } 
 /* The song count under the last row: "25 songs" (the key by n == 1, the number where the translation has its %d). */
 static void sg_foot_text(void) {
     char buf[64];
-    pod_fmt(buf, sizeof buf, TR(sg.count == 1 ? "%d song" : "%d songs"), (int)sg.count);
+    m1_fmt(buf, sizeof buf, TR(sg.count == 1 ? "%d song" : "%d songs"), (int)sg.count);
     widget_set_text_utf8(sg.foot, buf);
     widget_move(sg.foot, SG_HDR_X, sg_rows_end() + SG_FOOT_GAP);
 }
@@ -866,7 +857,7 @@ static void sg_head(
         az_fit(sg.title, sg_lib() ? TR("Songs") : sg_name_text());
         return;
     }
-    pod_fmt(buf, sizeof buf, TR("%d Selected"), (int)sg.nsel);
+    m1_fmt(buf, sizeof buf, TR("%d Selected"), (int)sg.nsel);
     widget_set_text_utf8(sg.title, buf);
 }
 
@@ -911,8 +902,7 @@ static void sg_load(int keep) {
             old =
                 (song_t
                      *)0; /* (the library is big: its old index is not held beside the new one, and it is read again only when it changed) */
-    if (sg.more_timer) timer_remove(sg.more_timer);
-    sg.more_timer = 0;
+    m1_timer_stop(&sg.more_timer);
     sg_build_end();
     rowmenu_close(&sg.rm); /* (a menu's row is an index of the list that is read again) */
     free(sg.sel);
@@ -986,9 +976,9 @@ static void sg_load(int keep) {
         grid_drop(&sg.g);
     sg_head_prep();
     if (!same) grid_placeholder(&sg.g);
-    pod_show(sg.view, sg.count != 0 ||
-                          sg.wait); /* (a source's list still loading: the title block, with the spinner under it) */
-    pod_show(sg.status, sg.count == 0 && !(sg.wait && sg.spin));
+    m1_show(sg.view,
+            sg.count != 0 || sg.wait); /* (a source's list still loading: the title block, with the spinner under it) */
+    m1_show(sg.status, sg.count == 0 && !(sg.wait && sg.spin));
     if (sg.foot)
         widget_set_visible(sg.foot, !sg.rv && !sg.wait && !sg.part,
                            0); /* (no count while a paged list is still growing) */
@@ -1026,7 +1016,8 @@ static int sg_on_gen(const void *unused) {
     (void)unused;
     sg.gen_timer = 0;
     if (!sg.src || !sg.view) return RET_OK;
-    if (sg.src->gen(sg.src) != sg.sgen && !sg.select && !sg.menu && !sg.down && !sg_moving() && pod_is_top(sg.win)) {
+    if (sg.src->gen(sg.src) != sg.sgen && !sg.select && !sg.menu && !sg.down && !grid_moving(sg.sv) &&
+        m1_is_top(sg.win)) {
         if (ls_gen_rows(sg.src) ==
             sg.srows) { /* only a download's progress moved: the rows are the same, the visible ones are painted again (their state is read while painting) */
             sg.sgen = sg.src->gen(sg.src);
@@ -1044,7 +1035,7 @@ static int sg_on_gen(const void *unused) {
 static int sg_on_stale(const void *unused) {
     (void)unused;
     sg.stale_timer = 0;
-    if (sg.view && !sg.rv && sg.g.tiles && !sg_valid() && pod_is_top(sg.win)) sg_load(1);
+    if (sg.view && !sg.rv && sg.g.tiles && !sg_valid() && m1_is_top(sg.win)) sg_load(1);
     return RET_OK;
 }
 
@@ -1130,8 +1121,7 @@ static int rv_enter(void) {
     sg.rg.st_title = sg.st_gtitle, sg.rg.st_sub = sg.st_gsub;
     grid_placeholder(&sg.rg);
     sg_stop_scroll();
-    if (sg.more_timer) timer_remove(sg.more_timer);
-    sg.more_timer = 0;
+    m1_timer_stop(&sg.more_timer);
     sg_build_end();
     if (!rv_load()) {
         grid_free(&sg.rg);
@@ -1139,8 +1129,8 @@ static int rv_enter(void) {
     }
     sg.rv = 1, sg.press = sg.down = 0, sg.dir = 1;
     rv_ui();
-    pod_show(sg.view, sg.rn != 0);
-    pod_show(sg.status, sg.rn == 0);
+    m1_show(sg.view, sg.rn != 0);
+    m1_show(sg.status, sg.rn == 0);
     if (!sg.rn) widget_set_tr_text(sg.status, "No albums");
     sg_size();
     widget_set_prop_int(sg.sv, "yoffset", 0);
@@ -1154,8 +1144,7 @@ static int rv_enter(void) {
 
 static void rv_leave(void) {
     sg_stop_scroll();
-    if (sg.more_timer) timer_remove(sg.more_timer);
-    sg.more_timer = 0;
+    m1_timer_stop(&sg.more_timer);
     sg_build_end();
     sg.rv = 0, sg.rn = 0;
     free(sg.rrow);
@@ -1234,11 +1223,11 @@ static void sg_select(int on) {
     if (sg.sel) memset(sg.sel, 0, (sg.count + 7) / 8);
     sg.press = sg.down = 0;
     nav[0] = sg.btn_more, nav[1] = sg.np;
-    for (i = 0; i < 2; ++i) pod_show(nav[i], !on);
-    if (sg.btn_cf) pod_show(sg.btn_cf, !on && sg_artist());
-    if (sg.btn_search) pod_show(sg.btn_search, !on && sg_searches());
-    pod_show(sg.btn_selall, on);
-    pod_show(sg.bar, on);
+    for (i = 0; i < 2; ++i) m1_show(nav[i], !on);
+    if (sg.btn_cf) m1_show(sg.btn_cf, !on && sg_artist());
+    if (sg.btn_search) m1_show(sg.btn_search, !on && sg_searches());
+    m1_show(sg.btn_selall, on);
+    m1_show(sg.bar, on);
     sg_pills(); /* the pills stay in the content, dim and dead (the library's) or dead (a playlist's) */
     widget_resize(sg.title, (on ? SG_SELALL_X : sg_title_end()) - NAV_TITLE_X, 22);
     widget_set_prop_str(sg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
@@ -1270,7 +1259,7 @@ static int sg_on_selall(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!sg.select || !sg.sel) return RET_OK;
-    sg.nsel = pod_sel_all(sg.sel, sg.count, sg.nsel);
+    sg.nsel = m1_sel_all(sg.sel, sg.count, sg.nsel);
     sg_count_changed();
     return RET_OK;
 }
@@ -1403,12 +1392,12 @@ static int sg_on_up(void *ctx, void *e) {
         int pt[2];
         pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
         widget_to_local(sg.view, pt);
-        if (pod_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && pod_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
+        if (m1_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && m1_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
             rv_cell_at(pt[0], pt[1]) == a && (unsigned)a < sg.rn)
             cc_open_album((void *)0, 0, (int)sg.rrow[a]);
         return RET_OK;
     }
-    if (pod_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && pod_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
+    if (m1_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && m1_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
         sg_item_of(e) == a) {
         if (sg.select)
             sg_toggle(a);
@@ -1568,9 +1557,9 @@ static int sg_on_destroy(void *ctx, void *e) {
     int i;
     (void)ctx;
     (void)e;
-    if (sg.more_timer) timer_remove(sg.more_timer);
-    if (sg.stale_timer) timer_remove(sg.stale_timer);
-    if (sg.gen_timer) timer_remove(sg.gen_timer);
+    m1_timer_stop(&sg.more_timer);
+    m1_timer_stop(&sg.stale_timer);
+    m1_timer_stop(&sg.gen_timer);
     ls_cover_end(&sg.cp);
     ls_spin_end(sg.spin);
     if (sg.src && sg.list) deque_destroy(sg.list);
@@ -1599,9 +1588,9 @@ static int sg_stack(void) {
     if (!sg.win) return 0;
     if (sg_under || !(sg_under = calloc(1, sizeof sg))) return -1;
     sg_build_end();
-    if (sg.more_timer) timer_remove(sg.more_timer);
-    if (sg.stale_timer) timer_remove(sg.stale_timer);
-    if (sg.gen_timer) timer_remove(sg.gen_timer);
+    m1_timer_stop(&sg.more_timer);
+    m1_timer_stop(&sg.stale_timer);
+    m1_timer_stop(&sg.gen_timer);
     ls_cover_end(&sg.cp);
     ls_spin_end(sg.spin);
     sg.more_timer = sg.stale_timer = sg.gen_timer = 0;
@@ -1650,23 +1639,23 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
         return -1;
     }
     widget_on(sg.win, EVT_DESTROY, sg_on_destroy, (void *)0);
-    sg.back = pod_bind(sg.win, "btn_return", sg_on_back, (void *)0);
-    sg.np = pod_bind(sg.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    sg.btn_more = pod_bind(sg.win, "btn_more", sg_on_more, (void *)0);
-    sg.btn_select = pod_bind(sg.win, "btn_select", sg_on_more, (void *)0); /* optional: Select in the "..." place */
-    sg.btn_cf = pod_bind(sg.win, "btn_coverflow", sg_on_cf, (void *)0); /* optional */
-    sg.btn_search = pod_bind(sg.win, "btn_search", sg_on_search, (void *)0); /* optional */
+    sg.back = m1_bind(sg.win, "btn_return", sg_on_back, (void *)0);
+    sg.np = m1_bind(sg.win, "btn_backtoplayer", m1_on_player, (void *)0);
+    sg.btn_more = m1_bind(sg.win, "btn_more", sg_on_more, (void *)0);
+    sg.btn_select = m1_bind(sg.win, "btn_select", sg_on_more, (void *)0); /* optional: Select in the "..." place */
+    sg.btn_cf = m1_bind(sg.win, "btn_coverflow", sg_on_cf, (void *)0); /* optional */
+    sg.btn_search = m1_bind(sg.win, "btn_search", sg_on_search, (void *)0); /* optional */
     sg.st_gtitle = widget_lookup(sg.win, "label_grid_title", 1); /* optional: the album view's text styles */
     sg.st_gsub = widget_lookup(sg.win, "label_grid_sub", 1);
-    sg.btn_selall = pod_bind(sg.win, "btn_selall", sg_on_selall, (void *)0);
-    sg.btn_play = pod_bind(sg.win, "btn_play", sg_on_play, (void *)0);
-    sg.btn_shuffle = pod_bind(sg.win, "btn_shuffle", sg_on_shuffle, (void *)0);
-    sg.hd_play = pod_bind(sg.win, "hd_play", sg_on_play, (void *)0);
-    sg.hd_shuffle = pod_bind(sg.win, "hd_shuffle", sg_on_shuffle, (void *)0);
+    sg.btn_selall = m1_bind(sg.win, "btn_selall", sg_on_selall, (void *)0);
+    sg.btn_play = m1_bind(sg.win, "btn_play", sg_on_play, (void *)0);
+    sg.btn_shuffle = m1_bind(sg.win, "btn_shuffle", sg_on_shuffle, (void *)0);
+    sg.hd_play = m1_bind(sg.win, "hd_play", sg_on_play, (void *)0);
+    sg.hd_shuffle = m1_bind(sg.win, "hd_shuffle", sg_on_shuffle, (void *)0);
     sg.pill.glyph = widget_lookup(sg.win, "sg_glyph", 1);
     sg.pill.ptext = widget_lookup(sg.win, "sg_play_text", 1);
-    sg.btn_add = pod_bind(sg.win, "sg_add", sg_on_add, (void *)0);
-    sg.btn_del = pod_bind(sg.win, "sg_del", sg_on_delete, (void *)0);
+    sg.btn_add = m1_bind(sg.win, "sg_add", sg_on_add, (void *)0);
+    sg.btn_del = m1_bind(sg.win, "sg_del", sg_on_delete, (void *)0);
     sg.title = widget_lookup(sg.win, "label_title", 1);
     sg.fade = widget_lookup(sg.win, "img_nb_fade", 1); /* optional */
     sg.view = widget_lookup(sg.win, "view_grid", 1);
@@ -1705,12 +1694,12 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
     rowmenu_bind(&sg.rm, sg.win); /* the rows' "..." menu (optional: no widgets means no "...") */
     if (sg_direct()) {
         if (sg_selects()) { /* the card would hold Select alone: the Select button takes the "..." place (left cap at 214, or the middle piece after Search / Cover Flow) and sg.btn_more stands for it from here on */
-            pod_show(sg.btn_more, 0);
+            m1_show(sg.btn_more, 0);
             sg.btn_more = sg.btn_select;
-            pod_show(sg.btn_more, 1);
+            m1_show(sg.btn_more, 1);
         } else { /* a source without Select: the card has nothing to hold, so neither button shows */
-            pod_show(sg.btn_more, 0);
-            pod_show(sg.btn_select, 0);
+            m1_show(sg.btn_more, 0);
+            m1_show(sg.btn_select, 0);
         }
     }
     if ((sg_artist() && sg.btn_cf) ||
@@ -1718,7 +1707,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
         const char *mid = sg_direct() ? "pod_nav_select" : "pod_nav_moremid";
         char down[32];
         snprintf(down, sizeof down, "%s_down", mid);
-        pod_show(sg_artist() ? sg.btn_cf : sg.btn_search, 1);
+        m1_show(sg_artist() ? sg.btn_cf : sg.btn_search, 1);
         if (!sg_mid()) /* no middle piece: the left cap moves to 214, beside Now Playing (no gap in the capsule) */
             widget_move(sg_artist() ? sg.btn_cf : sg.btn_search, NAV_VIEW_X, 0);
         widget_set_prop_str(sg.btn_more, "style:normal:icon", mid);
@@ -1748,23 +1737,23 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
             widget_move(sg.hd_play, AH_PLAY_X, PH_BTN_Y);
             widget_move(sg.hd_shuffle, AH_SHUF_X, PH_BTN_Y);
             az_fit(sg.hname, sg_name_text());
-            pod_show(sg.big, 0);
+            m1_show(sg.big, 0);
             widget_set_visible(sg.hname, 1, 0); /* (an insensitive label: shown, never a touch target) */
         } else
             grid_free(&sg.hg);
     }
     if (sg.head)
-        pod_pill_place(&sg.pill, PH_BTN_Y);
+        m1_pill_place(&sg.pill, PH_BTN_Y);
     else {
-        pod_centre_pill(sg.btn_play, SG_PILL_W);
-        pod_centre_pill(sg.btn_shuffle, SG_PILL_W);
+        m1_centre_pill(sg.btn_play, SG_PILL_W);
+        m1_centre_pill(sg.btn_shuffle, SG_PILL_W);
     }
     sg_pills();
-    pod_centre_pill(sg.btn_add, SG_BAR_PILL_W);
-    pod_centre_pill(sg.btn_del, SG_BAR_PILL_W);
+    m1_centre_pill(sg.btn_add, SG_BAR_PILL_W);
+    m1_centre_pill(sg.btn_del, SG_BAR_PILL_W);
     az_make_disc(&sg.al);
-    sg.mark[0] = pod_make_mark(sg.win, "unselect");
-    sg.mark[1] = pod_make_mark(sg.win, "selected");
+    sg.mark[0] = m1_make_mark(sg.win, "unselect");
+    sg.mark[1] = m1_make_mark(sg.win, "selected");
     if (!sg.mark[0] || !sg.mark[1])
         sg.mark[0] = sg.mark[1] =
             (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
@@ -1788,9 +1777,9 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
     widget_on(sg.al.rail, EVT_AFTER_PAINT, sg_on_rail_paint, (void *)0);
     if (!grid_init(&sg.g, sg.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&sg.g);
-        pod_show(sg.view, 0);
-        pod_show(sg.al.rail, 0);
-        pod_show(sg.status, 1);
+        m1_show(sg.view, 0);
+        m1_show(sg.al.rail, 0);
+        m1_show(sg.status, 1);
         widget_set_tr_text(sg.status, "Not enough memory");
         return 0;
     }

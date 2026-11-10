@@ -147,7 +147,7 @@ static int st_write(void) {
         unlink(STAMP_FILE);
         return 0;
     }
-    return pod_card_write(CARD_DIR, STAMP_FILE, STAMP_TMP, buf, o, (const void *)0, 0);
+    return m1_card_write(CARD_DIR, STAMP_FILE, STAMP_TMP, buf, o, (const void *)0, 0);
 }
 
 /* Clear Cover Cache (1) and Clear Track Durations (2) make their part stale: the line goes. */
@@ -206,7 +206,7 @@ static void hc_stamp(int mask) {
 static int hc_expect(void) {
     unsigned sig[HC_SIG];
     int mask, i;
-    if (!pod_card_mounted()) return 0; /* nothing can be made without the card */
+    if (!m1_card_mounted()) return 0; /* nothing can be made without the card */
     st_read();
     mask = (st.c ? 0 : 1) | (st.t ? 0 : 2) | (st.a ? 0 : 8) | (access(REBUILD_FILE, F_OK) ? 0 : 1) |
            (access(AREBUILD_FILE, F_OK) ? 0 : 8);
@@ -248,10 +248,7 @@ static void hc_show(int on) {
 }
 
 /* The dot timer goes (a no-op when it is not running). */
-static void hc_dots_stop(void) {
-    if (hc.dots) timer_remove(hc.dots);
-    hc.dots = 0;
-}
+static void hc_dots_stop(void) { m1_timer_stop(&hc.dots); }
 
 /* The waiting label: the translated text without its trailing ellipsis (the "…" character, or three ASCII dots) and 1 to 3 ASCII dots by phase. 1 when the text has no ellipsis (shown as it is, no animation). */
 static int hc_wait_label(void) {
@@ -356,8 +353,7 @@ static void hc_dur_save(void) {
 
 /* The page's build released: the timer removed, what was measured saved, a running worker cancelled (joined if finished, else left to exit on its own), the line hidden. */
 static void hc_end(void) {
-    if (hc.timer) timer_remove(hc.timer);
-    hc.timer = 0;
+    m1_timer_stop(&hc.timer);
     hc_free_scan();
     hc_dur_save();
     if (hc.own) cc_build_stop();
@@ -375,7 +371,7 @@ static int hc_on_dscan(const void *unused);
 static void hc_dur_begin(void) {
     unsigned cap;
     int failed;
-    if (!hc.win || !hc.fg || hc_off || hc.own || hc.len || hc.timer || cc_build_busy() || !pod_card_mounted()) {
+    if (!hc.win || !hc.fg || hc_off || hc.own || hc.len || hc.timer || cc_build_busy() || !m1_card_mounted()) {
         hc_show(0); /* (no stamp line: Home asks again) */
         return;
     }
@@ -891,9 +887,8 @@ static int cp_is_pic(const char *name) {
 }
 
 static void cp_stop_timers(void) {
-    if (cp.timer) timer_remove(cp.timer);
-    if (cp.poll) timer_remove(cp.poll);
-    cp.timer = cp.poll = 0;
+    m1_timer_stop(&cp.timer);
+    m1_timer_stop(&cp.poll);
     if (cp.dir) closedir(cp.dir);
     cp.dir = (void *)0;
     if (cp.adir) closedir(cp.adir);

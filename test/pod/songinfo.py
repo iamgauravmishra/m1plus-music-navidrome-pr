@@ -412,7 +412,3 @@ def remote_tests(ctx):
 
 
 SECTIONS = [asset_tests, field_tests, geometry_tests, lifecycle_tests, cover_tests, remote_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

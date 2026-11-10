@@ -148,8 +148,8 @@ static int rn_open(const char *name, const char *head, const char *text, int pit
         return -1;
     }
     widget_on(rn.win, EVT_DESTROY, rn_on_destroy, rn.win);
-    pod_bind(rn.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(rn.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(rn.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(rn.win, "btn_backtoplayer", m1_on_player, (void *)0);
     rn.sv = widget_lookup(rn.win, "rn_scrollview", 1);
     rn.view = widget_lookup(rn.win, "rn_view", 1);
     rn.st_head = widget_lookup(rn.win, "label_head", 1);

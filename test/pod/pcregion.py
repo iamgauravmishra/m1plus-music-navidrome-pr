@@ -154,7 +154,3 @@ def string_tests(ctx):
 
 
 SECTIONS = [table_tests, infer_tests, save_tests, search_tests, files_tests, string_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

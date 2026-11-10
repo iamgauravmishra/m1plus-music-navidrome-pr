@@ -442,7 +442,3 @@ def navidrome_tests(ctx):
 
 
 SECTIONS = [insert_tests, shuffle_tests, gapless_tests, refusal_tests, idle_tests, lock_tests, clear_tests, pinned_tests, navidrome_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

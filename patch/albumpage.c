@@ -6,7 +6,7 @@
  * reaches the window's top (450 px) with the glass controls floating over it (Back, a Select | Now Playing capsule; in select mode the all / none toggle, Add, Delete and
  * Cancel), so the rows scroll under them. The content view holds the header's widgets (the title, the artist and the "year . N tracks" line, the Shuffle disc and the
  * Play pill with its glyph and text) and paints the rest itself in its EVT_AFTER_PAINT: the rounded cover, the tracks' numbers and titles, the press fill, the hairlines
- * and the select marks. The window is tinted from the cover as Now Playing is (pod_tone under the gradient image img_ah_tint), and so is the status bar (pod_bar_tint).
+ * and the select marks. The window is tinted from the cover as Now Playing is (m1_tone under the gradient image img_ah_tint), and so is the status bar (m1_bar_tint).
  *
  *   entry     album_open(class, row), called by cc_open_album (patch/covercache.c) with the album row of the list the caller loaded: loadAlbumdetailList(class, row) leaves
  *             the album's tracks in *pdeq_showlist and the browsing record in classinfo (class 0xff10 an album of the library, 0xff11 an album of an artist, 0xff14 a composer's),
@@ -14,7 +14,7 @@
  *             "All albums" card, a window that will not open) returns -1 and the caller opens the stock albuminfo_page.
  *   cover     the Cover Flow cache file of the album (/mnt/mmc/.m1plus/covers/<key>-168.jpg, the key of the album row), box-reduced to 160 px with its corners cut in the alpha;
  *             a file that is not there is made by the cache worker (one job, polled), an empty "no art" marker leaves the placeholder disc and a black page.
- *   tint      the tone cache (pod_tone_get) or the cover file's average colour; none for a page without a cover.
+ *   tint      the tone cache (m1_tone_get) or the cover file's average colour; none for a page without a cover.
  *   rows      the stock row's number (position + 1) and title (the stock is_playing: a playing track's number is the wave marker), 64 px, from the stock list while painting.
  *   play      Play / Shuffle / a track: patch/songops.c, and Now Playing opens the way the stock album page's rows do (pod_open_player: with songerinfoflag set the
  *             pages above the Now Playing in the stack are popped first).
@@ -56,7 +56,7 @@ static struct {
     void *
         foot; /* the footer under the last row (ab_foot, a label of the content view): "13 tracks, 49 minutes", hidden while the duration is unknown */
     void *hname, *hartist, *hmeta; /* the header's labels */
-    pod_pill_t
+    m1_pill_t
         pill; /* the Play pill's glyph and its hidden text label (the text style and the translated text; the page paints it), patch/common.c */
     void *list; /* the stock list the page is of (*pdeq_showlist when valid) */
     void *first; /* its first record: with the size, tells a list another query replaced */
@@ -338,7 +338,7 @@ static int ab_on_paint(void *ctx, void *e) {
 
 /* ---------------------------------------------------------------------------
  * The tint: the window's colour is the cover's tone under the gradient image of the asset (docs/modules/album-page.md "Cover tint"); the status bar takes the window's row 0
- * (Now Playing's rule, pod_bar_tint / pod_bar_black: the bar has one owner, the window that tinted it last) while the page is in front and tinted.
+ * (Now Playing's rule, m1_bar_tint / m1_bar_black: the bar has one owner, the window that tinted it last) while the page is in front and tinted.
  */
 static void ab_win_color(unsigned color) {
     unsigned v[4]; /* value_t: type at 0, the uint32 at 8 */
@@ -349,14 +349,14 @@ static void ab_win_color(unsigned color) {
 
 static void ab_bar_apply(void) {
     if (ab.barok && ab.fg && ab.tinted &&
-        pod_bar_tint(ab.win, pod_shade(ab.tone, 0, AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS)))
+        m1_bar_tint(ab.win, m1_shade(ab.tone, 0, AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS)))
         ab.bar = 1; /* a failed call keeps what the bar has (and owes) */
 }
 
 __attribute__((noinline)) static void ab_bar_black(void) {
     if (!ab.bar) return;
     ab.bar = 0;
-    pod_bar_black(ab.win);
+    m1_bar_black(ab.win);
 }
 
 /* The tone as the page shows it: in Light Mode neutral (pal_tone: a chromatic dark tone cannot flip, and the page's white text does). ab_tone_raw is the tone as chosen,
@@ -386,14 +386,14 @@ static void ab_tint_cover(const char *file) {
     unsigned tone, px;
     char url[80];
     if (ab.tinted || !ab.cover_key) return;
-    if (pod_tone_get(ab.cover_key, &tone)) {
+    if (m1_tone_get(ab.cover_key, &tone)) {
         ab_tint_set(tone);
         return;
     }
     if (!file) file = cc_url(url, ab.cover_key);
     if (file && cc_decode(ab.win, file, 1, 1, 1, &px)) {
-        tone = pod_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
-        pod_tone_put(ab.cover_key, tone);
+        tone = m1_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
+        m1_tone_put(ab.cover_key, tone);
         ab_tint_set(tone);
     }
 }
@@ -402,9 +402,8 @@ static void ab_tint_cover(const char *file) {
  * The cover: from the cache file, else from the cache worker (one job for this album), else the placeholder disc
  */
 static void ab_build_end(void) {
-    if (ab.build_timer) timer_remove(ab.build_timer);
-    if (ab.dur_timer) timer_remove(ab.dur_timer);
-    ab.build_timer = ab.dur_timer = 0;
+    m1_timer_stop(&ab.build_timer);
+    m1_timer_stop(&ab.dur_timer);
     if (ab.hg.tiles)
         ab.hg.tiles[0].load = 0; /* (a source's cover is no longer polled: no spinner; the tick ends the timer) */
     if (ab.own || ab.lown) cc_build_stop();
@@ -567,7 +566,7 @@ static void ab_durations(void) {
         ab_redraw();
         return;
     }
-    if (!ab.count || !ab.list || ab.own || ab.lown || ab.dur_timer || ab.dur || !pod_card_mounted())
+    if (!ab.count || !ab.list || ab.own || ab.lown || ab.dur_timer || ab.dur || !m1_card_mounted())
         return; /* (no card, or USB mode: no table, nothing measured) */
     if (!ab.lheld) {
         dur_acquire();
@@ -644,7 +643,7 @@ static void ab_meta(char *out, unsigned size) {
         year = I(deque_at(ab.list, i), REC_YEAR);
         if (year < 1000 || year > 2999) year = 0;
     }
-    pod_fmt(count, sizeof count, TR(ab.count == 1 ? "%d track" : "%d tracks"), (int)ab.count);
+    m1_fmt(count, sizeof count, TR(ab.count == 1 ? "%d track" : "%d tracks"), (int)ab.count);
     if (year) o = (unsigned)snprintf(out, size, "%d \xc2\xb7 ", year);
     snprintf(out + o, size - o, "%s", count);
 }
@@ -666,9 +665,9 @@ static void ab_texts(void) {
     widget_set_text_utf8(ab.hmeta, line);
 }
 
-/* The Play pill's text over its picture (cut at the window's edges by the scroll_view's clip, as the picture); the pair is centred by pod_pill_place (patch/common.c). */
+/* The Play pill's text over its picture (cut at the window's edges by the scroll_view's clip, as the picture); the pair is centred by m1_pill_place (patch/common.c). */
 static void ab_paint_pill(void *canvas, int off) {
-    if (!ab.wait) pod_pill_paint(&ab.pill, canvas, AH_BTN_Y - off);
+    if (!ab.wait) m1_pill_paint(&ab.pill, canvas, AH_BTN_Y - off);
 }
 
 /* ---------------------------------------------------------------------------
@@ -684,8 +683,8 @@ static void ab_size(void) {
  * The Shuffle disc, the Play pill (the buttons, the glyph and the painted text) come with the tracks; the header does not move. */
 static void ab_pills(int on) {
     if (!ab.src) return;
-    pod_show(ab.btn_play, on);
-    pod_show(ab.btn_shuffle, on);
+    m1_show(ab.btn_play, on);
+    m1_show(ab.btn_shuffle, on);
     widget_set_visible(ab.pill.glyph, on, 0); /* (an insensitive image: taps reach btn_play) */
     if (ab.btn_more) { /* no tracks yet (loading, or none): the "..." keeps its place in the capsule but is dead, its one row (Download Album) has nothing to work on */
         widget_set_sensitive(ab.btn_more, on);
@@ -724,9 +723,9 @@ static void ab_load(int keep) {
         deque_destroy(list);
     if (ab.src && !ab.count && !list && ab.src->state) st = ab.src->state(ab.src, LS_SONGS, deque_at(ab.srow_d, 0));
     ab.wait = st == LS_ST_LOADING;
-    pod_show(ab.view,
-             ab.count != 0 || ab.wait); /* (a source's album still loading: the header, with the spinner under it) */
-    pod_show(ab.status, ab.count == 0 && !(ab.wait && ab.spin));
+    m1_show(ab.view,
+            ab.count != 0 || ab.wait); /* (a source's album still loading: the header, with the spinner under it) */
+    m1_show(ab.status, ab.count == 0 && !(ab.wait && ab.spin));
     if (!ab.count) widget_set_tr_text(ab.status, list ? "Not enough memory" : ls_empty_key(st, "No songs"));
     ls_spin(ab.spin, ab.wait && ab.spin);
     ab_pills(ab.count != 0);
@@ -743,7 +742,7 @@ static int ab_on_gen(const void *unused) {
     (void)unused;
     ab.gen_timer = 0;
     if (!ab.view || !ab.src) return RET_OK;
-    if (ab.src->gen(ab.src) != ab.gen && !ab.down && !grid_moving(ab.sv) && pod_is_top(ab.win)) {
+    if (ab.src->gen(ab.src) != ab.gen && !ab.down && !grid_moving(ab.sv) && m1_is_top(ab.win)) {
         if (ls_gen_rows(ab.src) ==
             ab.grows) { /* only a download's progress moved: the rows are the same, the visible ones are painted again */
             ab.gen = ab.src->gen(ab.src);
@@ -763,7 +762,7 @@ static int ab_on_gen(const void *unused) {
 static int ab_on_stale(const void *unused) {
     (void)unused;
     ab.stale_timer = 0;
-    if (ab.view && ab.g.tiles && !ab_valid() && pod_is_top(ab.win)) ab_load(1);
+    if (ab.view && ab.g.tiles && !ab_valid() && m1_is_top(ab.win)) ab_load(1);
     return RET_OK;
 }
 
@@ -816,14 +815,14 @@ static void ab_select(int on) {
     ab.nsel = 0;
     if (ab.sel) memset(ab.sel, 0, (ab.count + 7) / 8);
     ab.press = ab.down = 0;
-    pod_show(ab.back, !on);
-    pod_show(ab.btn_select,
-             !on && !ab.src); /* (Add and Delete work on the stock selection: a source's page has no select mode yet) */
-    pod_show(ab.np, !on);
-    pod_show(ab.btn_selall, on);
-    pod_show(ab.btn_add, on);
-    pod_show(ab.btn_del, on);
-    pod_show(ab.btn_cancel, on);
+    m1_show(ab.back, !on);
+    m1_show(ab.btn_select,
+            !on && !ab.src); /* (Add and Delete work on the stock selection: a source's page has no select mode yet) */
+    m1_show(ab.np, !on);
+    m1_show(ab.btn_selall, on);
+    m1_show(ab.btn_add, on);
+    m1_show(ab.btn_del, on);
+    m1_show(ab.btn_cancel, on);
     widget_set_sensitive(ab.btn_play, !on); /* the header's buttons stay, dead */
     widget_set_sensitive(ab.btn_shuffle, !on);
     ab_selall_icon();
@@ -861,7 +860,7 @@ static int ab_on_selall(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!ab.select || !ab.sel) return RET_OK;
-    ab.nsel = pod_sel_all(ab.sel, ab.count, ab.nsel);
+    ab.nsel = m1_sel_all(ab.sel, ab.count, ab.nsel);
     ab_selall_icon();
     ab_redraw();
     return RET_OK;
@@ -953,7 +952,7 @@ static int ab_on_up(void *ctx, void *e) {
     ab.down = ab.down_more = 0;
     ab_set_press(0);
     if (a < 0 || !e || !ab.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - ab.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - ab.down_y) < SC_DRAG_PX &&
+    if (m1_abs(I(e, PE_X) - ab.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - ab.down_y) < SC_DRAG_PX &&
         ab_item_of(e) == a) {
         if (ab.select)
             ab_toggle(a);
@@ -1035,8 +1034,8 @@ static int ab_on_destroy(void *ctx, void *e) {
     int i;
     (void)ctx;
     (void)e;
-    if (ab.stale_timer) timer_remove(ab.stale_timer);
-    if (ab.gen_timer) timer_remove(ab.gen_timer);
+    m1_timer_stop(&ab.stale_timer);
+    m1_timer_stop(&ab.gen_timer);
     ls_cover_end(&ab.cp);
     ls_spin_end(ab.spin);
     ab_build_end();
@@ -1089,16 +1088,16 @@ static int ab_open(const lib_src_t *src, unsigned cls, void *row) {
     }
     na_page_open(key); /* the order the opener noted, when this album is in it */
     widget_on(ab.win, EVT_DESTROY, ab_on_destroy, (void *)0);
-    ab.back = pod_bind(ab.win, "btn_return", ab_on_back, (void *)0);
-    ab.np = pod_bind(ab.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    ab.btn_select = pod_bind(ab.win, "btn_select", ab_on_select, (void *)0);
-    ab.btn_selall = pod_bind(ab.win, "btn_selall", ab_on_selall, (void *)0);
-    ab.btn_add = pod_bind(ab.win, "sg_add", ab_on_add, (void *)0);
-    ab.btn_del = pod_bind(ab.win, "sg_del", ab_on_delete, (void *)0);
-    ab.btn_cancel = pod_bind(ab.win, "btn_cancel", ab_on_cancel, (void *)0);
-    ab.btn_more = src ? pod_bind(ab.win, "btn_more", ab_on_more, (void *)0) : (void *)0;
-    ab.btn_play = pod_bind(ab.win, "btn_play", ab_on_play, (void *)0);
-    ab.btn_shuffle = pod_bind(ab.win, "btn_shuffle", ab_on_shuffle, (void *)0);
+    ab.back = m1_bind(ab.win, "btn_return", ab_on_back, (void *)0);
+    ab.np = m1_bind(ab.win, "btn_backtoplayer", m1_on_player, (void *)0);
+    ab.btn_select = m1_bind(ab.win, "btn_select", ab_on_select, (void *)0);
+    ab.btn_selall = m1_bind(ab.win, "btn_selall", ab_on_selall, (void *)0);
+    ab.btn_add = m1_bind(ab.win, "sg_add", ab_on_add, (void *)0);
+    ab.btn_del = m1_bind(ab.win, "sg_del", ab_on_delete, (void *)0);
+    ab.btn_cancel = m1_bind(ab.win, "btn_cancel", ab_on_cancel, (void *)0);
+    ab.btn_more = src ? m1_bind(ab.win, "btn_more", ab_on_more, (void *)0) : (void *)0;
+    ab.btn_play = m1_bind(ab.win, "btn_play", ab_on_play, (void *)0);
+    ab.btn_shuffle = m1_bind(ab.win, "btn_shuffle", ab_on_shuffle, (void *)0);
     ab.view = widget_lookup(ab.win, "view_grid", 1);
     ab.sv = widget_lookup(ab.win, "songs_scrollview", 1);
     ab.status = widget_lookup(ab.win, "label_status", 1);
@@ -1125,8 +1124,8 @@ static int ab_open(const lib_src_t *src, unsigned cls, void *row) {
     ab.fg = 1;
     ab.barok = widget_on(ab.win, EVT_WINDOW_TO_FG, ab_on_fg, (void *)0) &&
                widget_on(ab.win, EVT_WINDOW_TO_BG, ab_on_bg, (void *)0);
-    ab.mark[0] = pod_make_mark(ab.win, "unselect");
-    ab.mark[1] = pod_make_mark(ab.win, "selected");
+    ab.mark[0] = m1_make_mark(ab.win, "unselect");
+    ab.mark[1] = m1_make_mark(ab.win, "selected");
     if (!ab.mark[0] || !ab.mark[1])
         ab.mark[0] = ab.mark[1] =
             (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
@@ -1136,16 +1135,16 @@ static int ab_open(const lib_src_t *src, unsigned cls, void *row) {
     widget_on(ab.view, EVT_POINTER_UP, ab_on_up, (void *)0);
     widget_on(ab.view, EVT_POINTER_ABORT, ab_on_abort, (void *)0);
     widget_on(ab.view, EVT_AFTER_PAINT, ab_on_paint, (void *)0);
-    pod_pill_place(&ab.pill, AH_BTN_Y);
+    m1_pill_place(&ab.pill, AH_BTN_Y);
     if (src) { /* (no select mode on a source's page yet: the "..." takes Select's place) */
-        pod_show(ab.btn_select, 0);
-        pod_show(ab.btn_more, 1);
+        m1_show(ab.btn_select, 0);
+        m1_show(ab.btn_more, 1);
     }
     if (!grid_init(&ab.hg, ab.win, 1, AH_ART, AH_CORNER) || !grid_init(&ab.g, ab.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&ab.hg);
         grid_free(&ab.g);
-        pod_show(ab.view, 0);
-        pod_show(ab.status, 1);
+        m1_show(ab.view, 0);
+        m1_show(ab.status, 1);
         widget_set_tr_text(ab.status, "Not enough memory");
         return 0;
     }

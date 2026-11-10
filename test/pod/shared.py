@@ -110,8 +110,8 @@ def tone_cache_tests(expect):
     """The tone cache (patch/common.c): lookups, the least recently used entry goes first, bounds."""
     m = Machine()
     out = m.alloc(4)
-    get = lambda k: (m.call(PSYMS['pod_tone_get'], a0=k, a1=out, count=100000), m.word(out))[0] and m.word(out)
-    put = lambda k, t: m.call(PSYMS['pod_tone_put'], a0=k, a1=t, count=100000)
+    get = lambda k: (m.call(PSYMS['m1_tone_get'], a0=k, a1=out, count=100000), m.word(out))[0] and m.word(out)
+    put = lambda k, t: m.call(PSYMS['m1_tone_put'], a0=k, a1=t, count=100000)
     n = O['TONE_CACHE_N']
     expect(n == 64 and get(5) == 0, 'the cache holds 64 tones; empty at start')
     for k in range(1, n + 1): put(k, 0xff000000 | k)

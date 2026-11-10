@@ -102,9 +102,9 @@ static void ns_sync_show(int force) {
     if (!ns.win || !row) return;
     if (force) ns.state = -1, ns.text[0] = 1, ns.text[1] = 0; /* (a text no real one equals) */
     if (state != ns.state) {
-        pod_show(ns_find("pod_row", NS_OUT), conf);
-        pod_show(row, conf);
-        pod_show(widget_lookup(ns.win, "pod_gap0", 1), conf);
+        m1_show(ns_find("pod_row", NS_OUT), conf);
+        m1_show(row, conf);
+        m1_show(widget_lookup(ns.win, "pod_gap0", 1), conf);
         widget_set_sensitive(row, conf && !busy);
         if (lab) ns_colour(lab, busy ? "#6C6C70" : "#FFFFFF");
         ls_spin(ns.spin, busy);
@@ -127,10 +127,10 @@ static void ns_sync_show(int force) {
     }
 }
 
-/* The navbar's small title once the large one has scrolled away (pod_title_gone, the rule every large-title page shares; docs/modules/navbar.md); the fade shows while the list is scrolled. */
+/* The navbar's small title once the large one has scrolled away (m1_title_gone, the rule every large-title page shares; docs/modules/navbar.md); the fade shows while the list is scrolled. */
 static void ns_title_update(void) {
     int off = ns.sv ? *(int *)((char *)ns.sv + SC_YOFF) : 0;
-    pod_title_set(ns.title, &ns.title_on, ns.noscroll || pod_title_gone(off, 0));
+    m1_title_set(ns.title, &ns.title_on, ns.noscroll || m1_title_gone(off, 0));
     if (ns.fade) {
         widget_set_visible(ns.fade, off > 0, 0);
         widget_set_sensitive(ns.fade, 0);
@@ -298,8 +298,7 @@ static void nl_layout(void) {
 static int nl_tick(const void *timer);
 
 static void nl_stop(void) {
-    if (nl.timer) timer_remove(nl.timer);
-    nl.timer = 0;
+    m1_timer_stop(&nl.timer);
     nl.connecting = 0;
     ls_spin(nl.spin, 0);
     nl_vis(nl.busy, 0);
@@ -439,7 +438,7 @@ static int nl_on_eye(void *ctx, void *e) {
 static int nl_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != nl.win) return RET_OK;
-    if (nl.timer) timer_remove(nl.timer);
+    m1_timer_stop(&nl.timer);
     ls_spin_end(nl.spin);
     if (nl.kb) keyboard_detach(); /* the typed text goes with the keyboard's state, the page's copy with the page */
     memset(&nl, 0, sizeof nl);
@@ -501,20 +500,20 @@ static int nl_open(int focus) {
         return -1;
     }
     widget_on(nl.win, EVT_DESTROY, nl_on_destroy, nl.win);
-    pod_bind(nl.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(nl.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(nl.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(nl.win, "btn_backtoplayer", m1_on_player, (void *)0);
     nl.field = widget_lookup(nl.win, "kb_field", 1);
     nl.err = widget_lookup(nl.win, "nl_err", 1);
     nl.busy = widget_lookup(nl.win, "nl_busy", 1);
     nl.spin = widget_lookup(nl.win, "nl_spin", 1);
-    nl.eye = pod_bind(nl.win, "nl_eye", nl_on_eye, (void *)0);
+    nl.eye = m1_bind(nl.win, "nl_eye", nl_on_eye, (void *)0);
     for (i = 0; i < 3; i++) {
         snprintf(name, sizeof name, "nl_v%d", i);
         nl.v[i] = widget_lookup(nl.win, name, 1);
         snprintf(name, sizeof name, "nl_h%d", i);
         nl.h[i] = widget_lookup(nl.win, name, 1);
         snprintf(name, sizeof name, "nl_hit%d", i);
-        if (!pod_bind(nl.win, name, nl_on_hit, (void *)(long)i)) nl.field = (void *)0;
+        if (!m1_bind(nl.win, name, nl_on_hit, (void *)(long)i)) nl.field = (void *)0;
     }
     if (!nl.field || !nl.err || !nl.busy || !nl.spin || !nl.eye || !nl.v[0] || !nl.v[1] || !nl.v[2] || !nl.h[0] ||
         !nl.h[1] || !nl.h[2] ||
@@ -560,7 +559,7 @@ static int ns_on_fg(void *ctx, void *e) {
 static int ns_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != ns.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
-    if (ns.timer) timer_remove(ns.timer);
+    m1_timer_stop(&ns.timer);
     ls_spin_end(ns.spin);
     memset(&ns, 0, sizeof ns);
     return RET_OK;
@@ -578,12 +577,12 @@ int nd_server_open(void) {
     }
     widget_on(ns.win, EVT_DESTROY, ns_on_destroy, ns.win);
     widget_on(ns.win, EVT_WINDOW_TO_FG, ns_on_fg, (void *)0);
-    pod_bind(ns.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(ns.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(ns.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(ns.win, "btn_backtoplayer", m1_on_player, (void *)0);
     for (i = 0; i < NS_ROWS; ++i) {
         char name[24];
         snprintf(name, sizeof name, "pod_row%d", i);
-        if (!pod_bind(ns.win, name, ns_on_row, (void *)(long)i)) {
+        if (!m1_bind(ns.win, name, ns_on_row, (void *)(long)i)) {
             navigator_back(); /* an asset that is not ours: the destroy handler clears the state */
             return -1;
         }

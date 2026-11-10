@@ -189,20 +189,10 @@ def tap_row(m, r, top=TOP):
     return tap(m, 100, top + r * ROW + 20)
 
 
-def click(m, name):
-    m.click(name, count=900000000)
-    return list(m.calls)
-
-
 def open_select(m):
     """The \"...\" card's Select row (the old Select button)."""
     click(m, 'btn_more')
     return click(m, 'vs_item7')
-
-
-def vis(m, name):
-    w = m.widgets[name]
-    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
 
 
 def ui(): return awtk_ui.parse(open(UI, 'rb').read())
@@ -706,7 +696,3 @@ def cue_tests(ctx):
 
 
 SECTIONS = [asset_tests, open_tests, rows_tests, levels_tests, play_tests, select_tests, stale_tests, order_tests, cue_tests]   # tools/check.py runs each as its own task
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

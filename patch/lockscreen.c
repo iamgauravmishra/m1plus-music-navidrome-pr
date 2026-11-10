@@ -159,7 +159,7 @@ static int lk_tick(const void *timer) {
         lk.timer = 0;
         return RET_OK;
     }
-    want = pod_screen_lit()
+    want = m1_screen_lit()
                ? LK_TICK_MS
                : POD_DARK_MS; /* dark: a key compare a second, so the cover is right when the screen wakes */
     if (lk.timer && lk.interval != want && timer_modify(lk.timer, want) == RET_OK) lk.interval = want;
@@ -177,10 +177,7 @@ static int lk_first(const void *timer) {
     return RET_OK;
 }
 
-static void lk_unarm(void) {
-    if (lk.timer) timer_remove(lk.timer);
-    lk.timer = 0;
-}
+static void lk_unarm(void) { m1_timer_stop(&lk.timer); }
 
 static void lk_stop(void) {
     lk_unarm();
@@ -410,10 +407,7 @@ static int lw_tick(const void *timer) {
     return RET_OK;
 }
 
-static void lw_unarm(void) {
-    if (lw.timer) timer_remove(lw.timer);
-    lw.timer = 0;
-}
+static void lw_unarm(void) { m1_timer_stop(&lw.timer); }
 
 /* Arm the thumbnail timer; a refused timer loads the rest at once (stock's own way). */
 static void lw_arm(void) {
@@ -491,8 +485,8 @@ int lkwp_open(void) {
         if (lw.win) memset(&lw, 0, sizeof lw);
         return -1;
     }
-    pod_bind(lw.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(lw.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(lw.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(lw.win, "btn_backtoplayer", m1_on_player, (void *)0);
     get_screensaver_image(); /* stock's list, first (it may set an unreadable chosen picture back to the default) */
     list = *(void **)LOCK_LIST;
     n = list ? (int)deque_size(list) : 0;

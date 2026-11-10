@@ -402,7 +402,3 @@ def fallback_tests(ctx):
 
 
 SECTIONS = [classify_tests, request_tests, failure_tests, cancel_tests, preview_tests, fallback_tests, subscribe_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

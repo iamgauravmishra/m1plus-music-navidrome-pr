@@ -38,7 +38,7 @@ ICON = {T_SD: 'fo_ic_sd', T_OTG: 'fo_ic_usb', T_DIR: 'pod_ic_folders', T_LIST: '
 
 
 def chevron(im, x, y):
-    """pod_make_chevron: a two segment stroke, 10 x 16, grey."""
+    """m1_make_chevron: a two segment stroke, 10 x 16, grey."""
     d = ImageDraw.Draw(im)
     pts = [(x + 14 / 8, y + 14 / 8), (x + 68 / 8, y + 64 / 8), (x + 14 / 8, y + 114 / 8)]
     d.line(pts, fill=(0x8A,) * 3, width=2, joint='curve')

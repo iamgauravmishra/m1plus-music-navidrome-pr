@@ -717,7 +717,3 @@ def server_tests(ctx):
 
 
 SECTIONS = [hook_tests, job_tests, life_tests, idle_tests, idle_setting_tests, server_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

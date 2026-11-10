@@ -138,7 +138,7 @@ static int wp_wifi_on(void) { return *(volatile unsigned char *)WIFI_FLAG != 0; 
 static void wp_put(void *row, int *y, int h, int touch) {
     widget_move(row, 0, *y);
     if (touch)
-        pod_show(row, 1);
+        m1_show(row, 1);
     else
         widget_set_visible(row, 1, 0);
     *y += h;
@@ -266,7 +266,7 @@ static void wp_layout(void) {
     for (i = 0; i < WP_ROWS; i++) {
         int j = wp.map[i], joining;
         if (j < 0) {
-            pod_show(wp.r[i].row, 0);
+            m1_show(wp.r[i].row, 0);
             continue;
         }
         joining = i < WP_CUR && wp.nets[j].current && !(wp.st.state == WF_ST_CONNECTED && wp.st.ip);
@@ -289,7 +289,7 @@ static void wp_layout(void) {
         wp_put(wp.other_row, &y, WP_ROW_H, 1);
     } else {
         wp_vis(wp.hdr_net, 0);
-        pod_show(wp.other_row, 0);
+        m1_show(wp.other_row, 0);
     }
     y += WP_END;
     widget_set_prop_int(wp.sv, "virtual_h", y);
@@ -697,7 +697,7 @@ static void wi_layout(void) {
         wp_piece(wi.forget, &wi.piece[WI_FIELDS], WP_P_SINGLE);
         wp_put(wi.forget, &y, WP_ROW_H, 1);
     } else
-        pod_show(wi.forget, 0);
+        m1_show(wi.forget, 0);
     wi_field(n++, TR("Security"), TR(wf_sec_label(wi.net.sec)));
     if (wi.conn) {
         wi_field(n++, TR("IP Address"), wi.ip);
@@ -709,7 +709,7 @@ static void wi_layout(void) {
         wp_vis(wi.gap[0], 0);
     for (i = 0; i < WI_FIELDS; i++) {
         if (i >= n) {
-            pod_show(wi.f[i].row, 0);
+            m1_show(wi.f[i].row, 0);
             continue;
         }
         wp_piece(wi.f[i].row, &wi.piece[i], wp_pos(i, n));
@@ -721,9 +721,9 @@ static void wi_layout(void) {
         image_base_set_image(wi.auto_img, wi.net.off ? "sset_off" : "sset_on");
         wp_piece(wi.auto_row, &wi.piece[WI_FIELDS + 1], WP_P_SINGLE);
         wp_put(wi.auto_row, &y, WP_ROW_H, 1);
-        wp_vis(wi.gap[2], 0), pod_show(wi.join, 0);
+        wp_vis(wi.gap[2], 0), m1_show(wi.join, 0);
     } else {
-        wp_vis(wi.gap[1], 0), pod_show(wi.auto_row, 0);
+        wp_vis(wi.gap[1], 0), m1_show(wi.auto_row, 0);
         wp_put(wi.gap[2], &y, WI_GAP_H, 0);
         wp_piece(wi.join, &wi.piece[WI_FIELDS + 2], WP_P_SINGLE);
         wp_put(wi.join, &y, WP_ROW_H, 1);
@@ -822,15 +822,15 @@ static void wi_open(const wf_net *w) {
         return;
     }
     widget_on(wi.win, EVT_DESTROY, wi_on_destroy, wi.win);
-    pod_bind(wi.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(wi.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(wi.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(wi.win, "btn_backtoplayer", m1_on_player, (void *)0);
     wi.sv = widget_lookup(wi.win, "wifiinfo_scrollview", 1);
     wi.fade = widget_lookup(wi.win, "img_nb_fade", 1);
     wi.title = widget_lookup(wi.win, "label_title", 1);
-    wi.forget = pod_bind(wi.win, "wi_row_forget", wi_on_forget, (void *)0);
-    wi.auto_row = pod_bind(wi.win, "wi_row_auto", wi_on_auto, (void *)0);
+    wi.forget = m1_bind(wi.win, "wi_row_forget", wi_on_forget, (void *)0);
+    wi.auto_row = m1_bind(wi.win, "wi_row_auto", wi_on_auto, (void *)0);
     wi.auto_img = widget_lookup(wi.win, "wi_auto_img", 1);
-    wi.join = pod_bind(wi.win, "wi_row_join", wi_on_join, (void *)0);
+    wi.join = m1_bind(wi.win, "wi_row_join", wi_on_join, (void *)0);
     for (i = 0; i < 3; i++) {
         snprintf(n, sizeof n, "wi_gap%d", i);
         wi.gap[i] = widget_lookup(wi.win, n, 1);
@@ -944,9 +944,9 @@ static int wk_open(const wf_net *w, int bad) {
     }
     memcpy(&wk.net, w, sizeof wk.net);
     widget_on(wk.win, EVT_DESTROY, wk_on_destroy, wk.win);
-    pod_bind(wk.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(wk.win, "btn_backtoplayer", pod_on_player, (void *)0);
-    wk.eye = pod_bind(wk.win, "wk_eye", wk_on_eye, (void *)0);
+    m1_bind(wk.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(wk.win, "btn_backtoplayer", m1_on_player, (void *)0);
+    wk.eye = m1_bind(wk.win, "wk_eye", wk_on_eye, (void *)0);
     wk.err = widget_lookup(wk.win, "wk_err", 1);
     wk.line = widget_lookup(wk.win, "wk_line", 1);
     if (!wk.eye || !wk.err || !wk.line ||
@@ -999,8 +999,8 @@ static void wo_layout(void) {
     wp_vis(wo.card_b, sec);
     wp_vis(wo.hair, sec);
     wp_vis(wo.passl, sec);
-    pod_show(wo.eye, sec);
-    pod_show(wo.hit_pass, sec);
+    m1_show(wo.eye, sec);
+    m1_show(wo.hit_pass, sec);
     widget_set_text_utf8(wo.secv, TR(wo.sec == WF_OPEN ? "None" : wo.sec == WF_TRANS ? "WPA2/WPA3" : "WPA3"));
     widget_move(wo.field, pass ? WO_PASS_X : WO_NAME_X, pass ? WO_PASS_Y : WO_NAME_Y);
     wp_vis(wo.namev, pass && wo.len);
@@ -1144,8 +1144,8 @@ static void wo_open(const wf_net *again) {
         wo.bad = 1;
     }
     widget_on(wo.win, EVT_DESTROY, wo_on_destroy, wo.win);
-    pod_bind(wo.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(wo.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(wo.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(wo.win, "btn_backtoplayer", m1_on_player, (void *)0);
     wo.field = widget_lookup(wo.win, "kb_field", 1);
     wo.card_a = widget_lookup(wo.win, "wo_card1a", 1);
     wo.card_b = widget_lookup(wo.win, "wo_card1b", 1);
@@ -1156,11 +1156,11 @@ static void wo_open(const wf_net *again) {
     wo.passv = widget_lookup(wo.win, "wo_pass_v", 1);
     wo.passl = widget_lookup(wo.win, "wo_pass_l", 1);
     wo.err = widget_lookup(wo.win, "wo_err", 1);
-    wo.eye = pod_bind(wo.win, "wo_eye", wo_on_eye, (void *)0);
-    wo.hit_pass = pod_bind(wo.win, "wo_hit_pass", wo_on_pass, (void *)0);
+    wo.eye = m1_bind(wo.win, "wo_eye", wo_on_eye, (void *)0);
+    wo.hit_pass = m1_bind(wo.win, "wo_hit_pass", wo_on_pass, (void *)0);
     if (!wo.field || !wo.card_a || !wo.card_b || !wo.hair || !wo.secv || !wo.namev || !wo.nameh || !wo.passv ||
-        !wo.passl || !wo.err || !wo.eye || !wo.hit_pass || !pod_bind(wo.win, "wo_hit_name", wo_on_name, (void *)0) ||
-        !pod_bind(wo.win, "wo_hit_sec", wo_on_sec, (void *)0) ||
+        !wo.passl || !wo.err || !wo.eye || !wo.hit_pass || !m1_bind(wo.win, "wo_hit_name", wo_on_name, (void *)0) ||
+        !m1_bind(wo.win, "wo_hit_sec", wo_on_sec, (void *)0) ||
         keyboard_attach(wo.win, TR("Network Name"), 0, WO_NAME_TW, WO_CY, KB_LITERAL, wo_change, wo_go) != 0) {
         navigator_back(); /* an asset that is not ours: the destroy handler frees what exists */
         return;
@@ -1212,13 +1212,13 @@ static void ws_open(void) {
         return;
     }
     widget_on(ws.win, EVT_DESTROY, ws_on_destroy, ws.win);
-    pod_bind(ws.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(ws.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(ws.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(ws.win, "btn_backtoplayer", m1_on_player, (void *)0);
     ws.sv = widget_lookup(ws.win, "wifisec_scrollview", 1);
     ws.fade = widget_lookup(ws.win, "img_nb_fade", 1);
     for (i = 0; i < 3; i++) {
         snprintf(n, sizeof n, "ws_row%d", i);
-        if (!pod_bind(ws.win, n, ws_on_row, (void *)(long)(i + 1))) ws.sv = (void *)0;
+        if (!m1_bind(ws.win, n, ws_on_row, (void *)(long)(i + 1))) ws.sv = (void *)0;
         snprintf(n, sizeof n, "ws_check%d", i);
         wp_vis(widget_lookup(ws.win, n, 1), i == cur);
     }
@@ -1333,7 +1333,7 @@ static int wp_on_bg(void *ctx, void *e) {
 static int wp_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != wp.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
-    if (wp.timer) timer_remove(wp.timer);
+    m1_timer_stop(&wp.timer);
     memset(&wp, 0, sizeof wp);
     return RET_OK;
 }
@@ -1370,20 +1370,20 @@ int wifipage_open(void) {
     widget_on(wp.win, EVT_DESTROY, wp_on_destroy, wp.win);
     widget_on(wp.win, EVT_WINDOW_TO_FG, wp_on_fg, (void *)0);
     widget_on(wp.win, EVT_WINDOW_TO_BG, wp_on_bg, (void *)0);
-    pod_bind(wp.win, "btn_return", pod_on_back, (void *)0);
-    pod_bind(wp.win, "btn_backtoplayer", pod_on_player, (void *)0);
+    m1_bind(wp.win, "btn_return", m1_on_back, (void *)0);
+    m1_bind(wp.win, "btn_backtoplayer", m1_on_player, (void *)0);
     wp.sv = widget_lookup(wp.win, "wifi_scrollview", 1);
     wp.fade = widget_lookup(wp.win, "img_nb_fade", 1);
-    wp.sw_row = pod_bind(wp.win, "wf_row_sw", wp_on_switch, (void *)0);
+    wp.sw_row = m1_bind(wp.win, "wf_row_sw", wp_on_switch, (void *)0);
     wp.sw_img = widget_lookup(wp.win, "wf_sw_img", 1);
     wp.sw_hair = widget_lookup(wp.win, "wf_hair_sw", 1);
     wp.hdr_my = widget_lookup(wp.win, "wf_hdr_my", 1);
     wp.hdr_net = widget_lookup(wp.win, "wf_hdr_net", 1);
     wp.spin_img = widget_lookup(wp.win, "wf_hdr_net_spin", 1);
-    wp.other_row = pod_bind(wp.win, "wf_row_other", wp_on_other, (void *)0);
+    wp.other_row = m1_bind(wp.win, "wf_row_other", wp_on_other, (void *)0);
     for (i = 0; i < WP_ROWS; i++) {
         snprintf(n, sizeof n, "wf_row%d", i);
-        wp.r[i].row = pod_bind(wp.win, n, wp_on_net, (void *)(long)(i + 1));
+        wp.r[i].row = m1_bind(wp.win, n, wp_on_net, (void *)(long)(i + 1));
         snprintf(n, sizeof n, "wf_chk%d", i);
         wp.r[i].chk = widget_lookup(wp.win, n, 1);
         snprintf(n, sizeof n, "wf_name%d", i);

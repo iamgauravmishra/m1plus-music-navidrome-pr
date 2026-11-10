@@ -1222,7 +1222,6 @@ def widths_tests(ctx):
     expect(not over, f'Rename, the unsaved-changes dialog and the band page\'s strings fit in all 13 languages ({over[:3]})')
 
 
-
 def carry_tests(ctx):
     """Filter memory across a gapless join (patch/peq_player.c carry): two instances, the old one's uninit before the new one's open."""
     expect = ctx.expect
@@ -1484,11 +1483,11 @@ def presets_page_tests(ctx):
     u = m.alloc(16)
     def dec(s, size, pad=b'\xaa'):
         m.u.mem_write(u, pad * 16); b = s.encode(); sb = m.alloc(len(b) + 1); m.u.mem_write(sb, b + b'\0')
-        r = m.call(PSYMS['pod_url_decode'], u, size, a2=sb, a3=len(b))
+        r = m.call(PSYMS['m1_url_decode'], u, size, a2=sb, a3=len(b))
         raw = bytes(m.u.mem_read(u, 16)); return r, raw[:raw.find(b'\0')], raw[size:] == pad * (16 - size)
     expect(dec('a%20b', 16)[:2] == (3, b'a b') and dec('%41%4a%4A', 16)[:2] == (3, b'AJJ') and dec('%', 16)[:2] == (1, b'%') and dec('a%2', 16)[:2] == (3, b'a%2') and dec('%g1%1g', 16)[:2] == (6, b'%g1%1g')
-           and dec('%2541', 16)[:2] == (3, b'%41') and dec('', 16)[:2] == (0, b''), 'pod_url_decode: %XX of either case, a malformed or short % as it is, no second pass')
-    expect(dec('abcdef', 4) == (3, b'abc', True) and dec('a%20bcd', 3) == (2, b'a ', True) and dec('x', 1) == (0, b'', True), 'pod_url_decode: never writes past size, always NUL terminated')
+           and dec('%2541', 16)[:2] == (3, b'%41') and dec('', 16)[:2] == (0, b''), 'm1_url_decode: %XX of either case, a malformed or short % as it is, no second pass')
+    expect(dec('abcdef', 4) == (3, b'abc', True) and dec('a%20bcd', 3) == (2, b'a ', True) and dec('x', 1) == (0, b'', True), 'm1_url_decode: never writes past size, always NUL terminated')
 
     # a stamp-looking first line that is not a stamp is a file of the user's
     m = libpage([('a.txt', b'# AutoEq: nosource\n' + AUTOEQ), ('b.txt', b'# AutoEq: /x/y\n' + AUTOEQ), ('c.txt', b'# AutoEq: s//n\n' + AUTOEQ), ('d.txt', b'# autoeq: s/over-ear/n\n' + AUTOEQ)])
@@ -3030,7 +3029,3 @@ def output_edit_tests(ctx):
 
 
 SECTIONS = [player_tests, carry_tests, parser_tests, page_tests, cross_tests, asset_tests, preset_page_tests, presets_page_tests, layout_peqp_tests, edit_band_tests, edit_select_tests, edit_dialog_tests, edit_revert_tests, edit_saveas_tests, edit_rename_tests, edit_channels_tests, layout_peqlib_tests, tenband_drag_tests, tenband_edit_tests, tenband_switch_tests, tenband_replace_tests, tenband_rows_tests, tenband_reopen_tests, tenband_memory_tests, tenband_reset_tests, tenband_curve_tests, tenband_preamp_tests, save_preset_tests, layout_tenband_tests, widths_tests, output_tests, output_edit_tests, retire_tests]
-
-
-def run(ctx):
-    for s in SECTIONS: s(ctx)

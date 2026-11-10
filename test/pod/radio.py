@@ -950,20 +950,10 @@ def grid_titles(m): return rows_text(m, 'label_grid_title')
 def grid_subs(m): return rows_text(m, 'label_grid_sub')
 
 
-def click(m, name):
-    m.click(name, count=900000000)
-    return list(m.calls)
-
-
 def destroy_np(m, win=None):
     """The window's EVT_DESTROY as AWTK delivers it: the handler bound on `win` (default: the machine's window), with its bound ctx."""
     fn, c = m.bound[(m.windows.get('m1plus_radionp', m.window) if win is None else win, O['EVT_DESTROY'])]
     m.call(fn, a0=c, count=4000000)
-
-
-def vis(m, name):
-    w = m.widgets[name]
-    return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
 
 
 def ui(name): return awtk_ui.parse(open(os.path.join(UI_DIR, name + '.bin'), 'rb').read())
@@ -1793,7 +1783,7 @@ def recent_tests(ctx):
 def np_machine(**kw):
     m = machine()
     m.window = NP_WIN
-    m.top_main = NP_WIN   # pod_is_top: the page is in front
+    m.top_main = NP_WIN   # m1_is_top: the page is in front
     np_widgets(m)
     for k, v in kw.items(): setattr(m, k, v)
     return m
@@ -2127,12 +2117,12 @@ def info_tests(ctx):
 
 
 def entry_tests(ctx):
-    """12. Every Now Playing entry opens Radio Now Playing while a station connects or plays (hook 17, rn_backtoplayer, and pod_open_now_playing)."""
+    """12. Every Now Playing entry opens Radio Now Playing while a station connects or plays (hook 17, rn_backtoplayer, and m1_open_now_playing)."""
     expect = ctx.expect
     import pod_pages
     stock_calls = lambda m: [c for c in m.calls if c[0] == 'on_backtoplayer_onclick']
     opens = lambda m: m.names().count('window_open')
-    entries = (('pod_open_now_playing', {}), ('pod_on_player', {'a0': 0, 'a1': 0}), ('rn_backtoplayer', {'a0': 0, 'a1': 0}))
+    entries = (('m1_open_now_playing', {}), ('m1_on_player', {'a0': 0, 'a1': 0}), ('rn_backtoplayer', {'a0': 0, 'a1': 0}))
     for fn, kw in entries:
         m = np_machine(); m.call(PSYMS[fn], count=900000000, **kw)
         expect(len(stock_calls(m)) == 1 and not opens(m), f'{fn}: no station, stock Now Playing through the trampoline')
@@ -2145,7 +2135,7 @@ def entry_tests(ctx):
         m = np_machine(window=0); l, r = play(m); m.call(PSYMS[fn], count=900000000, **kw)
         expect(len(stock_calls(m)) == 1, f'{fn}: Radio Now Playing will not open: stock Now Playing')
     m = np_machine(); l, r = play(m)
-    expect(m.call(PSYMS['rn_backtoplayer'], a0=0, a1=0, count=900000000) == 0 and m.call(PSYMS['pod_on_player'], a0=0, a1=0, count=900000000) == 0, 'the handlers answer RET_OK')
+    expect(m.call(PSYMS['rn_backtoplayer'], a0=0, a1=0, count=900000000) == 0 and m.call(PSYMS['m1_on_player'], a0=0, a1=0, count=900000000) == 0, 'the handlers answer RET_OK')
     # the Home menu's Now Playing row (patch/m1plus.c)
     page = next(p for p in pod_pages.PAGES if p.key == 'm1plus_menu')
     row = next(i for i, r in enumerate(page.rows) if r.action == pod_pages.ACT_PLAYER)
@@ -2535,7 +2525,3 @@ def retry_tests(ctx):
 
 
 SECTIONS = [parsers_tests, table_tests, play_tests, poll_tests, stop_tests, reroute_tests, fetch_tests, card_tests, asset_tests, open_tests, levels_tests, directory_tests, search_tests, logo_tests, favs_tests, np_tests, info_tests, entry_tests, view_tests, nowifi_tests, retry_tests]
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)

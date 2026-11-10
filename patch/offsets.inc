@@ -297,7 +297,7 @@
 #define WIDGET_NAME 0x10
 #define WIDGET_STYLE 0x1c /* the style name the widget uses (a char *; show_player_face 0x53bbf0.. compares it with btn_imgfav_style / btn_imgunfav_style before widget_use_style) */
 #define POP_MAX 16
-/* The cover tint (the album page, the Podcasts Show level; tools/mod_icons.py ah_tint): the window colour is the cover's tone (pod_tone,
+/* The cover tint (the album page, the Podcasts Show level; tools/mod_icons.py ah_tint): the window colour is the cover's tone (m1_tone,
  * the constants of Now Playing's) under a black gradient image, ah_tint.png (a window sized child of the page window, first,
  * insensitive), whose alpha runs from AH_TINT_A_TOP on window row 0 to AH_TINT_A_BOT on row AH_TINT_ROWS - 1 (the end of
  * the header: AH_HDR_H) and stays there below (200: the deep tint, 78 % dark), so the transparent track rows and the scroll bar
@@ -437,7 +437,7 @@
 #define LIST_TEXT_X 74          /* LIST_ART_X + LIST_ART + 12 */
 #define LIST_TEXT_W 234         /* to the 12 px right margin: 74 + 234 + 12 = 320 */
 #define LIST_HAIR_END 310       /* the hairline of a list row runs from its text to here (Search's rows': 68..310), the Apple inset */
-#define LIST_CHEV_X 288         /* a row that opens a page: the shared chevron (pod_make_chevron, POD_CHEV_W x POD_CHEV_H) from this x (Search's SE_CHEV_X), on the row's middle above the hairline */
+#define LIST_CHEV_X 288         /* a row that opens a page: the shared chevron (m1_make_chevron, POD_CHEV_W x POD_CHEV_H) from this x (Search's SE_CHEV_X), on the row's middle above the hairline */
 #define LIST_TEXT_W_CHEV 204    /* the text of such a row ends at 278 (Search's SE_END_CHEV): 74 + 204 */
 #define LIST_TITLE_Y 9
 #define LIST_TITLE_H 24
@@ -760,7 +760,7 @@
  * the large title (a label, SG_TITLE_PX px, x SG_TITLE_X, SG_TITLE_H high), the Play and Shuffle pills (real flat buttons, SG_PILL_W x SG_PILL_H at x SG_PILL_X0
  * and SG_PILL_X1, y SG_PILL_Y, corner radius SG_PILL_R; the glyph and the label are centred as a pair SG_PILL_GAP apart; a playlist's page has the album page's Shuffle disc and
  * Play pill instead, hd_shuffle / hd_play at AH_SHUF_X / AH_PLAY_X, 44 px high buttons from y PH_BTN_Y whose pictures are drawn centred in them, the glyph an image and the
- * text painted by the page, patch/common.c pod_pill_place) and from y SG_TOP the songs: with the
+ * text painted by the page, patch/common.c m1_pill_place) and from y SG_TOP the songs: with the
  * stock Title order (sort_flag 0) in sections, each a SG_HDR_H high header (the letter SG_HDR_PX px white at x SG_HDR_X on the page's black, no band, as the Recently Played
  * shelf's header; only the pinned copy is filled, SG_HDR_BG, so the rows scrolling under it are hidden) and its rows; in any other order the rows only. A row is LIST_ROW_H high as the library rows (the cover LIST_ART at (LIST_ART_X, LIST_ART_Y), the title at
  * LIST_TITLE_Y, the artist at LIST_SUB_Y, from x LIST_TEXT_X to SG_TEXT_END, the hairline from there); in select mode every row's content moves SG_SEL_COL right and
@@ -818,7 +818,7 @@
 #define SG_PILL_R 20
 #define SG_PILL_GLYPH 16
 #define SG_PILL_GAP 8
-#define SG_PILL_PX_SMALL 16     /* a pill label too wide beside its glyph at 18 px is drawn at this size (patch/common.c pod_centre_pill) */
+#define SG_PILL_PX_SMALL 16     /* a pill label too wide beside its glyph at 18 px is drawn at this size (patch/common.c m1_centre_pill) */
 #define SG_TOP 104
 #define SG_HDR_H 28
 #define SG_HDR_X 10
@@ -1272,7 +1272,7 @@
 #define PP_DL_TILE_Y 10
 #define PP_DL_TEXT_X 72
 #define PP_DL_TEXT_W 206 /* the text ends at x 278 (72 + 206), 10 px before the shared chevron */
-#define PP_DL_CHEV_X 288 /* = LIST_CHEV_X: the shared chevron (pod_make_chevron), centred on the row above its hairline */
+#define PP_DL_CHEV_X 288 /* = LIST_CHEV_X: the shared chevron (m1_make_chevron), centred on the row above its hairline */
 #define PP_SEC_GAP 12
 #define PP_LIB_GAP 24 /* the air between the grid's last row and the Library rows (Search, Downloads, Subscriptions, Saved) that close the Shows page */
 #define PP_BOTTOM 10
@@ -1282,7 +1282,7 @@
 #define PDL_LINE_Y 52
 #define PDL_LINE_PITCH 80
 
-/* The segmented control (patch/common.c pod_segmented, docs/modules/ui-rules.md "Segmented control"; the Discover level's Shows | Episodes is the first): a fully rounded track (SEG_TRACK, #1C1C1E, as the cards) holding equal segments, the selected one a
+/* The segmented control (patch/common.c m1_segmented, docs/modules/ui-rules.md "Segmented control"; the Discover level's Shows | Episodes is the first): a fully rounded track (SEG_TRACK, #1C1C1E, as the cards) holding equal segments, the selected one a
  * fully rounded thumb (SEG_THUMB, #D1D1D6, black label) SEG_PAD inside the track on every side, the other labels white; a SEG_SEP (#3A3A3C) hairline half the track high between two unselected segments. Colours are color_t words (r, g, b, a bytes). */
 #define SEG_PAD 3
 #define SEG_TRACK 0xff1e1c1cu

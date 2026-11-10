@@ -80,7 +80,7 @@ static void tb_gain_text(char *out, unsigned size, float g) {
 /* A fixed preamp as the pages show it: "0 dB", "-3 dB" (the value form "%d dB" with U+2212 before a cut). */
 static void tb_cut_text(char *out, unsigned size, int cut) {
     char num[24];
-    pod_fmt(num, sizeof num, TR("%d dB"), cut);
+    m1_fmt(num, sizeof num, TR("%d dB"), cut);
     snprintf(out, size, "%s%s", cut > 0 ? MINUS : "", num);
 }
 

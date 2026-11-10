@@ -55,7 +55,7 @@ int peq_list(char (*names)[PEQ_NAME], int max, int *total) {
     void *d;
     char *ent;
     int n = 0, all = 0;
-    if (!pod_card_mounted() || !(d = opendir(PEQ_DIR))) {
+    if (!m1_card_mounted() || !(d = opendir(PEQ_DIR))) {
         if (total) *total = 0;
         return 0;
     }
@@ -159,7 +159,7 @@ static void pq_layout(void) {
                 peq_shown(shown, sizeof shown, pq.name[i - PQ_FIRST]);
                 widget_set_text_utf8(pq.label[i], shown);
             }
-            pod_show(pq.row[i], on);
+            m1_show(pq.row[i], on);
         }
         if (!on) continue;
         pq_piece(i, !n ? 0 : p == 0 ? 1 : p == n ? 3 : 2);

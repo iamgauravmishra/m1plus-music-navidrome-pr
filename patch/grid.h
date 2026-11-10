@@ -60,7 +60,7 @@ typedef struct {
     grid_tile_t *tiles; /* n tiles, heap */
     int n;
     void *placeholder; /* bitmap of the disc */
-    void *chev; /* the list rows' chevron (pod_make_chevron), made on first use; freed by grid_free */
+    void *chev; /* the list rows' chevron (m1_make_chevron), made on first use; freed by grid_free */
     const void *
         az; /* the Albums list's az_t (patch/azlist.h): grid_list_paint takes a row's y from az_row_y (the section headers between the rows); NULL: row r at r * LIST_ROW_H */
     unsigned clock;
@@ -90,6 +90,8 @@ grid_tile_t *grid_find(grid_t *g, int album);
 /* The scroll_view sv is moving: a finger is dragging it (pressed and past the drag threshold) or its scroll animator (the fling) is running.
  * 0 for a null sv. The loaders decode nothing meanwhile (a decode is a few ms on the UI thread and the next touch would wait behind it). */
 int grid_moving(void *sv);
+/* The way a page's content went since its loader last looked: off its offset now, *seen the one it saw; *dir 1 down, -1 up (kept when it did not move). */
+void grid_dir(int off, int *seen, int *dir);
 /* The tile of album a: the one it has, else a free one, else the least recently used one outside [lo, hi] (the window). *fresh is 1 when
  * the tile was just reset: the caller then sets its texts and cover key (grid_set). */
 grid_tile_t *grid_tile(grid_t *g, int a, int lo, int hi, int *fresh);
@@ -120,7 +122,7 @@ void grid_text(void *canvas, grid_tile_t *t, int pass, int x, int y, int w, int 
 /* The list mode's rows [r0, r1] (row r is tile_of(ctx, r)) of a view scrolled `off` px: the pressed fill (row press - 1, 0 none), the cover, the hairline,
  * then the titles (style label st_title) and the subtitles (st_sub), cut at the view's edges by the scroll_view's canvas clip (the callers paint inside one). Shared by the Albums and Playlists lists. shift: the
  * cover, the texts (and their width) and the hairline's start move right by it (the Playlists page's select mode makes room for the mark; 0 elsewhere); the pressed fill stays.
- * The hairline runs from the text to LIST_HAIR_END (Apple's inset). A grid whose `az` is set (the Albums list) moves the hairline end, the chevron and the text end left by az_inset while the A-Z rail is shown. chev: the row opens a page: the shared grey chevron (pod_make_chevron) at LIST_CHEV_X and the texts end LIST_TEXT_W_CHEV after LIST_TEXT_X (0: no chevron, the texts to LIST_TEXT_W). */
+ * The hairline runs from the text to LIST_HAIR_END (Apple's inset). A grid whose `az` is set (the Albums list) moves the hairline end, the chevron and the text end left by az_inset while the A-Z rail is shown. chev: the row opens a page: the shared grey chevron (m1_make_chevron) at LIST_CHEV_X and the texts end LIST_TEXT_W_CHEV after LIST_TEXT_X (0: no chevron, the texts to LIST_TEXT_W). */
 void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int r0, int r1, int off, int view_h,
                      int press, int shift, int chev, grid_tile_t *(*tile_of)(void *, int), void *ctx);
 

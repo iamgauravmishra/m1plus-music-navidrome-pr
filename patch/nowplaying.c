@@ -51,6 +51,7 @@ static int np_on_queue(void *ctx, void *e) {
     return queue_open() == 0 ? RET_STOP : RET_OK;
 }
 #include "podcasts.h"
+#include "fnv.h"
 
 static struct {
     void *fav; /* btn_fav (stock's star button): wears the bookmark styles while an episode plays */
@@ -91,7 +92,7 @@ static struct {
  * channel keeps NP_SAT_NUM / NP_SAT_DEN of its distance from v (a grey stays grey). A black cover is the neutral
  * tone. With NP_V_MAX 192 the white title and the #AAAAAA lines keep 4.5:1 over the gradient (test/pod/nowplaying.py). */
 __attribute__((noinline)) unsigned np_tone(unsigned r, unsigned g, unsigned b) {
-    return pod_tone(r, g, b); /* patch/common.c, shared with the album page's tint */
+    return m1_tone(r, g, b); /* patch/common.c, shared with the album page's tint */
 }
 
 /* A clock without a leading zero, as Apple Music prints it: "m:ss", or "h:mm:ss" from an hour on; neg puts a "-" first. */
@@ -110,19 +111,17 @@ __attribute__((noinline)) void np_format_remaining(char *out, unsigned size, int
 }
 
 /* The gradient's alpha on window row y (np_tint.png: black, NP_ALPHA_TOP at the first row to NP_ALPHA_BOTTOM at the last). */
-__attribute__((noinline)) unsigned np_alpha(unsigned y) {
-    return pod_alpha(y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
-}
+__attribute__((noinline)) unsigned np_alpha(unsigned y) { return m1_alpha(y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H); }
 
 /* color (0x..BBGGRR) as the window shows it on row y: under the black gradient. */
 __attribute__((noinline)) unsigned np_shade(unsigned color, unsigned y) {
-    return pod_shade(color, y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
+    return m1_shade(color, y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
 }
 
 /* The coverage of the area outside a quarter circle of radius NP_ART_R in the corner square of NP_ART_R pixels
  * (the circle's centre at the square's inner corner), 0..255: each pixel is sampled 8 x 8 times. The same numbers
  * as the PNG mask of the earlier builds (test/pod/nowplaying.py). */
-__attribute__((noinline)) void np_corner_init(void) { pod_corner_fill(np.corner, NP_ART_R); }
+__attribute__((noinline)) void np_corner_init(void) { m1_corner_fill(np.corner, NP_ART_R); }
 
 static int np_art_once(const void *timer);
 
@@ -141,7 +140,7 @@ static int np_on_art_paint(void *ctx, void *e) {
             if (rec != np.sbseen && !np.once) np.once = timer_add(np_art_once, (void *)0, NP_ONCE_MS);
         }
     }
-    pod_corners(canvas, np.corner, NP_ART_R, NP_ART, np.color, NP_ART_Y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
+    m1_corners(canvas, np.corner, NP_ART_R, NP_ART, np.color, NP_ART_Y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
     return RET_OK;
 }
 
@@ -162,13 +161,13 @@ __attribute__((noinline)) unsigned np_file_key(const char *path) {
 }
 
 /* EXPERIMENTAL: the status bar takes the colour the page has on its first row, so the bar and the page read as one surface
- * (pod_bar_tint / pod_bar_black, patch/common.c, shared with the album page). np_bar_color is np_shade(color, 0), darkened
- * until the bar's white glyphs keep 4.5:1 (pod_bar_color). */
-__attribute__((noinline)) unsigned np_bar_color(unsigned color) { return pod_bar_color(np_shade(color, 0)); }
+ * (m1_bar_tint / m1_bar_black, patch/common.c, shared with the album page). np_bar_color is np_shade(color, 0), darkened
+ * until the bar's white glyphs keep 4.5:1 (m1_bar_color). */
+__attribute__((noinline)) unsigned np_bar_color(unsigned color) { return m1_bar_color(np_shade(color, 0)); }
 
 /* The bar in the page's colour, while the page is in front and its events are registered. */
 static void np_bar_apply(void) {
-    if (np.barok && np.fg && pod_bar_tint(np.win, np_bar_color(np.color)))
+    if (np.barok && np.fg && m1_bar_tint(np.win, np_bar_color(np.color)))
         np.bar = 1; /* a failed call keeps what the bar has (and owes) */
 }
 
@@ -177,13 +176,13 @@ static void np_bar_apply(void) {
 static void np_bar_black(void) {
     if (!np.bar) return;
     np.bar = 0;
-    pod_bar_black(np.win);
+    m1_bar_black(np.win);
 }
 
 /* The timer's check, for what the events missed: the bar is ours only while the page is the top normal window. A dialog
  * (the pull-down) is not a normal window; its EVT_WINDOW_TO_BACKGROUND has cleared np.fg. */
 static int np_bar_sync(void) {
-    int top = pod_is_top(np.win);
+    int top = m1_is_top(np.win);
     if (np.bar && !top)
         np_bar_black();
     else if (!np.bar && top)
@@ -317,7 +316,7 @@ static void np_cover(void) {
     track =
         cc_playing(); /* the track's album: its tone may be known (the album page's, an earlier play); an untagged one has no key */
     album = track && *cc_str(track, REC_ALBUM) ? cc_album_key(track) : 0;
-    if (sig && album && pod_tone_get(album, &tone)) { /* known: no hash of the file (up to NP_HASH_MAX bytes) */
+    if (sig && album && m1_tone_get(album, &tone)) { /* known: no hash of the file (up to NP_HASH_MAX bytes) */
         np.sig = sig, np.key = NP_KEY_TONE; /* a key no hash is compared equal to: the next full look colours again */
         np_set_color(tone);
         return;
@@ -333,14 +332,14 @@ static void np_cover(void) {
     if (album && cc_url(url, album) && cc_decode(np.win, url, 1, 1, 1, &px)) {
         tone = np_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
         np_set_color(tone);
-        pod_tone_put(album, tone);
+        m1_tone_put(album, tone);
         return;
     }
     snprintf(url, sizeof url, "file://%s", path);
     if (cc_decode(np.win, url, 1, 1, 1, &px)) {
         tone = np_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
         np_set_color(tone);
-        pod_tone_put(album, tone);
+        m1_tone_put(album, tone);
     }
 }
 
@@ -413,8 +412,7 @@ static int np_starts(const char *s, const char *w) {
 static int np_digit(char c) { return c >= '0' && c <= '9'; }
 
 __attribute__((noinline)) unsigned np_hash(const char *s) {
-    unsigned h = 2166136261u;
-    while (*s) h = (h ^ (unsigned char)*s++) * 16777619u;
+    unsigned h = m1_fnv(2166136261u, s);
     return h | !h;
 }
 
@@ -535,7 +533,7 @@ static void np_quality(void) {
     unsigned h;
     int need;
     if (!np.q || !np.info[0]) return;
-    need = pod_text_utf8(np.info[0], s, sizeof s);
+    need = m1_text_utf8(np.info[0], s, sizeof s);
     if (need > 0 && (unsigned)need < sizeof s) { /* else none, empty or cut short */
         text = np_info_text(0, s, out, sizeof out) ? out : s;
         h = np_hash(text);
@@ -566,7 +564,7 @@ static void np_info(void) {
     unsigned i, h, n;
     np_quality();
     for (i = 1; i < NP_INFO_N; ++i) { /* 0, the quality line, is np_quality's */
-        int need = np.info[i] ? pod_text_utf8(np.info[i], s, sizeof s) : -1;
+        int need = np.info[i] ? m1_text_utf8(np.info[i], s, sizeof s) : -1;
         /* none, empty, or too long for s (cut short): leave it */
         if (need <= 0 || (unsigned)need >= sizeof s) continue;
         h = np_hash(s);
@@ -651,7 +649,7 @@ static int np_on_fav(void *ctx, void *e) {
 static void np_work(void) {
     recent_note(cc_playing()); /* No stock list query: the page underneath owns pdeq_showlist;
                                * the menu's foreground handler resolves the cover key. */
-    if (!pod_screen_lit()) return;
+    if (!m1_screen_lit()) return;
     np_server_art();
     np_cover();
     np_time();
@@ -664,7 +662,7 @@ static int np_tick(const void *timer) {
     unsigned want;
     (void)timer;
     if (!np.win) return RET_OK; /* not ours any more: a timer that returns RET_OK ends */
-    want = pod_screen_lit() ? NP_TICK_MS : POD_DARK_MS;
+    want = m1_screen_lit() ? NP_TICK_MS : POD_DARK_MS;
     if (np.timer && np.interval != want && timer_modify(np.timer, want) == RET_OK) np.interval = want;
     /* another page on top: nothing of this one is seen, np_on_foreground catches up. A dialog (the pull-down) also clears np.fg
      * but leaves the page the top normal window and partly visible, so the work goes on under it. */
@@ -677,7 +675,7 @@ static int np_tick(const void *timer) {
 static void np_stop(void) {
     np_bar_black();
     ly_stop();
-    if (np.timer) timer_remove(np.timer);
+    m1_timer_stop(&np.timer);
     if (np.sbmp) bitmap_destroy(np.sbmp);
     memset(&np, 0, sizeof np);
 }
@@ -741,7 +739,7 @@ static void np_start(void *win) {
         np_corner_init();
         widget_on(art, EVT_AFTER_PAINT, np_on_art_paint, (void *)0);
     }
-    pod_bind(win, "btn_queue", np_on_queue, (void *)0);
+    m1_bind(win, "btn_queue", np_on_queue, (void *)0);
     ly_start(win);
     np.fg = 1;
     np.barok = widget_on(win, EVT_WINDOW_TO_BG, np_on_background, win) &&

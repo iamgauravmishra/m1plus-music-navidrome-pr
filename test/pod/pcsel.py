@@ -31,7 +31,6 @@ def page():
 
 
 def flags(m, n): return PF.flags(m, n)
-def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
 def confirms(m): return [c[1] for c in m.calls if c[0] == 'confirm']
 def unlinks(m): return [c[1].replace(RP + '/', '') for c in m.calls if c[0] == 'unlink']
 def tick(m): return DL.tick(m)
@@ -212,7 +211,3 @@ def width_tests(ctx):
 
 
 SECTIONS = [select_tests, width_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

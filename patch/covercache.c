@@ -22,6 +22,7 @@
 #endif
 #include "covercache.h"
 #include "durations.h"
+#include "fnv.h"
 
 /* FNV-1a over a string, with a separator so "ab"+"c" and "a"+"bc" differ (q2-pod). */
 unsigned cc_fnv(unsigned h, const char *s) {
@@ -519,11 +520,7 @@ struct cc_cmap {
 /* no file, or the no-art marker: the placeholder, not looked at again */
 #define CMAP_NONE 2
 
-static unsigned cmap_hash(const char *s) {
-    unsigned h = 2166136261u;
-    for (; *s; ++s) h = (h ^ (unsigned)fold((unsigned char)*s)) * 16777619u;
-    return h;
-}
+static unsigned cmap_hash(const char *s) { return m1_fnv_fold(2166136261u, s); }
 
 static int cmap_less(const cc_cmap_e *x, const cc_cmap_e *y) {
     return x->hash != y->hash ? x->hash < y->hash : x->key < y->key;

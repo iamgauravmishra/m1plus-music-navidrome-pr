@@ -605,7 +605,7 @@ def card_icon(g):
 POD_CHEV_W, POD_CHEV_H = 10, 16
 
 def pod_chevron(rgb, canvas=None):
-    """patch/common.c pod_make_chevron, pixel for pixel: a two segment stroke 2 px wide, 4 x 4 samples per pixel (integer eighths of
+    """patch/common.c m1_make_chevron, pixel for pixel: a two segment stroke 2 px wide, 4 x 4 samples per pixel (integer eighths of
     a pixel), POD_CHEV_W x POD_CHEV_H. `canvas` (w, h) puts it right aligned and vertically centred on a larger transparent canvas."""
     from PIL import Image
     def seg2(px, py, ax, ay, bx, by):
@@ -823,7 +823,7 @@ def generate_all(sizes):
     return f
 
 def ah_tint_alpha(y):
-    """patch/common.c pod_alpha with the album page's constants (AH_TINT): the black gradient's alpha on window row y."""
+    """patch/common.c m1_alpha with the album page's constants (AH_TINT): the black gradient's alpha on window row y."""
     top, bot, rows, _ = AH_TINT
     return bot if y >= rows - 1 else top + ((bot - top) * y + (rows - 1) // 2) // (rows - 1)
 

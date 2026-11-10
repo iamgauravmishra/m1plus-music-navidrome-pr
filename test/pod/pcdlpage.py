@@ -128,8 +128,6 @@ def page_tests(ctx):
     expect(subs_x[1] == O['LIST_TEXT_X'] + O['PS_BADGE_CHECK_W'] and set(subs_x[:1] + subs_x[2:]) == {O['LIST_TEXT_X']}, f'its grey line starts after the check; the others do not ({subs_x})')
 
 
-
-
 def big_card(m):
     """40 shows of 300 episode files each (.episodes with titles and dates), the files' dates interleaved so that the newest 300 of the whole card are seven or eight of each show."""
     m.free_mb = 18 * 1024
@@ -548,7 +546,3 @@ def width_tests(ctx):
 
 
 SECTIONS = [page_tests, scan_tests, inprogress_tests, open_tests, select_tests, played_tests, off_tests, width_tests]
-
-
-def run(ctx):
-    for f in SECTIONS: f(ctx)

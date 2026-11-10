@@ -268,24 +268,16 @@ static int qp_next_load(void) {
         grid_tile_t *t = grid_find(&qp.g, a);
         int top = qp_row_y(a) - s, d;
         if (t && (t->art || t->load)) continue; /* (load: a server cover on its way, the tick clears it) */
-        d = pod_abs(top + ROW / 2 - QP_WIN_H / 2);
+        d = m1_abs(top + ROW / 2 - QP_WIN_H / 2);
         if (top >= QP_WIN_H || top + ROW <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
     return best;
 }
 
-static int qp_moving(void) { return grid_moving(qp.sv); }
-
 static void qp_kick(void) {
     if (!qp.more_timer && qp.view && (qp.noscroll || qp_next_load() >= 0))
         qp.more_timer = timer_add(qp_on_load, (void *)0, QP_MORE_MS);
-}
-
-static void qp_dir(void) {
-    int s = qp_off();
-    if (s != qp.seen) qp.dir = s > qp.seen ? 1 : -1;
-    qp.seen = s;
 }
 
 static int qp_on_load(const void *unused) {
@@ -293,8 +285,8 @@ static int qp_on_load(const void *unused) {
     (void)unused;
     qp.more_timer = 0;
     if (!qp.view) return RET_OK;
-    qp_dir();
-    if (qp_moving()) { /* nothing is decoded while it moves: look again next tick */
+    grid_dir(qp_off(), &qp.seen, &qp.dir);
+    if (grid_moving(qp.sv)) { /* nothing is decoded while it moves: look again next tick */
         qp_kick();
         return RET_OK;
     }
@@ -319,7 +311,7 @@ static int qp_on_scroll(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!qp.view) return RET_OK;
-    qp_dir();
+    grid_dir(qp_off(), &qp.seen, &qp.dir);
     qp_kick();
     return RET_OK;
 }
@@ -395,7 +387,7 @@ static void qp_clear_sync(void) {
     int on = qp.n != 0 && !qp_stream() && pod_clear_ready();
     if (on == qp.clear_on) return;
     qp.clear_on = on;
-    pod_show(qp.btn_clear, on);
+    m1_show(qp.btn_clear, on);
 }
 
 /* The play mode changed (our buttons, the refresh tick finding another page's change): turning Shuffle on or off reorders the queue, so the rows are read again; a repeat change only touches the buttons. */
@@ -457,7 +449,7 @@ static void qp_load(int keep) {
     qp.base = qp.row + 1; /* -1 (no track): from the first */
     qp.n = qp.count > (unsigned)qp.base ? qp.count - (unsigned)qp.base : 0;
     qp.hkey = 0;
-    pod_show(qp.empty, qp.n == 0);
+    m1_show(qp.empty, qp.n == 0);
     qp.clear_on = -1; /* qp_clear_sync decides */
     qp_clear_sync();
     qp_size();
@@ -474,7 +466,7 @@ static void qp_load(int keep) {
 static int qp_on_stale(const void *unused) {
     (void)unused;
     qp.stale_timer = 0;
-    if (qp.view && qp.g.tiles && !qp_valid() && pod_is_top(qp.win)) qp_load(1);
+    if (qp.view && qp.g.tiles && !qp_valid() && m1_is_top(qp.win)) qp_load(1);
     return RET_OK;
 }
 
@@ -484,7 +476,7 @@ static void qp_sync(void) {
     if (!qp.view || !qp.g.tiles) return;
     qp_clear_sync();
     if (!qp_valid()) {
-        if (qp.fg && pod_is_top(qp.win)) qp_load(1);
+        if (qp.fg && m1_is_top(qp.win)) qp_load(1);
         return;
     }
     row = qp_playing_row();
@@ -505,7 +497,7 @@ static int qp_on_tick(const void *unused) {
     unsigned want;
     (void)unused;
     if (!qp.view) return RET_OK;
-    want = pod_screen_lit() ? QP_TICK_MS : POD_DARK_MS;
+    want = m1_screen_lit() ? QP_TICK_MS : POD_DARK_MS;
     if (qp.tick_timer && qp.tick_ms != want && timer_modify(qp.tick_timer, want) == RET_OK) qp.tick_ms = want;
     if (qp.fg) qp_sync();
     qp_srv_retry();
@@ -558,7 +550,7 @@ static int qp_on_up(void *ctx, void *e) {
     qp.down = 0;
     qp_set_press(0);
     if (a < 0 || !e || !qp.view) return RET_OK;
-    if (pod_abs(I(e, PE_X) - qp.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - qp.down_y) < SC_DRAG_PX &&
+    if (m1_abs(I(e, PE_X) - qp.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - qp.down_y) < SC_DRAG_PX &&
         qp_item_of(e) == a)
         qp_play_at(a);
     return RET_OK;
@@ -603,9 +595,9 @@ static int qp_on_bg(void *ctx, void *e) {
 static int qp_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    if (qp.more_timer) timer_remove(qp.more_timer);
-    if (qp.stale_timer) timer_remove(qp.stale_timer);
-    if (qp.tick_timer) timer_remove(qp.tick_timer);
+    m1_timer_stop(&qp.more_timer);
+    m1_timer_stop(&qp.stale_timer);
+    m1_timer_stop(&qp.tick_timer);
     grid_free(&qp.g);
     grid_free(&qp.hg);
     cc_cmap_free(qp.map);
@@ -632,10 +624,10 @@ int queue_open(void) {
         return -2;
     }
     widget_on(qp.win, EVT_DESTROY, qp_on_destroy, (void *)0);
-    qp.back = pod_bind(qp.win, "btn_return", qp_on_back, (void *)0);
-    qp.btn_shuffle = pod_bind(qp.win, "btn_shuffle", qp_on_shuffle, (void *)0);
-    qp.btn_repeat = pod_bind(qp.win, "btn_repeat", qp_on_repeat, (void *)0);
-    qp.btn_clear = pod_bind(qp.win, "btn_qclear", qp_on_clear, (void *)0);
+    qp.back = m1_bind(qp.win, "btn_return", qp_on_back, (void *)0);
+    qp.btn_shuffle = m1_bind(qp.win, "btn_shuffle", qp_on_shuffle, (void *)0);
+    qp.btn_repeat = m1_bind(qp.win, "btn_repeat", qp_on_repeat, (void *)0);
+    qp.btn_clear = m1_bind(qp.win, "btn_qclear", qp_on_clear, (void *)0);
     qp.view = widget_lookup(qp.win, "view_queue", 1);
     qp.sv = widget_lookup(qp.win, "queue_scrollview", 1);
     qp.status = widget_lookup(qp.win, "label_status", 1);
@@ -661,8 +653,8 @@ int queue_open(void) {
     if (!grid_init(&qp.hg, qp.win, 1, QP_COVER, QP_COVER_R) || !grid_init(&qp.g, qp.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&qp.hg);
         grid_free(&qp.g);
-        pod_show(qp.view, 0);
-        pod_show(qp.status, 1);
+        m1_show(qp.view, 0);
+        m1_show(qp.status, 1);
         widget_set_tr_text(qp.status, "Not enough memory");
         return 0;
     }

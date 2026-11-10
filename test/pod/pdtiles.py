@@ -508,14 +508,8 @@ def flags_tests(ctx):
            'the tile handlers\' flag tests (they reject a nonzero flag; stock is untouched) are pinned with the rest')
 
 
-
-
-def run(ctx):
-    for section in SECTIONS: section(ctx)
-
-
 def stockopen_tests(ctx):
-    """pod_open_stock (patch/common.c), which the Settings ACT_STOCK rows, the Wi-Fi row of the All System Settings hub (wifi_hub_open) and the Sleep Timer link use: a stock page
+    """m1_open_stock (patch/common.c), which the Settings ACT_STOCK rows, the Wi-Fi row of the All System Settings hub (wifi_hub_open) and the Sleep Timer link use: a stock page
     that has no single_instance property is restacked when its window is still in the stack (the top-right Now Playing button leaves it there under the player), else opened by
     navigator_to. The model: navigator_to always adds a window, the Now Playing button restacks the player, a restack delivers EVT_WINDOW_TO_FG."""
     expect, P = ctx.expect, pod_pages
@@ -529,7 +523,7 @@ def stockopen_tests(ctx):
         else: m.push(PL); m.event(old, 'bg'); m.event(PL, 'init')
 
     def open_(m, path, window):
-        return m.call(PSYMS['pod_open_stock'], a0=m.cstr(path), a1=m.cstr(window) if window else 0, count=3000000)
+        return m.call(PSYMS['m1_open_stock'], a0=m.cstr(path), a1=m.cstr(window) if window else 0, count=3000000)
 
     kinds = lambda m: [c for c in m.calls if c[0] in ('navigator_to', 'switch_to', 'to_fg')]
     names = [(path, window) for path, _, window in P.STOCK_PAGES]
