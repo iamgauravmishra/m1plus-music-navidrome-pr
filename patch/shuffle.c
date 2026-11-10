@@ -678,7 +678,8 @@ int shuffle_play(int kind) {
         /* loadSongList finds a song by file name and CUE start, so a duplicate name (01.flac in
          * every album) would always start at the first; the drawn row's own index wins when it is
          * the same song */
-        if (at < n && !strcmp(str(deque_at(queue, at), REC_PATH), str(pick, REC_PATH)))
+        if (at < n && !strcmp(str(deque_at(queue, at), REC_PATH), str(pick, REC_PATH)) &&
+            I(deque_at(queue, at), REC_CUE_START) == I(pick, REC_CUE_START)) /* (a CUE image's tracks share the path) */
             idx = at;
         else if (found >= 0 && (unsigned)found < n)
             idx = (unsigned)found;
