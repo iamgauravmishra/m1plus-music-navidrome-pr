@@ -151,7 +151,7 @@ def main():
     ap.add_argument('--no-cache', action='store_true')
     ap.add_argument('--perf', action='store_true', help='also run the cost and stress-scale checks (always on for --dev, integration and --update)')
     ap.add_argument('--verbose', action='store_true', help='print every passing test, not only failures')
-    ap.add_argument('--jobs', type=int, default=min(8, os.cpu_count() or 4))
+    ap.add_argument('--jobs', type=int, default=min(16, os.cpu_count() or 4))
     ap.add_argument('--timeout', type=int, default=300, help='seconds per test (default 300)')
     a = ap.parse_args()
     if a.list:
@@ -204,6 +204,7 @@ def main():
             workflow.validate_tree(tree)
         # Stress inputs have very different costs. Quick runs must not schedule a
         # later dev run's long stress tasks last by overwriting their durations.
+        os.environ['M1_SOURCE_KEY'] = workflow.source_key()   # the tasks compare the tree with this instead of hashing the sources once each; the input key is checked again after them
         times_path = timing_file(a.perf)
         times = workflow.read(times_path)
         test_start = progress = time.monotonic()

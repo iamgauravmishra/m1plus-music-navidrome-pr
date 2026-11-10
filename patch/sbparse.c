@@ -201,7 +201,26 @@ static int sp_find(const char *resp, const char *end, const char *cont, const ch
 
 /* ---- rows ---- */
 
-static int sp_track(sba_track_t *t, const char *o, const char *e, const char *head, const char *he) {
+/* getAlbum's own fields, read once for all its songs (a lookup per song walks the whole song array again). */
+typedef struct {
+    char id[SBA_ID], cover[SBA_ID], name[SBA_TEXT], artist[SBA_TEXT];
+    unsigned year;
+} sp_head_t;
+
+static void sp_head(sp_head_t *h, const char *head, const char *he) {
+    sp_id(h->id, head, he, "id");
+    sp_id(h->cover, head, he, "coverArt");
+    h->year = sp_num(head, he, "year");
+    sp_text(h->name, SBA_TEXT, head, he, "name");
+    sp_text(h->artist, SBA_TEXT, head, he, "artist");
+}
+
+static void sp_copy(char *dst, const char *src) {
+    while ((*dst++ = *src++) != 0) {
+    }
+}
+
+static int sp_track(sba_track_t *t, const char *o, const char *e, const sp_head_t *head) {
     sp_zero(t, sizeof *t);
     if (!sp_id(t->id, o, e, "id")) return 0;
     sp_text(t->title, SBA_TEXT, o, e, "title");
@@ -222,11 +241,11 @@ static int sp_track(sba_track_t *t, const char *o, const char *e, const char *he
     t->created = sp_time(o, e, "created");
     t->starred = sp_flag(o, e, "starred");
     if (head) { /* getAlbum: what a song leaves out is the album's */
-        if (!t->album_id[0]) sp_id(t->album_id, head, he, "id");
-        if (!t->cover[0]) sp_id(t->cover, head, he, "coverArt");
-        if (!t->year) t->year = sp_num(head, he, "year");
-        if (!t->album[0]) sp_text(t->album, SBA_TEXT, head, he, "name");
-        if (!t->artist[0]) sp_text(t->artist, SBA_TEXT, head, he, "artist");
+        if (!t->album_id[0]) sp_copy(t->album_id, head->id);
+        if (!t->cover[0]) sp_copy(t->cover, head->cover);
+        if (!t->year) t->year = head->year;
+        if (!t->album[0]) sp_copy(t->album, head->name);
+        if (!t->artist[0]) sp_copy(t->artist, head->artist);
     }
     return 1;
 }
@@ -287,6 +306,7 @@ int sba_parse_tracks(const char *json, unsigned n, sba_track_t *out, int max, in
                  {"starred2", "song"}, {"randomSongs", "song"}, {"songsByGenre", "song"}};
     const char *end, *resp, *head = 0, *o, *oe;
     sp_it_t it;
+    sp_head_t hd;
     int count = 0, r, k;
     if (!(resp = sp_open(json, n, &end, err))) return -1;
     if (err) *err = SBA_OK;
@@ -300,8 +320,9 @@ int sba_parse_tracks(const char *json, unsigned n, sba_track_t *out, int max, in
         if (head) break; /* the container is there without the array: an empty answer */
     }
     if (k == (int)(sizeof where / sizeof where[0]) || !out || max <= 0 || !head || r <= 0) return 0;
+    if (k == 0) sp_head(&hd, head, end);
     while (count < max && sp_next(&it, &o, &oe))
-        if (sp_track(&out[count], o, oe, k == 0 ? head : 0, end)) ++count;
+        if (sp_track(&out[count], o, oe, k == 0 ? &hd : 0)) ++count;
     return count;
 }
 

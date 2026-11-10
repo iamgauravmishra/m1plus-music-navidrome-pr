@@ -6,10 +6,10 @@ Modelled on q2-pod's test/patch.py.
 Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/manifest.json).
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
 """
-import importlib.util, json, os, re, struct, sys, unicodedata
+import importlib.util, json, math, os, re, struct, sys, unicodedata
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK, UC_HOOK_INTR
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
-                                UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0,
+                                UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0, UC_MIPS_REG_F12, UC_MIPS_REG_F14,
                                 UC_MIPS_REG_CP0_STATUS as _STATUS, UC_MIPS_REG_0 as UC_MIPS_REG_0)
 
 PERF = os.environ.get('M1_PERF') == '1'   # cost measurement and stress-scale checks; off by default (make test PERF=1; dev/check/accept always set it)
@@ -34,7 +34,7 @@ HEAP_SIZE = 0x4000000
 
 
 def init(work):
-    """Point the harness at a built tree (the payload's manifest and symbols)."""
+    """Point the harness at a built tree (the payload's manifest and symbols). The sources' key is the runner's (M1_SOURCE_KEY, tools/check.py) or computed here when a module runs alone."""
     global WORK, DEMO, BUILD, MANIFEST, PSYMS
     WORK = work
     DEMO = os.path.join(WORK, 'rootfs', pod.DEMO)
@@ -42,7 +42,7 @@ def init(work):
     MANIFEST = json.load(open(os.path.join(BUILD, 'manifest.json')))
     import workflow, build
     final = workflow.read(os.path.join(work, 'build.json'))
-    if final.get('sources') != workflow.source_key() or final.get('demo_sha256') != workflow.sha(DEMO) \
+    if final.get('sources') != (os.environ.get('M1_SOURCE_KEY') or workflow.source_key()) or final.get('demo_sha256') != workflow.sha(DEMO) \
             or final.get('elf_sha256') != workflow.sha(os.path.join(BUILD, 'patch.elf')):
         raise SystemExit('stale or modified test tree; rebuild with make test or make dev')
     build.TAG = pod.TAG = final['tag']
@@ -177,6 +177,9 @@ REC_SIZE = 0x58
 
 
 _ARG_REGS = (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_SP)
+HOT_MOCKS = frozenset(('memcpy', 'memset', 'pow', 'sqrt', 'cos', 'sin'))
+_COPY_REGS = (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_RA)
+_MATH_REGS = (UC_MIPS_REG_F12, UC_MIPS_REG_F14, UC_MIPS_REG_RA)
 
 
 class Traps(dict):
@@ -446,6 +449,18 @@ class Machine:
         if not name:
             w = self.watch.get(address)   # a payload function of our own: recorded, then run for real
             if w: self.calls.append((w, struct.unpack('<i', struct.pack('<I', u.reg_read(UC_MIPS_REG_A0)))[0]))
+            return
+        if name in HOT_MOCKS:   # the mocks called by the million (a path joined, a curve's points): answered here, before the long chain below
+            if name == 'memcpy':
+                a0, a1, a2, ra = u.reg_read_batch(_COPY_REGS); u.mem_write(a0, bytes(u.mem_read(a1, a2)))
+            elif name == 'memset':
+                a0, a1, a2, ra = u.reg_read_batch(_COPY_REGS); u.mem_write(a0, bytes([a1 & 0xff]) * a2)
+            else:   # pow, sqrt, cos, sin: doubles in f12 / f14, the result in f0 (v0 is 0, as the chain leaves it)
+                x, y, ra = u.reg_read_batch(_MATH_REGS); a0 = 0
+                x, y = struct.unpack('<dd', struct.pack('<QQ', x & (2 ** 64 - 1), y & (2 ** 64 - 1)))
+                r = math.sqrt(x) if name == 'sqrt' else math.pow(x, y) if name == 'pow' else math.cos(x) if name == 'cos' else math.sin(x)
+                u.reg_write(UC_MIPS_REG_F0, struct.unpack('<Q', struct.pack('<d', r))[0])
+            u.reg_write(UC_MIPS_REG_V0, a0); u.reg_write(UC_MIPS_REG_PC, ra)
             return
         a0, a1, a2, a3, sp = u.reg_read_batch(_ARG_REGS)
         stack = lambda i: self.word(sp + 16 + 4 * i)   # o32: arguments 4.. are on the stack
@@ -1014,10 +1029,6 @@ class Machine:
             if self.extern_cover: self.files[self.read_cstr(a1)] = 4096
             ret = self.extern_cover
         # ---- libc
-        elif name == 'memset':
-            self.u.mem_write(a0, bytes([a1 & 0xff]) * a2); ret = a0
-        elif name == 'memcpy':
-            self.u.mem_write(a0, bytes(self.u.mem_read(a1, a2))); ret = a0
         elif name == 'strcmp':
             x, y = self.read_cstr(a0), self.read_cstr(a1); ret = (x > y) - (x < y)
         elif name in ('strlen', 'strchr', 'strrchr'):   # (the Navidrome source's row data: sbsrc.c reads its fields with these)
@@ -1078,11 +1089,11 @@ class Machine:
             self.__dict__.setdefault('fopens', []).append(path)   # (every open of the machine's life, which self.calls loses when a test clears it)
             if 'w' in mode and ('fopen', path) not in self.fail: self.files[path] = 0; self.present.add(path)
             ret = (self.alloc(4) if path in self.files or path in self.fs else 0)
-            self.fh = (ret, path)
+            self.fh = (ret, path); self.fread_at = 0
         elif name == 'fclose':
             self.calls.append(('fclose',))
         elif name == 'fseek':
-            self.calls.append(('fseek',))
+            self.calls.append(('fseek',)); self.fread_at = 0
         elif name == 'ftell':
             ret = self.files.get(self.fh[1], len(self.fs.get(self.fh[1], b'')))
         elif name == 'fread':
@@ -1091,8 +1102,9 @@ class Machine:
                 chunk = data[:a1 * a2]; self.u.mem_write(a0, chunk) if chunk else None
                 ret = len(chunk) // a1 if a1 else 0
             else:
-                self.u.mem_write(a0, b'\0' * 4)
-                ret = 1 if self.files.get(self.fh[1]) else 0
+                self.u.mem_write(a0, b'\0' * 4)   # a file with a size only: one zero item a call, until the size is read (a read loop ends as it does at the end of a real file)
+                at = self.__dict__.get('fread_at', 0); ret = 1 if at < self.files.get(self.fh[1], 0) else 0
+                self.fread_at = at + a1 * ret
             self.calls.append(('fread', ret))
         elif name == 'fwrite':
             self.calls.append(('fwrite', self.word(a0))); ret = 1
@@ -1291,13 +1303,6 @@ class Machine:
             if num:
                 self.u.mem_write(a2, struct.pack('<d', float(num.group(0)))); self.setword(a3, num.end()); ret = 1
             else: ret = 0xffffffff if not s.strip() else 0
-        elif name in ('pow', 'sqrt', 'cos', 'sin'):
-            import math
-            f = lambda r: struct.unpack('<d', struct.pack('<Q', u.reg_read(r) & (2 ** 64 - 1)))[0]
-            from unicorn.mips_const import UC_MIPS_REG_F12, UC_MIPS_REG_F14
-            x, y = f(UC_MIPS_REG_F12), f(UC_MIPS_REG_F14)
-            r = {'pow': lambda: math.pow(x, y), 'sqrt': lambda: math.sqrt(x), 'cos': lambda: math.cos(x), 'sin': lambda: math.sin(x)}[name]()
-            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<Q', struct.pack('<d', r))[0])
         else:
             raise AssertionError(f'unmocked call {name} at {address:#x}')
         u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff)

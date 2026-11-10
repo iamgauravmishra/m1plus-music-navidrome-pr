@@ -71,8 +71,8 @@ uv run python -I tools/check.py --test albums/toggle_tests
 uv run python -I tools/check.py --tests-only --jobs 4 --timeout 300
 ```
 
-`JOBS=4` also works with Makefile test/build targets. The runner prints failures and one summary
-line (`--verbose` prints every pass too); it reports completed tasks, native crashes and assertion
+`JOBS=4` also works with Makefile test/build targets; the default is one worker per CPU, at most 16
+(on 18 CPUs the full suite takes 110 s with 8 workers, 60 s with 16 and 57 s with 18). The runner prints failures and one summary line (`--verbose` prints every pass too); it reports completed tasks, native crashes and assertion
 totals separately. Missing inputs/results fail; subprocess groups have
 wall-time limits. Logs and failed trees are retained. `make clean` removes `work/check` only,
 keeping dev artifacts, counters and caches. Locks prevent overlapping writes.

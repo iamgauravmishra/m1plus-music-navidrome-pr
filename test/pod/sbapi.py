@@ -1004,7 +1004,7 @@ def trial(ctx):
     expect(seen == [('aaa', 'ann'), ('bbb', 'bob')], f'both go out, each with the login it was asked with ({seen})')
     expect(call(m, 'sba_trial_state', ida, 0) == ST['OK'] and call(m, 'sba_trial_state', idb, 0) == ST['OK'] and call(m, 'sba_trial_state', idb + 5, 0) == ST['NONE'], 'each id has its own answer, an unknown id has none')
     m = machine(conf=False)
-    m.curl_site = Site(ping=lambda url, opts: {'body': ok_json()} if 'aaa' in url else {'body': err_json(40)})
+    m.curl_site = Site(ping=lambda url, opts: {'body': ok_json()} if 'aaa.local' in url else {'body': err_json(40)})
     r, th = ask(m, 'sba_ping_try', 'http://aaa.local', 'ann', 'pa')
     ida = call(m, 'sba_trial_id')
     ask(m, 'sba_ping_try', 'http://bbb.local', 'bob', 'pb')
