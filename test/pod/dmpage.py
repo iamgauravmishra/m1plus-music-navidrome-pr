@@ -12,7 +12,7 @@ library, playlist table and canvas mocked. The checks:
   touch        a row plays the mix from that song, Shuffle, Play, drags, aborts, a song missing on the card, the playlist gone or renamed
   texts        13 languages: every line fits, the description in two lines at most, the Updated line (today, yesterday, a date)
   free         destroy frees everything and a second open works"""
-import importlib.util, os, random, struct, sys
+import os, random, struct
 from unicorn import mips_const
 from unicorn.mips_const import UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_V0, UC_MIPS_REG_PC, UC_MIPS_REG_RA, UC_MIPS_REG_F0
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
@@ -21,16 +21,6 @@ from awtk_text import Ttf, StbText
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 dm_t, pulldown = sibling("dailymix"), sibling("pulldown")

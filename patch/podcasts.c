@@ -315,13 +315,6 @@ int pcsearch_toggle(void) {
     return next;
 }
 
-static void pg_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
-static int pg_abs(int v) { return v < 0 ? -v : v; }
 static int pg_off(void) { return pg.sv ? I(pg.sv, SC_YOFF) : 0; }
 static void pg_redraw(void) { widget_invalidate_force(pg.sv, (void *)0); }
 static void pg_awake_arm(void); /* the downloads' timer, armed when something is queued */
@@ -2012,8 +2005,8 @@ static void pg_title(const char *key, const char *text) {
 
 static void pg_empty(const char *key) {
     widget_move(pg.status, 20, 180);
-    pg_show(pg.view, 0);
-    pg_show(pg.status, 1);
+    pod_show(pg.view, 0);
+    pod_show(pg.status, 1);
     widget_set_tr_text(pg.status, key);
 }
 
@@ -2098,9 +2091,9 @@ static void pg_nav(void) {
         cap = more || find || globe,
         gx = NAV_VIEW_X - (more ? NAV_VIEW_W : 0); /* the pieces are right-aligned to Now Playing, 46 apart */
     const char *img = cap ? "ah_nav_play" : "ah_nav_np", *mimg = globe && more ? "pod_nav_moremid" : "pod_nav_more";
-    pg_show(pg.btn_more, more);
-    pg_show(pg.find, find);
-    pg_show(pg.btn_globe, globe);
+    pod_show(pg.btn_more, more);
+    pod_show(pg.find, find);
+    pod_show(pg.btn_globe, globe);
     if (globe) widget_move(pg.btn_globe, gx, 0); /* [Globe | Now Playing], [Globe | ... | NP] or [... | NP] */
     if (pg.btn_more) {
         widget_set_prop_str(pg.btn_more, "style:normal:icon", mimg);
@@ -2111,7 +2104,7 @@ static void pg_nav(void) {
     if (pg.sf)
         widget_set_visible(pg.sf, pg.level == L_SRCH,
                            0); /* (insensitive for life: a touch on the field goes to the content view) */
-    pg_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC);
+    pod_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC);
     if (pg.title &&
         !pg.select) { /* the small title ends before the leftmost button, cut with an ellipsis (pg_head sets the text again at the new width) */
         widget_resize(pg.title, (globe ? gx : more || find ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W) - NAV_TITLE_X, 22);
@@ -2281,8 +2274,8 @@ static void pg_load_shows(int keep) {
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg.rev = pc_rev();
     pg_title("Podcasts", (const char *)0);
-    pg_show(pg.view, 1);
-    pg_show(pg.status, 0);
+    pod_show(pg.view, 1);
+    pod_show(pg.status, 0);
     // clang-format off: a translation key stays on one line (test/pod/i18n.py reads the source)
     if (!pg.nshows) pg_empty("No podcasts. Copy a folder for each show into Podcasts on the card, or put subscriptions.txt there and choose Import from Card in the menu at the top right.");
     // clang-format on
@@ -2531,13 +2524,13 @@ static void pg_dls_apply(void) {
     int max;
     pg_ord_build();
     if (!pg.nrows && (pg.subs || !pg.dscan_on)) {
-        pg_show(
+        pod_show(
             pg.view,
             1); /* (the large title and the storage line stay, the hint is painted under them: the first frame is the last) */
-        pg_show(pg.status, 0);
+        pod_show(pg.status, 0);
     } else {
-        pg_show(pg.view, 1);
-        pg_show(pg.status, 0);
+        pod_show(pg.view, 1);
+        pod_show(pg.status, 0);
     }
     pg_size();
     max = pg_content() - GRID_VIEW_H;
@@ -2657,8 +2650,8 @@ static void pg_open_show_with(int si, int off, pc_ep_t *all, int m) {
     pg_hdr_make();
     pg_title((const char *)0, pg.shows[si].title);
     pg_nav();
-    pg_show(pg.view, 1);
-    pg_show(pg.status, 0);
+    pod_show(pg.view, 1);
+    pod_show(pg.status, 0);
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_shape(&pg.hg, PS_ART, PS_ART_R,
                1); /* (the corners are cut in the alpha: the page's tint shows through them) */
@@ -2705,7 +2698,7 @@ static void pg_eps_shown(void) {
     pg_det_refind(); /* (the episode page stays on its episode, wherever the list put it) */
     pg_cells_drop();
     pg_hdr_make();
-    pg_show(pg.status, 0);
+    pod_show(pg.status, 0);
     pg_size();
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;
@@ -2742,7 +2735,7 @@ static void pg_srch_rows_reset(void) {
 /* The status line under the field (the label of the empty states), or none. */
 static void pg_srch_hint(const char *text) {
     pg.htext = text;
-    pg_show(pg.status, 0);
+    pod_show(pg.status, 0);
 }
 
 /* What the level shows for the state: the field's texts, the status line (Loading... while a preview is fetched, Searching..., No results, the failure's words) or the rows of the answer. */
@@ -2798,7 +2791,7 @@ static void pg_load_search(int fresh) {
     pg.from_search = pg.pv_disc = 0;
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg_nav();
-    pg_show(pg.view, 1);
+    pod_show(pg.view, 1);
     if (pg.sf_hint) widget_set_tr_text(pg.sf_hint, "Search Apple Podcasts");
     pg_srch_rows_reset();
     pg.sgen = pn_search_gen();
@@ -3138,7 +3131,7 @@ static void pg_subscribe(void) {
 /* The status line under the control (the label of the empty states), or none. */
 static void pg_disc_hint(const char *text) {
     pg.htext = text;
-    pg_show(pg.status, 0);
+    pod_show(pg.status, 0);
 }
 
 /* What the level shows for the state of the chart in view: its rows, or the status line (Loading... while it is asked for, the failure's words, No results). */
@@ -3240,7 +3233,7 @@ static void pg_load_disc(int fresh) {
     pg_title((const char *)0, TR("Discover"));
     pg_srch_rows_reset();
     pg_nav();
-    pg_show(pg.view, 1);
+    pod_show(pg.view, 1);
     pg_disc_apply();
     widget_set_prop_int(pg.sv, "yoffset", pg.doff[pg.dtab]);
     pg_collapse();
@@ -3443,13 +3436,13 @@ static void pg_select(int on) {
     memset(pg.pick, 0, sizeof pg.pick);
     pg.ncan = on ? pg_sel_scan(1) : 0;
     pg.press = pg.down = 0;
-    pg_show(pg.btn_more, 0);
-    pg_show(pg.np, !on);
-    pg_show(pg.btn_selall, on);
-    pg_show(pg.bar, on);
-    pg_show(pg.del, on && !(pg.level == L_DLS &&
-                            pg.subs)); /* the bar's one pill: Delete, or on the Subscriptions page Unsubscribe */
-    pg_show(pg.unsubp, on && pg.level == L_DLS && pg.subs);
+    pod_show(pg.btn_more, 0);
+    pod_show(pg.np, !on);
+    pod_show(pg.btn_selall, on);
+    pod_show(pg.bar, on);
+    pod_show(pg.del, on && !(pg.level == L_DLS &&
+                             pg.subs)); /* the bar's one pill: Delete, or on the Subscriptions page Unsubscribe */
+    pod_show(pg.unsubp, on && pg.level == L_DLS && pg.subs);
     if (pg.title && on)
         widget_resize(pg.title, SG_SELALL_X - NAV_TITLE_X,
                       22); /* (leaving select mode, pg_nav sets the width of the level) */
@@ -3542,8 +3535,8 @@ static int pg_on_back(void *ctx, void *e) {
 #define PG_DLG_MS 200
 
 static void pg_dlg_show(int on) {
-    pg_show(pg.dlg_scrim, on);
-    pg_show(pg.dlg_card, on);
+    pod_show(pg.dlg_scrim, on);
+    pod_show(pg.dlg_card, on);
     pg.dlg = on;
 }
 
@@ -4017,8 +4010,8 @@ static void pg_dls_back(void) {
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_placeholder(&pg.g);
     pg_title(pg.saved ? "Saved" : "Downloads", (const char *)0);
-    pg_show(pg.view, 1);
-    pg_show(pg.status, 0);
+    pod_show(pg.view, 1);
+    pod_show(pg.status, 0);
     if (pg.saved) { /* the episode may have been unsaved (or saved) since: the page is made again, at the offset it was left */
         pg_load_downloads(0);
         pg.want_off = off;
@@ -4167,8 +4160,8 @@ static const char *const pg_row_id[PG_SHEET_ROWS] = {"speed",     "refresh", "se
 static void pg_sheet_close(void) {
     if (!pg.sheet) return;
     pg.sheet = SH_NONE;
-    pg_show(pg.sh_scrim, 0);
-    pg_show(pg.sh_card, 0);
+    pod_show(pg.sh_scrim, 0);
+    pod_show(pg.sh_card, 0);
 }
 
 /* The grey value of row i (a value label v: 0 speed, 1 refresh), right aligned to x PS_SHEET_VALUE_R, in the room the row's label leaves (the label keeps its whole text), cut with an ellipsis by
@@ -4199,18 +4192,18 @@ static void pg_sheet_rows(const int *rows, int n) {
         for (k = 0; k < n; ++k)
             if (rows[k] == i) at = k;
         if (at < 0) {
-            pg_show(pg.sh_row[i], 0);
+            pod_show(pg.sh_row[i], 0);
             continue;
         }
         widget_move(pg.sh_row[i], 0, at * PM_ROW_H);
-        pg_show(pg.sh_row[i], 1);
+        pod_show(pg.sh_row[i], 1);
         widget_set_visible(pg.sh_hr[i], at > 0, 0);
     }
     widget_move(pg.sh_card, 0, AH_WIN_H - h);
     widget_resize(pg.sh_card, PG_W, h);
     widget_set_prop_str(pg.sh_card, "style:normal:bg_image", glass[n]);
-    pg_show(pg.sh_scrim, 1);
-    pg_show(pg.sh_card, 1);
+    pod_show(pg.sh_scrim, 1);
+    pod_show(pg.sh_card, 1);
 }
 
 static int pg_any_unplayed(void) {
@@ -4617,7 +4610,7 @@ static int pg_on_up(void *ctx, void *e) {
     pg.down = 0;
     pg_set_press(0);
     if (!a || !e || !pg.view) return RET_OK;
-    if (pg_abs(I(e, PE_X) - pg.down_x) >= PG_TAP_PX || pg_abs(I(e, PE_Y) - pg.down_y) >= PG_TAP_PX) return RET_OK;
+    if (pod_abs(I(e, PE_X) - pg.down_x) >= PG_TAP_PX || pod_abs(I(e, PE_Y) - pg.down_y) >= PG_TAP_PX) return RET_OK;
     same = pg_hit(e, &part2);
     if (pg.select) {
         if (a > 0 && same == a - 1) pg_toggle_pick(same); /* a tap marks and unmarks; a drag marks nothing */

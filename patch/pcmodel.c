@@ -246,22 +246,6 @@ static int pm_join(char *out, unsigned size, const char *root, const char *dir, 
            (!name || (pm_cat(out, size, "/") && pm_cat(out, size, name)));
 }
 
-/* Up to cap bytes of a file into a heap buffer (NUL after the data); NULL when it cannot be read or is empty. *n is the length. */
-static char *pm_slurp(const char *path, unsigned cap, unsigned *n) {
-    char *buf;
-    int fd = open(path, O_RDONLY, 0), got = 0, r;
-    if (fd < 0) return (char *)0;
-    buf = calloc(cap + 1, 1);
-    while (buf && (unsigned)got < cap && (r = read(fd, buf + got, cap - (unsigned)got)) > 0) got += r;
-    close(fd);
-    if (!buf || got <= 0) {
-        free(buf);
-        return (char *)0;
-    }
-    *n = (unsigned)got;
-    return buf;
-}
-
 /* ---------------------------------------------------------------------------
  * The text formats
  */
@@ -437,7 +421,8 @@ static int pm_summary(const char *root, pc_show_t *s) {
     s->cover[0] = 0;
     s->hash = pc_hash(s->dir);
     pm_cpy(s->title, PC_TITLE, s->dir);
-    if (pm_join(path, sizeof path, root, s->dir, ".episodes") && (buf = pm_slurp(path, PM_META_MAX, &n)) != (char *)0) {
+    if (pm_join(path, sizeof path, root, s->dir, ".episodes") &&
+        (buf = pod_read_file(path, PM_META_MAX, &n)) != (char *)0) {
         s->newest = pm_newest_pub(
             buf, n); /* the entries' dates: a downloaded file's own date is the download's, not the episode's */
         has_eps = s->newest != 0; /* (entries with no date: the files' dates, as the merge takes them) */
@@ -470,7 +455,7 @@ static int pm_summary(const char *root, pc_show_t *s) {
     }
     closedir(d);
     if (!has_eps) s->newest = file_newest;
-    if (pm_join(path, sizeof path, root, s->dir, ".show") && (buf = pm_slurp(path, 4096, &n)) != (char *)0) {
+    if (pm_join(path, sizeof path, root, s->dir, ".show") && (buf = pod_read_file(path, 4096, &n)) != (char *)0) {
         pc_parse_show(buf, n, s);
         free(buf);
     }
@@ -693,7 +678,7 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
     }
     nf = pm_files(root, show->dir, files, PM_MAX_FILES);
     if (pm_join(path, sizeof path, root, show->dir, ".episodes") &&
-        (buf = pm_slurp(path, PM_META_MAX, &got)) != (char *)0) {
+        (buf = pod_read_file(path, PM_META_MAX, &got)) != (char *)0) {
         nm = pc_parse_eps(buf, got, work, PC_MAX_EPS);
         free(buf);
     }

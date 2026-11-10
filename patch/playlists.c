@@ -121,12 +121,6 @@ static struct {
     grid_t g; /* LAST (test/pod/playlists.py reads the fields above by index) */
 } pl __attribute__((section(".scratch")));
 
-static void pl_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 static int pl_rows(void) { return ((int)pl.count + GRID_COLS - 1) / GRID_COLS; }
 static int pl_rows_h(void) {
     return pl.list ? (int)pl.count * LIST_ROW_H : pl_rows() ? GRID_ROW_GAP + pl_rows() * PITCH : 0;
@@ -153,7 +147,6 @@ static void pl_fade(void) {
     widget_set_sensitive(pl.fade, 0);
 }
 static void pl_redraw(void) { widget_invalidate_force(pl.sv, (void *)0); }
-static int pl_abs(int v) { return v < 0 ? -v : v; }
 
 /* Pick mode (the Add to Playlist picker, patch/picker.c; docs/modules/picker.md): "New playlist" is row 0, the playlists follow. When the picker opens over
  * our own Songs page of a playlist, the Playlists page below it has a state, kept aside here and put back when the picker goes. */
@@ -169,22 +162,6 @@ static unsigned pl_slot(unsigned k) { return pl.ord ? pl.ord[k] : k; }
 static void *pl_rec(int i) { return deque_at(pl.pls, pl_slot((unsigned)(i - pl_v()))); }
 /* The playlist's id: REC_DISC, what the stock row handler hands to classinfo[1] (@0x53d5f4) */
 static int pl_id(int i) { return I(pl_rec(i), REC_DISC); }
-
-/* A text with its %d: "8 tracks", "3 Selected" (the number put where the player's language has its %d), as the album page's meta line */
-static unsigned pl_fmt(char *out, unsigned size, const char *f, int n) {
-    char digits[12];
-    unsigned o = 0, d = 0, i;
-    for (i = (unsigned)(n < 0 ? 0 : n); d == 0 || i; i /= 10) digits[d++] = (char)('0' + i % 10);
-    while (*f && o + 1 < size) {
-        if (f[0] == '%' && f[1] == 'd') {
-            while (d && o + 1 < size) out[o++] = digits[--d];
-            f += 2;
-        } else
-            out[o++] = *f++;
-    }
-    out[o] = 0;
-    return o;
-}
 
 /* ---------------------------------------------------------------------------
  * The window: the rows that touch the view and the ones about to
@@ -231,7 +208,7 @@ static void pl_texts(tile_t *t, int a) {
         grid_set(t, TR(a ? "Favorites" : "playlist_create"), sub, 0);
         return;
     }
-    if (in->scanned) pl_fmt(sub, sizeof sub, TR(in->songs == 1 ? "%d track" : "%d tracks"), in->songs);
+    if (in->scanned) pod_fmt(sub, sizeof sub, TR(in->songs == 1 ? "%d track" : "%d tracks"), in->songs);
     grid_set(t, cc_str(pl_rec(a), REC_TITLE), sub, 0);
 }
 
@@ -479,7 +456,7 @@ static int pl_next_load(void) {
         int top, d;
         if (pl.info[a].scanned && t && t->art) continue;
         top = pl_top(a);
-        d = pl_abs(top + pl_height() / 2 - GRID_VIEW_H / 2);
+        d = pod_abs(top + pl_height() / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + pl_height() <= 0) d += 100000;
         if (d < bd) bd = d, best = a;
     }
@@ -768,10 +745,10 @@ static void pl_load(void) {
                       : (unsigned char *)0; /* none: no select mode (the menu's Delete opens the stock page) */
     {
         int st = pl.src && !pl.count && pl.src->state ? pl.src->state(pl.src, LS_PLAYLISTS, (void *)0) : LS_ST_READY;
-        pl_show(pl.view,
-                pl.count != 0 ||
-                    pl.src != (const lib_src_t *)0); /* (a source's page keeps the large title when it has no rows) */
-        pl_show(pl.status, pl.count == 0 && !(st == LS_ST_LOADING && pl.spin));
+        pod_show(pl.view,
+                 pl.count != 0 ||
+                     pl.src != (const lib_src_t *)0); /* (a source's page keeps the large title when it has no rows) */
+        pod_show(pl.status, pl.count == 0 && !(st == LS_ST_LOADING && pl.spin));
         ls_spin(pl.spin, st == LS_ST_LOADING && pl.count == 0 && pl.spin != (void *)0);
         if (!pl.count) widget_set_tr_text(pl.status, pl.src ? ls_empty_key(st, "No playlists") : "No playlists");
     }
@@ -909,7 +886,7 @@ static void pl_head(void) { /* the navbar's title: "N Selected" in select mode, 
         widget_set_tr_text(pl.title, pl_v() ? "Add to Playlist" : "Playlists");
         return;
     }
-    pl_fmt(buf, sizeof buf, TR("%d Selected"), (int)pl.nsel);
+    pod_fmt(buf, sizeof buf, TR("%d Selected"), (int)pl.nsel);
     widget_set_text_utf8(pl.title, buf);
 }
 
@@ -928,10 +905,10 @@ static void pl_select(int on) {
     if (pl.sel) memset(pl.sel, 0, (pl.count + 7) / 8);
     pl.press = pl.down = 0;
     nav[0] = pl.btn_more, nav[1] = pl.np;
-    for (i = 0; i < 2; ++i) pl_show(nav[i], !on);
-    pl_show(pl.btn_plactions, !on);
-    pl_show(pl.btn_selall, on);
-    pl_show(pl.bar, on);
+    for (i = 0; i < 2; ++i) pod_show(nav[i], !on);
+    pod_show(pl.btn_plactions, !on);
+    pod_show(pl.btn_selall, on);
+    pod_show(pl.bar, on);
     if (pl.title) widget_resize(pl.title, (on ? SG_SELALL_X : NAV_CF_X) - NAV_TITLE_X, 22);
     if (pl.back) {
         widget_set_prop_str(pl.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
@@ -959,15 +936,7 @@ static int pl_on_selall(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!pl.select || !pl.sel) return RET_OK;
-    if (pl.nsel < pl.count) { /* all, unless all are: then none */
-        unsigned i;
-        memset(pl.sel, 0, (pl.count + 7) / 8);
-        for (i = 0; i < pl.count; ++i) pl.sel[i >> 3] |= (unsigned char)(1 << (i & 7));
-        pl.nsel = pl.count;
-    } else {
-        memset(pl.sel, 0, (pl.count + 7) / 8);
-        pl.nsel = 0;
-    }
+    pl.nsel = pod_sel_all(pl.sel, pl.count, pl.nsel);
     pl_head();
     pl_redraw();
     return RET_OK;
@@ -1000,7 +969,7 @@ static int pl_on_up(void *ctx, void *e) {
     pl.down = 0;
     if (pl.list) pl_set_press(0);
     if (a < 0 || !e || !pl.view) return RET_OK;
-    if (pl_abs(I(e, PE_X) - pl.down_x) < PL_TAP_PX && pl_abs(I(e, PE_Y) - pl.down_y) < PL_TAP_PX &&
+    if (pod_abs(I(e, PE_X) - pl.down_x) < PL_TAP_PX && pod_abs(I(e, PE_Y) - pl.down_y) < PL_TAP_PX &&
         pl_item_of(e) == a) {
         if (pl.select)
             pl_toggle(a);
@@ -1380,8 +1349,8 @@ static int pl_open_page(const lib_src_t *src) {
         void *st_title = pl.g.st_title, *st_sub = pl.g.st_sub;
         if (!grid_init(&pl.g, pl.win, GRID_TILES, GRID_COVER, GRID_R)) {
             grid_free(&pl.g);
-            pl_show(pl.view, 0);
-            pl_show(pl.status, 1);
+            pod_show(pl.view, 0);
+            pod_show(pl.status, 1);
             widget_set_tr_text(pl.status, "Not enough memory");
             return 0;
         }
@@ -1399,7 +1368,7 @@ static int pl_open_page(const lib_src_t *src) {
     pl.list = pl_v() || !pl_use_grid(); /* the picker is always the list (the saved choice is the page's own) */
     pl_shape(pl.list);
     if (pl.src) { /* read-only remote playlists: no list-plus button (New Playlist, Import, Export, Delete Playlists, Clean Up are the stock library's), the title runs on */
-        pl_show(pl.btn_plactions, 0);
+        pod_show(pl.btn_plactions, 0);
         widget_set_prop_str(pl.btn_more, "style:normal:icon",
                             "pod_nav_more"); /* (the capsule's left cap is gone: "..." takes its rounded edge) */
         widget_set_prop_str(pl.btn_more, "style:over:icon", "pod_nav_more");
@@ -1408,7 +1377,7 @@ static int pl_open_page(const lib_src_t *src) {
         pl.gen_timer = timer_add(pl_on_gen, (void *)0, LS_GEN_MS);
     }
     if (pl_v()) { /* the picker: Back and the title only */
-        pl_show(pl.btn_more, 0), pl_show(pl.np, 0), pl_show(pl.btn_plactions, 0);
+        pod_show(pl.btn_more, 0), pod_show(pl.np, 0), pod_show(pl.btn_plactions, 0);
         if (pl.title) widget_resize(pl.title, SG_SELALL_X - NAV_TITLE_X, 22);
         pl_head();
     }

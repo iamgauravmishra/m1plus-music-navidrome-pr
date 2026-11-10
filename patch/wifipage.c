@@ -132,19 +132,13 @@ static struct {
 static void wo_open(const wf_net *again);
 static int wp_save(void);
 
-static void wp_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 static int wp_wifi_on(void) { return *(volatile unsigned char *)WIFI_FLAG != 0; }
 
 /* A shown row or header at *y (headers stay insensitive: never a touch target). */
 static void wp_put(void *row, int *y, int h, int touch) {
     widget_move(row, 0, *y);
     if (touch)
-        wp_show(row, 1);
+        pod_show(row, 1);
     else
         widget_set_visible(row, 1, 0);
     *y += h;
@@ -272,7 +266,7 @@ static void wp_layout(void) {
     for (i = 0; i < WP_ROWS; i++) {
         int j = wp.map[i], joining;
         if (j < 0) {
-            wp_show(wp.r[i].row, 0);
+            pod_show(wp.r[i].row, 0);
             continue;
         }
         joining = i < WP_CUR && wp.nets[j].current && !(wp.st.state == WF_ST_CONNECTED && wp.st.ip);
@@ -295,7 +289,7 @@ static void wp_layout(void) {
         wp_put(wp.other_row, &y, WP_ROW_H, 1);
     } else {
         wp_vis(wp.hdr_net, 0);
-        wp_show(wp.other_row, 0);
+        pod_show(wp.other_row, 0);
     }
     y += WP_END;
     widget_set_prop_int(wp.sv, "virtual_h", y);
@@ -703,7 +697,7 @@ static void wi_layout(void) {
         wp_piece(wi.forget, &wi.piece[WI_FIELDS], WP_P_SINGLE);
         wp_put(wi.forget, &y, WP_ROW_H, 1);
     } else
-        wp_show(wi.forget, 0);
+        pod_show(wi.forget, 0);
     wi_field(n++, TR("Security"), TR(wf_sec_label(wi.net.sec)));
     if (wi.conn) {
         wi_field(n++, TR("IP Address"), wi.ip);
@@ -715,7 +709,7 @@ static void wi_layout(void) {
         wp_vis(wi.gap[0], 0);
     for (i = 0; i < WI_FIELDS; i++) {
         if (i >= n) {
-            wp_show(wi.f[i].row, 0);
+            pod_show(wi.f[i].row, 0);
             continue;
         }
         wp_piece(wi.f[i].row, &wi.piece[i], wp_pos(i, n));
@@ -727,9 +721,9 @@ static void wi_layout(void) {
         image_base_set_image(wi.auto_img, wi.net.off ? "sset_off" : "sset_on");
         wp_piece(wi.auto_row, &wi.piece[WI_FIELDS + 1], WP_P_SINGLE);
         wp_put(wi.auto_row, &y, WP_ROW_H, 1);
-        wp_vis(wi.gap[2], 0), wp_show(wi.join, 0);
+        wp_vis(wi.gap[2], 0), pod_show(wi.join, 0);
     } else {
-        wp_vis(wi.gap[1], 0), wp_show(wi.auto_row, 0);
+        wp_vis(wi.gap[1], 0), pod_show(wi.auto_row, 0);
         wp_put(wi.gap[2], &y, WI_GAP_H, 0);
         wp_piece(wi.join, &wi.piece[WI_FIELDS + 2], WP_P_SINGLE);
         wp_put(wi.join, &y, WP_ROW_H, 1);
@@ -1005,8 +999,8 @@ static void wo_layout(void) {
     wp_vis(wo.card_b, sec);
     wp_vis(wo.hair, sec);
     wp_vis(wo.passl, sec);
-    wp_show(wo.eye, sec);
-    wp_show(wo.hit_pass, sec);
+    pod_show(wo.eye, sec);
+    pod_show(wo.hit_pass, sec);
     widget_set_text_utf8(wo.secv, TR(wo.sec == WF_OPEN ? "None" : wo.sec == WF_TRANS ? "WPA2/WPA3" : "WPA3"));
     widget_move(wo.field, pass ? WO_PASS_X : WO_NAME_X, pass ? WO_PASS_Y : WO_NAME_Y);
     wp_vis(wo.namev, pass && wo.len);

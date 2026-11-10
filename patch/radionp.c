@@ -127,12 +127,6 @@ static void rn_set(void *w, char *cache, unsigned size, const char *s) {
 
 static void rn_sheet_close(void);
 
-static void rn_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 static void rn_button(void *btn, const char *normal, const char *pressed) {
     static const char *const state[] = {"normal", "over", "focused", "disable"};
     char prop[40];
@@ -247,10 +241,10 @@ static int rn_on_next(void *ctx, void *e) {
  */
 static void rn_sheet_close(void) {
     rn.sheet = 0;
-    rn_show(rn.sh_scrim, 0);
-    rn_show(rn.sh_card, 0);
-    rn_show(rn.sh_row, 0);
-    rn_show(rn.sh_info, 0);
+    pod_show(rn.sh_scrim, 0);
+    pod_show(rn.sh_card, 0);
+    pod_show(rn.sh_row, 0);
+    pod_show(rn.sh_info, 0);
 }
 
 static int rn_on_more(void *ctx, void *e) {
@@ -270,10 +264,10 @@ static int rn_on_more(void *ctx, void *e) {
     widget_move(rn.sh_card, 0, AH_WIN_H - 2 * PM_ROW_H);
     widget_resize(rn.sh_card, 320, 2 * PM_ROW_H);
     widget_set_prop_str(rn.sh_card, "style:normal:bg_image", "pc_sheet2");
-    rn_show(rn.sh_row, 1);
-    rn_show(rn.sh_info, 1);
-    rn_show(rn.sh_scrim, 1);
-    rn_show(rn.sh_card, 1);
+    pod_show(rn.sh_row, 1);
+    pod_show(rn.sh_info, 1);
+    pod_show(rn.sh_scrim, 1);
+    pod_show(rn.sh_card, 1);
     return RET_OK;
 }
 

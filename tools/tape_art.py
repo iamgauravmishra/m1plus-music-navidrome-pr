@@ -378,10 +378,6 @@ def rot(im):
     """The landscape picture turned 90 degrees clockwise: the framebuffer's: landscape (x, y) -> (column H - 1 - y, row x)."""
     return im.transpose(Image.ROTATE_270)
 
-def rot_rect(r):
-    """A landscape rectangle (x0, y0, x1, y1), exclusive ends, as the framebuffer's (x0, y0, x1, y1)."""
-    return (H - r[3], r[0], H - r[1], r[2])
-
 def reduce(big, box_):
     return big.convert('RGB').crop(tuple(v * K for v in box_)).resize(((box_[2] - box_[0]), (box_[3] - box_[1])), Image.BOX)
 

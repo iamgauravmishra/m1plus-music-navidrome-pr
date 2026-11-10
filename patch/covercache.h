@@ -202,7 +202,6 @@ int cc_build_start(
     void); /* 1: the worker runs. 0: nothing to build, card full (MIN_FREE_MB), or no thread: the set is freed */
 int cc_build_done(void); /* albums finished so far (advances as files appear) */
 int cc_build_total(void);
-int cc_build_running(void); /* a thread was started and the set is not stopped yet */
 int cc_build_busy(void); /* a job set is held */
 int cc_build_active(
     void); /* the worker runs a cover or duration set with work left: volatile reads only (no lock, no file), for the status bar's sync icon (patch/lineout.c); false for a transient file job, a cancelled or orphaned set */
@@ -216,9 +215,7 @@ int cc_build_truncated(
 int cc_build_stalled(
     void); /* the last set ended because build_watch gave up on it (also after it is freed, until the next cc_build_open): its albums were not all built */
 /* Albums by distance from row `centre` (the centre, then one after, one before, ...), as the shared album order shows them
- * (`order` may be NULL): each one with a track path is added. Returns the number of jobs held after (cc_build_total). */
-int cc_build_near(void *albums, const unsigned *order, unsigned centre);
-/* The same walk in bounded steps: `*cursor` starts at 0 and is advanced; at most `batch` albums are considered (and so
+ * (`order` may be NULL): each one with a track path is added, in bounded steps: `*cursor` starts at 0 and is advanced; at most `batch` albums are considered (and so
  * stat'ed) per call. 1 once the walk is complete (or the set is full: then `*cursor` is left on the album that did not fit), 0 when more remains. The caller keeps `centre`
  * and the set unchanged between calls, and starts the worker only after the last step (jobs are never written while it runs). `keys`, if not NULL, holds the cache key of each album by
  * display position (a scoped list's, patch/coverflow.c coverflow_artist_albums); NULL keys every album by cc_album_key. */

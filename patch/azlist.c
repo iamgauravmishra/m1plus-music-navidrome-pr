@@ -218,12 +218,6 @@ int az_rail_span(const az_t *az, int letters) {
     return (letters < az->nsec ? 2 * letters - 1 : letters) * SG_RAIL_PITCH;
 } /* the drawn height */
 
-static void az_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* The rail widget is the drawn span plus SG_RAIL_PAD above and below, centred on the list of rail_h px (the bar of select mode leaves less than the window; a touch
  * further from the span reaches the rows, and the wide column takes none of the rows' right edge or the pills outside it); inside it the span starts at
  * SG_RAIL_PAD. There only when there are sections. */
@@ -234,7 +228,7 @@ void az_rail_fit(az_t *az, int rail_h) {
         widget_move(az->rail, SG_RAIL_X, SG_LIST_Y + (rail_h - span) / 2 - SG_RAIL_PAD);
         widget_resize(az->rail, SG_RAIL_W, span + 2 * SG_RAIL_PAD);
     }
-    az_show(az->rail, az->nsec > 0 && az->count && !az->norail);
+    pod_show(az->rail, az->nsec > 0 && az->count && !az->norail);
     az_redraw_rail(az);
 }
 

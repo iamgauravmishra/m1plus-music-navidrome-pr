@@ -4,20 +4,10 @@ to the stock page, the header (the texts, the pill's pair in every language, the
 the tone cache), the rows painted from the stock list (number, title, the playing row's gold, a CUE track, three digits, the press fill, the hairline), the taps (a track, Play,
 Shuffle: the stock sequence and Now Playing the stock album page's way), the select mode with Add and Delete on the stock selection vector, and a list another query replaced.
 The compiled payload runs under Unicorn; the stock library is the machine's lists."""
-import importlib.util, os, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 SG = sibling('songs')

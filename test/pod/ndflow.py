@@ -2,20 +2,10 @@
 The pages run on the compiled payload under Unicorn with lib_nd (patch/sbsrc.c) and the data layer's worker (patch/sbapi.c) behind a scripted libcurl; the worker is run by the test (SA.drain).
 Sections: artist_pl (the real getArtists / getPlaylists lists: an artist tapped on the Artists page, the artist's albums page, a playlist tapped, its Songs page; each with the queue empty and full of covers), album (the album page opened on an Albums row after the Albums page queued its covers: tracks, the header cover, and a request that failed, was refused by the full queue or by the Wi-Fi guard
 is made again), gen (a cover does not move the list generation; a cover generation of its own does), songs (the Songs paging against a real server's response size), state (lib_nd's state for the whole-library lists)."""
-import importlib.util, json, os, sys
+import json, os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 SS = sibling('sbsrc')

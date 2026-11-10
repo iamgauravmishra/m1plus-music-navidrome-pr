@@ -198,7 +198,6 @@ enum {
     PH_COMMIT,
     PH_SAVE
 };
-#define PH_LAST PH_SAVE
 
 typedef struct {
     int phase, manual, art_only, failed;
@@ -1830,7 +1829,6 @@ static struct {
 } dp __attribute__((section(".scratch")));
 
 static int dp_off(void) { return dp.sv ? I(dp.sv, SC_YOFF) : 0; }
-static int dp_abs(int v) { return v < 0 ? -v : v; }
 static int dp_content(void) { return DP_ROWS_Y + (int)dp.n * LIST_ROW_H + DP_BOTTOM; }
 
 static void dp_color(void *w, const char *prop, unsigned c) {
@@ -2142,7 +2140,7 @@ static int dp_next_load(void) {
         int top, d;
         if (t && t->art) continue;
         top = DP_ROWS_Y + a * LIST_ROW_H - s;
-        d = dp_abs(top + LIST_ROW_H / 2 - DP_VIEW_H / 2);
+        d = pod_abs(top + LIST_ROW_H / 2 - DP_VIEW_H / 2);
         if (top >= DP_VIEW_H || top + LIST_ROW_H <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -2239,7 +2237,8 @@ static int dp_on_up(void *ctx, void *e) {
     dp.down = 0;
     dp_set_press(0);
     if (a < 0 || !e || !dp.view) return RET_OK;
-    if (dp_abs(I(e, PE_X) - dp.down_x) < DP_TAP_PX && dp_abs(I(e, PE_Y) - dp.down_y) < DP_TAP_PX && dp_item_of(e) == a)
+    if (pod_abs(I(e, PE_X) - dp.down_x) < DP_TAP_PX && pod_abs(I(e, PE_Y) - dp.down_y) < DP_TAP_PX &&
+        dp_item_of(e) == a)
         dp_play(cc_str(dp.rows[a].raw, REC_PATH), 0);
     return RET_OK;
 }

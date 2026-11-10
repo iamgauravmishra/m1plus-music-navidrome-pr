@@ -55,12 +55,6 @@ static struct {
     unsigned px;
 } up __attribute__((section(".scratch")));
 
-static void up_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* tpl with its %s replaced by val, into out (the translations are printf-like, never a format). */
 static void up_subst(char *out, unsigned size, const char *tpl, const char *val) {
     unsigned o = 0;
@@ -201,10 +195,10 @@ static void up_apply(const up_view_t *v) {
     if (t) widget_set_text_utf8(up.text, v->text);
     if (p) widget_set_text_utf8(up.pill, v->pill);
     if (p2) widget_set_text_utf8(up.pill2, v->pill2);
-    up_show(up.icon, g);
-    up_show(up.text, t);
-    up_show(up.pill, p);
-    up_show(up.pill2, p2);
+    pod_show(up.icon, g);
+    pod_show(up.text, t);
+    pod_show(up.pill, p);
+    pod_show(up.pill2, p2);
     up.act = v->act;
     up.act2 = v->act2;
     widget_invalidate_force(up.win, (void *)0);
@@ -235,8 +229,8 @@ static void up_popup(void) {
         widget_set_sensitive(up.pd_cancel, !up.cancelling);
     }
     if (on != up.pop) {
-        up_show(up.pd_scrim, on);
-        up_show(up.pd_card, on);
+        pod_show(up.pd_scrim, on);
+        pod_show(up.pd_card, on);
         if (on) widget_set_sensitive(up.pd_cancel, !up.cancelling);
         up.pop = on;
     }
@@ -273,10 +267,10 @@ static void up_start(void) {
 
 /* The page's block cleared (visible=false and sensitive=false: glyph, texts, both pills) while a stock dialog is up: the dialog is translucent, so the page behind would show through it. up_sync puts it back. */
 static void up_hide_block(void) {
-    up_show(up.icon, 0);
-    up_show(up.text, 0);
-    up_show(up.pill, 0);
-    up_show(up.pill2, 0);
+    pod_show(up.icon, 0);
+    pod_show(up.text, 0);
+    pod_show(up.pill, 0);
+    pod_show(up.pill2, 0);
     widget_set_visible(up.title, 0, 0);
 }
 

@@ -78,11 +78,6 @@ static struct {
     int srv; /* the playing track is a server track (streamed or downloaded): Find Cover & Lyrics is not for it (its cover and lyrics have no local album or file to be saved under) */
 } pm __attribute__((section(".scratch")));
 
-static void pm_show(void *w, int on) {
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* The row set shown: 0 the first page, 1 the More page, 2 the first page of an episode. */
 static int pm_set(void) { return pm.page ? 1 : pm.ep ? 2 : 0; }
 
@@ -105,13 +100,13 @@ static void pm_arrange(void) {
         void *r = pm.row[pm_page[set][i]];
         used[pm_page[set][i]] = 1;
         widget_move(r, 0, (int)i * PM_ROW_H);
-        pm_show(r, 1);
+        pod_show(r, 1);
     }
     for (i = 0; i < PM_ROWS;
          i++) { /* parked under the shown rows: nothing it could shadow if a hit test did look at it */
         if (used[i]) continue;
         widget_move(pm.row[i], 0, h);
-        pm_show(pm.row[i], 0);
+        pod_show(pm.row[i], 0);
     }
     for (i = 0; i < n; i++) widget_restack(pm.row[pm_page[set][i]], k++);
     if (pm.page ==

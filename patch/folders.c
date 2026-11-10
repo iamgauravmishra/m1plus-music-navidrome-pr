@@ -118,13 +118,6 @@ static int fo_on_stale(const void *unused);
 static void fo_cap(void);
 static void fo_select(int on);
 
-static void fo_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
-static int fo_abs(int v) { return v < 0 ? -v : v; }
 static int fo_off(void) { return fo.sv ? I(fo.sv, SC_YOFF) : 0; }
 static void fo_redraw(void) { widget_invalidate_force(fo.sv, (void *)0); }
 
@@ -540,8 +533,8 @@ static void fo_load(int keep) {
     }
     fo_order();
     if (!fo_root()) vs_offer(&fo.vs, fo_offers()); /* (the root has no card) */
-    fo_show(fo.view, fo.nvis != 0);
-    fo_show(fo.status, fo.nvis == 0);
+    pod_show(fo.view, fo.nvis != 0);
+    pod_show(fo.status, fo.nvis == 0);
     if (!fo.nvis) widget_set_tr_text(fo.status, nomem ? "Not enough memory" : "Empty folder");
     fo_pills();
     fo_size();
@@ -656,11 +649,11 @@ static void fo_menu(int on);
 static void fo_cap(void) {
     int sel = !fo.select && !fo_root(), np = !fo.select;
     const char *img = sel ? "ah_nav_play" : "ah_nav_np";
-    fo_show(fo.btn_more, sel && !fo_direct());
-    fo_show(fo.btn_select, sel && fo_direct());
+    pod_show(fo.btn_more, sel && !fo_direct());
+    pod_show(fo.btn_select, sel && fo_direct());
     if (!sel && fo.menu) fo_menu(0);
     widget_resize(fo.title, (fo.select ? SG_SELALL_X : sel ? NAV_VIEW_X : FO_TITLE_END_NP) - NAV_TITLE_X, 22);
-    fo_show(fo.np, np);
+    pod_show(fo.np, np);
     if (fo.np) {
         widget_set_prop_str(fo.np, "style:normal:icon", img);
         widget_set_prop_str(fo.np, "style:over:icon", img);
@@ -675,8 +668,8 @@ static void fo_select(int on) {
     if (fo.sel) memset(fo.sel, 0, (fo.count + 7) / 8);
     fo.press = fo.down = 0;
     fo_cap();
-    fo_show(fo.btn_selall, on);
-    fo_show(fo.bar, on);
+    pod_show(fo.btn_selall, on);
+    pod_show(fo.bar, on);
     fo_pills();
     widget_set_prop_str(fo.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
     widget_set_prop_str(fo.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
@@ -876,7 +869,7 @@ static int fo_on_up(void *ctx, void *e) {
     fo.down = 0;
     fo_set_press(0);
     if (a < 0 || !e || !fo.view) return RET_OK;
-    if (fo_abs(I(e, PE_X) - fo.down_x) < SC_DRAG_PX && fo_abs(I(e, PE_Y) - fo.down_y) < SC_DRAG_PX &&
+    if (pod_abs(I(e, PE_X) - fo.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - fo.down_y) < SC_DRAG_PX &&
         fo_item_of(e) == a && (unsigned)a < fo.nvis)
         fo_tap(a);
     return RET_OK;
@@ -1042,8 +1035,8 @@ static int fo_open_page(void) {
     widget_on(fo.view, EVT_AFTER_PAINT, fo_on_paint, (void *)0);
     if (!grid_init(&fo.g, fo.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&fo.g);
-        fo_show(fo.view, 0);
-        fo_show(fo.status, 1);
+        pod_show(fo.view, 0);
+        pod_show(fo.status, 1);
         widget_set_tr_text(fo.status, "Not enough memory");
         return 0;
     }

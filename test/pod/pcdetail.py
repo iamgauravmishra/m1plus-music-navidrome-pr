@@ -2,21 +2,11 @@
 Parser: an item's long plain text (up to 4 KB: HTML to paragraphs, entities, CDATA, the cut on a UTF-8 boundary, the element preferred) against an independent oracle on synthetic feeds and the real
 fixtures. The notes file: its format, the atomic write, only the kept items, old notes dropped, the bounded read of one episode. The page: opened from a subscribed show, a local show and a search preview,
 its layout against tools/pod_show.py, the pill and the sheet working on it, Back keeping the list's place, the strings' widths and kinsoku, and the screen-off rule. The compiled payload runs under Unicorn."""
-import importlib.util, os, re, sys
+import os, re, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), 'tools'))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PF, PCS = sibling('pcfeed'), sibling('pcshow')

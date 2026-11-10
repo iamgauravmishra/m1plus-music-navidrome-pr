@@ -62,8 +62,10 @@ def code_sha(*modules):
 
 FORMAT = 4
 
+@functools.cache
 def versions():
-    out = [f'format {FORMAT}', sys.version]
+    """What a cached step depends on besides its inputs: the Python packages and the native toolchain (clang, lld, objcopy: the steps that compile; workflow.environment)."""
+    out = [f'format {FORMAT}', sys.version, json.dumps(workflow.environment(), sort_keys=True)]
     for d in ('pillow', 'fonttools', 'pyelftools', 'capstone', 'unicorn'):
         try: out.append(f'{d}={md.version(d)}')
         except md.PackageNotFoundError: out.append(f'{d}=none')

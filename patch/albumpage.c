@@ -106,12 +106,6 @@ static struct {
 static int ab_on_stale(const void *unused);
 static int ab_on_gen(const void *unused);
 
-static void ab_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 static int ab_off(void) { return ab.sv ? I(ab.sv, SC_YOFF) : 0; }
 static void ab_redraw(void) { widget_invalidate_force(ab.sv, (void *)0); }
 
@@ -690,8 +684,8 @@ static void ab_size(void) {
  * The Shuffle disc, the Play pill (the buttons, the glyph and the painted text) come with the tracks; the header does not move. */
 static void ab_pills(int on) {
     if (!ab.src) return;
-    ab_show(ab.btn_play, on);
-    ab_show(ab.btn_shuffle, on);
+    pod_show(ab.btn_play, on);
+    pod_show(ab.btn_shuffle, on);
     widget_set_visible(ab.pill.glyph, on, 0); /* (an insensitive image: taps reach btn_play) */
     if (ab.btn_more) { /* no tracks yet (loading, or none): the "..." keeps its place in the capsule but is dead, its one row (Download Album) has nothing to work on */
         widget_set_sensitive(ab.btn_more, on);
@@ -730,9 +724,9 @@ static void ab_load(int keep) {
         deque_destroy(list);
     if (ab.src && !ab.count && !list && ab.src->state) st = ab.src->state(ab.src, LS_SONGS, deque_at(ab.srow_d, 0));
     ab.wait = st == LS_ST_LOADING;
-    ab_show(ab.view,
-            ab.count != 0 || ab.wait); /* (a source's album still loading: the header, with the spinner under it) */
-    ab_show(ab.status, ab.count == 0 && !(ab.wait && ab.spin));
+    pod_show(ab.view,
+             ab.count != 0 || ab.wait); /* (a source's album still loading: the header, with the spinner under it) */
+    pod_show(ab.status, ab.count == 0 && !(ab.wait && ab.spin));
     if (!ab.count) widget_set_tr_text(ab.status, list ? "Not enough memory" : ls_empty_key(st, "No songs"));
     ls_spin(ab.spin, ab.wait && ab.spin);
     ab_pills(ab.count != 0);
@@ -822,14 +816,14 @@ static void ab_select(int on) {
     ab.nsel = 0;
     if (ab.sel) memset(ab.sel, 0, (ab.count + 7) / 8);
     ab.press = ab.down = 0;
-    ab_show(ab.back, !on);
-    ab_show(ab.btn_select,
-            !on && !ab.src); /* (Add and Delete work on the stock selection: a source's page has no select mode yet) */
-    ab_show(ab.np, !on);
-    ab_show(ab.btn_selall, on);
-    ab_show(ab.btn_add, on);
-    ab_show(ab.btn_del, on);
-    ab_show(ab.btn_cancel, on);
+    pod_show(ab.back, !on);
+    pod_show(ab.btn_select,
+             !on && !ab.src); /* (Add and Delete work on the stock selection: a source's page has no select mode yet) */
+    pod_show(ab.np, !on);
+    pod_show(ab.btn_selall, on);
+    pod_show(ab.btn_add, on);
+    pod_show(ab.btn_del, on);
+    pod_show(ab.btn_cancel, on);
     widget_set_sensitive(ab.btn_play, !on); /* the header's buttons stay, dead */
     widget_set_sensitive(ab.btn_shuffle, !on);
     ab_selall_icon();
@@ -867,15 +861,7 @@ static int ab_on_selall(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!ab.select || !ab.sel) return RET_OK;
-    if (ab.nsel < ab.count) { /* all, unless all are: then none */
-        unsigned i;
-        memset(ab.sel, 0, (ab.count + 7) / 8);
-        for (i = 0; i < ab.count; ++i) ab.sel[i >> 3] |= (unsigned char)(1 << (i & 7));
-        ab.nsel = ab.count;
-    } else {
-        memset(ab.sel, 0, (ab.count + 7) / 8);
-        ab.nsel = 0;
-    }
+    ab.nsel = pod_sel_all(ab.sel, ab.count, ab.nsel);
     ab_selall_icon();
     ab_redraw();
     return RET_OK;
@@ -906,7 +892,6 @@ static int ab_on_add(void *ctx, void *e) {
 /* ---------------------------------------------------------------------------
  * Touch on the rows (the Songs page's: DOWN remembers, ABORT forgets, UP within the drag threshold on the same row acts)
  */
-static int ab_abs(int v) { return v < 0 ? -v : v; }
 
 static int ab_item_of(void *e) {
     int pt[2];
@@ -968,7 +953,7 @@ static int ab_on_up(void *ctx, void *e) {
     ab.down = ab.down_more = 0;
     ab_set_press(0);
     if (a < 0 || !e || !ab.view) return RET_OK;
-    if (ab_abs(I(e, PE_X) - ab.down_x) < SC_DRAG_PX && ab_abs(I(e, PE_Y) - ab.down_y) < SC_DRAG_PX &&
+    if (pod_abs(I(e, PE_X) - ab.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - ab.down_y) < SC_DRAG_PX &&
         ab_item_of(e) == a) {
         if (ab.select)
             ab_toggle(a);
@@ -1153,14 +1138,14 @@ static int ab_open(const lib_src_t *src, unsigned cls, void *row) {
     widget_on(ab.view, EVT_AFTER_PAINT, ab_on_paint, (void *)0);
     pod_pill_place(&ab.pill, AH_BTN_Y);
     if (src) { /* (no select mode on a source's page yet: the "..." takes Select's place) */
-        ab_show(ab.btn_select, 0);
-        ab_show(ab.btn_more, 1);
+        pod_show(ab.btn_select, 0);
+        pod_show(ab.btn_more, 1);
     }
     if (!grid_init(&ab.hg, ab.win, 1, AH_ART, AH_CORNER) || !grid_init(&ab.g, ab.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&ab.hg);
         grid_free(&ab.g);
-        ab_show(ab.view, 0);
-        ab_show(ab.status, 1);
+        pod_show(ab.view, 0);
+        pod_show(ab.status, 1);
         widget_set_tr_text(ab.status, "Not enough memory");
         return 0;
     }

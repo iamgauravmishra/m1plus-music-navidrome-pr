@@ -3,20 +3,10 @@ grey "..." painted at the right end of the rows (the rail's side of the Songs pa
 tap elsewhere, select mode and a page without the widgets do not), the bottom sheet (the asset's place for every row, every language fits, closed by the scrim), the three rows
 (Play Next / Play After through upnext_add with a one-row deque holding the tapped row, Add to Playlist through the page's one-row selection and picker) and the toast of every status.
 The compiled payload runs under Unicorn; upnext_add and picker_open are trapped (their own tests are test/pod/upnext.py and test/pod/picker.py)."""
-import importlib.util, io, os, struct, sys
+import io, os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 SG, AB = sibling('songs'), sibling('albumpage')

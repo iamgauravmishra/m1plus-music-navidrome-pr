@@ -1137,9 +1137,6 @@ def close_win(m, name):
     m.call(fn, a0=c, a1=0)
 
 
-def fg_win(m, name):
-    fn, c = m.bound[(m.windows[name], O['EVT_WINDOW_TO_FG'])]
-    m.call(fn, a0=c, a1=0, count=40000000)
 
 
 def backs(m): return sum(1 for c in m.hist if c[0] == 'navigator_back')

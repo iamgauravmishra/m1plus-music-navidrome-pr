@@ -19,12 +19,6 @@
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 
-static void rm_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 int rowmenu_zone_x(int right) { return right - RM_MORE_W; }
 
 /* The "..." as a bitmap: the image rm_dots is white on transparent (cc_decode flattens it over black, so the red channel is the coverage), the bitmap's alpha is that coverage and its
@@ -55,8 +49,8 @@ void rowmenu_close(rowmenu_t *rm) {
     rm->add = (rowmenu_add_fn)0;
     if (rm->rows) deque_destroy(rm->rows);
     rm->rows = (void *)0;
-    rm_show(rm->scrim, 0);
-    rm_show(rm->card, 0);
+    pod_show(rm->scrim, 0);
+    pod_show(rm->card, 0);
     rm->src = (const lib_src_t *)0;
 }
 
@@ -208,8 +202,8 @@ int rowmenu_bind(rowmenu_t *rm, void *win) {
     rm->fav_icon = widget_lookup(win, "rm_icon3", 1);
     rm->dl_label = widget_lookup(win, "rm_label2", 1);
     rm->dl_icon = widget_lookup(win, "rm_icon2", 1);
-    rm_show(rm->scrim, 0);
-    rm_show(rm->card, 0);
+    pod_show(rm->scrim, 0);
+    pod_show(rm->card, 0);
     if (!ok) return 0;
     rm->dots = rm_make_dots(win);
     rm->on = rm->dots != (void *)0;
@@ -273,7 +267,7 @@ int rowmenu_open_src(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add, cons
     if (rm->fav_label) widget_set_tr_text(rm->fav_label, rm->fav ? "Undo Favorite" : "Favorite");
     if (rm->fav_icon) widget_set_prop_str(rm->fav_icon, "image", rm->fav ? "rm_ic_unfav" : "rm_ic_fav");
     rm->rows = d, rm->row = row, rm->add = add, rm->open = 1;
-    rm_show(rm->scrim, 1);
-    rm_show(rm->card, 1);
+    pod_show(rm->scrim, 1);
+    pod_show(rm->card, 1);
     return 1;
 }

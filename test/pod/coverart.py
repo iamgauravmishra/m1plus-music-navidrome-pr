@@ -2,20 +2,10 @@
 embedded picture (taglib_album_picture, as stock's toolsGetAlbumCover does) or the folder image (stock's choice, reproduced), decodes it at libjpeg's DCT scale (or through the streaming PNG
 decoder) and writes the output size stock's resize would, by an exact area average. The compiled payload runs under Unicorn; libjpeg is the PIL mock of test/pod/pcnet.py, which decodes at the
 scale it is asked and records it. Every failure must hand the same album to the stock call."""
-import importlib.util, io, os, re, struct, sys, zlib
+import io, os, re, struct, zlib
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCN = sibling('pcnet')

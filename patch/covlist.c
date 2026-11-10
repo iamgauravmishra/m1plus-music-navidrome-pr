@@ -121,8 +121,6 @@ static int cv_on_down(void *ctx, void *e) {
     return RET_OK;
 }
 
-static int cv_abs(int v) { return v < 0 ? -v : v; }
-
 /* The scroll_view's virtual_h setter keeps the offset as it was: after the rows shrink, the offset moves back into [0, rows - the view's height]
  * (the same clamp folders.c and albums.c make; 0 when everything fits). */
 static void cv_clamp_off(void) {
@@ -163,7 +161,8 @@ static int cv_on_up(void *ctx, void *e) {
     cv.down = 0;
     cv_set_press(0);
     if (r < 0 || !e || !cv.view) return RET_OK;
-    if (cv_abs(I(e, PE_X) - cv.down_x) < CV_TAP_PX && cv_abs(I(e, PE_Y) - cv.down_y) < CV_TAP_PX && cv_row_of(e) == r) {
+    if (pod_abs(I(e, PE_X) - cv.down_x) < CV_TAP_PX && pod_abs(I(e, PE_Y) - cv.down_y) < CV_TAP_PX &&
+        cv_row_of(e) == r) {
         unsigned d = cv.idx[r];
         if (cv.files)
             cv_file_ask(r);

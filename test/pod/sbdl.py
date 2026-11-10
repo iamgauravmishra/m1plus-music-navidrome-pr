@@ -2,20 +2,10 @@
 generation counter, the .part file and the Range resume, the stall limit and the free-space floor (sbnet's options), a file that is on the card already (never overwritten), the
 manifest dl.idx (written atomically, read back offline, dropped when a file was deleted by hand), delete, and the library scan after a DSD download. The compiled payload runs
 under Unicorn against a scripted libcurl (no network); the card is a dict of paths. sbapi.c's real guard and login run (the conf file, Wi-Fi level and card state are set up, not a forced answer)."""
-import importlib.util, os, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCN = sibling('pcnet')

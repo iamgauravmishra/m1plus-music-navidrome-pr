@@ -312,7 +312,7 @@ void rd_list_free(rd_list_t *l) {
     memset(l, 0, sizeof *l);
 }
 
-int rd_list_copy(rd_list_t *to, const rd_list_t *from) {
+static int rd_list_copy(rd_list_t *to, const rd_list_t *from) {
     char *b;
     if (to == from) return 1;
     rd_list_free(to);
@@ -418,7 +418,7 @@ int rd_favs_read(rd_list_t *l) {
     return l->buf != 0 && ok;
 }
 
-int rd_fav_index(const rd_list_t *favs, const char *url) {
+static int rd_fav_index(const rd_list_t *favs, const char *url) {
     int k;
     for (k = 0; k < favs->n; ++k)
         if (!strcmp(rd_url(favs, k), url)) return k;
@@ -1023,8 +1023,6 @@ static void *rd_fetch_worker(void *unused) {
 }
 
 static void rd_logo_poll(void);
-int rd_logo_running(void);
-void rd_logo_cancel(void);
 
 int rd_fetch(const char *path, int kind) {
     rd_fetch_reap();

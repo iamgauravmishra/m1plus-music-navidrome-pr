@@ -5,20 +5,10 @@ asset), the header (the playing track, the cover from the cache), Up Next (the t
 follows), the loader, the taps (start_playqueue with the queue index as the stock drawer's row handler calls it; drags and the header play nothing), the mode buttons (Shuffle
 toggles, Repeat cycles off / all / one, the buttons' look), the refresh timer (the player moves on, the mode changes elsewhere, the queue is replaced, a dark screen) and the destroy.
 The compiled payload runs under Unicorn; the player is the machine's queue (the deque at PLAY_QUEUE) and position."""
-import importlib.util, os, sys
+import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 SG = sibling('songs')

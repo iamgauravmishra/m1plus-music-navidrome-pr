@@ -1,20 +1,10 @@
 """Podcast Region (patch/pcregion.c, tools/pcregion.py, docs/modules/podcasts.md "Region"): the 34 storefronts by name, the saved choice (/mnt/data/m1plus/podcast-region: two capital letters and a line feed; anything else
 is Automatic), what Automatic infers (the UI language's country, for English and Spanish the Settings time zone's, else the United States) for every language, time zone and a few bad inputs against the Python model,
 the value and the picker's first label, the atomic save and the removal for Automatic, the region in the search request, and the strings in 13 languages. The compiled payload runs under Unicorn."""
-import importlib.util, os, sys
+import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 import pcregion, pod_i18n, pod_pages, timezones   # noqa: E402

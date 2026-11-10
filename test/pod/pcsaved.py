@@ -1,21 +1,11 @@
 """The Podcasts page's Saved level (patch/podcasts.c, docs/modules/podcasts.md "Saved"): the Library row, the level (the episodes whose myfav rows stock's star and our Save Episode row add, the
 last saved first, the Downloads page's Downloaded rows; a tap opens the episode page; Back returns), the empty state, the stock Favourites query's two answers (music only; episodes with the
 payload's scope flag, which is down again afterwards) and a saved episode whose file is gone. The compiled payload runs under Unicorn; the card is a dict of paths and myfav a list."""
-import importlib.util, os, sys
+import os, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), 'tools'))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCS = sibling('pcshows')

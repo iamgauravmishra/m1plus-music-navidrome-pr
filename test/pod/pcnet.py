@@ -1,7 +1,7 @@
 """Podcast feeds on the network (patch/pcnet.c, docs/modules/podcasts.md "Feeds"): the guards, the import of subscriptions.txt, the refresh worker (one detached thread, one show at a
 time) against a scripted libcurl: the request's options (verification never switched off), the files written (atomically; .episodes and .show), the first refresh naming the folder,
 every failure (certificate, network, 404, an HTML page, a feed too large, a card that cannot be written) and what the page reads (busy, generation, progress, current feed, status)."""
-import importlib.util, os, re, sys
+import os, re
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -9,16 +9,6 @@ FEEDS = os.path.join(ROOT, 'test', 'data', 'feeds')
 CA, ROOT_DIR, KILL = '/etc/m1plus-cacert.pem', '/mnt/mmc/Podcasts', '/mnt/mmc/m1plus-off'
 PN = dict(OK=0, NOWIFI=1, NOCLOCK=2, NOCERT=3, CERT=4, NET=5, GONE=6, HTTP=7, NOTFEED=8, STORAGE=9, MEM=10, BUSY=11)
 EPS_MAX = 65536
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCP = sibling('podcasts')

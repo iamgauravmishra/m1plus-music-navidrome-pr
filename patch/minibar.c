@@ -80,12 +80,6 @@ static struct {
     int rlogo; /* the station's logo is not cached yet: look again on the next ticks */
 } mb __attribute__((section(".scratch")));
 
-/* Hidden and out of the hit test together (this AWTK's widget_find_target ignores visible). */
-static void mb_vis(void *w, int on) {
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* ---------------------------------------------------------------------------
  * The list: it always runs to the window's bottom, under the translucent pill. While the bar shows, the trailing spacer row pod_pad
  * (MB_PAD high, an invisible insensitive view that is the list's last child) is visible, so the stock list_view layout (it sums every
@@ -132,13 +126,13 @@ static void mb_hide(void) {
     mb.rkey = 0;
     mb.rlogo = 0;
     mb.art.settle = 0;
-    mb_vis(mb.bar, 0);
+    pod_show(mb.bar, 0);
     mb_pad(0);
 }
 
 static void mb_show(void) {
     mb_pad(1);
-    mb_vis(mb.bar, 1);
+    pod_show(mb.bar, 1);
     widget_invalidate_force(mb.bar, (void *)0);
     mb.shown = 1;
 }
@@ -516,8 +510,8 @@ static void mb_glyph(void) {
     }
     if (playing == mb.playing) return;
     mb.playing = playing;
-    mb_vis(mb.play, !playing);
-    mb_vis(mb.pause, playing);
+    pod_show(mb.play, !playing);
+    pod_show(mb.pause, playing);
     widget_invalidate_force(mb.card, (void *)0); /* the whole pill, not the glyph's rectangle (see the blur) */
 }
 

@@ -525,7 +525,8 @@ int wf_cmd(const char *cmd, char *reply, unsigned size) {
     char local[40];
     unsigned fds[32], cl = 0;
     int tv[2], fd, r = -1, n, ll;
-    if (size) reply[0] = 0;
+    if (!size) return -1;
+    reply[0] = 0;
     fd = socket(WF_AF_UNIX, WF_SOCK_DGRAM, 0);
     if (fd < 0 || fd >= 1024) {
         if (fd >= 0) close(fd);

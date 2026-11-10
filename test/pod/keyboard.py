@@ -665,7 +665,6 @@ def zh_opened(setting=True, dictionary=True, **kw):
     return m
 
 
-def engine_state(m): return m.engine()
 
 
 def setting_tests(ctx):

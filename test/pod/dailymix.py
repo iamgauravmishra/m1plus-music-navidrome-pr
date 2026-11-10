@@ -12,23 +12,13 @@ scroll_view and pointer code) with the stock library, playlist table, clock and 
   text          the title and artists lines in 13 languages against the Python wrap
   touch         the card opens the playlist's songs, the disc plays them, a rename and a reused id
   menu          the section in the list: order, heights, hidden / shown, the shelf below it, the scroll position"""
-import importlib.util, os, random, re, struct, sys
+import os, random, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_ui, mod_icons, pod_dailymix as D, pod_mix as X, pod_ui as U
 from awtk_text import Ttf, StbText, awtk_width
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 recent, pulldown = sibling('recent'), sibling('pulldown')
@@ -167,9 +157,6 @@ def stock_world(m, songs, plays=None, recent_=(), fav=(), present=True):
     return recs
 
 
-def plrow(id_, name='', album='', cd_num=None, path='', artist='', title=''):
-    return dict(id=id_, name=name, path=path, title=title or name, album=album, artist=artist, genre='', composer='', albumsonger='',
-                type=4 if id_ <= 100 else 8, cd_num=id_ if cd_num is None else cd_num, track=0, year=0)
 
 
 def put_tones(m, songs, picks, mdl):

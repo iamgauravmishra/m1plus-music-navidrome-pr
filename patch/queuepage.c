@@ -80,15 +80,8 @@ static int qp_on_stale(const void *unused);
 static int qp_on_load(const void *unused);
 static int qp_stream(void);
 
-static void qp_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 static int qp_off(void) { return qp.sv ? I(qp.sv, SC_YOFF) : 0; }
 static void qp_redraw(void) { widget_invalidate_force(qp.sv, (void *)0); }
-static int qp_abs(int v) { return v < 0 ? -v : v; }
 
 /* The index is of the stock queue `list` as long as that queue is still the player's, as big, and starts with the same record. */
 static int qp_valid(void) {
@@ -275,7 +268,7 @@ static int qp_next_load(void) {
         grid_tile_t *t = grid_find(&qp.g, a);
         int top = qp_row_y(a) - s, d;
         if (t && (t->art || t->load)) continue; /* (load: a server cover on its way, the tick clears it) */
-        d = qp_abs(top + ROW / 2 - QP_WIN_H / 2);
+        d = pod_abs(top + ROW / 2 - QP_WIN_H / 2);
         if (top >= QP_WIN_H || top + ROW <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -402,7 +395,7 @@ static void qp_clear_sync(void) {
     int on = qp.n != 0 && !qp_stream() && pod_clear_ready();
     if (on == qp.clear_on) return;
     qp.clear_on = on;
-    qp_show(qp.btn_clear, on);
+    pod_show(qp.btn_clear, on);
 }
 
 /* The play mode changed (our buttons, the refresh tick finding another page's change): turning Shuffle on or off reorders the queue, so the rows are read again; a repeat change only touches the buttons. */
@@ -464,7 +457,7 @@ static void qp_load(int keep) {
     qp.base = qp.row + 1; /* -1 (no track): from the first */
     qp.n = qp.count > (unsigned)qp.base ? qp.count - (unsigned)qp.base : 0;
     qp.hkey = 0;
-    qp_show(qp.empty, qp.n == 0);
+    pod_show(qp.empty, qp.n == 0);
     qp.clear_on = -1; /* qp_clear_sync decides */
     qp_clear_sync();
     qp_size();
@@ -565,7 +558,7 @@ static int qp_on_up(void *ctx, void *e) {
     qp.down = 0;
     qp_set_press(0);
     if (a < 0 || !e || !qp.view) return RET_OK;
-    if (qp_abs(I(e, PE_X) - qp.down_x) < SC_DRAG_PX && qp_abs(I(e, PE_Y) - qp.down_y) < SC_DRAG_PX &&
+    if (pod_abs(I(e, PE_X) - qp.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - qp.down_y) < SC_DRAG_PX &&
         qp_item_of(e) == a)
         qp_play_at(a);
     return RET_OK;
@@ -668,8 +661,8 @@ int queue_open(void) {
     if (!grid_init(&qp.hg, qp.win, 1, QP_COVER, QP_COVER_R) || !grid_init(&qp.g, qp.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&qp.hg);
         grid_free(&qp.g);
-        qp_show(qp.view, 0);
-        qp_show(qp.status, 1);
+        pod_show(qp.view, 0);
+        pod_show(qp.status, 1);
         widget_set_tr_text(qp.status, "Not enough memory");
         return 0;
     }

@@ -712,11 +712,10 @@ def covlist_tests(ctx):
     # 4. Memory: the album copy, the order and the rows are freed with the window; a second open after the destroy works; a second open while one is up is refused.
     m = world(); count(m)
     open_list(m, 3)
-    allocs_before = len([c for c in m.calls if c[0] == 'free'])
     expect(m.call(PSYMS['homecover_list_open'], a0=3, count=6000000) == 0xffffffff, 'a second list while one is up is refused')
     m.call(PSYMS['cv_on_destroy'], a0=0, a1=0, count=3000000)
     freed = [c for c in m.calls if c[0] in ('free', 'deque_destroy')]
-    expect(len(freed) >= 3 and allocs_before >= 0, f'destroy frees the rows, the order and the album copy ({[c[0] for c in freed]})')
+    expect([c[0] for c in freed] == ['deque_destroy', 'free', 'free'], f'destroy frees the album copy, the order and the rows ({[c[0] for c in freed]})')
     open_list(m, 3)
     expect(('window_open', 'm1plus_covlist') in m.calls, 'a list can be opened again after the first closed')
     m.call(PSYMS['cv_on_destroy'], a0=0, a1=0, count=3000000)

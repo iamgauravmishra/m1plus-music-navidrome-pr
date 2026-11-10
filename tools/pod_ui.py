@@ -1823,7 +1823,6 @@ def cfg_rows(w, labels, on):
 # chevron or icon). The label is 22 px high in the strip's bottom 26 px.
 HDR_X, HDR_PX, HDR_RGB = 10, 20, '#AAAAAA'   # the secondary grey (SH_SUB_RGB, pod_settings.GREY): a group caption, dimmer than its rows
 HDR_LABEL_Y, HDR_LABEL_H = 14, 22
-HDR_NAMES = tuple(f'pod_hdr{g}' for g in range(len(pod_pages.EXTRAS_GROUPS)))
 
 
 def extras_headers(w):
@@ -2262,7 +2261,6 @@ def cache_pill():
 # pod_dm_head is the shelf's (a stock hscroll_label, the key "Made for You"); the card pod_dm_card (DM_W x DM_H at DM_X, DM_TOP) paints the art and the text itself
 # (its own EVT_AFTER_PAINT) and takes the taps that open the playlist; the play disc pod_dm_play is a stock button over its corner (a later sibling, so it takes its own
 # touches) whose look is the glass images dm_disc / dm_disc_down; the two hidden labels only carry the title (36 px white) and artists (16 px #EBEBEB) text styles.
-DM_NAMES = ('pod_daily', 'pod_dm_head', 'pod_dm_busy', 'pod_dm_card', 'pod_dm_play', 'pod_dm_title', 'pod_dm_sub')
 DM_DISC_IMAGE = 'dm_disc'
 
 

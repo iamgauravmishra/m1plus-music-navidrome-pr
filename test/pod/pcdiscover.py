@@ -3,20 +3,10 @@ The extractor against Python's json module on the sample answers (test/data/disc
 answers, the artwork one by one, Cancel, the guards, the lookup in the chart's store), and the level: geometry against tools/pod_show.py discover_layout, the Shows | Episodes control, the grey line under the title,
 the lazy fetch of each chart, a tap on a row (show or episode: the lookup, the preview, Back to the chart), Not available, every failure in the page's words, the magnifier, the navbar, the screen-off rule and the
 strings in 13 languages. The compiled payload runs under Unicorn; the card is a dict of paths and libcurl is scripted."""
-import importlib.util, json, os, random, re, sys
+import json, os, random, re
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 SU, SE = sibling('pcsearchui'), sibling('pcsearch')
@@ -398,9 +388,6 @@ def level(**kw):
     return m
 
 
-def at_chart(m, tab=0, off=0):
-    SU.discover(m)
-    return m
 
 
 def rows(m, off=0):

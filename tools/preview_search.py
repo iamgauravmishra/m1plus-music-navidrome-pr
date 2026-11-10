@@ -50,9 +50,6 @@ SONGS = [('song', n, 'Song · ' + a, c) for n, a, c in (('Blue in Green', 'Miles
                                                        ('Blue Moon', 'Billie Holiday', (0x6A, 0x4A, 0x6A)), ('Blue Bossa', 'Joe Henderson', (0x4A, 0x7A, 0x5A)), ('Blue Suede Shoes', 'Elvis Presley', (0x9A, 0x4A, 0x4A)))]
 
 
-def chip_texts(s): return [s.shown_key(k) if hasattr(s, 'shown_key') else k for k in PS.CHIPS]
-
-
 def draw_top(s, t, im, text, hint, caret, selected_chip, sx=0, chips=None, sep=True):
     """The page's top: the field (magnifier, text or hint, clear disc, caret), the round X, the chips (the Search page's; an empty list: none, and no line, as the AutoEq page has it), the line."""
     f = t.field

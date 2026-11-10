@@ -40,8 +40,6 @@ int dur_has(const char *path); /* the table has an entry for path, any size (acq
 int dur_probe(const char *path);
 /* f with its %d replaced by n and its %s by s1, then s2 (the translations put them where the language wants them; the table's text is never a printf format). */
 void dur_subst(char *out, unsigned size, const char *f, int n, const char *s1, const char *s2);
-/* f with its first %d replaced by n1 and its second by n2. */
-void dur_subst2(char *out, unsigned size, const char *f, int n1, int n2);
 /* "49 minutes", "1 hour, 12 minutes" (rounded to the minute, at least one) in the page's language. */
 void dur_text(char *out, unsigned size, unsigned sec);
 /* Settings > Developer > Clear Track Durations: the file is deleted and the table held in memory (if any) emptied. */

@@ -1,20 +1,10 @@
 """The refresh dialog of the Podcasts page (patch/podcasts.c pg_dlg_*, patch/pcnet.c's progress and cancel, tools/pod_ui.py podcasts_dialog; docs/modules/podcasts.md "Feeds"): it opens when
 Refresh All or Import starts the worker, shows the show, "n of m" and the bar from the status record the worker writes, Cancel and Back stop the worker (between shows and in the middle of
 a transfer, through libcurl's transfer-info callback), and it closes itself, with one line of summary, when the worker has stopped. The compiled payload runs under Unicorn."""
-import importlib.util, os, sys
+import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PF = sibling('pcshows')

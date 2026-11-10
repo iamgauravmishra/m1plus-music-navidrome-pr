@@ -338,16 +338,6 @@ static struct {
     int value, off;
 } cfpos __attribute__((section(".scratch")));
 
-/* Visibility and hit-testing together. This AWTK build's hit test (widget_find_target_default
- * 0x6747d4, widget_on_pointer_down_children 0x6714ac) only checks flags & 9 -- enable (bit 0) and
- * sensitive (bit 3) -- and never visible (bit 2), so a hidden widget still takes the touches over
- * its rectangle. Everything this page hides is therefore made insensitive as well. */
-static void show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* The whole frame is due for a repaint: the shelf moved or its album changed. AWTK repaints only the dirty
  * rectangles (canvas_begin_frame 0x6447b4 clips the canvas to them, canvas_set_clip_rect), and the stock
  * slide_menu marks only its own rectangle, CF_VIEW_W x CF_VIEW_H, when its xoffset or value changes
@@ -359,7 +349,6 @@ static void redraw(void) {
 }
 
 static unsigned album_count(void) { return cf.albums ? cf.count : 0; }
-static int abs_i(int v) { return v < 0 ? -v : v; }
 static int clamp_i(int v, int lo, int hi) { return v < lo ? lo : v > hi ? hi : v; }
 static void *album_at(unsigned i) { return i < album_count() ? cc_row(cf.albums, cf.order, i) : (void *)0; }
 
@@ -522,7 +511,7 @@ static int resident(int a) { /* the slot holding album a, or -1 */
     return -1;
 }
 
-static int distance(int a, int c) { /* along the shelf */ return abs_i(a - c); }
+static int distance(int a, int c) { /* along the shelf */ return pod_abs(a - c); }
 
 /* Album a decoded into a free slot, else into the farthest unwanted one (CF_SLOTS > CF_WANTED: there is one). */
 static void fx_load(int a, int c, int n) {
@@ -852,7 +841,7 @@ static void snap(int albums) {
     snap_stop();
     cf.snap_from = offset();
     cf.snap_to = bound(albums) * h;
-    d = abs_i(cf.snap_to - cf.snap_from);
+    d = pod_abs(cf.snap_to - cf.snap_from);
     if (!d || h <= 0) {
         snap_land();
         return;
@@ -876,8 +865,8 @@ static void tap(int x) {
     int d = x - g->cx, a, b, far;
     pose(g, CF_ONE, &p1);
     a = project(g, &p1, -8 * g->art), b = project(g, &p1, 8 * g->art);
-    far = 16 * abs_i(d) > (a > b ? a : b) ? 2 : 1; /* past the first cover's drawn outer edge (1/16 px) */
-    if (abs_i(d) < g->art / 2) { /* the centre cover */
+    far = 16 * pod_abs(d) > (a > b ? a : b) ? 2 : 1; /* past the first cover's drawn outer edge (1/16 px) */
+    if (pod_abs(d) < g->art / 2) { /* the centre cover */
         if (!offset()) open_album(value());
         return;
     }
@@ -905,9 +894,9 @@ static int drag_px(void) { return cf.land ? CFL_DRAG_PX : DRAG_PX; }
  * travel beyond it), the shelf under the finger, the sample. */
 static void track(int x, int y, int t) {
     int dx = x - cf.down_x, dy = y - cf.down_y;
-    if (abs_i(dx) > cf.reach) cf.reach = abs_i(dx);
-    if (abs_i(dy) > cf.reach) cf.reach = abs_i(dy);
-    if (!cf.active && abs_i(dx) >= DRAG_START && abs_i(dx) >= abs_i(dy))
+    if (pod_abs(dx) > cf.reach) cf.reach = pod_abs(dx);
+    if (pod_abs(dy) > cf.reach) cf.reach = pod_abs(dy);
+    if (!cf.active && pod_abs(dx) >= DRAG_START && pod_abs(dx) >= pod_abs(dy))
         cf.active = 1, cf.origin = cf.down_x + (dx > 0 ? DRAG_START : -DRAG_START);
     if (cf.active) {
         int h = stride(), off = cf.base_off + (x - cf.origin) * h / drag_px();
@@ -996,7 +985,7 @@ static void layout(void) {
 static void artist_nav(void) {
     void *title = widget_lookup(cf.win, "label_title", 1), *np = widget_lookup(cf.win, "btn_backtoplayer", 1);
     if (!cf.scoped) return;
-    show(cf.songs, has_songs());
+    pod_show(cf.songs, has_songs());
     if (has_songs() && np) {
         widget_set_prop_str(np, "style:normal:icon", "ah_nav_play");
         widget_set_prop_str(np, "style:over:icon", "ah_nav_play");
@@ -1011,9 +1000,9 @@ static void artist_nav(void) {
  * (it commits an index; the touch layer drives it, bounded). */
 static void to_covers(void) {
     cf.screen = CF_COVERS;
-    show(cf.status, 0);
-    show(cf.cancel, 0);
-    show(cf.covers, 1); /* the captions are never hidden, and stay insensitive (the asset): they
+    pod_show(cf.status, 0);
+    pod_show(cf.cancel, 0);
+    pod_show(cf.covers, 1); /* the captions are never hidden, and stay insensitive (the asset): they
                          * lie over the frame's black bottom rows, so its touch layer gets the touch */
     artist_nav();
     if (!cf.built) {
@@ -1293,9 +1282,9 @@ static int start_build(void);
 
 static void show_preparing(void) {
     cf.screen = CF_PREPARING;
-    show(cf.covers, 0);
-    show(cf.status, 1);
-    show(cf.cancel, 1);
+    pod_show(cf.covers, 0);
+    pod_show(cf.status, 1);
+    pod_show(cf.cancel, 1);
     widget_set_tr_text(cf.status, "Preparing covers...");
 }
 
@@ -1433,16 +1422,16 @@ static int open_page(void) {
         navigator_back(); /* an asset that is not ours: leave rather than work on half a page */
         return -1;
     }
-    show(cf.status, 0);
-    show(cf.cancel, 0);
+    pod_show(cf.status, 0);
+    pod_show(cf.cancel, 0);
     return 0;
 }
 
 /* n albums loaded: their covers (after building the missing art), else `empty` or "too large". */
 static int open_covers(int n, const char *empty) {
     if (n <= 0 || n > MAX_ALBUMS) {
-        show(cf.covers, 0);
-        show(cf.status, 1);
+        pod_show(cf.covers, 0);
+        pod_show(cf.status, 1);
         widget_set_text_utf8(cf.name, "");
         widget_set_text_utf8(cf.artist, "");
         widget_set_tr_text(cf.status, n > 0 ? "Library too large" : empty);

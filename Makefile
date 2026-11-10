@@ -6,7 +6,7 @@ VOLUME ?= /Volumes/Music
 CLANG_FORMAT ?= $(if $(LLVM_BIN),$(LLVM_BIN),/opt/homebrew/opt/llvm/bin)/clang-format
 C_SOURCES := $(shell git ls-files 'patch/*.c' 'patch/*.h')
 
-.PHONY: help setup doctor test dev preview flash check accept publish clean format format-check lint
+.PHONY: help setup doctor test dev preview flash ota-serve ota check accept publish clean format format-check lint
 help:
 	@echo 'make setup                  Sync the uv environment (Python 3.15)'
 	@echo 'make doctor                 Check inputs, toolchain and native emulator'

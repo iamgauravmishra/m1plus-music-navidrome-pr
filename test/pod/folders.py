@@ -206,7 +206,6 @@ def vis(m, name):
 
 
 def ui(): return awtk_ui.parse(open(UI, 'rb').read())
-def names_in(m, paint_result): return [t for (t, r), s in paint_result[1] if s == 'label_row_title']
 def enter(m, name, top=None):
     """Tap the shown row called name."""
     i = [m.read_cstr(m.word(r + O['REC_NAME'])) for r in m.shown if not m.read_cstr(m.word(r + O['REC_NAME'])).startswith('.')].index(name)

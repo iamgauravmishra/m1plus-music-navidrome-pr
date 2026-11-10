@@ -1644,7 +1644,6 @@ def rec_preset(m): return unpack_preset(m.fs[STATE][16:16 + 992])
 def rec_mode(m): return struct.unpack_from('<i', m.fs[STATE], 8)[0]
 def btext(m, name): return [u8(c[2]) for c in m.hist if c[0] == 'widget_set_text_utf8' and c[1] == m.bw[name]]
 def toasts(m): return [c[1] for c in m.hist if c[0] == 'toast']
-def shown_now(m, name): return m.props.get((m.widgets[name], 'visible'))
 def band_win_open(m): return ('window_open', 'm1plus_peqband') in m.hist
 
 
@@ -2191,7 +2190,7 @@ def saves(m): return len([c for c in m.calls if c[0] == 'rename'])
 def sent(m): return len([c for c in m.calls if c[0] == 'set_equalizer_value'])
 
 
-def tpage(state=None, flag=1, bitmap_ok=True, drop=()):
+def tpage(state=None, flag=1, bitmap_ok=True, drop=(), count=False):
     """The editor as m1plus.c open_page and tenband_opened leave it: the record, stock's switch, the asset's widgets by name."""
     m = demo_machine()
     m.bitmap_ok = bitmap_ok
@@ -2199,7 +2198,7 @@ def tpage(state=None, flag=1, bitmap_ok=True, drop=()):
     if state is not None: m.fs[STATE] = state
     for n in TBW:
         if n not in drop: m.widget(n)
-    m.count()
+    if count: m.count()   # (the block hook is most of the emulation time: only the section that reads icount asks for it)
     m.opened = m.call(PSYMS['tenband_open'], count=1 << 40)
     return m
 
@@ -2240,7 +2239,7 @@ def tenband_drag_tests(ctx):
 
     # the page opens on a Rock record
     rock = [float(g) for g in CURVES[2]]
-    m = tpage(tenband(rock, -1, 2))
+    m = tpage(tenband(rock, -1, 2), count=True)
     expect(m.opened == 1 and ('window_open', 'm1plus_tenband') in m.calls, 'tenband_open opens the editor\'s window')
     expect(m.icount < 10_000_000, f'opening the editor (record, three small bitmaps, the card, the graph, the texts) costs {m.icount:,} payload instructions, once')
     sizes = [(w, h) for _, (d_, w, h) in m.bitmaps.items()]
@@ -2622,7 +2621,6 @@ def spage(files=(), state=None, flag=1):
     if state is not None: m.fs[STATE] = state
     m.windows['m1plus_keyboard'] = 0
     for n in TBW: m.widget(n)
-    m.count()
     m.opened = m.call(PSYMS['tenband_open'], count=1 << 40)
     m.calls = []
     return m

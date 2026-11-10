@@ -3,22 +3,12 @@ refresh line in every state and its tap (the guards, the progress dialog, the do
 Downloads row and its level, the grid of every show (captions in each case, no badge, the order, a tap that opens the Show page, a subscription with nothing downloaded), the "..." sheet (Import from
 Card only while subscriptions.txt exists, no Add Show; the "..." hidden when the sheet would be empty), the empty library, the Feeds level gone, every layout number against the shared model
 (tools/pod_show.py shows_layout), the strings' widths in the 13 languages and the screen-off rule. The compiled payload runs under Unicorn; the card is a dict of paths."""
-import importlib.util, os, sys
+import os, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), 'tools'))
 FEEDS = os.path.join(ROOT, 'test', 'data', 'feeds')
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCP, PCN = sibling('podcasts'), sibling('pcnet')

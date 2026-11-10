@@ -41,7 +41,6 @@ def land(col, row):
     return row, H - 1 - col
 
 
-def theme_of(i): return THEMES[i]
 
 
 class TM(Machine):

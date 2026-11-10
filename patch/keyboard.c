@@ -122,12 +122,6 @@ static unsigned kb_clen(const char *s) { /* the bytes of the UTF-8 character at 
     return c < 0x80 ? 1 : c < 0xe0 ? 2 : c < 0xf0 ? 3 : 4;
 }
 
-static void kb_show(void *w, int on) { /* hide = invisible and insensitive: an invisible widget still takes touches */
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* UTF-16 (a surrogate pair is one character, a lone surrogate U+FFFD) to UTF-8 in out[cap], NUL-terminated and never cut inside a character; returns the length. */
 static unsigned u16_to_u8(const unsigned short *s, char *out, unsigned cap) {
     unsigned n = 0;
@@ -233,7 +227,7 @@ static void kb_refresh(void) { /* the text and the caret */
         shown[0] = 0;
     widget_set_text_utf8(kb.text, shown);
     widget_set_visible(kb.hint, kb.len == 0, 0);
-    kb_show(kb.clear, kb.len != 0 && !(kb.flags & KB_PASSWORD));
+    pod_show(kb.clear, kb.len != 0 && !(kb.flags & KB_PASSWORD));
     widget_move(kb.caret, kb.tx + (kb.len ? w + 1 : 0), kb.cy);
     if (kb.embedded && kb.on_change) kb.on_change(kb.buf);
 }
@@ -296,7 +290,7 @@ static void kb_page(int page) {
                 if (geo != kb.geo) {
                     widget_move(kb.key[k], x, KB_PAD + r * KB_PITCH);
                     widget_resize(kb.key[k], w, KB_KH);
-                    kb_show(kb.key[k], 1);
+                    pod_show(kb.key[k], 1);
                 }
                 widget_set_text_utf8(kb.key[k], kb.lab[k]);
             }
@@ -305,12 +299,12 @@ static void kb_page(int page) {
     }
     kb.nkeys = k;
     if (geo != kb.geo)
-        for (r = k; r < KB_KEYS; ++r) kb_show(kb.key[r], 0);
+        for (r = k; r < KB_KEYS; ++r) pod_show(kb.key[r], 0);
     kb.geo = geo;
-    kb_show(kb.shift, page == P_LOWER &&
-                          !zh_page); /* the Chinese letter page has no shift: the pinyin separator takes its place */
-    kb_show(kb.shifton, page == P_UPPER);
-    kb_show(kb.sym, !letters || zh_page);
+    pod_show(kb.shift, page == P_LOWER &&
+                           !zh_page); /* the Chinese letter page has no shift: the pinyin separator takes its place */
+    pod_show(kb.shifton, page == P_UPPER);
+    pod_show(kb.sym, !letters || zh_page);
     if (!letters)
         widget_set_text_utf8(kb.sym, page == P_NUM ? "#+=" : "123");
     else if (zh_page)
@@ -323,7 +317,7 @@ static void kb_bottom(void) {
     int lang = kb.layers > 1, x = lang ? KB_LANG_X + KB_LANG_W + KB_GAP : KB_LANG_X;
     widget_move(kb.space, x, KB_ROW3_Y);
     widget_resize(kb.space, KB_GO_X - KB_GAP - x, KB_KH);
-    kb_show(kb.lang, lang);
+    pod_show(kb.lang, lang);
 }
 
 static void kb_lang_label(void) { /* the layer a tap goes to */
@@ -446,7 +440,7 @@ static void zh_render(void) {
     unsigned used = 0;
     if (!kb.strip) return;
     if (zh.src == S_NONE) {
-        kb_show(kb.strip, 0);
+        pod_show(kb.strip, 0);
         return;
     }
     if (zh.src == S_PINYIN) {
@@ -496,7 +490,7 @@ static void zh_render(void) {
             zh.slot[j] = 0;
         }
     zh_highlight(zh.hot);
-    kb_show(kb.strip, 1);
+    pod_show(kb.strip, 1);
 }
 
 static void zh_hide(void) { /* nothing to show: predictions or candidates off */
@@ -1269,8 +1263,8 @@ void keyboard_show(int on) {
         kb_unpop();
         kb_stop();
     }
-    kb_show(kb.pad, on);
-    kb_show(kb.strip, on && zh.src != S_NONE);
+    pod_show(kb.pad, on);
+    pod_show(kb.strip, on && zh.src != S_NONE);
     widget_set_visible(kb.caret, on, 0);
 }
 

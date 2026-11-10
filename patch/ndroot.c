@@ -59,12 +59,6 @@ static struct {
     int nav; /* -1 nothing set yet, 0 the capsule is [... | Now Playing], 1 it is [Search | ... | Now Playing] */
 } nr __attribute__((section(".scratch")));
 
-static void nr_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* The connection state: what the status record and the Wi-Fi say. */
 static int nr_state(void) {
     int sync = sba_state(SBA_K_SYNC, "", (int *)0);
@@ -155,7 +149,7 @@ static void nr_nav(void) {
                *down = on ? "pod_nav_moremid_down" : "pod_nav_more_down";
     if (on == nr.nav) return;
     nr.nav = on;
-    nr_show(nr.search, on);
+    pod_show(nr.search, on);
     widget_set_prop_str(nr.more, "style:normal:icon", mid);
     widget_set_prop_str(nr.more, "style:over:icon", mid);
     widget_set_prop_str(nr.more, "style:pressed:icon", down);
@@ -204,13 +198,13 @@ static void nr_refresh(int force) {
         nr.f[1] = 0; /* (a text no real one equals) */
     if (nr.shown != !conf) {
         nr.shown = !conf;
-        nr_show(nr.list, conf);
-        nr_show(nr.es_big, !conf);
-        nr_show(nr.es_icon, !conf);
-        nr_show(nr.es_title, !conf);
-        nr_show(nr.es_text, !conf);
-        nr_show(nr.es_pill, !conf);
-        nr_show(nr.es_dl, !conf);
+        pod_show(nr.list, conf);
+        pod_show(nr.es_big, !conf);
+        pod_show(nr.es_icon, !conf);
+        pod_show(nr.es_title, !conf);
+        pod_show(nr.es_text, !conf);
+        pod_show(nr.es_pill, !conf);
+        pod_show(nr.es_dl, !conf);
         vs_offer(&nr.vs,
                  conf ? VS_WITH_SEARCH | VS_WITH_SELECT : VS_WITH_SELECT); /* signed out: Server Settings alone */
         nr.dim = -1; /* (the offer made the Sync Now row sensitive again) */

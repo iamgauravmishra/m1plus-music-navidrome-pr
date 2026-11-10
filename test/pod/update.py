@@ -200,7 +200,6 @@ def download(m):
     return r
 
 
-def put_fs(m, p): return m.fs.get(p)
 
 
 def check_tests(ctx):

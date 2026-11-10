@@ -1,18 +1,8 @@
 """Artist photos (patch/artistphoto.c, cc_build_add_artist in patch/covercache.c; docs/modules/artists.md "Artist photos"): the pictures a user keeps beside the music (artist.jpg, folder.jpg) are
 found by walking up from each album's track folder, judged by the purity check on a snapshot of the library's albums, and cached at 168 and 44 px in /mnt/mmc/.m1plus/artists with an empty -44 file
 for "no photo". The compiled payload runs under Unicorn on the cover test's card machine."""
-import importlib.util, os, struct, sys
+import struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(os.path.dirname(os.path.abspath(__file__)), name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 CA = sibling('coverart')

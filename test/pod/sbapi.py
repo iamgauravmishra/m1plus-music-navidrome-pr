@@ -1,20 +1,10 @@
 """The Navidrome data layer (patch/sbapi.c, patch/sbapi.h, docs/modules/subsonic.md "Data and cache"): the conf file, the guard, the cache files on the card, the metadata worker (one detached
 thread, a small request queue, a generation counter, a status record) and every request it makes, against a scripted libcurl. The parsers are patch/sbparse.c's (real), so the fixtures are real Subsonic JSON. Sections: conf, guard, cache, worker, sync, songs, star, cover, play, urls, bg, big (everything, or `sbapi/<section>`)."""
-import hashlib, importlib.util, json, os, re, struct, sys
+import hashlib, json, os, re, struct
 from urllib.parse import parse_qs, urlparse
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCN = sibling('pcnet')   # the card machine and scripted libcurl the podcast network tests use

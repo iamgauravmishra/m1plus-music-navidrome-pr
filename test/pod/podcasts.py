@@ -870,8 +870,6 @@ def cells(m, off=0):
     return out
 
 
-def ring_of(m, h):
-    return m.state(h)
 
 
 def open_tests(ctx):

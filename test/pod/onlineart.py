@@ -3,22 +3,12 @@ services' answers taken apart (fixtures in test/data/onlineart, Python's json mo
 LRCLIB asks for), the order of the job (iTunes, Deezer, the thumbnails, LRCLIB's get and search), the lyrics candidates (the exact match first, the rest by the closeness of their length, repeats dropped, the cap,
 their files), every failure, Cancel and the single-thread rule, the larger picture fetched for the confirmation and the picked cover (the larger picture's address, the cache files, the .pick marker,
 the folder picture), a lyrics candidate's save, and Rebuild Covers leaving a picked cover alone."""
-import importlib.util, json, os, sys
+import json, os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, 'test', 'data', 'onlineart')
 SEARCH_DATA = os.path.join(ROOT, 'test', 'data', 'search')
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCS, PCJ = sibling('pcsearch'), sibling('pcjson')

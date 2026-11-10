@@ -78,11 +78,6 @@ int peq_list(char (*names)[PEQ_NAME], int max, int *total) {
 
 static void pq_scan(void) { pq.n = peq_list(pq.name, PQ_ROWS, &pq.total); }
 
-static void pq_show(void *w, int on) {
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* The switch and the checks as the flag and the record are: 10-Band EQ, or the row of the file that plays (none when that file
  * is gone from the card: the record still plays it). */
 static void pq_marks(void) {
@@ -164,7 +159,7 @@ static void pq_layout(void) {
                 peq_shown(shown, sizeof shown, pq.name[i - PQ_FIRST]);
                 widget_set_text_utf8(pq.label[i], shown);
             }
-            pq_show(pq.row[i], on);
+            pod_show(pq.row[i], on);
         }
         if (!on) continue;
         pq_piece(i, !n ? 0 : p == 0 ? 1 : p == n ? 3 : 2);

@@ -40,7 +40,6 @@ extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of 
 extern const char *
 np_cover_file(int *busy); /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern int pod_open_settings(void); /* patch/m1plus.c: the Settings page */
 extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: the shuffle generator (seeded once) */
 extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode, set as the Play settings page does */
 extern void *pg_episode_queue(

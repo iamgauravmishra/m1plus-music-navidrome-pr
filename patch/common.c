@@ -165,6 +165,35 @@ int pod_open_stock(const char *path, const char *window) {
  * heading is a header's name (a playlist, a podcast show), `head` (the offset the name has gone at). The page ORs in its own conditions (select mode, no scroll events ...). */
 int pod_title_gone(int off, int head) { return off >= (head ? head : SG_COLLAPSE); }
 
+char *pod_read_file(const char *path, unsigned cap, unsigned *n) {
+    char *buf;
+    int fd = open(path, O_RDONLY, 0), got = 0, r;
+    if (fd < 0) return (char *)0;
+    buf = calloc(cap + 1, 1);
+    while (buf && (unsigned)got < cap && (r = read(fd, buf + got, cap - (unsigned)got)) > 0) got += r;
+    close(fd);
+    if (!buf || got <= 0) {
+        free(buf);
+        return (char *)0;
+    }
+    *n = (unsigned)got;
+    return buf;
+}
+
+unsigned pod_sel_all(unsigned char *sel, unsigned count, unsigned nsel) {
+    unsigned i;
+    memset(sel, 0, (count + 7) / 8);
+    if (nsel >= count) return 0;
+    for (i = 0; i < count; ++i) sel[i >> 3] |= (unsigned char)(1 << (i & 7));
+    return count;
+}
+
+void pod_show(void *w, int on) {
+    if (!w) return;
+    widget_set_visible(w, on, 0);
+    widget_set_sensitive(w, on);
+}
+
 /* Show or hide the small title w when `on` differs from *cur. */
 void pod_title_set(void *w, int *cur, int on) {
     if (on == *cur) return;

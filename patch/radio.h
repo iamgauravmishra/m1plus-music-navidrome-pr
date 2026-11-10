@@ -19,7 +19,6 @@
 #define RD_VIEW_TMP "/mnt/data/m1plus/radio-view.tmp"
 #define RD_RECENT_MAX 10
 #define RD_API "https://all.api.radio-browser.info" /* the directory's round-robin name */
-#define RD_QUERY "order=votes&reverse=true&limit=100&hidebroken=true"
 #define RD_SILENT_MS 20000 /* a start hciplayer never reports playing for fails after this long */
 #define RD_STALL_MS 10000 /* a playing stream hciplayer stops reporting playing for this long is restarted once */
 #define RD_STEADY_MS 60000 /* a stream that played this long earns a new restart */
@@ -64,7 +63,6 @@ void rd_caption(const char *info, char *out, unsigned n);
 
 /* ---- lists ---- */
 void rd_list_free(rd_list_t *l);
-int rd_list_copy(rd_list_t *to, const rd_list_t *from); /* 1 copied, 0 no memory (to is empty) */
 /* text (len bytes) parsed into l as an .m3u / .pls (kind 0) or radio-browser's CSV: stations (1), countries (2), genres (3); 1 when something was parsed. */
 void rd_list_move(rd_list_t *to, rd_list_t *from); /* to takes from's text (its own is freed); from is empty */
 int rd_list_set(rd_list_t *l, const char *text, unsigned len, int kind);
@@ -73,7 +71,6 @@ int rd_list_set(rd_list_t *l, const char *text, unsigned len, int kind);
 int rd_favs_read(
     rd_list_t
         *l); /* favourites.m3u (the Stations list); 0 when there was no memory or the file is cut or holds a NUL */
-int rd_fav_index(const rd_list_t *favs, const char *url); /* url's row, else -1 */
 /* l's station i out of favourites.m3u when it is there, else appended: 1 added, 0 removed, -1 not written (nothing changed). */
 int rd_fav_toggle(const rd_list_t *l, int i);
 int rd_fav_has(const char *url);

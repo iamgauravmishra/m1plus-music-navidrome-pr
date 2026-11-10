@@ -44,7 +44,7 @@ int up_parse(const char *s, unsigned v[3]) {
     return *s == 0;
 }
 
-int up_cmp(const unsigned a[3], const unsigned b[3]) {
+static int up_cmp(const unsigned a[3], const unsigned b[3]) {
     int i;
     for (i = 0; i < 3; ++i)
         if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;

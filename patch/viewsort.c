@@ -11,12 +11,6 @@
 #include "i18n.h"
 #include "viewsort.h"
 
-static void vs_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 static int vs_has(const vs_t *v, int row) { return v->sorts >> row & 1; }
 
 /* The rows top to bottom: the action rows (Search and Select, or the Playlists page's four), when offered, Grid, List, then the sorts. */
@@ -37,7 +31,8 @@ void vs_offer(vs_t *v, unsigned mask) {
     v->sorts = mask & (VS_ALL_SORTS | VS_WITH_VIEWS | VS_WITH_SEARCH | VS_WITH_SELECT | VS_WITH_ACT2 | VS_WITH_ACT3);
     for (i = 0, v->rows = 0; i < VS_ROWS; ++i) v->rows += vs_has(v, i);
     for (i = 0; i < VS_ROWS; ++i)
-        vs_show(v->item[i], vs_has(v, i)); /* a row the page does not offer: hidden and insensitive, the widgets stay */
+        pod_show(v->item[i],
+                 vs_has(v, i)); /* a row the page does not offer: hidden and insensitive, the widgets stay */
     widget_set_visible(
         v->hair, vs_actions(v) && v->rows > vs_actions(v),
         0); /* (the hairline under the first group goes with it, or when nothing follows; it stays insensitive) */
@@ -94,8 +89,8 @@ int vs_bind(vs_t *v, void *win, int (*item)(void *, void *), int (*scrim)(void *
     for (i = 0; i < VS_ROWS; ++i) pod_bind(win, ITEMS[i], item, (void *)(long)i);
     pod_bind(win, "vs_scrim", scrim, (void *)0);
     vs_offer(v, sorts);
-    vs_show(v->scrim, 0);
-    vs_show(v->card, 0);
+    pod_show(v->scrim, 0);
+    pod_show(v->card, 0);
     return 0;
 }
 
@@ -183,6 +178,6 @@ void vs_menu(vs_t *v, int on, int sort, int rev, int list) {
         vs_fit(v);
     }
     v->on = on;
-    vs_show(v->scrim, on);
-    vs_show(v->card, on);
+    pod_show(v->scrim, on);
+    pod_show(v->card, on);
 }

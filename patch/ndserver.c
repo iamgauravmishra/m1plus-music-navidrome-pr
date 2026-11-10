@@ -84,12 +84,6 @@ static void ns_refresh(void) {
     ns_value(NS_PASS, sba_password_saved() ? "\xe2\x80\xa2\xe2\x80\xa2\xe2\x80\xa2\xe2\x80\xa2" : "", 0);
 }
 
-static void ns_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* A label's text colour, in every state it can show (the root card's Sync Now row greys the same way). */
 static void ns_colour(void *w, const char *rgb) {
     static const char *const prop[3] = {"style:normal:text_color", "style:disable:text_color",
@@ -108,9 +102,9 @@ static void ns_sync_show(int force) {
     if (!ns.win || !row) return;
     if (force) ns.state = -1, ns.text[0] = 1, ns.text[1] = 0; /* (a text no real one equals) */
     if (state != ns.state) {
-        ns_show(ns_find("pod_row", NS_OUT), conf);
-        ns_show(row, conf);
-        ns_show(widget_lookup(ns.win, "pod_gap0", 1), conf);
+        pod_show(ns_find("pod_row", NS_OUT), conf);
+        pod_show(row, conf);
+        pod_show(widget_lookup(ns.win, "pod_gap0", 1), conf);
         widget_set_sensitive(row, conf && !busy);
         if (lab) ns_colour(lab, busy ? "#6C6C70" : "#FFFFFF");
         ls_spin(ns.spin, busy);

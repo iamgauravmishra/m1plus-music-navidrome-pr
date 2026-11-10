@@ -1,21 +1,11 @@
 """Podcast search, the worker side (patch/pcnet.c "Search", docs/modules/podcasts.md "Search"): what the field's text is (a search term, a feed address, an Apple Podcasts link), the request (the
 store's URL with the term URL-encoded, the country a constant, the same libcurl options as a feed's), the answer taken apart by the extractor, the artwork fetched one by one, every failure,
 the 96 KB cap, the single-thread rule and Cancel; the preview (a feed address, an Apple link's lookup, the held parser, the picture) and Subscribe against an import and its first refresh."""
-import importlib.util, io, json, os, sys
+import io, json, os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, 'test', 'data', 'search')
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCN = sibling('pcnet')

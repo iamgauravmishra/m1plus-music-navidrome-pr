@@ -341,7 +341,6 @@ DP_BOTTOM = 16                                                       # air under
 DP_V_MIN = 48                                                        # the tint's brightest channel is at least this (never near black)
 DP_LUM_MAX = 4588                                                    # ... and its luminance (16 bit, 0.07) at most: white text 8.7:1, the greys below 4.5:1
 DP_GREY_K, DP_ACC_K = 184, 208                                       # the artist / description grey and the "Updated" accent: the tint + (255 - tint) * k / 256
-PAGE_MIN_CONTRAST = 4.5
 
 
 def snap565(rgb):

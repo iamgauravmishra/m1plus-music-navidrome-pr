@@ -29,7 +29,6 @@ SET_KEYS = ['Shuffle', 'Repeat', 'Appearance']
 PANE = (O['IP_PANE_X'], 0, O['IP_PANE_W'], O['IP_SCREEN_H'])
 
 
-def sel_colour(rgb): return 0xff000000 | rgb
 
 
 def ip_lerp(a, b, i, n):

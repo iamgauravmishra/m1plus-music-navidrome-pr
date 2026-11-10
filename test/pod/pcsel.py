@@ -1,20 +1,10 @@
 """The Podcasts Show page's select mode (patch/podcasts.c, docs/modules/podcasts.md "Downloads"; the Downloads page and its select mode are test/pod/pcdlpage.py) in the Playlists page's manner (the navbar's x,
 "N Selected", Select All, marks, a Delete bar, a confirm; only episodes on the card are marked; the file and its .part unlinked, the `.episodes` line kept, the playing episode kept, a show with no file
 staying on the Shows level). The compiled payload runs under Unicorn; the card is a dict of paths."""
-import importlib.util, os, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 DL = sibling('pcdl')
@@ -45,9 +35,6 @@ def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
 def confirms(m): return [c[1] for c in m.calls if c[0] == 'confirm']
 def unlinks(m): return [c[1].replace(RP + '/', '') for c in m.calls if c[0] == 'unlink']
 def tick(m): return DL.tick(m)
-def to_downloads(m):
-    tick(m)   # (the page reads the queue again from its timer: the row appears)
-    PCP.tap_downloads(m)
 def title(m): return PCP.title_text(m)
 
 

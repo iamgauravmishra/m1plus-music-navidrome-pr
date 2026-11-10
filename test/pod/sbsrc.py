@@ -3,20 +3,10 @@ pages read from them, the id round trip, the requests a missing list starts), th
 the row-menu actions, and the play queue (stream address or local file, DSD, the 64 cap, the playing marker). The compiled payload runs under Unicorn against the card of the download
 tests and a scripted libcurl; the stock deque copies the record and every string it holds (the push hook below models that and counts the heap a list costs). Sections: lists, songs,
 play, extras, trackcover (a track shows its album's cover file), sheet, awake, messages, queue_star (everything, or `sbsrc/<section>`)."""
-import importlib.util, os, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 SA = sibling('sbapi')

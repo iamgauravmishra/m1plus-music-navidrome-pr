@@ -1,20 +1,10 @@
 """The library source seam (patch/libsrc.c, patch/libsrc.h, patch/songops.c so_play_src; docs/modules/subsonic.md "The seam"): lib_stock returns the lists the stock queries give (albums, songs, artists,
 an album's tracks) as copies, plays through so_play exactly (so_play_src with NULL, with &lib_stock and lib_stock.play start the same queue with the same calls), reports the cache
 file of a cover, the durations table's seconds, and nothing for the extras. The compiled payload runs under Unicorn on the album page's machine."""
-import importlib.util, os, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 AP = sibling('albumpage')

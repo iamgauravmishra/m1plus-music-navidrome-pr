@@ -40,7 +40,6 @@ extern int rn_open(void); /* patch/radionp.c: Radio's Now Playing page */
 #define RP_TEXT_W \
     224 /* the search field runs the page's width (296, no round X beside it): its text may take this up to the clear button */
 #define RP_TOP_SEARCH 48 /* the search page's: the field (window y 56) lies over the list's first 42 px */
-#define RP_FIELD_Y 56
 #define RP_END 24
 #define RP_GROUP_GAP 24
 #define RP_CREDIT_GAP 12 /* under the last row */
@@ -96,7 +95,7 @@ static struct {
     char caption[72], want_path[360], keep_caption[72];
     int keep_off, keep_from, keep_genre, keep_local, keep_favs; /* the level the search began on, as it was */
     unsigned char rank[RD_MAX + 1]; /* the countries' section ranks */
-    int want_kind, retry, search, search_from, credit_on, local, ltimer_on;
+    int want_kind, retry, search, search_from, local;
     int again; /* the caption is a failure a tap tries again (no Wi-Fi, no date, the directory) */
     unsigned ltimer;
 } rp __attribute__((section(".scratch")));
@@ -107,13 +106,6 @@ static void rp_note(const char *text);
 static int rp_on_tick(const void *unused);
 static void rp_search_layout(void);
 
-static void rp_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
-static int rp_abs(int v) { return v < 0 ? -v : v; }
 static int rp_off(void) { return rp.sv ? I(rp.sv, SC_YOFF) : 0; }
 static void rp_redraw(void) { widget_invalidate_force(rp.sv, (void *)0); }
 static int rp_rows_lvl(void) { return rp.level == L_ROOT || rp.level == L_DIR; } /* the levels of menu rows */
@@ -351,7 +343,7 @@ static void rp_credit_place(void) {
                                  : GRID_MARGIN;
     widget_move(rp.credit, x, rp_rows_end() + RP_CREDIT_GAP);
     widget_resize(rp.credit, RP_TEXT_END - x, 20);
-    rp_show(rp.credit, rp_credit() && rp.nrows);
+    pod_show(rp.credit, rp_credit() && rp.nrows);
 }
 
 static void rp_title_update(void) {
@@ -394,11 +386,11 @@ static void rp_nav(void) {
     int tog = rp_toggle_on(), more = rp_more_on(), find = rp_find_on() || more, cap = tog || find;
     const char *img = cap ? "ah_nav_play" : "ah_nav_np", *g = rp.vlist ? "pod_nav_grid" : "pod_nav_list";
     char n[32], nd[32];
-    rp_show(rp.find, find && !more);
-    rp_show(rp.more, more);
+    pod_show(rp.find, find && !more);
+    pod_show(rp.more, more);
     widget_move(rp.find, tog ? NAV_CF_X : NAV_VIEW_X, 0);
     widget_move(rp.more, tog ? NAV_CF_X : NAV_VIEW_X, 0);
-    rp_show(rp.view_btn, tog);
+    pod_show(rp.view_btn, tog);
     snprintf(n, sizeof n, "%s%s", g, find ? "" : "l");
     snprintf(nd, sizeof nd, "%s_down", n);
     widget_set_prop_str(rp.view_btn, "style:normal:icon", n);
@@ -444,8 +436,8 @@ static void rp_show_level(int level, int keep) {
         rp_placeholder();
         rp.serial = rd_serial();
     }
-    rp_show(rp.view, 1);
-    rp_show(rp.status, 0);
+    pod_show(rp.view, 1);
+    pod_show(rp.status, 0);
     rp_size();
     rp_nav();
     az_fit(rp.big, rp_title());
@@ -467,12 +459,12 @@ static void rp_note(const char *text) {
     if (!rp.note) rp.sel[rp.level] = rp_off();
     rp.note = 1;
     rp.press = rp.down = 0;
-    rp_show(rp.view, 0);
-    rp_show(rp.credit, 0);
+    pod_show(rp.view, 0);
+    pod_show(rp.credit, 0);
     rp.al.count = 0, rp.al.nsec = 0;
     az_rail_fit(&rp.al, GRID_VIEW_H);
     widget_set_text_utf8(rp.status, text);
-    rp_show(rp.status, 1);
+    pod_show(rp.status, 1);
     widget_set_prop_int(rp.sv, "yoffset", 0);
     widget_set_prop_int(rp.sv, "virtual_h", GRID_VIEW_H);
     rp_nav();
@@ -707,7 +699,7 @@ static void rp_search_enter(void) {
     rd_list_move(&rp.keep, &rp.list); /* the search results replace the list: the level's own stays here for Back */
     rp.search_from = rp.level, rp.search = 1, rp.local = 0;
     keyboard_set_text("");
-    rp_show(rp.field, 1);
+    pod_show(rp.field, 1);
     keyboard_show(1);
     rp_search_layout();
     rp_show_level(L_LIST, 0);
@@ -719,7 +711,7 @@ static void rp_search_leave(void) {
     rp_timer_off();
     rp.search = 0, rp.loading = 0, rp.retry = 0;
     keyboard_show(0);
-    rp_show(rp.field, 0);
+    pod_show(rp.field, 0);
     rp_search_layout();
     rd_list_move(&rp.list, &rp.keep); /* the level it began on, exactly as it was */
     rp.from = rp.keep_from, rp.genre = rp.keep_genre, rp.local = rp.keep_local, rp.favs = rp.keep_favs;
@@ -818,7 +810,7 @@ static int rp_on_up(void *ctx, void *e) {
     rp_set_press(0);
     if (a < 0 || !e || !rp.view || rp.note) return RET_OK;
     x = I(e, PE_X);
-    near = rp_abs(x - rp.down_x) < SC_DRAG_PX && rp_abs(I(e, PE_Y) - rp.down_y) < SC_DRAG_PX;
+    near = pod_abs(x - rp.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - rp.down_y) < SC_DRAG_PX;
     if (!near || rp_item_of(e) != a || a >= rp.nrows) return RET_OK;
     if (rp_rows_lvl())
         rp_root_action(rp.rows[a]);
@@ -843,10 +835,10 @@ static int rp_on_abort(void *ctx, void *e) {
 static void rp_sheet_close(void) {
     if (!rp.sheet) return;
     rp.sheet = 0;
-    rp_show(rp.sh_scrim, 0);
-    rp_show(rp.sh_card, 0);
-    rp_show(rp.sh_row, 0);
-    rp_show(rp.sh_clear, 0);
+    pod_show(rp.sh_scrim, 0);
+    pod_show(rp.sh_card, 0);
+    pod_show(rp.sh_row, 0);
+    pod_show(rp.sh_clear, 0);
 }
 
 static int rp_on_more(void *ctx, void *e) {
@@ -861,9 +853,9 @@ static int rp_on_more(void *ctx, void *e) {
     widget_move(rp.sh_card, 0, AH_WIN_H - PM_ROW_H);
     widget_resize(rp.sh_card, RP_W, PM_ROW_H);
     widget_set_prop_str(rp.sh_card, "style:normal:bg_image", "pc_sheet1");
-    rp_show(row, 1);
-    rp_show(rp.sh_scrim, 1);
-    rp_show(rp.sh_card, 1);
+    pod_show(row, 1);
+    pod_show(rp.sh_scrim, 1);
+    pod_show(rp.sh_card, 1);
     return RET_OK;
 }
 
@@ -1148,7 +1140,7 @@ int radio_open(void) {
         return -2;
     }
     keyboard_show(0);
-    rp_show(rp.field, 0);
+    pod_show(rp.field, 0);
     if (!grid_init(&rp.g, rp.win, GRID_TILES, GRID_COVER, GRID_R)) {
         grid_free(&rp.g);
         rp_note(TR("Not enough memory"));

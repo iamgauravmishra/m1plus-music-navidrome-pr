@@ -937,9 +937,6 @@ static int open_page(int index, int as_home) {
 
 int m1plus_open_entry(void) { return open_page(POD_ENTRY_PAGE, 1); }
 
-/* The Settings page, for the iPod page's Settings row (patch/ipod.c): the normal instance, with Back, over whatever is in front. */
-int pod_open_settings(void) { return open_page(POD_SETTINGS_PAGE, 0); }
-
 /* The Lock Screen page, for stock's Display page Lock Screen row (patch/lockscreen.c lk_redirect): the normal instance, with Back. */
 int pod_open_lock(void) { return open_page(POD_LOCK_PAGE, 0); }
 

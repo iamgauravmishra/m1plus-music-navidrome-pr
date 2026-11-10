@@ -331,7 +331,6 @@ def model(ang, arm, label_src=None, playkey=0, pressed=K_NONE, rec_base_=None, t
     return out
 
 
-def to_image(ws): return Image.frombytes('RGBA', (W, H), struct.pack('<%dI' % len(ws), *ws))
 
 
 def ndiff(a, b):

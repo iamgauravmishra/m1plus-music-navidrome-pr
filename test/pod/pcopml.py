@@ -4,7 +4,7 @@ The scanner po_next: three realistic exports (in the style of Apple Podcasts, Po
 entities, quotes, attribute order and case, missing attributes, comments / CDATA / DOCTYPE, a '>' inside a quote, cut tags, every cut of every sample) and fuzzing: the input ends at an unmapped
 page and so does the item, so any overrun faults. The import of subscriptions.txt and OPML together (the 40 cap, duplicates, the rename to .imported, a dot file, a failed write) and the export
 (escaping, order, the atomic write, a failed write, a round trip through the scanner)."""
-import importlib.util, os, random, sys
+import os, random
 import xml.etree.ElementTree as ET
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -13,16 +13,6 @@ DATA = os.path.join(ROOT, 'test', 'data', 'opml')
 URL, TITLE = 320, 96
 ITEM = URL + TITLE
 REGION, SIZE = 0x30000000, 0x40000   # the text, the item and the scanner state each end where a page is unmapped
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCN = sibling('pcnet')

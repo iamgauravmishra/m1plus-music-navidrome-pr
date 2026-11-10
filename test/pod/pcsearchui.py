@@ -3,20 +3,10 @@ Discover level's magnifier (the field that opens our keyboard, Searching..., the
 leaving while the worker fetches, Back returning to Discover), what is typed (a term, a feed address, an Apple Podcasts link), the preview of a show (the Show page with its Subscribe pill, the episodes greyed, no
 sheets), Subscribe (what an import makes, already subscribed, a failed fetch makes nothing), the downloads pausing for a job, the screen-off rule and the strings' widths in 13 languages (test/pod/pcdiscover.py has
 the Discover level itself). The compiled payload runs under Unicorn; the card is a dict of paths and libcurl is scripted."""
-import importlib.util, io, json, os, sys
+import io, json, os, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCS, SE = sibling('pcshows'), sibling('pcsearch')

@@ -27,7 +27,6 @@
 #define BD_GAIN_SLIDE 12.0 /* the slider's range, either way (the engine takes 24) */
 #define BD_Q_MIN 0.1
 #define BD_Q_MAX 10.0
-#define BD_GREY "#8A8A8A"
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 
 static struct {
@@ -358,11 +357,6 @@ static int bd_on_move(void *ctx, void *e) {
     return RET_OK;
 }
 
-static void bd_show(void *w, int on) {
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* ---------------------------------------------------------------------------
  * The number keypad (a bottom sheet in the page's asset: bk_*): a tap on a row's name or value opens it with the value in its most natural unit
  */
@@ -393,8 +387,8 @@ static void bk_show_text(void) {
 
 static void bk_close(void) {
     bd.kopen = 0;
-    bd_show(bd.kscrim, 0);
-    bd_show(bd.kcard, 0);
+    pod_show(bd.kscrim, 0);
+    pod_show(bd.kcard, 0);
 }
 
 /* A digit or the point. */
@@ -495,14 +489,14 @@ static void bd_type(int r) {
                       : "0.1 \xe2\x80\x93 10");
     widget_set_text_utf8(bd.ktitle, r == 0 ? TR("Frequency") : r == 1 ? TR("Gain") : "Q");
     widget_set_text_utf8(bd.krange, range);
-    bd_show(bd.kunitk, r == 0);
+    pod_show(bd.kunitk, r == 0);
     widget_set_sensitive(bd.ksign, r == 1);
     peq_label_colors(bd.ksign, r == 1 ? "#FFFFFF" : "#5A5A5E");
     widget_set_text_utf8(bd.ksign, MINUS);
     bk_show_text();
     bd.kopen = 1;
-    bd_show(bd.kscrim, 1);
-    bd_show(bd.kcard, 1);
+    pod_show(bd.kscrim, 1);
+    pod_show(bd.kcard, 1);
 }
 
 static int bd_on_up(void *ctx, void *e) {
@@ -562,8 +556,8 @@ static int bd_on_next(void *ctx, void *e) {
  */
 static void bd_dialog(int on) {
     bd.dlg = on;
-    bd_show(bd.dscrim, on);
-    bd_show(bd.dcard, on);
+    pod_show(bd.dscrim, on);
+    pod_show(bd.dcard, on);
 }
 
 /* The way out the user asked for. */

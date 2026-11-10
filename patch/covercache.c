@@ -1897,7 +1897,6 @@ int cc_build_done(void) {
     return cb.orphan && cb.stalled ? cb.total : cb.done;
 }
 int cc_build_total(void) { return cb.total; }
-int cc_build_running(void) { return cb.running; }
 int cc_build_active(void) {
     return cb.running && !cb.cancelled && cb.done < cb.total && cb.jobs &&
            cb.jobs[0].key; /* (a transient file job, key 0, is the Pod cover pane's: not a build) */
@@ -1940,9 +1939,4 @@ int cc_build_near_step(void *albums, const unsigned *order, const unsigned *keys
     return full || (c >> 1) >= n;
 }
 
-int cc_build_near(void *albums, const unsigned *order, unsigned centre) {
-    unsigned c = 0;
-    cc_build_near_step(albums, order, (const unsigned *)0, centre, &c, ~0u);
-    return cb.total;
-}
 #endif /* CF_HOST */

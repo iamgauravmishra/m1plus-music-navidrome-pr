@@ -37,7 +37,6 @@ extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message b
 #define TB_SEND_MS 150 /* the record is saved and the player told at most this often while a slider is dragged */
 #define TB_GREY_VAL "#8A8A8A"
 #define TB_PREAMP_ROWS 14 /* the Preamp page: Auto, then 0 .. -12 dB */
-#define TB_REGION_PX 18 /* (the region line's font size: tools/pod_ui.py cards_region) */
 #define STEP_MAX (PEQ_GAIN_MAX * 2)
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 

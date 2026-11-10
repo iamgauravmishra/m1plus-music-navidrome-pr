@@ -3,22 +3,12 @@ txt and OPML), the level (a row per subscribed show by title: cover, name, the f
 the select mode with Unsubscribe (a confirm; the Show page's semantics: feed= dropped, files kept, the folder removed when nothing is left, the user's own files kept, never the playing episode, a
 write that fails touches nothing), Export OPML (the file, the toast), the empty state, the screen-off rule and the strings in 13 languages measured in the real font. The compiled payload runs under
 Unicorn; the card is a dict of paths."""
-import importlib.util, os, struct, sys
+import os, struct, sys
 import xml.etree.ElementTree as ET
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), 'tools'))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCS = sibling('pcshows')

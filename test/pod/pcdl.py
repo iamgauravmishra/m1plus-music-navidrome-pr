@@ -2,21 +2,11 @@
 512 KB chunks (open, write, fsync, close), the .part file and the rename, a Range resume (206) and a server that answers 200, the stall limit, the retries after 10, 20 and 40 s, the failures that
 end at once (404, a web page, a full card, the 32 MB margin), Cancel and the pause for a refresh, the refresh and the downloads never running together, the keep-awake call (only from the page's
 timer, only while a download runs), the rows' state lines and their widths in the 13 languages, and malformed answers. The compiled payload runs under Unicorn; the card is a dict of paths."""
-import importlib.util, os, sys
+import os
 import pod_show
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCN, PF = sibling('pcnet'), sibling('pcshows')

@@ -13,6 +13,8 @@
 int pod_text_utf8(void *widget, char *buf, unsigned size);
 /* The n bytes at in with each %XX decoded to its byte, into out (size bytes, always NUL terminated, never written past; a malformed '%' stays). Returns the length written. */
 unsigned pod_url_decode(char *out, unsigned size, const char *in, unsigned n);
+/* Up to cap bytes of a file in a heap buffer (a NUL after them, the caller frees it), *n the length; NULL when it is missing, empty or there is no memory. */
+char *pod_read_file(const char *path, unsigned cap, unsigned *n);
 int pod_screen_lit(void); /* stock backlight state */
 
 int pod_on_back(void *ctx, void *e); /* click handler: navigator_back() */
@@ -36,6 +38,11 @@ int pod_is_type(void *w, const char *type); /* w is a widget of exactly this typ
 /* The navbar's small title (docs/modules/navbar.md "Small titles"): pod_title_gone(off, head) is 1 once the page's heading has scrolled away (head 0: the large title, SG_COLLAPSE;
  * else the offset a header's name is gone at); pod_title_set shows or hides w when on differs from *cur. */
 int pod_title_gone(int off, int head);
+/* w shown or hidden, and in or out of the hit test with it (this AWTK's widget_find_target ignores visible); a NULL w is left alone. */
+void pod_show(void *w, int on);
+/* Select All on a page's mark bits (count rows, nsel marked): all of them, unless all are: then none. Returns the new number marked. */
+unsigned pod_sel_all(unsigned char *sel, unsigned count, unsigned nsel);
+static inline int pod_abs(int v) { return v < 0 ? -v : v; }
 void pod_title_set(void *w, int *cur, int on);
 /* The translated text f ("%d tracks") with n where it has its %d, into out (size bytes). */
 void pod_fmt(char *out, unsigned size, const char *f, int n);

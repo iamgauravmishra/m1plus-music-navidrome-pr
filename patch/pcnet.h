@@ -330,5 +330,4 @@ int pn_eq_state(void); /* PN_E_* */
 int pn_eq_code(
     void); /* the failure's PN_*: PN_NOWIFI, PN_NOCLOCK, PN_NOCERT, PN_CERT, PN_NET, PN_GONE, PN_HTTP, PN_NOTFEED, PN_CARDFULL, PN_STORAGE, PN_MEM, PN_CANCELLED */
 int pn_eq_mode(void); /* the job of the state: 0 the list, 1 a preset */
-unsigned pn_eq_pct(void); /* the download's progress, 0..100; 0 while the server has not told the length */
 void pn_eq_reset(void); /* forget a finished job (nothing while one runs) */

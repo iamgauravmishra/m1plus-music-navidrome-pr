@@ -14,9 +14,6 @@
 
 /* (the PC_* sizes are patch/offsets.inc's: include it first) */
 
-#define PC_ROOT_PATH \
-    "/mnt/mmc/Podcasts" /* the folder, matched case-insensitively (pc_root gives the spelling the card has) */
-
 typedef struct {
     char file[PC_FILE]; /* the file name in the show folder; "" = no file (yet) */
     char title[PC_TITLE]; /* the metadata title, else the file name without its extension */

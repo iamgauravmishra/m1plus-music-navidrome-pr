@@ -222,22 +222,6 @@ int pn_guard(void) {
  * Files
  */
 
-/* Up to cap bytes of a file into a heap buffer (a NUL after them); NULL when it is missing or empty. */
-static char *pn_slurp(const char *path, unsigned cap, unsigned *n) {
-    char *buf;
-    int fd = open(path, O_RDONLY, 0), got = 0, r;
-    if (fd < 0) return (char *)0;
-    buf = calloc(cap + 1, 1);
-    while (buf && (unsigned)got < cap && (r = read(fd, buf + got, cap - (unsigned)got)) > 0) got += r;
-    close(fd);
-    if (!buf || got <= 0) {
-        free(buf);
-        return (char *)0;
-    }
-    *n = (unsigned)got;
-    return buf;
-}
-
 /* data into path atomically: written to tmp, fsynced, renamed over path. 1 on success; a failure leaves no temp file. */
 static int pn_save(const char *path, const char *tmp, const char *data, unsigned n) {
     unsigned at = 0;
@@ -496,7 +480,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
         !pn_join(file, sizeof file, path, ".show", (const char *)0))
         return;
     memset(&s, 0, sizeof s);
-    buf = pn_slurp(file, PN_SHOW_MAX, &n);
+    buf = pod_read_file(file, PN_SHOW_MAX, &n);
     if (!buf) return;
     pc_parse_show(buf, n, &s);
     free(buf);
@@ -562,7 +546,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
             code = PN_MEM;
         else {
             pn_join(file, sizeof file, path, ".episodes", (const char *)0);
-            old = pn_slurp(file, PN_EPS_MAX, &oldn);
+            old = pod_read_file(file, PN_EPS_MAX, &oldn);
             n = pf_render_episodes(p, path, old, oldn, eps, PN_EPS_MAX, &fresh);
             first = s.checked == 0;
             pn_notes(path, p);
@@ -867,7 +851,7 @@ static int pn_dl_run(struct dx *d, const char *show, const char *name, unsigned 
         return PN_OK;
     }
     pn_join(eps_path, sizeof eps_path, d->dir, ".episodes", (const char *)0);
-    eps = pn_slurp(eps_path, PN_EPS_MAX, &n);
+    eps = pod_read_file(eps_path, PN_EPS_MAX, &n);
     i = eps && pf_find_episode(eps, n, name, url, sizeof url, &length);
     free(eps);
     if (!i || !(pn_starts(url, "http://") || pn_starts(url, "https://")))
@@ -1612,7 +1596,7 @@ const pn_lyr_t *pn_lyr_get(int i) { return i >= 0 && i < pn.ln ? &pn.lcand[pn.ls
 char *pn_lyr_text(int i, unsigned *n) {
     char path[PN_PATH];
     if (i < 0 || i >= pn.ln || !pn_lyr_path(pn.lslot[i], path, sizeof path)) return (char *)0;
-    return pn_slurp(path, PN_LRC_CAP, n);
+    return pod_read_file(path, PN_LRC_CAP, n);
 }
 
 int pn_art_full_path(int i, char *path, unsigned size) {
@@ -1945,7 +1929,7 @@ static void *pn_kmain(void *arg) {
         }
         if (wrote && kind == 1 && pn.pkdir[0] && !pn.cancel && pn_art_side(pn.pkdir, side, sizeof side)) {
             unsigned n = 0;
-            char *data = pn_slurp(src, PN_PICK_CAP, &n);
+            char *data = pod_read_file(src, PN_PICK_CAP, &n);
             char stmp[PN_PATH];
             stmp[0] = 0;
             if (data && pn_join(stmp, sizeof stmp, pn.pkdir, ".cover.tmp", (const char *)0))
@@ -2344,7 +2328,7 @@ static int pn_import_opml(struct pn_imp *im, const char *path) {
     int items = 0, complete = 1;
     po_t p;
     po_item_t *it;
-    buf = pn_slurp(path, PO_FILE_MAX, &n);
+    buf = pod_read_file(path, PO_FILE_MAX, &n);
     if (!buf) return 0;
     it = calloc(1, sizeof *it);
     if (it) {
@@ -2374,7 +2358,7 @@ int pn_import(const char *root, const pc_show_t *shows, int nshows) {
     if (!im) return -1;
     im->root = root, im->shows = shows, im->nshows = im->subs = nshows;
     if (pn_join(path, sizeof path, root, PN_IMPORT_FILE, (const char *)0) &&
-        (buf = pn_slurp(path, PN_URLS_MAX, &n)) != (char *)0) {
+        (buf = pod_read_file(path, PN_URLS_MAX, &n)) != (char *)0) {
         found = 1;
         pn_import_lines(im, buf, n);
         free(buf);
@@ -2894,7 +2878,6 @@ int pn_eq_get(const char *path, const char *stamp) { return pn_eq_start(1, path,
 int pn_eq_state(void) { return pn.estate; }
 int pn_eq_code(void) { return pn.ecode; }
 int pn_eq_mode(void) { return pn.emode; }
-unsigned pn_eq_pct(void) { return pn.part >= 1000 ? 100 : pn.part / 10; }
 void pn_eq_reset(void) {
     if (!pn.busy) pn.estate = PN_E_IDLE, pn.ecode = 0;
 }

@@ -95,11 +95,6 @@ static int lb_stamp(const char *file, char *sub, unsigned size) {
     return 1;
 }
 
-static void lb_show(void *w, int on) {
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* The card's rows: the files in order, AutoEq first. Rows of a section that is empty are hidden, and its header with them; the pieces are the
  * section's (a top, the middle ones, a bottom; a single one alone) and a hairline under every row but the section's last. */
 static void lb_layout(void) {
@@ -116,7 +111,7 @@ static void lb_layout(void) {
     for (s = 0; s < LB_SLOTS; s++) {
         int ae = s < PQ_ROWS, j = ae ? s : s - PQ_ROWS, count = ae ? na : nc, row = s + 1, p;
         int on = j < count;
-        lb_show(lb.row[row], on);
+        pod_show(lb.row[row], on);
         if (!on) continue;
         {
             char shown[PEQ_NAME];
@@ -129,8 +124,8 @@ static void lb_layout(void) {
         peq_piece_set(lb.row[row], &lb.piece[row], p, 1);
         if (lb.hair[row]) widget_set_visible(lb.hair[row], j < count - 1, 0);
     }
-    lb_show(lb.sec[0], na != 0);
-    lb_show(lb.sec[1], nc != 0);
+    pod_show(lb.sec[0], na != 0);
+    pod_show(lb.sec[1], nc != 0);
     /* the column's height as the layouter makes it (the download row, the two spacers and the visible headers and rows): set now, so that a list
      * that got shorter is not left scrolled past its end */
     vh = POD_LIB_BASE + (na ? POD_LIB_HDR + na * POD_LIB_ROW : 0) + (nc ? POD_LIB_HDR + nc * POD_LIB_ROW : 0);

@@ -13,8 +13,6 @@
 
 /* 1 when s is exactly major.minor.patch: three runs of 1..5 decimal digits, joined by dots, nothing before, between or after (no "v", no suffix, no space, no CR, no query, no sign). v: the three numbers. */
 int up_parse(const char *s, unsigned v[3]);
-/* major, then minor, then patch: -1, 0 or 1. */
-int up_cmp(const unsigned a[3], const unsigned b[3]);
 /* What a release tag means for a build whose version is own (dev: a development build, which has none to compare): 0 the tag is not a version (nothing is offered), 1 the build is as new or newer ("Up to date"),
  * 2 the release is offered. A development build is offered any valid tag. */
 int up_offer(const char *tag, const char *own, int dev);

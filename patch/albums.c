@@ -185,13 +185,6 @@ static struct {
 /* The room of the circle, when the artist page has none (no photo): everything under it is this much higher. */
 static int al_gone(void) { return al.circ ? 0 : PH_SHIFT; }
 
-/* Hidden and out of the hit test together (this AWTK's widget_find_target ignores visible). */
-static void al_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 static int al_rows(void) { return ((int)al.count + GRID_COLS - 1) / GRID_COLS; }
 /* The content starts with the large title (the Songs and Artists pages' block); the rows, or the grid's first gap, follow it. An artist's page has the pills
  * under the title: the block ends at AL_PILLS_END and the list's first row is GRID_ROW_GAP under it (the grid's first gap is its own). */
@@ -389,7 +382,6 @@ static int al_on_paint(void *ctx, void *e) {
 /* ---------------------------------------------------------------------------
  * The loader: one cover per tick on the page's own timer
  */
-static int al_abs(int v) { return v < 0 ? -v : v; }
 
 /* The album to decode next, or -1: of the window's albums without a tile that was tried, the cell nearest the middle
  * of the view, the cells in view before the rest (the window is the view and the rows ahead). */
@@ -407,7 +399,7 @@ static int al_next_load(void) {
             top = az_row_y(&al.az, a) - s, h = LIST_ROW_H;
         else
             top = GRID_ROW_GAP + a / GRID_COLS * PITCH - s, h = CELL_H;
-        d = al_abs(top + h / 2 - GRID_VIEW_H / 2);
+        d = pod_abs(top + h / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + h <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -623,7 +615,7 @@ static int al_on_build(const void *unused) {
 }
 
 /* The scan in steps: the first call (the one-shot AL_BUILD_START_MS) opens the set, every call considers AL_SCAN_BATCH
- * albums (nearest the first one in view first, as cc_build_near) and, while more remains, re-arms itself AL_SCAN_MS
+ * albums (nearest the first one in view first, as cc_build_near_step) and, while more remains, re-arms itself AL_SCAN_MS
  * later so input is served between steps. The worker starts only after the last step: it never reads a job being written. */
 static int al_on_build_start(const void *unused) {
     (void)unused;
@@ -719,8 +711,8 @@ static int al_on_up(void *ctx, void *e) {
     al.down = 0;
     if (al.list) al_set_press(0);
     if (a < 0 || !e || !al.view) return RET_OK;
-    dx = al_abs(I(e, PE_X) - al.down_x);
-    dy = al_abs(I(e, PE_Y) - al.down_y);
+    dx = pod_abs(I(e, PE_X) - al.down_x);
+    dy = pod_abs(I(e, PE_Y) - al.down_y);
     if (dx < AL_TAP_PX && dy < AL_TAP_PX && al_item_of(e) == a) {
         int row = (int)(al.order ? al.order[a] : (unsigned)a); /* the stock row */
         if (al.src) { /* a source's album: its album page; an artist's All Songs tile: the source's songs of that artist */
@@ -848,8 +840,8 @@ static void al_rail(void) {
     if (al.list)
         az_rail_fit(&al.az, GRID_VIEW_H);
     else {
-        al_show(al.az.rail, 0);
-        al_show(al.az.bubble, 0);
+        pod_show(al.az.rail, 0);
+        pod_show(al.az.bubble, 0);
     }
 }
 
@@ -1094,8 +1086,8 @@ static int al_begin(void) {
             widget_move(al.btn_play, AL_PLAY_X, AL_HEAD_PILL_Y - al_gone());
             widget_move(al.btn_shuffle, AL_SHUFFLE_X, AL_HEAD_PILL_Y - al_gone());
         }
-        al_show(al.btn_play, 1);
-        al_show(al.btn_shuffle, 1);
+        pod_show(al.btn_play, 1);
+        pod_show(al.btn_shuffle, 1);
     }
     al.g.az = &al.az; /* (list rows lie below the headers) */
     al_shape(al.list);
@@ -1142,10 +1134,10 @@ static void al_empty(void) {
     int st = LS_ST_READY;
     if (al.src && !al.count && al.src->state)
         st = al.src->state(al.src, LS_ALBUMS, al.artist_row ? deque_at(al.artist_row, 0) : (void *)0);
-    al_show(al.view, al.src != (const lib_src_t *)0 && !al.count);
-    al_show(al.status, !(st == LS_ST_LOADING && al.spin));
+    pod_show(al.view, al.src != (const lib_src_t *)0 && !al.count);
+    pod_show(al.status, !(st == LS_ST_LOADING && al.spin));
     ls_spin(al.spin, st == LS_ST_LOADING && al.spin != (void *)0);
-    if (al.az_ok) al_show(al.az.rail, 0), al_show(al.az.bubble, 0); /* (nothing to index) */
+    if (al.az_ok) pod_show(al.az.rail, 0), pod_show(al.az.bubble, 0); /* (nothing to index) */
     widget_set_tr_text(al.status, al.count                  ? "Not enough memory"
                                   : al.artist_row || al.src ? ls_empty_key(st, "No albums")
                                                             : "Update Local Music first");
@@ -1177,8 +1169,8 @@ static void al_src_reload(void) {
             al_empty();
             return;
         }
-        al_show(al.status, 0);
-        al_show(al.view, 1);
+        pod_show(al.status, 0);
+        pod_show(al.view, 1);
         return;
     }
     al_stop_scroll();
@@ -1187,7 +1179,7 @@ static void al_src_reload(void) {
     grid_placeholder(&al.g);
     al_sections();
     if (n)
-        al_show(al.status, 0), al_show(al.view, 1);
+        pod_show(al.status, 0), pod_show(al.view, 1);
     else
         al_empty();
     al_size();
@@ -1274,12 +1266,12 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     al.az.bubble = widget_lookup(al.win, "sg_bubble", 1);
     al.az.bubble_letter = widget_lookup(al.win, "sg_bubble_letter", 1);
     al.az_ok = al.az.st_hdr && al.az.st_rail && al.az.st_rail_on && al.az.rail && al.az.bubble && al.az.bubble_letter;
-    al_show(al.status, 0);
+    pod_show(al.status, 0);
     al.small = widget_lookup(al.win, "label_title", 1);
     al.big = widget_lookup(al.win, "al_title", 1);
     if (!(ls_caps(al.src) &
           LS_CAP_COVERFLOW)) { /* no Cover Flow for this source: its button goes and the "..." takes the capsule's left cap (the Artists page's), with the title running to it */
-        al_show(widget_lookup(al.win, "btn_coverflow", 1), 0);
+        pod_show(widget_lookup(al.win, "btn_coverflow", 1), 0);
         if (al.btn) {
             widget_set_prop_str(al.btn, "style:normal:icon", "pod_nav_more");
             widget_set_prop_str(al.btn, "style:over:icon", "pod_nav_more");
@@ -1307,8 +1299,8 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
         az_fit(al.small, name);
         if (al.head) { /* the name under the circle, centred (22 px), in place of the large title */
             az_fit(al.name_lbl, name);
-            al_show(al.name_lbl, 1);
-            al_show(al.big, 0);
+            pod_show(al.name_lbl, 1);
+            pod_show(al.big, 0);
             if (!al.circ) widget_move(al.name_lbl, PH_NAME_X, AL_NAME_Y - PH_SHIFT);
         }
     } else {

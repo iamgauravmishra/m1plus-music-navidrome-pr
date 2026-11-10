@@ -430,11 +430,6 @@ static unsigned pg_clean(char *out, const char *text) {
 /* ---------------------------------------------------------------------------
  * The page
  */
-static void pg_show(void *w, int on) {
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
 /* The rows and the graph from the working preset (the page opening, and each time it is back in front after the band page). */
 static void pg_fill(void) {
     int i, n = pg.work.count;
@@ -451,7 +446,7 @@ static void pg_fill(void) {
         widget_set_text_utf8(pg.sub[i], text);
         peq_piece_set(pg.row[i], &pg.piece[i], piece, 0);
         if (pg.hair[i]) widget_set_visible(pg.hair[i], i < n, 0);
-        if (!pg.shown[i]) pg_show(pg.row[i], 1), pg.shown[i] = 1;
+        if (!pg.shown[i]) pod_show(pg.row[i], 1), pg.shown[i] = 1;
     }
     peq_graph_curve(&pg.g, &pg.work);
     peq_graph_scale(&pg.g, pg.top, pg.bot);

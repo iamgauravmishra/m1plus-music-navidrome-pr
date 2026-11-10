@@ -35,7 +35,6 @@ OFF, _o = {}, 0
 for _n, _s in _FIELDS: OFF[_n] = _o; _o += _s
 
 
-def window_h(m): return m.window
 
 
 def state(m, name, i=0):
@@ -223,15 +222,6 @@ def fold_tests(ctx):
 
 
 
-def lib_for_query():
-    songs = [('Halo', 'Beyoncé', 'I Am... Sasha Fierce'), ('Blue in Green', 'Miles Davis', 'Kind of Blue'), ('So What', 'Miles Davis', 'Kind of Blue'),
-             ('Die Straße', 'Müller', 'Heimat'), ('Straight', 'Nobody', 'Blue Note'), ('カタカナ', 'ｱｲｳ', 'ひらがな'), ('Ørn', 'Sigur Rós', 'Ágætis byrjun'),
-             ('Davis Cup', 'Someone', 'Else'), ('Anthem', 'Miles', 'Davis')]
-    artists = ['Beyoncé', 'Miles Davis', 'Müller', 'Sigur Rós', 'Unknown Artist']
-    albums = [('Kind of Blue', 'Miles Davis'), ('Heimat', 'Müller'), ('Ágætis byrjun', 'Sigur Rós'), ('Unknown Album', 'Unknown Artist')]
-    m = opened(songs, artists, albums, playlists=['Miles Mix', 'Road Trip'])
-    # the stock list's last rows are the "Unknown ..." ones (id -1), which are never results
-    return m
 
 
 def found(q):

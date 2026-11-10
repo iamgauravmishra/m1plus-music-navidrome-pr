@@ -1,20 +1,10 @@
 """Track durations (patch/durations.c, patch/covercache.c CC_DURATIONS, patch/homecover.c, patch/albumpage.c; docs/modules/album-page.md "Album length"): the table file (format, lookup by
 bisection, corrupt files, merge, prune, a changed size), the CUE math, the TagLib measurement through the worker, the duration text, the album page's total (known, measured in the
 background, worker busy, unreadable) and Home's "Measuring tracks" line (phases, saves, stop, resume). The compiled payload runs under Unicorn."""
-import importlib.util, os, struct, sys
+import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 HC, AP = sibling('homecover'), sibling('albumpage')

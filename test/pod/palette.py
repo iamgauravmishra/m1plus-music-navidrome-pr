@@ -1216,3 +1216,7 @@ def press_tests(ctx):
 
 
 SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, tinted_tests, findings_tests, rest_glyph_tests]
+
+
+def run(ctx):
+    for section in SECTIONS: section(ctx)

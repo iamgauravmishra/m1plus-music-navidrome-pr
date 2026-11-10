@@ -303,7 +303,7 @@ void dur_subst(char *out, unsigned size, const char *f, int n, const char *s1, c
     out[o] = 0;
 }
 
-void dur_subst2(char *out, unsigned size, const char *f, int n1, int n2) {
+static void dur_subst2(char *out, unsigned size, const char *f, int n1, int n2) {
     unsigned o = 0;
     int k = 0;
     while (*f && o + 1 < size) {

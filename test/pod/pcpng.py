@@ -1,20 +1,10 @@
 """Podcast cover art from a PNG (patch/pcpng.c, patch/pccover.c pv_shrink_png; docs/modules/podcasts.md "Cover art"): the streaming PNG decoder (chunks, inflate with stored, fixed and dynamic blocks,
 the five filters, every colour type and depth, transparency over white) feeding the area average and the libjpeg encoder, compared with PIL's resize of the same picture, and every kind of damaged
 file (it must fail cleanly, with no output file and every libjpeg object destroyed). The compiled payload runs under Unicorn; libjpeg is the PIL mock of test/pod/pcnet.py."""
-import importlib.util, io, os, random, struct, sys, zlib
+import io, os, random, struct, zlib
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCN = sibling('pcnet')

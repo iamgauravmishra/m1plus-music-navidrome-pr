@@ -189,13 +189,6 @@ static int sg_on_stale(const void *unused);
 static void *sg_under __attribute__((section(
     ".scratch"))); /* a Songs page below the one open (Search was opened from it and a playlist result opened ours): its state, put back when this page is destroyed */
 
-static void sg_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
-static int sg_abs(int v) { return v < 0 ? -v : v; }
 static int sg_off(void) { return sg.sv ? I(sg.sv, SC_YOFF) : 0; }
 static void sg_redraw(void) { widget_invalidate_force(sg.sv, (void *)0); }
 
@@ -466,7 +459,7 @@ static int rv_next_load(void) {
         tile_t *t = grid_find(&sg.rg, a);
         int top = RV_TOP + a / GRID_COLS * GRID_PITCH - s, d;
         if (t && t->art) continue;
-        d = sg_abs(top + GRID_CELL_H / 2 - GRID_VIEW_H / 2);
+        d = pod_abs(top + GRID_CELL_H / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + GRID_CELL_H <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -582,7 +575,7 @@ static int sg_next_load(void) {
         tile_t *t = grid_find(&sg.g, a);
         int top = sg_row_y(a) - s, d;
         if (t && t->art) continue;
-        d = sg_abs(top + ROW / 2 - GRID_VIEW_H / 2);
+        d = pod_abs(top + ROW / 2 - GRID_VIEW_H / 2);
         if (top >= GRID_VIEW_H || top + ROW <= 0) d += 100000; /* ahead of the view */
         if (d < bd) bd = d, best = a;
     }
@@ -816,7 +809,7 @@ static int sg_on_scroll(void *ctx, void *e) {
     sg_dir();
     sg_title_update();
     sg_kick();
-    if (!sg.rv && sg_abs(sg_first() - sg.build_at) > SG_BUILD_MOVE && !sg_moving()) sg_build_later();
+    if (!sg.rv && pod_abs(sg_first() - sg.build_at) > SG_BUILD_MOVE && !sg_moving()) sg_build_later();
     return RET_OK;
 }
 
@@ -830,15 +823,12 @@ static void sg_size(void) {
     widget_set_prop_int(sg.sv, "virtual_h", h);
 }
 
-/* "%d Selected" in the player's language, the number where the translation has its %d. */
-static void sg_fmt(char *out, unsigned size, const char *f, int n) { pod_fmt(out, size, f, n); }
-
 static const char *sg_name_text(void) { return sg.key ? TR(sg.key) : sg.name; } /* a list's title */
 
 /* The song count under the last row: "25 songs" (the key by n == 1, the number where the translation has its %d). */
 static void sg_foot_text(void) {
     char buf[64];
-    sg_fmt(buf, sizeof buf, TR(sg.count == 1 ? "%d song" : "%d songs"), (int)sg.count);
+    pod_fmt(buf, sizeof buf, TR(sg.count == 1 ? "%d song" : "%d songs"), (int)sg.count);
     widget_set_text_utf8(sg.foot, buf);
     widget_move(sg.foot, SG_HDR_X, sg_rows_end() + SG_FOOT_GAP);
 }
@@ -876,7 +866,7 @@ static void sg_head(
         az_fit(sg.title, sg_lib() ? TR("Songs") : sg_name_text());
         return;
     }
-    sg_fmt(buf, sizeof buf, TR("%d Selected"), (int)sg.nsel);
+    pod_fmt(buf, sizeof buf, TR("%d Selected"), (int)sg.nsel);
     widget_set_text_utf8(sg.title, buf);
 }
 
@@ -996,9 +986,9 @@ static void sg_load(int keep) {
         grid_drop(&sg.g);
     sg_head_prep();
     if (!same) grid_placeholder(&sg.g);
-    sg_show(sg.view,
-            sg.count != 0 || sg.wait); /* (a source's list still loading: the title block, with the spinner under it) */
-    sg_show(sg.status, sg.count == 0 && !(sg.wait && sg.spin));
+    pod_show(sg.view, sg.count != 0 ||
+                          sg.wait); /* (a source's list still loading: the title block, with the spinner under it) */
+    pod_show(sg.status, sg.count == 0 && !(sg.wait && sg.spin));
     if (sg.foot)
         widget_set_visible(sg.foot, !sg.rv && !sg.wait && !sg.part,
                            0); /* (no count while a paged list is still growing) */
@@ -1149,8 +1139,8 @@ static int rv_enter(void) {
     }
     sg.rv = 1, sg.press = sg.down = 0, sg.dir = 1;
     rv_ui();
-    sg_show(sg.view, sg.rn != 0);
-    sg_show(sg.status, sg.rn == 0);
+    pod_show(sg.view, sg.rn != 0);
+    pod_show(sg.status, sg.rn == 0);
     if (!sg.rn) widget_set_tr_text(sg.status, "No albums");
     sg_size();
     widget_set_prop_int(sg.sv, "yoffset", 0);
@@ -1244,11 +1234,11 @@ static void sg_select(int on) {
     if (sg.sel) memset(sg.sel, 0, (sg.count + 7) / 8);
     sg.press = sg.down = 0;
     nav[0] = sg.btn_more, nav[1] = sg.np;
-    for (i = 0; i < 2; ++i) sg_show(nav[i], !on);
-    if (sg.btn_cf) sg_show(sg.btn_cf, !on && sg_artist());
-    if (sg.btn_search) sg_show(sg.btn_search, !on && sg_searches());
-    sg_show(sg.btn_selall, on);
-    sg_show(sg.bar, on);
+    for (i = 0; i < 2; ++i) pod_show(nav[i], !on);
+    if (sg.btn_cf) pod_show(sg.btn_cf, !on && sg_artist());
+    if (sg.btn_search) pod_show(sg.btn_search, !on && sg_searches());
+    pod_show(sg.btn_selall, on);
+    pod_show(sg.bar, on);
     sg_pills(); /* the pills stay in the content, dim and dead (the library's) or dead (a playlist's) */
     widget_resize(sg.title, (on ? SG_SELALL_X : sg_title_end()) - NAV_TITLE_X, 22);
     widget_set_prop_str(sg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
@@ -1280,15 +1270,7 @@ static int sg_on_selall(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!sg.select || !sg.sel) return RET_OK;
-    if (sg.nsel < sg.count) { /* all, unless all are: then none */
-        unsigned i;
-        memset(sg.sel, 0, (sg.count + 7) / 8);
-        for (i = 0; i < sg.count; ++i) sg.sel[i >> 3] |= (unsigned char)(1 << (i & 7));
-        sg.nsel = sg.count;
-    } else {
-        memset(sg.sel, 0, (sg.count + 7) / 8);
-        sg.nsel = 0;
-    }
+    sg.nsel = pod_sel_all(sg.sel, sg.count, sg.nsel);
     sg_count_changed();
     return RET_OK;
 }
@@ -1421,12 +1403,12 @@ static int sg_on_up(void *ctx, void *e) {
         int pt[2];
         pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
         widget_to_local(sg.view, pt);
-        if (sg_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && sg_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
+        if (pod_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && pod_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
             rv_cell_at(pt[0], pt[1]) == a && (unsigned)a < sg.rn)
             cc_open_album((void *)0, 0, (int)sg.rrow[a]);
         return RET_OK;
     }
-    if (sg_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && sg_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
+    if (pod_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && pod_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
         sg_item_of(e) == a) {
         if (sg.select)
             sg_toggle(a);
@@ -1723,12 +1705,12 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
     rowmenu_bind(&sg.rm, sg.win); /* the rows' "..." menu (optional: no widgets means no "...") */
     if (sg_direct()) {
         if (sg_selects()) { /* the card would hold Select alone: the Select button takes the "..." place (left cap at 214, or the middle piece after Search / Cover Flow) and sg.btn_more stands for it from here on */
-            sg_show(sg.btn_more, 0);
+            pod_show(sg.btn_more, 0);
             sg.btn_more = sg.btn_select;
-            sg_show(sg.btn_more, 1);
+            pod_show(sg.btn_more, 1);
         } else { /* a source without Select: the card has nothing to hold, so neither button shows */
-            sg_show(sg.btn_more, 0);
-            sg_show(sg.btn_select, 0);
+            pod_show(sg.btn_more, 0);
+            pod_show(sg.btn_select, 0);
         }
     }
     if ((sg_artist() && sg.btn_cf) ||
@@ -1736,7 +1718,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
         const char *mid = sg_direct() ? "pod_nav_select" : "pod_nav_moremid";
         char down[32];
         snprintf(down, sizeof down, "%s_down", mid);
-        sg_show(sg_artist() ? sg.btn_cf : sg.btn_search, 1);
+        pod_show(sg_artist() ? sg.btn_cf : sg.btn_search, 1);
         if (!sg_mid()) /* no middle piece: the left cap moves to 214, beside Now Playing (no gap in the capsule) */
             widget_move(sg_artist() ? sg.btn_cf : sg.btn_search, NAV_VIEW_X, 0);
         widget_set_prop_str(sg.btn_more, "style:normal:icon", mid);
@@ -1766,7 +1748,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
             widget_move(sg.hd_play, AH_PLAY_X, PH_BTN_Y);
             widget_move(sg.hd_shuffle, AH_SHUF_X, PH_BTN_Y);
             az_fit(sg.hname, sg_name_text());
-            sg_show(sg.big, 0);
+            pod_show(sg.big, 0);
             widget_set_visible(sg.hname, 1, 0); /* (an insensitive label: shown, never a touch target) */
         } else
             grid_free(&sg.hg);
@@ -1806,9 +1788,9 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
     widget_on(sg.al.rail, EVT_AFTER_PAINT, sg_on_rail_paint, (void *)0);
     if (!grid_init(&sg.g, sg.win, GRID_TILES, LIST_ART, 0)) {
         grid_free(&sg.g);
-        sg_show(sg.view, 0);
-        sg_show(sg.al.rail, 0);
-        sg_show(sg.status, 1);
+        pod_show(sg.view, 0);
+        pod_show(sg.al.rail, 0);
+        pod_show(sg.status, 1);
         widget_set_tr_text(sg.status, "Not enough memory");
         return 0;
     }

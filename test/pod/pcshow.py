@@ -4,21 +4,11 @@ status bar, the tone cache), the navbar ("..." | Now Playing, the small title an
 pill, the "...") in every combination of badges and every state of the pill with what a tap on each does, the two bottom sheets (the show's: each row shown only where it applies and what it does, a
 single-feed refresh, Select Episodes, Mark All as Played, Unsubscribe in both cases; an episode's), the Latest Episode pill in both cases, the line breaking with the kinsoku rules against the Python
 port, the strings' widths in the 13 languages, and the screen-off rule. The compiled payload runs under Unicorn; the card is a dict of paths."""
-import importlib.util, os, struct, sys
+import os, struct, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), 'tools'))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCP, PCN, DL, SEL = sibling('podcasts'), sibling('pcnet'), sibling('pcdl'), sibling('pcsel')

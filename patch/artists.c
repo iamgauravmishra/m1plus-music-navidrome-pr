@@ -115,14 +115,6 @@ static struct {
         cp; /* the shared cover poll (patch/libsrc.c): a source's picture on its way is asked for again, its spinner turned */
 } ar __attribute__((section(".scratch")));
 
-/* Hidden and out of the hit test together (this AWTK's widget_find_target ignores visible). */
-static void ar_show(void *w, int on) {
-    if (!w) return;
-    widget_set_visible(w, on, 0);
-    widget_set_sensitive(w, on);
-}
-
-static int ar_abs(int v) { return v < 0 ? -v : v; }
 static void ar_redraw(void) { widget_invalidate_force(ar.sv, (void *)0); }
 
 static const char *ar_name(void *r) {
@@ -330,7 +322,7 @@ static int ar_next_photo(void) {
     for (r = lo; r <= hi; ++r) {
         int d;
         if (!ar_wants(r)) continue;
-        d = ar_abs(az_row_y(&ar.al, r) - az_off(&ar.al) + AR_ROW / 2 - GRID_VIEW_H / 2);
+        d = pod_abs(az_row_y(&ar.al, r) - az_off(&ar.al) + AR_ROW / 2 - GRID_VIEW_H / 2);
         if (d < bd) bd = d, best = r;
     }
     return best;
@@ -493,7 +485,7 @@ static int ar_on_up(void *ctx, void *e) {
     ar.down = 0;
     ar_set_press(0);
     if (a < 0 || !e || !ar.view) return RET_OK;
-    if (ar_abs(I(e, PE_X) - ar.down_x) < SC_DRAG_PX && ar_abs(I(e, PE_Y) - ar.down_y) < SC_DRAG_PX &&
+    if (pod_abs(I(e, PE_X) - ar.down_x) < SC_DRAG_PX && pod_abs(I(e, PE_Y) - ar.down_y) < SC_DRAG_PX &&
         ar_item_of(e) == a)
         ar_open((unsigned)a);
     return RET_OK;
@@ -615,10 +607,10 @@ static void ar_load(int keep) {
     h = ar.count ? ar.al.content : GRID_VIEW_H;
     widget_resize(ar.view, AR_W, h);
     widget_set_prop_int(ar.sv, "virtual_h", h);
-    ar_show(ar.list,
-            ar.count != 0 ||
-                ar.src != (const lib_src_t *)0); /* (a source's page keeps the large title when it has no rows) */
-    ar_show(ar.status, ar.count == 0 && !(st == LS_ST_LOADING && ar.spin));
+    pod_show(ar.list,
+             ar.count != 0 ||
+                 ar.src != (const lib_src_t *)0); /* (a source's page keeps the large title when it has no rows) */
+    pod_show(ar.status, ar.count == 0 && !(st == LS_ST_LOADING && ar.spin));
     if (!ar.count) widget_set_tr_text(ar.status, ar.src ? ls_empty_key(st, "No artists") : "Update Local Music first");
     ls_spin(ar.spin, st == LS_ST_LOADING && ar.count == 0 && ar.spin != (void *)0);
     if (!ar.count) widget_set_prop_int(ar.sv, "yoffset", 0);

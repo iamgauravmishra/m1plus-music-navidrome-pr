@@ -2,21 +2,11 @@
 file of every show, the newest download first, sliced scan, capped), the rows' grey lines and played check, the taps (an In Progress row pauses, resumes or retries; a Downloaded row opens the episode's page and Back
 returns to the same place), the "..." sheet (Select, Delete Played Episodes), select mode and its Delete across both sections, Delete Played with the playing episode protected and its toast, the empty state, the
 screen-off rule and the strings in 13 languages measured in the real font. The compiled payload runs under Unicorn; the card is a dict of paths."""
-import importlib.util, os, struct, sys
+import os, struct, sys
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), 'tools'))
-
-
-def sibling(name):
-    mod = sys.modules.get(f'podtest_{name}')
-    if mod is None:
-        spec = importlib.util.spec_from_file_location(f'podtest_{name}', os.path.join(HERE, name + '.py'))
-        mod = importlib.util.module_from_spec(spec)
-        sys.modules[f'podtest_{name}'] = mod
-        spec.loader.exec_module(mod)
-    return mod
 
 
 PCS, SEL, DL = sibling('pcshows'), sibling('pcsel'), sibling('pcdl')
