@@ -1,8 +1,8 @@
 """The Navidrome library source (patch/sbsrc.c, patch/sbsrc.h, docs/modules/subsonic.md "The seam"): lib_nd's lists as stock-shaped records built from the cache files of sbapi.c (what the
 pages read from them, the id round trip, the requests a missing list starts), the Songs list's windowed read, cap and memory, `complete`, `gen`, `cover`, `seconds`, the row extras and
-the row-menu actions, and the play queue (stream address or local file, DSD, the 64 cap, the playing marker). The compiled payload runs under Unicorn against the card of the download
+the row-menu actions, and the play queue (stream address or local file, DSD, the 500 cap, the playing marker). The compiled payload runs under Unicorn against the card of the download
 tests and a scripted libcurl; the stock deque copies the record and every string it holds (the push hook below models that and counts the heap a list costs). Sections: lists, songs,
-play, extras, trackcover (a track shows its album's cover file), sheet, awake, messages, queue_star (everything, or `sbsrc/<section>`)."""
+play, extras, trackcover (a track shows its album's cover file), sheet, awake, scrobble, messages, queue_star (everything, or `sbsrc/<section>`)."""
 import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -385,19 +385,23 @@ def play(ctx):
     r, q = playit(m, h, -1)
     expect(r == 0 and q and q[0]['title'].startswith('Song '), 'at -1 starts a random track')
     expect(playit(m, h, 99)[0] == -1 and playit(m, h, 7)[0] == -1, 'a position outside the list: -1')
-    # the 64 cap
+    # the 500 cap
     m = machine()
     h = play_setup(m, [trk(i, track=i) for i in range(1, 101)])
     r, q = playit(m, h, 10)
-    expect(r == 0 and len(q) == 64 and q[0]['title'] == 'Song 11' and q[-1]['title'] == 'Song 74' and m.played[1] == 0, f'a queue is a window of 64 tracks from the tapped one, opened at 0 ({len(q)})')
-    r, q = playit(m, h, 90)
-    expect(len(q) == 64 and q[0]['title'] == 'Song 37' and q[-1]['title'] == 'Song 100' and m.played[1] == 54 and q[54]['title'] == 'Song 91', 'near the end the window still holds 64 rows (it starts at count - 64) and opens at the tapped one')
+    expect(r == 0 and len(q) == 100 and q[0]['title'] == 'Song 1' and q[-1]['title'] == 'Song 100' and m.played[1] == 10, f'a list of 100 is queued whole, opened at the tapped row ({len(q)})')
+    m = machine()
+    h = play_setup(m, [trk(i, track=i) for i in range(1, 601)])
+    r, q = playit(m, h, 10)
+    expect(r == 0 and len(q) == 500 and q[0]['title'] == 'Song 11' and q[-1]['title'] == 'Song 510' and m.played[1] == 0, f'a longer list gives a window of 500 tracks from the tapped one, opened at 0 ({len(q)})')
+    r, q = playit(m, h, 590)
+    expect(len(q) == 500 and q[0]['title'] == 'Song 101' and q[-1]['title'] == 'Song 600' and m.played[1] == 490 and q[490]['title'] == 'Song 591', 'near the end the window still holds 500 rows (it starts at count - 500) and opens at the tapped one')
     m.seed = 5
     r, q = playit(m, h, -1, 2)
     ts = [x['title'] for x in q]
     ns = [int(t.split()[1]) for t in ts]
-    expect(r == 0 and len(q) == 64 and len(set(ts)) == 64, f'Shuffle on 100 queues 64 distinct tracks ({len(q)}, {len(set(ts))})')
-    expect(any((b - a) % 100 != 1 for a, b in zip(ns, ns[1:])), f'and they are not one contiguous run ({ns[:12]})')
+    expect(r == 0 and len(q) == 500 and len(set(ts)) == 500, f'Shuffle on 600 queues 500 distinct tracks ({len(q)}, {len(set(ts))})')
+    expect(any((b - a) % 600 != 1 for a, b in zip(ns, ns[1:])), f'and they are not one contiguous run ({ns[:12]})')
     m = machine()
     h = play_setup(m, [trk(i, track=i) for i in range(1, 13)])
     m.seed = 9
@@ -413,8 +417,8 @@ def play(ctx):
         m.seed = 11 + n
         r, q = playit(m, h, -1, 2)
         ts = [x['title'] for x in q] if q else []
-        if not (r == 0 and len(ts) == min(n, 64) and len(set(ts)) == len(ts) and m.played[1] == 0):
-            expect(False, f'Shuffle on {n} rows: {min(n, 64)} distinct tracks opened at 0 ({r}, {len(ts)}, {len(set(ts))})')
+        if not (r == 0 and len(ts) == n and len(set(ts)) == len(ts) and m.played[1] == 0):
+            expect(False, f'Shuffle on {n} rows: {n} distinct tracks opened at 0 ({r}, {len(ts)}, {len(set(ts))})')
             break
     else:
         expect(True, 'Shuffle plays lists of every length 1..70 without hanging, with distinct rows')
@@ -453,7 +457,7 @@ def play(ctx):
     h = play_setup(m, [trk(1, id='d1', title='One', suffix='flac'), trk(2, id='d2', title='Dsd Two', suffix='dsf'), trk(3)])
     r, q = playit(m, h, 0)
     f1, f2 = f'{SD.MUSIC}/{SD.name_of(ts[0])}', f'{SD.MUSIC}/{SD.name_of(ts[1])}'
-    expect(r == 0 and [x['path'] for x in q][:2] == [f1, f2] and q[0]['name'] == SD.name_of(ts[0]) and q[2]['path'].startswith('http'),
+    expect(r == 0 and [x['path'] for x in q][:2] == [f1, f2] and q[0]['name'] == '03 One.flac' and q[2]['path'].startswith('http'),
            f'a downloaded track is queued as its local file (the DSD one too); the rest stream: {[x["path"][:50] for x in q]}')
     r, q = playit(m, h, 1)
     expect(r == 0 and q[1]['path'] == f2 and m.played[1] == 1, 'a downloaded DSD track plays when tapped')
@@ -654,17 +658,18 @@ def sheet(ctx):
            f'its REC_ID is the map\'s synthetic id (the playing marker and Now Playing\'s cover find the track): {x.get("id")}')
     q2, rs2 = queue_row(r1)
     expect(rs2 and rs2[0]['id'] == x['id'], 'the same track queued again keeps its id')
-    # the map grows past a play's 64 and keeps the play's ids
+    # the map grows past what a play noted (64 entries of room for a short list) and keeps the play's ids
     m2 = machine()
     items = [trk(i) for i in range(1, 91)]
     h2 = play_setup(m2, items)
-    r, q = playit(m2, h2, 0)
+    h1 = m2.alloc(16); m2.deques[h1] = m2.deques[h2][:64]
+    r, q = playit(m2, h1, 0)
     before = [S32(m2.word(r_ + REC_ID)) for r_ in m2.played[0]]
     ids = []
     for i in range(64, 90):
         qh = call(m2, F_QUEUE_ROW, LIB, m2.deques[h2][i]) & 0xffffffff
         ids.append(S32(m2.word(m2.deques[qh][0] + REC_ID)) if qh else None)
-    ok = all(i is not None for i in ids) and len(set(ids + before)) == 64 + 26
+    ok = len(before) == 64 and all(i is not None for i in ids) and len(set(ids + before)) == 64 + 26
     expect(ok and all(m2.read_cstr(m2.call(PSYMS['sba_rec_track'], a0=i & 0xffffffff, count=2000000)) == f't{k + 65}' for k, i in enumerate(ids))
            and m2.read_cstr(m2.call(PSYMS['sba_rec_track'], a0=before[5] & 0xffffffff, count=2000000)) == 't6', 'Play Next / After add to the map past the 64 of a play: every id resolves, the play\'s too, no two alike')
     # DSD and offline
@@ -682,7 +687,7 @@ def sheet(ctx):
     for k in (0, 1):
         q, rs = queue_row(m.deques[h][k])
         f = f'{SD.MUSIC}/{SD.name_of(ts[k])}'
-        expect(rs and rs[0]['path'] == f and rs[0]['name'] == SD.name_of(ts[k]) and not any(c[0] == 'toast' for c in m.calls), f'a downloaded track queues its local file even offline ({rs and rs[0]["path"]})')
+        expect(rs and rs[0]['path'] == f and rs[0]['name'] == f.rsplit('/', 1)[1] and not any(c[0] == 'toast' for c in m.calls), f'a downloaded track queues its local file even offline ({rs and rs[0]["path"]})')
     # Cancel Download: a waiting download leaves the queue
     m = machine()
     h = play_setup(m, [trk(1), trk(2)])
@@ -842,11 +847,12 @@ def messages(ctx):
     r = call(m, F_ACT, LIB, deque_row(m, h, 0), ACT_DOWNLOAD)
     expect(r == R['CARDFULL'] and [c[1] for c in m.calls if c[0] == 'toast'] == ['Card is full'], 'a card with no room: "Card is full" (not "Storage unavailable")')
     m = machine(); SD.guard(m, 0)
-    h = play_setup(m, [trk(i) for i in range(1, 36)])
+    m.put(SD.QUEUE, ''.join(f'i=q{k}\tt=q{k}\tx=flac\tp=\n' for k in range(1024)).encode())   # (the queue the card kept: all 1024 places taken)
+    h = play_setup(m, [trk(i) for i in range(1, 4)])
     m.thread = None
-    rs = [call(m, F_ACT, LIB, deque_row(m, h, i), ACT_DOWNLOAD) for i in range(34)]
+    rs = [call(m, F_ACT, LIB, deque_row(m, h, i), ACT_DOWNLOAD) for i in range(2)]
     q = [c[1] for c in m.calls if c[0] == 'toast']
-    expect(R['QFULL'] in rs and q and set(q) == {'Download queue is full'}, f'a full download queue says "Download queue is full" ({set(q)})')
+    expect(rs == [R['QFULL']] * 2 and q and set(q) == {'Download queue is full'}, f'a full download queue says "Download queue is full" ({set(q)})')
     m = machine(); SD.guard(m, 0)
     h = play_setup(m, [trk(1)])
     m.card_mounted = False
@@ -1014,11 +1020,77 @@ def dlalbum(ctx):
     r = call(m, F_ACT, LIB, h, ACT_DOWNLOAD_ALL)
     said = toasts(m)
     states = [SD.state(m, f't{i}')[0] for i in range(1, 35)]
-    expect(r == R['QFULL'] and said == ['Downloading 32, queue full'] and states == [SD.DL['WAIT']] * 32 + [SD.DL['NONE']] * 2, f'a full queue: the 32 that fit wait, one toast "Downloading 32, queue full" ({r}, {said}, {states})')
+    expect(r == 0 and said == ['Downloading 34 songs'] and states == [SD.DL['WAIT']] * 34, f'an album of 34: all of them wait ({r}, {said})')
+    m, h = setup([trk(i) for i in range(1, 5)])
+    m.put(SD.QUEUE, ''.join(f'i=q{k}\tt=q{k}\tx=flac\tp=\n' for k in range(1022)).encode())   # (two places left of the 1024)
+    m.calls = []
+    r = call(m, F_ACT, LIB, h, ACT_DOWNLOAD_ALL)
+    said = toasts(m)
+    states = [SD.state(m, f't{i}')[0] for i in range(1, 5)]
+    expect(r == R['QFULL'] and said == ['Downloading 2, queue full'] and states == [SD.DL['WAIT']] * 2 + [SD.DL['NONE']] * 2, f'a full queue: the 2 that fit wait, one toast "Downloading 2, queue full" ({r}, {said}, {states})')
     expect(call(m, F_ACT, LIB, 0, ACT_DOWNLOAD_ALL) == -1, 'no list: -1')
 
 
-SECTIONS = [lists, songs, play, extras, trackcover, sheet, awake, messages, queue_star, dlalbum]
+def scrobble(ctx):
+    """A server track that played for half its length (or four minutes) is reported to the server once: scrobble.view from the keep-awake tick."""
+    expect = ctx.expect
+    m = machine(); SD.guard(m, 0)
+    h = play_setup(m, [trk(1), trk(2), trk(3), trk(4, seconds=0), trk(5, seconds=3000)])   # (101, 102 and 103 s; no length; 50 minutes)
+    playit(m, h, 0)
+    m.setword(pod.DATA['PLAY_QUEUE'][0], m.new_deque(m.played[0]))
+    m.play_pos, m.status = 0, 2
+    urls = []
+    m.curl_site = lambda url, o: (urls.append(url), {'body': SA.ok_json()})[1]
+
+    def tick(ms=1000, n=1):
+        for _ in range(n):
+            m.clock += ms
+            m.thread = None
+            m.call(PSYMS['nl_awake_tick'], a0=0, count=2000000)
+            if m.thread: m.call(m.thread[0], a0=m.thread[1], count=1 << 40)
+    g0 = m.call(PSYMS['sba_gen'], count=2000000)
+    tick()          # the tick that first sees the track counts nothing
+    tick(n=50)      # 50 s of 101
+    expect(urls == [], 'under half the track: nothing is sent')
+    tick()
+    expect(len(urls) == 1 and '/rest/scrobble.view?' in urls[0] and '&id=t1' in urls[0] and urls[0].endswith('&submission=true'), f'half the track played: one scrobble.view for it, a submission ({urls})')
+    expect(m.call(PSYMS['sba_gen'], count=2000000) == g0, 'no list moves for it (the pages do not read again)')
+    tick(n=60)
+    expect(len(urls) == 1, 'the same play is reported once')
+    # paused time does not count
+    m.play_pos = 1; del urls[:]
+    tick(); tick(n=20)
+    m.status = 3; tick(100000); tick(n=5)
+    m.status = 2; tick(); tick(n=30)
+    expect(urls == [], 'the next track, 50 s played around a long pause: not yet')
+    tick()
+    expect(len(urls) == 1 and '&id=t2' in urls[0], '51 s played: reported')
+    # a tick that comes late (the UI thread was busy) loses nothing
+    m.play_pos = 0; del urls[:]
+    tick(); tick(60000)
+    expect(len(urls) == 1 and '&id=t1' in urls[0], 'the first track again is a new play; one late tick a minute on counts the minute')
+    # no Wi-Fi: tried again while it plays
+    m.play_pos = 2; del urls[:]
+    m.wifi = -1
+    tick(); tick(n=70)
+    expect(urls == [], 'no Wi-Fi: nothing goes out')
+    m.wifi = 4
+    tick()
+    expect(len(urls) == 1 and '&id=t3' in urls[0], 'Wi-Fi back while it still plays: reported then')
+    # four minutes for a long track or one of unknown length
+    for pos, name in ((3, 'no length'), (4, 'a 50 minute track')):
+        m.play_pos = pos; del urls[:]
+        tick(); tick(n=239)
+        none = urls == []
+        tick()
+        expect(none and len(urls) == 1 and f'&id=t{pos + 1}' in urls[0], f'{name}: reported after four minutes')
+    # a local track is nobody's play
+    m.play_pos = -1; del urls[:]
+    tick(n=300)
+    expect(urls == [], 'nothing of ours playing: nothing is sent')
+
+
+SECTIONS = [lists, songs, play, extras, trackcover, sheet, awake, scrobble, messages, queue_star, dlalbum]
 
 
 def run(ctx):

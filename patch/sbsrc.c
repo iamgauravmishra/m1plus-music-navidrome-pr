@@ -31,7 +31,7 @@
 #define NL_CHUNK 32 /* songs.idx rows read at a time */
 #define NL_ASKS 4 /* album requests one artist's songs read starts (the request queue holds SBA_QMAX) */
 #define NL_ARTIST_TRACKS 5000
-#define NL_PATH 208
+#define NL_PATH 336 /* a downloaded file's path (sbdl.c SBD_PATH) */
 #define NL_META 320
 #define NL_RING 16
 #define NL_RETRY_MS 10000u
@@ -52,6 +52,10 @@ static struct {
         epoch; /* due: when a request that did not make its list appear may be made again (0 none); epoch: moves then, so the pages read again (nd_gen) */
     int dsd_row,
         tries; /* dsd_row: the list row the last play answered -2 for; tries: the confirm's button relabel timer */
+    char sc_id[SBA_ID]; /* the scrobble's track: the server track the player was on at the last tick ("" none) */
+    unsigned sc_ms, sc_need,
+        sc_at; /* how long it has played, how long counts as a play (ms), when the last tick saw it playing */
+    int sc_run, sc_sent; /* it was playing at the last tick; the play was reported */
     struct {
         unsigned key, at;
     } ring[NL_RING];
@@ -558,11 +562,34 @@ int sbs_playing(const char *id) {
  */
 #define NL_AWAKE_MS 1000
 #define NL_AWAKE_GRACE_MS 5000u
+#define NL_SCROBBLE_MS \
+    240000u /* a play counts after four minutes, or half the track when that is sooner (the usual scrobble rule) */
+
+/* Scrobble: a server track (a stream or its downloaded file) that has played for half its length or four minutes is reported to the server once (sba_scrobble: scrobble.view), so its
+ * play count and last played move and the server forwards the play where it is set up to. The keep-awake tick counts the time the player spends playing it (the clock between two
+ * ticks that both saw it playing, so a late tick loses nothing). A report the guard or the full queue refuses is made again at the next tick while the track still plays; a play
+ * with no Wi-Fi to the end is not reported. */
+static void nl_scrobble(void *rec, int st, int ours) {
+    const char *id = ours ? sba_rec_track(I(rec, REC_ID)) : "";
+    unsigned now = (unsigned)time_now_ms();
+    if (strcmp(nl.sc_id, id)) {
+        sba_track_t *t = id[0] ? calloc(1, sizeof *t) : (sba_track_t *)0;
+        nl_copy(nl.sc_id, sizeof nl.sc_id, id);
+        nl.sc_ms = 0, nl.sc_run = 0, nl.sc_sent = 0, nl.sc_need = NL_SCROBBLE_MS;
+        if (t && sba_rec_row(I(rec, REC_ID), t) && t->seconds && t->seconds * 500u < NL_SCROBBLE_MS)
+            nl.sc_need = t->seconds * 500u;
+        free(t);
+    }
+    if (st == 2 && nl.sc_run) nl.sc_ms += now - nl.sc_at;
+    nl.sc_run = st == 2, nl.sc_at = now;
+    if (id[0] && st == 2 && !nl.sc_sent && nl.sc_ms >= nl.sc_need && sba_scrobble(id) == SBA_OK) nl.sc_sent = 1;
+}
 
 static int nl_awake_tick(const void *timer) {
     void *rec = cc_playing();
     int st = mclGetPlayStatus(), ours = rec && sba_rec_track(I(rec, REC_ID))[0];
     (void)timer;
+    nl_scrobble(rec, st, ours);
     if ((st == 2 && ours && sbn_http_url(P(rec, REC_PATH))) || sba_dl_busy()) {
         reset_poweroptions_timer(1, 1,
                                  0); /* a stream plays or a download runs: stock standby would stop Wi-Fi and the CPU */
@@ -570,12 +597,17 @@ static int nl_awake_tick(const void *timer) {
     }
     if ((int)((unsigned)time_now_ms() - nl.awake_until) < 0 || st == 3 || (st == 2 && ours)) return RET_REPEAT;
     nl.awake = 0;
+    nl.sc_id[0] = 0; /* (the same track started again later is a new play) */
     return RET_OK;
 }
 
 static void nl_awake_arm(void) {
     nl.awake_until = (unsigned)time_now_ms() + NL_AWAKE_GRACE_MS;
     if (!nl.awake) nl.awake = timer_add(nl_awake_tick, (void *)0, NL_AWAKE_MS);
+}
+
+void sbs_dl_resume(void) {
+    if (sba_dl_resume() > 0) nl_awake_arm(); /* the tick holds the device awake while the files come */
 }
 
 /* ---------------------------------------------------------------------------
@@ -827,10 +859,11 @@ static int nd_complete(const lib_src_t *s, int which) {
 /* ---------------------------------------------------------------------------
  * Play
  */
-static void nl_queue_free(void *q, sba_track_t *t, char (*local)[NL_PATH]) {
+static void nl_queue_free(void *q, sba_track_t *t, char (*local)[NL_PATH], int *ids) {
     if (q) deque_destroy(q);
     free(t);
     free(local);
+    free(ids);
 }
 
 /* One stock queue record: the PR's fields (sb_play_click) -- the file name, the address (or the local file), the texts and the numbers; the strings are copied by the push. */
@@ -910,8 +943,9 @@ static int nd_play(const lib_src_t *s, void *list, int at, int how, void (*open)
     unsigned count = list ? deque_size(list) : 0, i, n = 0, first = 0, last, idx = 0;
     sba_track_t *t;
     char (*local)[NL_PATH];
-    int ids[SBA_QUEUE_MAX], online = get_wifisignal() > 0, lone[SBA_QUEUE_MAX], shuffle = at < 0, here, dsd;
-    unsigned k, stride;
+    int *ids, *lone, online = get_wifisignal() > 0, shuffle = at < 0, here, dsd;
+    unsigned k, stride,
+        cap = count < SBA_QUEUE_MAX ? count : SBA_QUEUE_MAX; /* the queue's rows: the list, or a window of it */
     const char *id;
     void *q;
     if (at < 0 &&
@@ -937,10 +971,12 @@ static int nd_play(const lib_src_t *s, void *list, int at, int how, void (*open)
     if (at < 0 || at >= (int)count) return -1;
     id = nd_rec_id(s, deque_at(list, (unsigned)at));
     if (I(deque_at(list, (unsigned)at), REC_TYPE) != 8 || !id[0]) return -1;
-    t = calloc(SBA_QUEUE_MAX, sizeof *t);
-    local = calloc(SBA_QUEUE_MAX, sizeof *local);
-    if (!t || !local) {
-        nl_queue_free((void *)0, t, local);
+    t = calloc(cap, sizeof *t);
+    local = calloc(cap, sizeof *local);
+    ids = calloc(2 * cap, sizeof *ids); /* the records' ids, then whether each plays from the card */
+    lone = ids + cap;
+    if (!t || !local || !ids) {
+        nl_queue_free((void *)0, t, local, ids);
         pod_toast(TR("Not enough memory"));
         return -1;
     }
@@ -949,11 +985,11 @@ static int nd_play(const lib_src_t *s, void *list, int at, int how, void (*open)
     dsd = sba_is_dsd(t[0].suffix);
     if (dsd && !here) { /* the page asks to download it first */
         nl.dsd_row = at;
-        nl_queue_free((void *)0, t, local);
+        nl_queue_free((void *)0, t, local, ids);
         return -2;
     }
     if (!here && !online) {
-        nl_queue_free((void *)0, t, local);
+        nl_queue_free((void *)0, t, local, ids);
         pod_toast(TR("Connect to Wi-Fi first"));
         return -1;
     }
@@ -963,7 +999,7 @@ static int nd_play(const lib_src_t *s, void *list, int at, int how, void (*open)
         if (count <= SBA_QUEUE_MAX) first = 0;
     }
     last = shuffle ? count : (count - first > SBA_QUEUE_MAX ? first + SBA_QUEUE_MAX : count);
-    for (k = 0, i = shuffle ? (unsigned)at : first; n < SBA_QUEUE_MAX; ++k) {
+    for (k = 0, i = shuffle ? (unsigned)at : first; n < cap; ++k) {
         void *rec;
         if (shuffle ? k >= count : i >= last) break;
         rec = deque_at(list, i);
@@ -980,7 +1016,7 @@ static int nd_play(const lib_src_t *s, void *list, int at, int how, void (*open)
         i = shuffle ? (i + stride) % count : i + 1;
     }
     if (!n) {
-        nl_queue_free((void *)0, t, local);
+        nl_queue_free((void *)0, t, local, ids);
         return -1;
     }
     sba_queue_note(t, (int)n, ids);
@@ -994,7 +1030,7 @@ static int nd_play(const lib_src_t *s, void *list, int at, int how, void (*open)
             pod_toast(TR("Can't play")); /* no stream address could be made for a track */
         else
             pod_toast(TR("Not enough memory")); /* no memory for the queue */
-        nl_queue_free(q, t, local);
+        nl_queue_free(q, t, local, ids);
         return -1;
     }
     sba_queue_keep();
@@ -1004,7 +1040,7 @@ static int nd_play(const lib_src_t *s, void *list, int at, int how, void (*open)
         pod_set_mode_for_queue(MODE_SHUFFLE);
     *(int *)G_CLASS_TYPE = cls;
     open(q, (int)idx, cls);
-    nl_queue_free(q, t, local);
+    nl_queue_free(q, t, local, ids);
     nl_awake_arm();
     return 0;
 }

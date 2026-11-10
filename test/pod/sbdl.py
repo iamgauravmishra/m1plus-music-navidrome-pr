@@ -1,6 +1,7 @@
 """Navidrome downloads (patch/sbdl.c, docs/modules/subsonic.md "Data and cache"): the queue and its guards, the worker (one detached thread, one file at a time), progress and the
 generation counter, the .part file and the Range resume, the stall limit and the free-space floor (sbnet's options), a file that is on the card already (never overwritten), the
-manifest dl.idx (written atomically, read back offline, dropped when a file was deleted by hand), delete, and the library scan after a DSD download. The compiled payload runs
+manifest dl.idx (written atomically, read back offline, dropped when a file was deleted by hand), delete, the folder layout (artist/album/file), the waiting queue the card keeps
+(dlq.idx: a reboot, the stop at a lost Wi-Fi, the resume), and the library scan of a finished album's folder. The compiled payload runs
 under Unicorn against a scripted libcurl (no network); the card is a dict of paths. sbapi.c's real guard and login run (the conf file, Wi-Fi level and card state are set up, not a forced answer)."""
 import os, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
@@ -9,9 +10,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 
 
 PCN = sibling('pcnet')
+SA = sibling('sbapi')
 SBA = dict(OK=0, NOCONF=1, NOWIFI=2, NOCLOCK=3, NOCERT=4, CERT=5, NET=6, AUTH=7, NOTFOUND=8, HTTP=9, PARSE=10, STORAGE=11, MEM=12, QFULL=13, CARDFULL=14, NOTAUDIO=15, WRITE=16, CANCELLED=17)
 DL = dict(NONE=0, WAIT=1, ACTIVE=2, DONE=3, FAILED=4)
-MUSIC, IDX = '/mnt/mmc/Subsonic', '/mnt/mmc/.m1plus/subsonic/dl.idx'
+MUSIC, IDX, QUEUE = '/mnt/mmc/Subsonic', '/mnt/mmc/.m1plus/subsonic/dl.idx', '/mnt/mmc/.m1plus/subsonic/dlq.idx'
+ALBUM_DIR = MUSIC + '/An Artist/An Album'
 TRACK = struct.Struct('<64s192s192s192s64s64s12s9IB3x')
 SIZE = TRACK.size
 assert SIZE == 820
@@ -32,9 +35,30 @@ def body(n):
 DATA = body(1300000)
 
 
-def name_of(t, variant=0):
-    title = t['title'].replace('/', '_')
-    return f'{fnv(t["id"]):08x}-{title}' + (f' ({variant + 1})' if variant else '') + '.' + t['suffix']
+def name_of(t, variant=0, artist=None):
+    """The file of a track under MUSIC: <artist>/<album>/<nn> <title>.<suffix> (patch/sbdl.c sbd_file_name)."""
+    num = (f'{t["disc"]}-' if t['disc'] > 1 else '') + f'{t["track"]:02d} ' if t['track'] else ''
+    return f'{artist or t["artist"]}/{t["album"]}/{num}{t["title"].replace("/", "_")}' + (f' ({variant + 1})' if variant else '') + '.' + t['suffix']
+
+
+def queued(m):
+    """The track ids dlq.idx holds, in order."""
+    return [line.split('\t')[0][2:] for line in m.fs.get(QUEUE, b'').decode().split('\n') if line.startswith('i=')]
+
+
+def resume(m):
+    """sba_dl_resume on the UI thread: (the number waiting, the thread it started)."""
+    m.thread = None
+    r = m.call(PSYMS['sba_dl_resume'], count=1 << 40)
+    return r, m.thread
+
+
+def reboot(m, site=None):
+    """A new machine with the same card: nothing of the queue or the manifest is in memory."""
+    n = machine(site)
+    n.fs.update(m.fs); n.dirs.update(m.dirs); n.present.update(m.present)
+    if site is None: n.curl_site = server(n)
+    return n
 
 
 def track(i='tr-1', title='Song One', suffix='flac', size=len(DATA), **kw):
@@ -216,17 +240,24 @@ def queue_tests(ctx):
     m.thread = None
     r, th = add(m, track())
     expect(r == 0 and th is None and state(m)[0] == DL['DONE'], 'a track already on the card: SBA_OK and DONE, no worker')
-    # the cap: 32 waiting or running
+    # the cap: 1024 waiting or running (1022 come from the card's queue file, as after a reboot)
     m = machine(); m.curl_site = server(m)
+    m.dirs.add('/mnt/mmc/.m1plus/subsonic')
+    m.put(QUEUE, ''.join(f'i=q{k}\tt=q{k}\tx=flac\tp=\n' for k in range(1022)).encode())
     r, th = add(m, track('t0', 't0'))
-    for k in range(1, 32): r = add(m, track(f't{k}', f't{k}'))[0]
-    expect(r == 0, 'the queue holds 32')
-    r, _ = add(m, track('t32', 't32'))
-    expect(r == SBA['QFULL'] and state(m, 't32')[0] == DL['NONE'], 'the 33rd: SBA_QFULL')
+    expect(r == 0 and th and state(m, 'q0')[0] == DL['WAIT'] and state(m, 'q1021')[0] == DL['WAIT'], 'the rows the card kept wait again; an add starts the worker for all of them')
+    r, _ = add(m, track('t1', 't1'))
+    expect(r == 0, 'the queue holds 1024')
+    r, _ = add(m, track('t2', 't2'))
+    expect(r == SBA['QFULL'] and state(m, 't2')[0] == DL['NONE'] and 't2' not in queued(m), 'the 1025th: SBA_QFULL, nothing written')
     # a thread that cannot be made
     m = machine(thread_ok=False)
     r, th = add(m, track())
     expect(r == SBA['MEM'] and state(m)[0] == DL['NONE'] and not fn(m, 'sba_dl_busy'), 'no thread: SBA_MEM, not queued, not busy')
+    # the card refuses the queue file
+    m = machine(); m.fail.add(('open', QUEUE))
+    r, th = add(m, track())
+    expect(r == SBA['STORAGE'] and th is None and state(m)[0] == DL['NONE'], 'a queue row that cannot be written: SBA_STORAGE, not queued')
     # a track without an id
     r, th = add(m, track(''))
     expect(r == SBA['PARSE'] and th is None, 'a track with no id is refused')
@@ -254,7 +285,9 @@ def transfer_tests(ctx):
     expect('secret' not in o[10002], 'the password is not in the URL')
     expect(not o.get(10007), 'no Range on a fresh download')
     expect(o.get(19) == 512 and o.get(20) == 45 and o.get(10065) == PCN.CA and o.get(64, 1) == 1 and o.get(81, 2) == 2, 'sbnet\'s stall limit (512 B/s for 45 s), CA bundle and verification are on')
-    expect(m.fs.get(final) == DATA and f'{final}.part' not in m.fs, 'the file is complete under its name (<id hash>-<title>.<suffix>) and the .part file is gone')
+    expect(m.fs.get(final) == DATA and f'{final}.part' not in m.fs, 'the file is complete under its name (<artist>/<album>/<nn> <title>.<suffix>) and the .part file is gone')
+    expect(final == ALBUM_DIR + '/03 Song One.flac' and [c[1] for c in calls if c[0] == 'mkdir' and c[1].startswith(MUSIC)] == [MUSIC, MUSIC + '/An Artist', ALBUM_DIR],
+           f'the artist and album folders are made for it ({final})')
     expect(('rename', f'{final}.part', final) in calls, 'finished by a rename of the .part file')
     seen = [s for s in states if s[1] == DL['ACTIVE']]
     expect(seen and seen[-1][3] == len(DATA) and all(s[2] <= s[0] for s in seen), 'while it runs the state is ACTIVE with the bytes got and the size the server gave')
@@ -455,6 +488,7 @@ def failure_tests(ctx):
     guard(m, SBA['NOWIFI'])
     calls = work(m, th)
     expect(state(m)[:2] == (DL['FAILED'], SBA['NOWIFI']) and 'curl_perform' not in [c[0] for c in calls], 'Wi-Fi lost before the worker got to it: FAILED with the guard\'s words, no request')
+    expect(queued(m) == ['tr-1'] and not fn(m, 'sba_dl_busy'), 'its row stays on the card for a later start')
     m = machine(); m.curl_site = server(m)
     r, th = add(m, t)
     m.free_mb = 20
@@ -485,11 +519,13 @@ def control_tests(ctx):
     t1, t2, t3 = track(), track('tr-2', 'Song Two'), track('tr-3', 'Song Three')
     m = machine(); m.curl_site = server(m)
     r, th = add(m, t1); add(m, t2); add(m, t3)
+    expect(queued(m) == ['tr-1', 'tr-2', 'tr-3'], 'each add appends the track\'s row to dlq.idx')
     cancel(m, 'tr-2')
-    expect(state(m, 'tr-2')[0] == DL['NONE'], 'a waiting download leaves the queue')
+    expect(state(m, 'tr-2')[0] == DL['NONE'] and queued(m) == ['tr-1', 'tr-3'], 'a waiting download leaves the queue, and the card')
     calls = work(m, th)
     reqs = [c[1] for c in calls if c[0] == 'curl_perform']
     expect(len(reqs) == 2 and 'id=tr-1' in reqs[0] and 'id=tr-3' in reqs[1] and state(m, 'tr-2')[0] == DL['NONE'], 'the cancelled one is never fetched')
+    expect(QUEUE not in m.fs and QUEUE + '.tmp' not in m.fs, 'with the queue drained dlq.idx is gone')
     # cancel the running one from inside the transfer
     m = machine(); base = server(m)
     hits = []
@@ -503,10 +539,12 @@ def control_tests(ctx):
     final = f'{MUSIC}/{name_of(t1)}'
     expect(hits and state(m)[0] == DL['NONE'] and final not in m.fs and 'tr-1' not in m.fs.get(IDX, b'').decode(), 'cancelling the running download stops it: no file, no manifest row, not failed')
     expect(state(m, 'tr-2')[0] == DL['DONE'], 'the next track in the queue still downloads')
+    expect(QUEUE not in m.fs, 'and nothing waits on the card')
     # cancel all
     m = machine(); m.curl_site = server(m)
     r, th = add(m, t1); add(m, t2); add(m, t3)
     m.call(PSYMS['sba_dl_cancel_all'], count=2000000)
+    expect(QUEUE not in m.fs, 'cancel all: the queue file goes')
     calls = work(m, th)
     expect(all(state(m, i)[0] == DL['NONE'] for i in ('tr-1', 'tr-2', 'tr-3')) and 'curl_perform' not in [c[0] for c in calls] and not fn(m, 'sba_dl_busy'), 'cancel all: nothing is fetched, the worker ends')
     # delete
@@ -516,7 +554,11 @@ def control_tests(ctx):
     f1 = f'{MUSIC}/{name_of(t1)}'
     m.put(f1 + '.part', b'x')
     expect(m.call(PSYMS['sba_dl_delete'], a0=m.cstr('tr-1'), count=1 << 40) == 0 and f1 not in m.fs and f1 + '.part' not in m.fs, 'delete: the file (and a leftover .part) go')
+    tried = ('rmdir', ALBUM_DIR) in m.calls
     expect(state(m)[0] == DL['NONE'] and [r['id'] for r in listing(m)] == ['tr-2'] and path_of(m) is None, 'and the manifest row')
+    expect(ALBUM_DIR in m.dirs and tried, 'the album folder stays while another download is in it')
+    expect(m.call(PSYMS['sba_dl_delete'], a0=m.cstr('tr-2'), count=1 << 40) == 0 and ALBUM_DIR not in m.dirs and MUSIC + '/An Artist' not in m.dirs and MUSIC in m.dirs
+           and ('rmdir', MUSIC) not in m.calls, 'deleting the last one removes the empty album and artist folders (never the Subsonic folder)')
     expect(m.call(PSYMS['sba_dl_delete'], a0=m.cstr('nope'), count=1 << 40) == 0, 'deleting a track that was never downloaded is fine')
     # deleting by hand: the row goes when the path or the list is asked for
     m = machine(); m.curl_site = server(m)
@@ -572,21 +614,146 @@ def collision_tests(ctx):
     odd = track('x1', 'AC/DC: Back "in" <Black>?')
     r, th = add(m, odd); work(m, th)
     p = path_of(m, 'x1')
-    expect(p and p.startswith(MUSIC + '/') and p.count('/') == 4 and not any(c in p.rsplit('/', 1)[1] for c in ':"<>?*|\\'), f'unsafe characters in a title become underscores ({p})')
+    expect(p == ALBUM_DIR + '/03 AC_DC_ Back _in_ _Black__.flac', f'unsafe characters in a title become underscores ({p})')
 
 
-def dsd_tests(ctx):
-    """A DSD file is added to stock's library after the download; a PCM file is not."""
+def scan_tests(ctx):
+    """Stock's library learns the downloads: one scan of an album's folder when the worker leaves it or ends."""
     expect = ctx.expect
     m = machine(); m.curl_site = server(m)
     d = track('dsd-1', 'Big DSD', suffix='dsf')
     r, th = add(m, d); work(m, th)
-    expect(m.scans == ((MUSIC, 0),) and state(m, 'dsd-1')[0] == DL['DONE'], 'after a DSD download stock scans the Navidrome folder (drop 0: nothing is removed from the library)')
+    expect(m.scans == ((ALBUM_DIR, 0),) and state(m, 'dsd-1')[0] == DL['DONE'], f'after a download stock scans the album\'s folder (drop 0: nothing is removed from the library) ({m.scans})')
     r, th = add(m, track()); work(m, th)
-    expect(len(m.scans) == 1, 'a FLAC download does not scan')
+    expect(len(m.scans) == 2, 'a FLAC download scans too')
+    m = machine(); m.curl_site = server(m)
+    other = dict(track('o1', 'Else'), album='Other Album')
+    r, th = add(m, track()); add(m, track('tr-2', 'Song Two')); add(m, other); add(m, dict(track('o2', 'More'), album='Other Album'))
+    work(m, th)
+    expect(m.scans == ((ALBUM_DIR, 0), (MUSIC + '/An Artist/Other Album', 0)), f'four tracks of two albums: each folder is scanned once, when its last track is there ({m.scans})')
     m = machine(); m.curl_site = lambda url, o: dict(rc=22, code=404, body=b'', length=0)
     r, th = add(m, d); work(m, th)
-    expect(m.scans == (), 'a failed DSD download does not scan')
+    expect(m.scans == (), 'a failed download does not scan')
+    # the worker stops (Wi-Fi lost): what is on the card by then is scanned
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, track()); add(m, track('tr-2', 'Song Two'))
+    site = m.curl_site
+    m.curl_site = lambda url, o: (setattr(m, 'wifi', -1), site(url, o))[1]
+    work(m, th)
+    expect(m.scans == ((ALBUM_DIR, 0),) and state(m)[0] == DL['DONE'] and state(m, 'tr-2')[:2] == (DL['FAILED'], SBA['NOWIFI']), 'a queue that stops half-way scans the folder of what arrived')
+
+
+def layout_tests(ctx):
+    """The file of a track: <artist>/<album>/<nn> <title>.<suffix>, the artist being the album's."""
+    expect = ctx.expect
+
+    def got(t, seed=None):
+        m = machine(); m.curl_site = server(m)
+        if seed: seed(m)
+        r, th = add(m, t); work(m, th)
+        p = path_of(m, t['id'])
+        return p[len(MUSIC) + 1:] if p and m.fs.get(p) == DATA else p
+
+    expect(got(track()) == 'An Artist/An Album/03 Song One.flac', 'artist, album, the two-digit track number and the title')
+    expect(got(dict(track(), disc=2)) == 'An Artist/An Album/2-03 Song One.flac', 'a second disc carries its number')
+    expect(got(dict(track(), track=0)) == 'An Artist/An Album/Song One.flac', 'no track number: the title alone')
+    expect(got(dict(track(), track=112)) == 'An Artist/An Album/112 Song One.flac', 'a three-digit track number')
+    expect(got(dict(track(), artist='', album='', title='')) == 'Unknown Artist/Unknown Album/03 Track.flac', 'empty tags have stand-in names')
+    expect(got(dict(track(), artist='  AC/DC ', album='...And Justice.', title='What?')) == 'AC_DC/_..And Justice/03 What_.flac',
+           'no slash, no leading dot, no leading or trailing space and no trailing dot in a folder name')
+    long = got(dict(track(), artist='\u6b4c' * 40, album='B' * 90, title='T' * 150))
+    a, b, c = long.encode('latin-1').decode().split('/')   # (read_cstr shows bytes as latin-1 characters)
+    expect(a == '\u6b4c' * 21 and b == 'B' * 64 and c == '03 ' + 'T' * 100 + '.flac', f'long names are cut (64 bytes a folder, 100 the title) at a character ({len(a.encode())}, {len(b)}, {len(c)})')
+    albums = lambda m: SA.seed(m, '/mnt/mmc/.m1plus/subsonic/albums.idx', 'album', [dict(id='zz', name='Else', artist='Nobody'), dict(id='al-1', name='An Album', artist='Various Artists')])
+    expect(got(dict(track(), artist='Guest feat. Someone'), albums) == 'Various Artists/An Album/03 Song One.flac', 'the folder is the ALBUM\'s artist when the cache knows the album (a compilation stays together)')
+    expect(got(dict(track(), album_id='nope'), albums) == 'An Artist/An Album/03 Song One.flac', 'an album the cache does not have: the track\'s artist')
+
+
+def persist_tests(ctx):
+    """The waiting queue is on the card: it outlives a reboot, stops at a failure that is not the track's, and goes on with sba_dl_resume."""
+    expect = ctx.expect
+    t1, t2, t3 = track(), track('tr-2', 'Song Two'), track('tr-3', 'Song Three')
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2); add(m, t3)
+    rows = m.fs[QUEUE].decode().split('\n')
+    expect(queued(m) == ['tr-1', 'tr-2', 'tr-3'] and 't=Song One' in rows[0] and 'a=An Artist' in rows[0] and 'n=3' in rows[0] and f'z={len(DATA)}' in rows[0], 'dlq.idx has the whole row of each waiting track')
+    # a reboot before the worker ran: the three wait again, nothing runs until asked
+    m = reboot(m)
+    expect([state(m, i)[0] for i in ('tr-1', 'tr-2', 'tr-3')] == [DL['WAIT']] * 3 and not fn(m, 'sba_dl_busy') and m.thread is None, 'after a reboot the queue is read back: waiting, no worker yet')
+    r, th = resume(m)
+    expect(r == 3 and th and fn(m, 'sba_dl_busy') == 1, 'sba_dl_resume starts the worker for the three')
+    r2, th2 = resume(m)
+    expect(r2 == 0 and th2 is None, 'again while it runs: nothing')
+    calls = work(m, th)
+    reqs = [c[1] for c in calls if c[0] == 'curl_perform']
+    expect(len(reqs) == 3 and ['id=tr-1' in reqs[0], 'id=tr-2' in reqs[1], 'id=tr-3' in reqs[2]] == [True] * 3 and [r['id'] for r in listing(m)] == ['tr-1', 'tr-2', 'tr-3'],
+           'they download in the order asked, with their whole rows in the manifest')
+    expect(listing(m)[1] == t2 and QUEUE not in m.fs, 'the row read back from the card is the track as it was queued; the drained queue leaves no file')
+    expect(resume(m) == (0, None), 'nothing waiting: sba_dl_resume does nothing')
+    # a reboot half-way: the downloaded one is not fetched again
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2)
+    site = m.curl_site; seen = []
+
+    def one(url, o):
+        if seen: raise KeyboardInterrupt   # (the power goes during the second file)
+        seen.append(url)
+        return site(url, o)
+    m.curl_site = one
+    try: work(m, th)
+    except KeyboardInterrupt: pass
+    m = reboot(m)
+    expect(state(m)[0] == DL['DONE'] and state(m, 'tr-2')[0] == DL['WAIT'] and queued(m) == ['tr-1', 'tr-2'], 'power lost during the second file: the first is Downloaded, the second waits (its row is still on the card)')
+    log = []
+    m.curl_site = server(m, log=log)
+    r, th = resume(m); work(m, th)
+    expect(r == 1 and len(log) == 1 and 'id=tr-2' in log[0][0] and state(m, 'tr-2')[0] == DL['DONE'] and QUEUE not in m.fs, 'the resume fetches only the second')
+    # the worker stops at a failure that is not the track's: the rest keeps waiting
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2); add(m, t3)
+    guard(m, SBA['NOWIFI'])
+    calls = work(m, th)
+    expect(state(m)[:2] == (DL['FAILED'], SBA['NOWIFI']) and [state(m, i)[0] for i in ('tr-2', 'tr-3')] == [DL['WAIT']] * 2 and not fn(m, 'sba_dl_busy')
+           and 'curl_perform' not in [c[0] for c in calls], 'Wi-Fi lost: the first fails with the reason, the others keep waiting, the worker ends without a request')
+    expect(queued(m) == ['tr-1', 'tr-2', 'tr-3'], 'all three rows stay on the card')
+    expect(resume(m) == (0, None), 'sba_dl_resume without Wi-Fi: nothing')
+    r, th = add(m, t2)
+    expect(r == SBA['NOWIFI'] and th is None, 'asking for a waiting one without Wi-Fi says why it does not start')
+    guard(m, 0)
+    r, th = resume(m)
+    expect(r == 3 and th and state(m)[0] == DL['WAIT'], 'Wi-Fi back: the one it stopped at waits again with the others')
+    calls = work(m, th)
+    reqs = [c[1] for c in calls if c[0] == 'curl_perform']
+    expect(len(reqs) == 3 and 'id=tr-2' in reqs[0] and 'id=tr-3' in reqs[1] and 'id=tr-1' in reqs[2] and all(state(m, i)[0] == DL['DONE'] for i in ('tr-1', 'tr-2', 'tr-3')),
+           f'all three arrive, the one it stopped at last ({[u.split("id=")[1][:4] for u in reqs]})')
+    # an add of a waiting track starts a stopped queue too
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2)
+    guard(m, SBA['NOWIFI']); work(m, th); guard(m, 0)
+    r, th = add(m, t2)
+    expect(r == 0 and th and fn(m, 'sba_dl_busy') == 1, 'asking again for a waiting track starts the worker')
+    work(m, th)
+    expect(state(m, 'tr-2')[0] == DL['DONE'] and state(m)[:2] == (DL['FAILED'], SBA['NOWIFI']) and queued(m) == ['tr-1'], 'it arrives; the one the worker stopped at stays failed, its row kept for a resume')
+    # a failure of the track itself does not stop the queue, and its row is not kept
+    m = machine(); base = server(m)
+    m.curl_site = lambda url, o: (reply_head(m, o, 404), dict(rc=22, code=404, body=b'', length=0))[1] if 'id=tr-1' in url else base(url, o)
+    r, th = add(m, t1); add(m, t2)
+    work(m, th)
+    expect(state(m)[:2] == (DL['FAILED'], SBA['NOTFOUND']) and state(m, 'tr-2')[0] == DL['DONE'] and QUEUE not in m.fs, 'a 404 on one track: the next still downloads, and the failed one is not queued again after a reboot')
+    # a row with no line on the card (the file was removed under it)
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2)
+    del m.fs[QUEUE]
+    calls = work(m, th)
+    expect(state(m)[:2] == (DL['FAILED'], SBA['PARSE']) and 'curl_perform' not in [c[0] for c in calls] and not fn(m, 'sba_dl_busy'), 'a waiting track whose row is gone from the card fails without a request')
+    # odd lines in the queue file
+    m = machine(); m.curl_site = server(m)
+    m.dirs.add('/mnt/mmc/.m1plus/subsonic')
+    m.put(QUEUE, b'garbage\ni=\n\ni=k1\tt=One\tx=flac\tp=\ni=k1\tt=One\tx=flac\tp=\ni=k2\tt=Two\tx=mp3\tn=2\tp=\n')
+    r, th = resume(m)
+    expect(r == 2 and th, 'bad lines are skipped and a track listed twice waits once')
+    work(m, th)
+    expect(path_of(m, 'k1') == MUSIC + '/Unknown Artist/Unknown Album/One.flac' and path_of(m, 'k2') == MUSIC + '/Unknown Artist/Unknown Album/02 Two.mp3', 'and they download')
 
 
 def manifest_tests(ctx):
@@ -603,10 +770,11 @@ def manifest_tests(ctx):
     m.dirs.add('/mnt/mmc/.m1plus/subsonic')
     good = track('g1', 'Good')
     gf = name_of(good)
-    m.put(IDX, ('M1PLUS-DL 1\n' 'garbage\n' 'i=\n' f'i=noPath\tt=x\n' f'i=esc\tt=x\tp=../../etc/passwd\n' f'i=g1\tt=Good\tx=flac\tp={gf}\tw=3\n' '\n').encode())
-    m.put(f'{MUSIC}/{gf}', b'abc'); m.put('/etc/passwd', b'x')
-    expect([r['id'] for r in listing(m)] == ['g1'], 'lines with no id, no file name or a path out of the folder are skipped')
-    expect(state(m, 'esc')[0] == DL['NONE'] and state(m, 'g1')[0] == DL['DONE'], 'and are not Downloaded')
+    bad = ('../../etc/passwd', 'A/../../x.flac', '/etc/passwd', 'A//x.flac', 'A/.hidden/x.flac', '.x.flac', 'A/B/', 'A\\x.flac')
+    m.put(IDX, ('M1PLUS-DL 1\n' 'garbage\n' 'i=\n' 'i=noPath\tt=x\n' + ''.join(f'i=esc{k}\tt=x\tp={b}\n' for k, b in enumerate(bad)) + f'i=g1\tt=Good\tx=flac\tp={gf}\tw=3\n' '\n').encode())
+    m.put(f'{MUSIC}/{gf}', b'abc'); m.put('/etc/passwd', b'x'); m.put(MUSIC + '/A/x.flac', b'x'); m.put('/mnt/mmc/x.flac', b'x'); m.put(MUSIC + '/.x.flac', b'x'); m.put(MUSIC + '/A/.hidden/x.flac', b'x')
+    expect([r['id'] for r in listing(m)] == ['g1'], 'lines with no id, no file name or a path out of the folder (.., an absolute path, an empty or hidden part, a backslash) are skipped')
+    expect(all(state(m, f'esc{k}')[0] == DL['NONE'] for k in range(len(bad))) and state(m, 'g1')[0] == DL['DONE'], 'and are not Downloaded')
     # another download keeps the earlier rows and replaces an older row of the same track
     m.curl_site = server(m)
     r, th = add(m, track('t9', 'Nine')); work(m, th)
@@ -626,4 +794,4 @@ def manifest_tests(ctx):
     expect(m.fs.get(IDX) == big, 'an oversized manifest is kept, not replaced by one row')
 
 
-SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, dsd_tests, manifest_tests]
+SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, scan_tests, layout_tests, persist_tests, manifest_tests]

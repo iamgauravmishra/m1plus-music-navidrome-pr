@@ -27,6 +27,8 @@ const char *sbs_message(int code, int status);
 const char *sbs_request_message(int code, int status);
 /* 1 when the stock player is on the Navidrome track with this server id (a streamed or a downloaded file): the playing marker of a page with a Navidrome source. */
 int sbs_playing(const char *id);
+void sbs_dl_resume(
+    void); /* the Subsonic root page (its open, and Wi-Fi coming back while it is up): downloads that wait with no worker running start again (sba_dl_resume), with the keep-awake timer */
 void *sbs_playlist_scan(
     const lib_src_t *s,
     void *

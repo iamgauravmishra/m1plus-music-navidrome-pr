@@ -76,6 +76,7 @@ typedef struct {
     char id[SBA_ID], cover[SBA_ID], album_id[SBA_ID], suffix[SBA_SUFFIX];
     int rec;
     unsigned size; /* the track's bytes on the server, 0 unknown (Now Playing's File Size line) */
+    unsigned seconds; /* its length, 0 unknown (when a play counts as one: sbsrc.c's scrobble) */
 } sba_map_t;
 
 /* albcov.idx, written with albums.idx by every sync: one row per album, in albums.idx order, so a track finds its album's cover without reading the 0.65 KB album rows. The album id is two hashes
@@ -1199,6 +1200,7 @@ typedef struct {
 static void sba_fin(sba_slot_t *s, int code) {
     int cover = s->kind == SBA_K_COVER; /* (read before the slot is free: a new request may take it) */
     if (s->kind == SBA_K_SEARCH && code != SBA_CANCELLED) sba.search_done = sba_fnv(s->term);
+    int quiet = s->kind == SBA_K_SCROBBLE; /* no status record and no list behind it */
     if (code == SBA_CANCELLED)
         sba_stat_set(s->kind, s->id, SBA_ST_NONE, 0);
     else
@@ -1207,7 +1209,7 @@ static void sba_fin(sba_slot_t *s, int code) {
     s->state = SLOT_FREE;
     if (cover)
         sba_cbump();
-    else
+    else if (!quiet)
         sba_bump();
 }
 
@@ -1260,6 +1262,10 @@ static int sba_run(sba_wk_t *w, sba_slot_t *s) {
         return sba_run_search(w, s->term);
     case SBA_K_COVER:
         return sba_run_cover(w, s->id);
+    case SBA_K_SCROBBLE: {
+        int code = sba_get(w, "scrobble", s->id, "&submission=true");
+        return code ? code : sba_reply_code(w->sink);
+    }
     case SBA_K_STAR: {
         sba_star_arg_t *st = (sba_star_arg_t *)(unsigned long)s->arg;
         int code;
@@ -1918,11 +1924,14 @@ static int sba_enqueue(int kind, const char *id, unsigned arg, const char *term,
     s->kind = kind, s->arg = arg, s->seq = ++sba.seq;
     sba_copy(s->id, sizeof s->id, id ? id : "");
     sba_copy(s->term, sizeof s->term, term ? term : "");
-    sba_stat_make(kind, s->id);
-    sba_stat_set(kind, s->id, SBA_ST_LOAD, 0);
+    if (kind != SBA_K_SCROBBLE) {
+        sba_stat_make(kind, s->id);
+        sba_stat_set(kind, s->id, SBA_ST_LOAD, 0);
+    }
     __sync_synchronize();
     s->state = SLOT_WAIT;
-    if (kind != SBA_K_COVER) sba_bump(); /* (a cover is not a change of any list: the pages poll for theirs) */
+    if (kind != SBA_K_COVER && kind != SBA_K_SCROBBLE)
+        sba_bump(); /* (a cover or a scrobble is not a change of any list: the pages poll for their covers) */
     if (__sync_bool_compare_and_swap(&sba.busy, 0, 1) && pthread_create(&th, (const void *)0, sba_main, (void *)0)) {
         unsigned st = SLOT_WAIT;
         sba.busy = 0;
@@ -2028,6 +2037,7 @@ int sba_fetch_album(const char *id) { return id && id[0] ? sba_ask(SBA_K_ALBUM, 
 int sba_fetch_artist(const char *id) { return id && id[0] ? sba_ask(SBA_K_ARTIST, id, 0, 0, 0) : SBA_NOTFOUND; }
 int sba_fetch_playlist(const char *id) { return id && id[0] ? sba_ask(SBA_K_PLAYLIST, id, 0, 0, 0) : SBA_NOTFOUND; }
 int sba_fetch_songs(unsigned offset) { return sba_ask(SBA_K_SONGS, "", offset, 0, 0); }
+int sba_scrobble(const char *id) { return id && id[0] ? sba_ask(SBA_K_SCROBBLE, id, 0, 0, 0) : SBA_NOTFOUND; }
 int sba_search(const char *term) { return term && term[0] ? sba_ask(SBA_K_SEARCH, "", 0, term, 0) : SBA_PARSE; }
 int sba_search_is(const char *term) { return term && sba.search_done == sba_fnv(term); }
 
@@ -2464,6 +2474,29 @@ int sba_songs_window(unsigned offset, int n, sba_track_t *out) {
     return got;
 }
 
+int sba_album_artist(const char *album_id, char *out, unsigned cap) {
+    sba_album_t *row;
+    unsigned rows = 0, i;
+    int fd, r = 0;
+    if (!out || !cap) return 0;
+    out[0] = 0;
+    if (!album_id || !album_id[0] || !(row = (sba_album_t *)calloc(1, sizeof *row))) return 0;
+    fd = open(SBA_DIR "/albums.idx", O_RDONLY, 0);
+    if (fd >= 0) {
+        if (sba_head(fd, SBK_ALBUM, sizeof *row, &rows, (unsigned *)0))
+            for (i = 0; i < rows && i < SBA_MAX_ALBUMS && sba_read_all(fd, row, sizeof *row); ++i)
+                if (sba_same(row->id, album_id)) {
+                    row->artist[sizeof row->artist - 1] = 0;
+                    sba_copy(out, cap, row->artist);
+                    r = out[0] != 0;
+                    break;
+                }
+        close(fd);
+    }
+    free(row);
+    return r;
+}
+
 int sba_songs_cached(void) {
     unsigned rows, flags;
     int fd = open(SBA_DIR "/songs.idx", O_RDONLY, 0), ok;
@@ -2549,10 +2582,11 @@ void sba_queue_undo(void) {
 
 void sba_queue_note(const sba_track_t *t, int n, int *rec_id) {
     sba_map_t *m;
-    int i, j;
+    int i, j, cap;
     if (n > SBA_QUEUE_MAX) n = SBA_QUEUE_MAX;
     if (n < 0) n = 0;
-    m = calloc(SBA_QUEUE_MAX, sizeof *m);
+    cap = n < 64 ? 64 : n; /* (room for a few Play Next / Play After before the map has to grow) */
+    m = calloc((unsigned)cap, sizeof *m);
     if (!m) { /* no memory: the ids are still made, the map is just empty */
         sba_queue_keep();
         free(sba.map);
@@ -2578,6 +2612,7 @@ void sba_queue_note(const sba_track_t *t, int n, int *rec_id) {
             sba_copy(m[i].suffix, sizeof m[i].suffix, t[i].suffix);
             m[i].rec = rec;
             m[i].size = t[i].size;
+            m[i].seconds = t[i].seconds;
         }
     }
     if (!m) return;
@@ -2585,7 +2620,7 @@ void sba_queue_note(const sba_track_t *t, int n, int *rec_id) {
     sba_prevq.map = sba.map, sba_prevq.n = sba.map_n, sba_prevq.cap = sba.map_cap, sba_prevq.have = 1;
     sba.map = m;
     sba.map_n = n;
-    sba.map_cap = SBA_QUEUE_MAX;
+    sba.map_cap = cap;
 }
 
 int sba_queue_add(const sba_track_t *t) {
@@ -2595,9 +2630,10 @@ int sba_queue_add(const sba_track_t *t) {
         if (!strcmp(sba.map[i].id, t->id))
             return sba.map[i].rec; /* already known (the same track queued again): the same id */
     if (sba.map_n >= sba.map_cap) { /* Play Next / Play After grow the queue past what a play noted */
-        int cap = sba.map_cap ? sba.map_cap * 2 : SBA_QUEUE_MAX;
+        int cap = sba.map_cap ? sba.map_cap * 2 : 64;
         sba_map_t *m;
-        if (cap > SBA_MAP_MAX) return 0;
+        if (cap > SBA_MAP_MAX) cap = SBA_MAP_MAX;
+        if (sba.map_n >= cap) return 0;
         m = calloc((unsigned)cap, sizeof *m);
         if (!m) return 0;
         if (sba.map_n) memcpy(m, sba.map, (unsigned)sba.map_n * sizeof *m);
@@ -2621,6 +2657,7 @@ int sba_queue_add(const sba_track_t *t) {
     sba_copy(sba.map[sba.map_n].suffix, sizeof sba.map[0].suffix, t->suffix);
     sba.map[sba.map_n].rec = rec;
     sba.map[sba.map_n].size = t->size;
+    sba.map[sba.map_n].seconds = t->seconds;
     ++sba.map_n;
     return rec;
 }
@@ -2667,6 +2704,7 @@ int sba_rec_row(int rec_id, sba_track_t *out) {
             sba_copy(out->album_id, sizeof out->album_id, sba.map[i].album_id);
             sba_copy(out->suffix, sizeof out->suffix, sba.map[i].suffix);
             out->size = sba.map[i].size;
+            out->seconds = sba.map[i].seconds;
             return 1;
         }
     return 0;

@@ -1,7 +1,7 @@
-/* Navidrome downloads (docs/modules/subsonic.md "Data and cache", "File split"): ONE detached download worker, a small queue, the manifest dl.idx of finished downloads and the
+/* Navidrome downloads (docs/modules/subsonic.md "Data and cache", "File split"): ONE detached download worker, a queue whose rows wait on the card (dlq.idx), the manifest dl.idx of finished downloads and the
  * target files in SBA_MUSIC_DIR. The pages never block here: sba_dl_add queues a track and returns, the worker writes the file (sbn_download: a .part file, a Range resume, the PR's
  * stall limit of 512 B/s for 45 s and the 32 MB free-space floor), appends the manifest row, and the page's timer reads sba_dl_gen / sba_dl_state.
- * The worker never calls AWTK; the stock functions it calls are the library scan after a DSD download (scanSpecFolder, as the PR does) and, through sba_guard at the start of a download, get_wifisignal (the Wi-Fi check; sba_configured reads the saved login).
+ * The worker never calls AWTK; the stock functions it calls are the library scan of a finished album's folder (scanSpecFolder, as the PR does after a DSD file) and, through sba_guard at the start of a download, get_wifisignal (the Wi-Fi check; sba_configured reads the saved login).
  *
  * The manifest holds the track's whole row (title, artist, album, suffix, ...) plus the file name, so Downloaded works offline and with the server gone. It is a text file, one
  * track a line of tab-separated key=value fields (the keys are in sbd_row_text), replaced whole and atomically; a torn or odd line is skipped. A copy of (id, file, size, DSD)
@@ -24,8 +24,12 @@ extern int pn_free_kb(const char *path, unsigned *kb);
 #define SBD_IDX SBA_DIR "/dl.idx"
 #define SBD_IDX_TMP SBA_DIR "/dl.idx.tmp"
 #define SBD_HEAD "M1PLUS-DL 1\n"
-#define SBD_FILE 128 /* a file name in SBA_MUSIC_DIR, the NUL included */
-#define SBD_PATH 200 /* a full path, the ".part" included */
+#define SBD_Q \
+    SBA_DIR "/dlq.idx" /* the waiting downloads: a manifest line a track (no file name yet), appended by an add */
+#define SBD_Q_TMP SBA_DIR "/dlq.idx.tmp"
+#define SBD_FILE 288 /* a file's path under SBA_MUSIC_DIR (artist/album/name), the NUL included */
+#define SBD_PATH 336 /* a full path, the ".part" included */
+#define SBD_PART 64 /* bytes of an artist or album folder name */
 #define SBD_LINE 1600 /* a manifest line (the longest is about 1100 bytes) */
 #define SBD_IDX_MAX (4u << 20) /* a manifest larger than this is read as empty rather than loaded */
 #define SBD_ROWS 8000 /* entries kept in memory */
@@ -44,21 +48,21 @@ typedef struct {
     unsigned char state; /* 0 free, else SBA_DL_WAIT / ACTIVE / FAILED */
     int code;
     unsigned seq;
-    sba_track_t *t; /* the track while it waits or runs */
-} sbd_slot_t;
+} sbd_slot_t; /* (the track's row waits in dlq.idx: the worker reads it when its turn comes) */
 
 /* Writable state lives in .scratch (the payload has no .bss). */
 static struct {
-    volatile int lock, mf;
-    int busy, loaded, stop;
+    volatile int lock, mf, qf;
+    int busy, loaded, qloaded, stop;
     int status; /* the HTTP status of the last failed transfer (the worker writes it before it reports the failure) */
     int fail_code, fail_status; /* the newest failure nobody has been told of (0 none) */
     long fail_at; /* when it happened (time(), seconds) */
     unsigned seq, gen, got, total, step;
     sbn_sink_t *sink; /* the active transfer's sink: sba_dl_xfer answers only for it */
-    sbd_slot_t q[SBA_DLMAX];
+    sbd_slot_t *q; /* SBA_DLMAX slots, made at the first use (NULL: no memory, nothing queues) */
     sbd_ent_t *ix;
     int nix, capix;
+    char al_id[SBA_ID], al_artist[SBA_TEXT]; /* the worker's last album artist lookup */
 } sbd __attribute__((section(".scratch")));
 
 static void sbd_lock(void) {
@@ -70,6 +74,10 @@ static void sbd_mf_lock(void) {
     while (__sync_lock_test_and_set(&sbd.mf, 1)) usleep(1000);
 }
 static void sbd_mf_unlock(void) { __sync_lock_release(&sbd.mf); }
+static void sbd_qf_lock(void) {
+    while (__sync_lock_test_and_set(&sbd.qf, 1)) usleep(1000);
+}
+static void sbd_qf_unlock(void) { __sync_lock_release(&sbd.qf); }
 static void sbd_bump(void) {
     __sync_synchronize();
     __sync_add_and_fetch(&sbd.gen, 1);
@@ -171,11 +179,11 @@ static unsigned sbd_num(const char *p, const char *end, char key) {
     return r;
 }
 
-/* Parse a line into t / file / fsize; 0 when it has no id or no file name. */
+/* Parse a line into t / file / fsize; 0 when it has no id. file is "" for a row of the waiting queue (the manifest's readers check it). */
 static int sbd_parse_row(const char *p, const char *end, sba_track_t *t, char *file, unsigned fcap, unsigned *fsize) {
     memset(t, 0, sizeof *t);
     if (!sbd_field(p, end, 'i', t->id, sizeof t->id) || !t->id[0]) return 0;
-    if (!sbd_field(p, end, 'p', file, fcap) || !file[0]) return 0;
+    sbd_field(p, end, 'p', file, fcap);
     sbd_field(p, end, 't', t->title, sizeof t->title);
     sbd_field(p, end, 'a', t->artist, sizeof t->artist);
     sbd_field(p, end, 'l', t->album, sizeof t->album);
@@ -196,18 +204,56 @@ static int sbd_parse_row(const char *p, const char *end, sba_track_t *t, char *f
     return 1;
 }
 
-/* A file name must be a plain name inside SBA_MUSIC_DIR (the manifest is a file on the card: never follow a path out of the folder). */
+/* A file is a path inside SBA_MUSIC_DIR: plain names joined by '/', none empty and none starting with a dot (the manifest is a file on the card: never follow a path out of the folder). */
 static int sbd_file_ok(const char *f) {
     unsigned i;
-    if (!f[0] || f[0] == '.') return 0;
-    for (i = 0; f[i]; ++i)
-        if (f[i] == '/' || f[i] == '\\') return 0;
-    return 1;
+    if (!f[0]) return 0;
+    for (i = 0; f[i]; ++i) {
+        if (f[i] == '\\') return 0;
+        if ((!i || f[i - 1] == '/') && (f[i] == '.' || f[i] == '/')) return 0;
+    }
+    return f[i - 1] != '/';
 }
 
 static int sbd_path(char *out, unsigned cap, const char *file) {
     int k = snprintf(out, cap, "%s/%s", SBA_MUSIC_DIR, file);
     return k > 0 && (unsigned)k < cap;
+}
+
+/* The folder a file is in (SBA_MUSIC_DIR itself for a name with no folder). */
+static int sbd_dir(char *out, unsigned cap, const char *file) {
+    const char *cut = strrchr(file, '/');
+    int k = cut ? snprintf(out, cap, "%s/%s", SBA_MUSIC_DIR, file) : snprintf(out, cap, "%s", SBA_MUSIC_DIR);
+    if (k <= 0 || (unsigned)k >= cap) return 0;
+    if (cut) out[sizeof SBA_MUSIC_DIR + (unsigned)(cut - file)] = 0;
+    return 1;
+}
+
+/* Make the folders of a file (an existing one is fine; a failure shows when the file is opened). */
+static void sbd_mkdirs(const char *file) {
+    char path[SBD_PATH];
+    unsigned i, base = sizeof SBA_MUSIC_DIR; /* the index after "SBA_MUSIC_DIR/" */
+    mkdir("/mnt/mmc/.m1plus", 0755);
+    mkdir(SBA_MUSIC_DIR, 0775);
+    if (!sbd_path(path, sizeof path, file)) return;
+    for (i = base; path[i]; ++i)
+        if (path[i] == '/') {
+            path[i] = 0;
+            mkdir(path, 0775);
+            path[i] = '/';
+        }
+}
+
+/* After a delete: the album and artist folders go when they are empty (rmdir refuses a folder with files). */
+static void sbd_rmdirs(const char *file) {
+    char path[SBD_PATH];
+    unsigned n, base = sizeof SBA_MUSIC_DIR;
+    if (!sbd_path(path, sizeof path, file)) return;
+    for (n = sbd_len(path); n > base; --n)
+        if (path[n] == '/') {
+            path[n] = 0;
+            if (rmdir(path) != 0) return;
+        }
 }
 
 static int sbd_exists(const char *file) {
@@ -310,10 +356,13 @@ static void sbd_load_locked(void) {
 }
 
 /* The index is loaded on first use. */
+static void sbd_q_load(void);
 static void sbd_ensure(void) {
-    if (sbd.loaded) return;
+    if (sbd.loaded && sbd.qloaded) return;
     sbd_mf_lock();
     if (!sbd.loaded) sbd_load_locked();
+    if (!sbd.qloaded && m1_card_mounted())
+        sbd_q_load(); /* (after the index: a waiting row of a downloaded track is not queued again; not while the card is out, when the queue would read as empty for the whole run) */
     sbd_mf_unlock();
 }
 
@@ -395,27 +444,48 @@ static int sbd_owner(const char *file, char *id, unsigned cap) {
     return r;
 }
 
-/* ---- the file name of a track (the PR's layout: <8 hex of the id>-<title>.<suffix>) ---- */
+/* ---- the file of a track: <artist>/<album>/<nn> <title>.<suffix> under SBA_MUSIC_DIR ---- */
 
-static unsigned sbd_hash(const char *s) { return m1_fnv(2166136261u, s); }
-
-/* variant 0: "<hash>-<title>.<ext>"; n > 0: "<hash>-<title> (n+1).<ext>". 1 on success. */
-static int sbd_file_name(const sba_track_t *t, int variant, char *out, unsigned cap) {
-    char title[SBD_TITLE + 4], ext[SBA_SUFFIX];
-    unsigned i, n = 0, k;
-    for (i = 0; t->title[i] && n < SBD_TITLE; ++i) {
-        unsigned c = (unsigned char)t->title[i];
-        title[n++] = (c < 32 || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' ||
-                      c == '>' || c == '|')
-                         ? '_'
-                         : (char)c;
+/* A folder or file name from tag text: at most max bytes (cut at a character), control characters and the ones FAT refuses as '_', no leading dot, no leading or trailing space, no
+ * trailing dot; `empty` when nothing is left. out holds max + 1 bytes and no less than empty. */
+static void sbd_clean(char *out, const char *s, unsigned max, const char *empty) {
+    unsigned i, n = 0;
+    while (*s == ' ') ++s;
+    for (i = 0; s[i] && n < max; ++i) {
+        unsigned c = (unsigned char)s[i];
+        out[n++] = (c < 32 || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' ||
+                    c == '>' || c == '|')
+                       ? '_'
+                       : (char)c;
     }
-    while (n && ((unsigned char)t->title[n] & 0xc0) == 0x80) --n; /* the cut fell inside a character: drop it */
+    while (n && ((unsigned char)s[n] & 0xc0) == 0x80) --n; /* the cut fell inside a character: drop it */
+    while (n && (out[n - 1] == ' ' || out[n - 1] == '.')) --n;
+    if (n && out[0] == '.') out[0] = '_';
     if (!n) {
-        memcpy(title, "track", 5);
-        n = 5;
+        n = sbd_len(empty);
+        memcpy(out, empty, n);
     }
-    title[n] = 0;
+    out[n] = 0;
+}
+
+/* The artist folder of a track: its album's artist (albums.idx, one lookup an album), so the tracks of a compilation share a folder; the track's own artist when the cache does not
+ * have the album. Worker only. */
+static const char *sbd_artist(const sba_track_t *t) {
+    if (!t->album_id[0]) return t->artist;
+    if (!sbd_same(sbd.al_id, t->album_id)) {
+        sbd_set(sbd.al_id, sizeof sbd.al_id, t->album_id);
+        if (!sba_album_artist(t->album_id, sbd.al_artist, sizeof sbd.al_artist)) sbd.al_artist[0] = 0;
+    }
+    return sbd.al_artist[0] ? sbd.al_artist : t->artist;
+}
+
+/* variant 0: "<artist>/<album>/<nn> <title>.<ext>" (a second disc "<disc>-<nn> ...", no number when the track has none); n > 0: "... <title> (n+1).<ext>". 1 on success. */
+static int sbd_file_name(const sba_track_t *t, const char *artist, int variant, char *out, unsigned cap) {
+    char ar[SBD_PART + 16], al[SBD_PART + 16], title[SBD_TITLE + 8], ext[SBA_SUFFIX], num[24], var[12];
+    unsigned i, k;
+    sbd_clean(ar, artist, SBD_PART, "Unknown Artist");
+    sbd_clean(al, t->album, SBD_PART, "Unknown Album");
+    sbd_clean(title, t->title, SBD_TITLE, "Track");
     for (i = 0, k = 0; t->suffix[i] && k + 1 < sizeof ext; ++i) {
         unsigned c = (unsigned char)t->suffix[i];
         if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) ext[k++] = (char)c;
@@ -425,27 +495,152 @@ static int sbd_file_name(const sba_track_t *t, int variant, char *out, unsigned 
         k = 5;
     }
     ext[k] = 0;
-    if (variant > 0)
-        k = (unsigned)snprintf(out, cap, "%08x-%s (%d).%s", sbd_hash(t->id), title, variant + 1, ext);
-    else
-        k = (unsigned)snprintf(out, cap, "%08x-%s.%s", sbd_hash(t->id), title, ext);
+    num[0] = var[0] = 0;
+    if (t->track && t->disc > 1)
+        snprintf(num, sizeof num, "%d-%02d ", (int)(t->disc % 100), (int)(t->track % 1000));
+    else if (t->track)
+        snprintf(num, sizeof num, "%02d ", (int)(t->track % 1000));
+    if (variant > 0) snprintf(var, sizeof var, " (%d)", variant + 1);
+    k = (unsigned)snprintf(out, cap, "%s/%s/%s%s%s.%s", ar, al, num, title, var, ext);
     return (int)k > 0 && k < cap;
 }
 
-/* ---- the queue ---- */
+/* ---- the queue: SBA_DLMAX slots of (id, state) in memory, the tracks' rows in dlq.idx on the card ----
+ * An add appends the track's row to dlq.idx (one write, no sync: a lost line is a download asked for again) and the worker reads it back when the slot's turn comes, so a queue of
+ * hundreds costs no memory and outlives a reboot: the first use reads the file and every row whose track is not downloaded waits again (the worker starts with sba_dl_resume or
+ * the next add). Rows of finished, cancelled and given-up tracks are dropped when the queue drains or a waiting one is cancelled (sbd_q_compact). qf serialises the file's writers
+ * and the worker's read; order: qf, then lock. */
 
 /* The slot of an id (any state), -1 none. The caller holds lock. */
 static int sbd_slot(const char *id) {
     int i;
+    if (!sbd.q) return -1;
     for (i = 0; i < SBA_DLMAX; ++i)
         if (sbd.q[i].state && sbd_same(sbd.q[i].id, id)) return i;
     return -1;
 }
 
-static void sbd_slot_free(sbd_slot_t *s) {
-    sba_track_t *t = s->t;
-    memset(s, 0, sizeof *s);
-    free(t);
+static void sbd_slot_free(sbd_slot_t *s) { memset(s, 0, sizeof *s); }
+
+/* A failure that says nothing about the track (no Wi-Fi, the server, the login, the card): the worker stops there and the rest of the queue waits for the next start. */
+static int sbd_later(int code) {
+    return code == SBA_NOCONF || code == SBA_NOWIFI || code == SBA_NOCLOCK || code == SBA_NOCERT || code == SBA_CERT ||
+           code == SBA_NET || code == SBA_AUTH || code == SBA_STORAGE || code == SBA_MEM || code == SBA_CARDFULL;
+}
+
+static int sbd_q_line(const char *ls, const char *le, char *id, unsigned cap) {
+    return le - ls >= 4 && ls[0] == 'i' && ls[1] == '=' && sbd_field(ls, le, 'i', id, cap) && id[0];
+}
+
+/* The slots, and the queue the card remembers. Once; the caller holds mf (so the index does not move). */
+static void sbd_q_load(void) {
+    unsigned n = 0, seq = 0;
+    int cnt = 0, i;
+    sbd_slot_t *q = (sbd_slot_t *)calloc(SBA_DLMAX, sizeof *q);
+    char *text;
+    const char *p, *end, *ls, *le;
+    if (!q) return;
+    text = sbd_slurp(SBD_Q, &n);
+    p = text ? text : "";
+    end = p + n;
+    while (cnt < SBA_DLMAX && sbd_next(&p, end, &ls, &le)) {
+        char id[SBA_ID];
+        if (!sbd_q_line(ls, le, id, sizeof id)) continue;
+        for (i = 0; i < sbd.nix && !sbd_same(sbd.ix[i].id, id); ++i) {
+        }
+        if (i < sbd.nix) continue; /* downloaded since */
+        for (i = 0; i < cnt && !sbd_same(q[i].id, id); ++i) {
+        }
+        if (i < cnt) continue;
+        sbd_set(q[cnt].id, sizeof q[cnt].id, id);
+        q[cnt].state = SBA_DL_WAIT;
+        q[cnt].seq = ++seq;
+        ++cnt;
+    }
+    free(text);
+    sbd_lock();
+    sbd.q = q;
+    sbd.seq = seq;
+    sbd.qloaded = 1;
+    sbd_unlock();
+}
+
+/* The row of a waiting track, from dlq.idx. 1 found. Worker. */
+static int sbd_q_row(const char *id, sba_track_t *t) {
+    unsigned n = 0, fsize;
+    int r = 0;
+    char *text, rid[SBA_ID], file[8];
+    const char *p, *end, *ls, *le;
+    sbd_qf_lock();
+    text = sbd_slurp(SBD_Q, &n);
+    sbd_qf_unlock();
+    p = text ? text : "";
+    end = p + n;
+    while (!r && sbd_next(&p, end, &ls, &le))
+        if (sbd_q_line(ls, le, rid, sizeof rid) && sbd_same(rid, id))
+            r = sbd_parse_row(ls, le, t, file, sizeof file, &fsize);
+    free(text);
+    return r;
+}
+
+/* Append a track's row to dlq.idx. 1 written. The caller holds qf. */
+static int sbd_q_append(const sba_track_t *t) {
+    char *row = (char *)calloc(SBD_LINE, 1);
+    unsigned n;
+    int fd, ok = 0;
+    if (!row) return 0;
+    n = sbd_row_text(row, SBD_LINE - 1, t, "", 0);
+    row[n++] = '\n';
+    mkdir("/mnt/mmc/.m1plus", 0755);
+    mkdir(SBA_DIR, 0755);
+    fd = open(SBD_Q, O_WRONLY | O_APPEND | O_CREAT, 0644);
+    if (fd >= 0) {
+        ok = write(fd, row, n) == (int)n;
+        ok = close(fd) == 0 && ok;
+    }
+    free(row);
+    return ok;
+}
+
+/* dlq.idx keeps only the rows of tracks that still wait, run, or failed for a reason a later start may cure (one row a track); with none the file goes. */
+static void sbd_q_compact(void) {
+    unsigned n = 0, out = 0;
+    char *text, *buf;
+    unsigned char *seen;
+    const char *p, *end, *ls, *le;
+    if (!m1_card_mounted()) return;
+    sbd_qf_lock();
+    text = sbd_slurp(SBD_Q, &n);
+    buf = text ? (char *)calloc(n + 2, 1) : (char *)0;
+    seen = (unsigned char *)calloc(SBA_DLMAX, 1);
+    if (text && buf && seen) {
+        p = text;
+        end = p + n;
+        while (sbd_next(&p, end, &ls, &le)) {
+            char id[SBA_ID];
+            int i, keep = 0;
+            if (!sbd_q_line(ls, le, id, sizeof id)) continue;
+            sbd_lock();
+            i = sbd_slot(id);
+            if (i >= 0 && !seen[i] &&
+                (sbd.q[i].state == SBA_DL_WAIT || (sbd.q[i].state == SBA_DL_ACTIVE && !sbd.stop) ||
+                 (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code))))
+                keep = seen[i] = 1;
+            sbd_unlock();
+            if (!keep) continue;
+            memcpy(buf + out, ls, (unsigned)(le - ls));
+            out += (unsigned)(le - ls);
+            buf[out++] = '\n';
+        }
+        if (!out)
+            unlink(SBD_Q);
+        else if (out != n)
+            m1_card_write(SBA_DIR, SBD_Q, SBD_Q_TMP, buf, out, (const void *)0, 0);
+    }
+    free(seen);
+    free(buf);
+    free(text);
+    sbd_qf_unlock();
 }
 
 /* ---- progress ---- */
@@ -516,8 +711,9 @@ static int sbd_http_code(const sbn_sink_t *s, unsigned free_kb_known, unsigned f
 /* One track to the card. Returns SBA_OK, SBA_CANCELLED or the failure; *size the file's bytes. */
 static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     sbn_server_t srv;
-    char base[SBA_URL], user[SBA_TEXT], auth[SBA_TEXT], url[SBA_URL + 128], part[SBD_PATH], final[SBD_PATH],
-        owner[SBA_ID], identity[SBN_IDENTITY];
+    char base[SBA_URL], user[SBA_TEXT], auth[SBA_TEXT], url[SBA_URL + 128], part[SBD_PATH + 8], final[SBD_PATH],
+        dir[SBD_PATH], owner[SBA_ID], identity[SBN_IDENTITY];
+    const char *artist;
     unsigned kb = 0, need;
     int free_ok;
     int v, g, ok, resumable = -1, rc, code;
@@ -526,11 +722,10 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     if (g) return g;
     if (sba_net_open(base, sizeof base, user, sizeof user, auth, sizeof auth) != SBA_OK) return SBA_NOCONF;
     if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
-    mkdir("/mnt/mmc/.m1plus", 0755);
-    mkdir(SBA_MUSIC_DIR, 0775);
+    artist = sbd_artist(t);
     /* the name: a free one, or the one an earlier download of this track left (the file is never overwritten) */
     for (v = 0, ok = 0; v < 9; ++v) {
-        if (!sbd_file_name(t, v, file, SBD_FILE) || !sbd_path(final, sizeof final, file)) return SBA_STORAGE;
+        if (!sbd_file_name(t, artist, v, file, SBD_FILE) || !sbd_path(final, sizeof final, file)) return SBA_STORAGE;
         if (access(final, 0) != 0) {
             ok = 1;
             break;
@@ -551,7 +746,9 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
         sbd.got = sbd.total = *size;
         return SBA_OK;
     }
-    if (snprintf(part, sizeof part, "%s.part", final) >= (int)sizeof part) return SBA_STORAGE;
+    if (snprintf(part, sizeof part, "%s.part", final) >= (int)sizeof part || !sbd_dir(dir, sizeof dir, file))
+        return SBA_STORAGE;
+    sbd_mkdirs(file);
     need = t->size >> 10;
     if (kb <= SBA_RESERVE_KB || (need && kb - SBA_RESERVE_KB < need)) return SBA_CARDFULL;
     srv.base = base, srv.user = user, srv.auth = auth;
@@ -563,7 +760,7 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     /* who the .part file is for: a resume record of another server, user or track is not followed */
     identity[0] = 0;
     if (snprintf(identity, sizeof identity, "%s\n%s\n%s", base, user, t->id) >= (int)sizeof identity) identity[0] = 0;
-    rc = sbn_download(url, part, final, SBA_MUSIC_DIR, identity[0] ? identity : (const char *)0, sink, &resumable);
+    rc = sbn_download(url, part, final, dir, identity[0] ? identity : (const char *)0, sink, &resumable);
     sbd.sink = (sbn_sink_t *)0;
     if (rc == 1) {
         *size = (unsigned)(sink->resume_offset + sink->written);
@@ -581,20 +778,37 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     return code;
 }
 
+/* Stock's library learns the files of a folder (scanSpecFolder, as the PR does after a DSD file): once a folder, when the worker moves on to another album or stops. */
+static void sbd_scan(char *dir) {
+    if (dir[0] && m1_card_mounted()) scanSpecFolder(dir, 0);
+    dir[0] = 0;
+}
+
 static void *sbd_main(void *arg) {
+    char scan[SBD_PATH], dir[SBD_PATH], file[SBD_FILE], id[SBA_ID];
+    sba_track_t *t = (sba_track_t *)calloc(1, sizeof *t);
+    int tidy = 0;
     (void)arg;
+    scan[0] = 0;
     for (;;) {
-        int i, best = -1, code;
+        int i, best = -1, code, pause;
         unsigned size = 0;
-        char file[SBD_FILE];
-        sba_track_t *t;
         sbd_lock();
-        for (i = 0; i < SBA_DLMAX; ++i)
+        for (i = 0; sbd.q && i < SBA_DLMAX; ++i)
             if (sbd.q[i].state == SBA_DL_WAIT && (best < 0 || (int)(sbd.q[i].seq - sbd.q[best].seq) < 0)) best = i;
+        if (best < 0 &&
+            tidy) { /* the queue is drained: the last folder's scan and the queue file, before the worker ends (another may start the moment it does) */
+            sbd_unlock();
+            sbd_scan(scan);
+            sbd_q_compact();
+            tidy = 0;
+            continue;
+        }
         if (best < 0) { /* nothing left: the worker ends under the lock, so an add that follows starts a new one */
             sbd.busy = 0;
             sbd_unlock();
             sbd_bump();
+            free(t);
             return (void *)0;
         }
         sbd.q[best].state = SBA_DL_ACTIVE;
@@ -602,11 +816,12 @@ static void *sbd_main(void *arg) {
         sbd.stop = 0;
         sbd.got = sbd.total = 0;
         sbd.step = ~0u;
-        t = sbd.q[best].t;
+        sbd_set(id, sizeof id, sbd.q[best].id);
         sbd_unlock();
         sbd_bump();
+        tidy = 1;
         file[0] = 0;
-        code = t ? sbd_run(t, file, &size) : SBA_MEM;
+        code = !t ? SBA_MEM : !sbd_q_row(id, t) ? SBA_PARSE : sbd_run(t, file, &size);
         if (code == SBA_OK) {
             char *row = (char *)calloc(SBD_LINE, 1);
             if (!row)
@@ -618,8 +833,12 @@ static void *sbd_main(void *arg) {
                 free(row);
             }
         }
-        if (code == SBA_OK && sba_is_dsd(t->suffix) && m1_card_mounted())
-            scanSpecFolder(SBA_MUSIC_DIR, 0); /* stock's library learns the new DSD file, as the PR does */
+        if (code == SBA_OK && sbd_dir(dir, sizeof dir, file) && !sbd_same(dir, scan)) {
+            sbd_scan(scan); /* the album before this one is complete */
+            sbd_set(scan, sizeof scan, dir);
+        }
+        pause = code != SBA_OK && code != SBA_CANCELLED && sbd_later(code);
+        if (pause) sbd_scan(scan); /* (before the worker is seen to have ended) */
         sbd_lock();
         if (code == SBA_OK || code == SBA_CANCELLED)
             sbd_slot_free(&sbd.q[best]);
@@ -629,21 +848,42 @@ static void *sbd_main(void *arg) {
             sbd.fail_code = code;
             sbd.fail_status = code == SBA_HTTP ? sbd.status : 0;
             sbd.fail_at = time((long *)0);
-            free(sbd.q[best].t);
-            sbd.q[best].t = (sba_track_t *)0;
+            if (pause) sbd.busy = 0; /* the rest keeps waiting: sba_dl_resume or the next add starts a worker again */
         }
         sbd_unlock();
+        if (code == SBA_CANCELLED && !pause) sbd_q_compact(); /* its row goes now, not at the next start */
         sbd_bump();
+        if (pause) {
+            free(t);
+            return (void *)0;
+        }
     }
 }
 
 /* ---- the API ---- */
 
+/* A worker when none runs. SBA_OK (started, or one is running), SBA_MEM for no thread. */
+static int sbd_start(void) {
+    unsigned long th = 0;
+    int start = 0;
+    sbd_lock();
+    if (!sbd.busy) sbd.busy = 1, start = 1;
+    sbd_unlock();
+    if (!start) return SBA_OK;
+    if (pthread_create(&th, (const void *)0, sbd_main, (void *)0) != 0) {
+        sbd_lock();
+        sbd.busy = 0;
+        sbd_unlock();
+        return SBA_MEM;
+    }
+    pthread_detach(th);
+    return SBA_OK;
+}
+
 int sba_dl_add(const sba_track_t *t) {
     sbd_ent_t e;
-    int i, slot = -1, g, start = 0;
-    unsigned kb = 0, seq;
-    sba_track_t *copy;
+    int i, slot = -1, g, known = 0;
+    unsigned kb = 0;
     if (!t || !t->id[0]) return SBA_PARSE;
     if (sbd_find(t->id, &e)) {
         if (sbd_exists(e.file)) return SBA_OK; /* on the card already */
@@ -654,51 +894,65 @@ int sba_dl_add(const sba_track_t *t) {
     if (i >= 0 && sbd.q[i].state != SBA_DL_FAILED) { /* waiting or running: asked twice is once */
         if (sbd.q[i].state == SBA_DL_ACTIVE && sbd.stop)
             sbd.stop = 0; /* (a cancel the worker has not seen yet is withdrawn) */
-        sbd_unlock();
-        return SBA_OK;
+        known = 1;
     }
     sbd_unlock();
     g = sba_guard();
-    if (g) return g;
+    if (g) return known && sbd.busy ? SBA_OK : g;
+    if (known) return sbd_start(); /* (a queue that stopped or came back from the card starts here) */
     if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
+    if (!sbd.q) return SBA_MEM;
     if (kb <= SBA_RESERVE_KB || (t->size >> 10) > kb - SBA_RESERVE_KB) return SBA_CARDFULL;
-    copy = (sba_track_t *)calloc(1, sizeof *copy);
-    if (!copy) return SBA_MEM;
-    memcpy(copy, t, sizeof *copy);
+    sbd_qf_lock();
     sbd_lock();
     i = sbd_slot(t->id); /* (the same id is now a failed slot, or nothing) */
     if (i >= 0) slot = i;
     for (i = 0; slot < 0 && i < SBA_DLMAX; ++i)
         if (!sbd.q[i].state) slot = i;
-    for (i = 0; slot < 0 && i < SBA_DLMAX; ++i) /* the oldest failed one gives way */
-        if (sbd.q[i].state == SBA_DL_FAILED && (slot < 0 || (int)(sbd.q[i].seq - sbd.q[slot].seq) < 0)) slot = i;
+    if (slot < 0) /* the oldest failed one gives way */
+        for (i = 0; i < SBA_DLMAX; ++i)
+            if (sbd.q[i].state == SBA_DL_FAILED && (slot < 0 || (int)(sbd.q[i].seq - sbd.q[slot].seq) < 0)) slot = i;
     if (slot < 0) {
         sbd_unlock();
-        free(copy);
+        sbd_qf_unlock();
         return SBA_QFULL;
     }
     sbd_slot_free(&sbd.q[slot]);
-    seq = ++sbd.seq;
     sbd_set(sbd.q[slot].id, sizeof sbd.q[slot].id, t->id);
-    sbd.q[slot].t = copy;
-    sbd.q[slot].seq = seq;
+    sbd.q[slot].seq = ++sbd.seq;
     sbd.q[slot].state = SBA_DL_WAIT;
-    if (!sbd.busy) sbd.busy = 1, start = 1;
     sbd_unlock();
-    sbd_bump();
-    if (start) {
-        unsigned long th = 0;
-        if (pthread_create(&th, (const void *)0, sbd_main, (void *)0) != 0) {
-            sbd_lock();
-            sbd.busy = 0;
-            sbd_slot_free(&sbd.q[slot]);
-            sbd_unlock();
-            sbd_bump();
-            return SBA_MEM;
-        }
-        pthread_detach(th);
+    g = sbd_q_append(t) ? SBA_OK : SBA_STORAGE; /* (the worker reads the row under qf: never before it is there) */
+    sbd_qf_unlock();
+    if (g == SBA_OK) g = sbd_start();
+    if (g != SBA_OK) {
+        sbd_lock();
+        if (sbd.q[slot].state == SBA_DL_WAIT && sbd_same(sbd.q[slot].id, t->id)) sbd_slot_free(&sbd.q[slot]);
+        sbd_unlock();
+        sbd_q_compact(); /* (a row written for a worker that could not be started does not wait on the card) */
     }
-    return SBA_OK;
+    sbd_bump();
+    return g;
+}
+
+int sba_dl_resume(void) {
+    int i, n = 0;
+    sbd_ensure();
+    if (!sbd.q || sbd.busy || !m1_card_mounted() || sba_guard()) return 0;
+    sbd_lock();
+    for (i = 0; i < SBA_DLMAX; ++i) {
+        if (sbd.q[i].state == SBA_DL_FAILED &&
+            sbd_later(sbd.q[i].code)) { /* the one the worker stopped at: again, behind the others */
+            sbd.q[i].state = SBA_DL_WAIT;
+            sbd.q[i].code = 0;
+            sbd.q[i].seq = ++sbd.seq;
+        }
+        n += sbd.q[i].state == SBA_DL_WAIT;
+    }
+    sbd_unlock();
+    if (!n || sbd_start() != SBA_OK) return 0;
+    sbd_bump();
+    return n;
 }
 
 static void sbd_cancel_locked(int i) {
@@ -709,21 +963,31 @@ static void sbd_cancel_locked(int i) {
 }
 
 void sba_dl_cancel(const char *id) {
-    int i;
+    int i, waited = 0;
     if (!id) return;
+    sbd_ensure();
     sbd_lock();
     i = sbd_slot(id);
-    if (i >= 0) sbd_cancel_locked(i);
+    if (i >= 0) {
+        waited = sbd.q[i].state != SBA_DL_ACTIVE;
+        sbd_cancel_locked(i);
+    }
     sbd_unlock();
+    if (waited) sbd_q_compact(); /* (the worker drops the row of the one it was on) */
     sbd_bump();
 }
 
 void sba_dl_cancel_all(void) {
     int i;
     sbd_lock();
-    for (i = 0; i < SBA_DLMAX; ++i)
+    for (i = 0; sbd.q && i < SBA_DLMAX; ++i)
         if (sbd.q[i].state) sbd_cancel_locked(i);
     sbd_unlock();
+    if (m1_card_mounted()) { /* nothing waits on the card either (also when the queue was never read this run) */
+        sbd_qf_lock();
+        unlink(SBD_Q);
+        sbd_qf_unlock();
+    }
     sbd_bump();
 }
 
@@ -744,6 +1008,7 @@ int sba_dl_state(const char *id, int *code, unsigned *got, unsigned *total) {
     sbd_ent_t e;
     unsigned g = 0, tt = 0;
     if (!id || !id[0]) return SBA_DL_NONE;
+    sbd_ensure();
     sbd_lock();
     i = sbd_slot(id);
     if (i >= 0) {
@@ -804,6 +1069,7 @@ int sba_dl_delete(const char *id) {
         if (unlink(full) != 0 && access(full, 0) == 0) return -1;
         if (snprintf(part, sizeof part, "%s.part", full) < (int)sizeof part) unlink(part);
         if (snprintf(part, sizeof part, "%s.part.etag", full) < (int)sizeof part) unlink(part);
+        sbd_rmdirs(e.file);
     }
     if (!sbd_edit(id, (const char *)0)) r = -1;
     sbd_bump();

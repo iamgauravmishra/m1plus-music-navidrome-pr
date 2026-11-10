@@ -35,13 +35,13 @@
     "/mnt/mmc/.m1plus/subsonic.conf" /* one line "url|user|secret" (no newline): the secret is the salt and the token md5(password + salt) as 48 hex digits (patch/sbnet.h sbn_auth_make), never the password; mode 0600 where the card allows */
 #define SBA_SYNC_MAX_AGE 900u /* seconds: Sync is "due" when the last one is older than this (15 minutes) */
 #define SBA_MUSIC_DIR \
-    "/mnt/mmc/Subsonic" /* downloaded files: <id-prefix>-<name>.<suffix>, a .part file until complete */
+    "/mnt/mmc/Subsonic" /* downloaded files: <artist>/<album>/<nn> <title>.<suffix>, a .part file until complete; the stock library scans them in */
 #define SBA_CA \
     "/etc/m1plus-cacert.pem" /* the CA bundle HTTPS verifies with; HTTP is allowed (a LAN server) and unencrypted */
 #define SBA_RESERVE_KB 32768u /* a download leaves the card this much free (the PR's 32 MiB) */
 #define SBA_CACHE_RESERVE_KB 4096u /* the cache files keep this much free */
 #define SBA_QMAX 8 /* metadata requests waiting; the next is SBA_QFULL */
-#define SBA_DLMAX 32 /* downloads waiting or running */
+#define SBA_DLMAX 1024 /* downloads waiting or running (their rows wait in dlq.idx on the card) */
 
 /* Results: what a request returns at once (the guards) and what sba_state reports for a finished one. The page shows the words. */
 enum {
@@ -174,7 +174,8 @@ enum {
     SBA_K_SONGS, /* the Songs list (paged search3); `id` ignored */
     SBA_K_SEARCH, /* the last search3; `id` ignored */
     SBA_K_COVER, /* id = the coverArt id */
-    SBA_K_STAR /* id = the track */
+    SBA_K_STAR, /* id = the track */
+    SBA_K_SCROBBLE /* id = the track; no status record (nobody waits for it) */
 };
 
 unsigned sba_gen(
@@ -243,6 +244,13 @@ void sba_hearts(
     sba_track_t *v,
     int n); /* the starred flags of rows that did not come from a cache list (the download manifest's): starred.idx says, then the stars in flight, as every list read here does. Page side only */
 int sba_star_pending(const char *id); /* -1 when no star of that id is in flight, else the flag it will have (0 / 1) */
+int sba_scrobble(
+    const char *
+        id); /* scrobble.view (submission): the server counts a play of the track (play count, last played, what it forwards). SBA_OK = queued; nothing reports the answer and no list moves */
+int sba_album_artist(
+    const char *album_id, char *out,
+    unsigned
+        cap); /* the artist of a cached album (albums.idx, read row by row: files only, any thread): 1 and the name, 0 when the album is not there */
 
 /* A cover: getCoverArt?id=<cover>&size=SBA_COVER_PX stored in SBA_COVER_DIR under a name derived from the coverArt id (sba_cover_path). Navidrome covers have their OWN folder and
  * are never mixed with Cover Flow's files for local albums; the file is the same kind (a JPEG or PNG the loaders read as a cache file: file://<path> through cc_decode). Skipped when the
@@ -308,11 +316,11 @@ const char *sba_now_cover(void *track);
 int sba_rec_cover(void *track, char *path, unsigned cap);
 /* A queue record's synthetic REC_ID (always <= -2, as the PR makes it: -(FNV-1a of the track id & 0x3fffffff) - 2, bumped on a collision) and the reverse: the track id a queued record
  * stands for, "" when it is not ours. The map holds the last queue sbsrc built. */
-#define SBA_QUEUE_MAX 64
+#define SBA_QUEUE_MAX 500
 const char *sba_rec_track(int rec_id);
 unsigned
 sba_rec_size(int rec_id); /* the server's size in bytes of the track a queue record stands for, 0 unknown or not ours */
-/* What the map keeps of the track a queue record stands for: id, cover, album_id, suffix and size (the other fields zero; the cached row, found by album_id, has the rest). 1 found, 0 not ours. */
+/* What the map keeps of the track a queue record stands for: id, cover, album_id, suffix, size and seconds (the other fields zero; the cached row, found by album_id, has the rest). 1 found, 0 not ours. */
 int sba_rec_row(int rec_id, sba_track_t *out);
 void sba_queue_note(
     const sba_track_t *t, int n,
@@ -326,7 +334,7 @@ int sba_queue_add(
     const sba_track_t *
         t); /* one more queued track (Play Next / Play After): its synthetic id (the one it already has when the map knows the track), 0 when the map is full or there is no memory */
 
-/* ---- downloads (patch/sbdl.c: the PR's resume, stall and free-space rules; one file at a time; the queue is in memory, the files and the manifest dl.idx are on the card) ---- */
+/* ---- downloads (patch/sbdl.c: the PR's resume, stall and free-space rules; one file at a time; the waiting queue dlq.idx, the files and the manifest dl.idx are on the card) ---- */
 
 enum { SBA_DL_NONE = 0, SBA_DL_WAIT, SBA_DL_ACTIVE, SBA_DL_DONE, SBA_DL_FAILED };
 
@@ -337,6 +345,8 @@ void sba_dl_cancel(
     const char *
         id); /* a waiting (or failed) download leaves the queue; the active one stops (sbn_download then removes its .part, as the PR did; a network fault keeps it for the next try) */
 void sba_dl_cancel_all(void);
+int sba_dl_resume(
+    void); /* UI thread: with the guard clear and no worker running, the waiting downloads (a queue the card kept over a reboot, or one the worker stopped at a lost Wi-Fi, a full card ...) start again, the one it stopped at last; the number waiting, 0 when nothing was started */
 int sba_dl_state(const char *id, int *code, unsigned *got,
                  unsigned *total); /* SBA_DL_*; code: the SBA_* of a failure; got / total in bytes (total 0 unknown) */
 int sba_dl_failure(

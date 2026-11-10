@@ -10,7 +10,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 PCN = sibling('pcnet')   # the card machine and scripted libcurl the podcast network tests use
 CONF, ND, COVERS, CA = '/mnt/mmc/.m1plus/subsonic.conf', '/mnt/mmc/.m1plus/subsonic', '/mnt/mmc/.m1plus/subsonic/covers', '/etc/m1plus-cacert.pem'
 R = dict(OK=0, NOCONF=1, NOWIFI=2, NOCLOCK=3, NOCERT=4, CERT=5, NET=6, AUTH=7, NOTFOUND=8, HTTP=9, PARSE=10, STORAGE=11, MEM=12, QFULL=13, CARDFULL=14, NOTAUDIO=15, WRITE=16, CANCELLED=17)
-K = dict(PING=0, SYNC=1, ALBUM=2, ARTIST=3, PLAYLIST=4, SONGS=5, SEARCH=6, COVER=7, STAR=8)
+K = dict(PING=0, SYNC=1, ALBUM=2, ARTIST=3, PLAYLIST=4, SONGS=5, SEARCH=6, COVER=7, STAR=8, SCROBBLE=9)
 ST = dict(NONE=0, LOAD=1, OK=2, FAIL=3)
 KIND = dict(track=1, album=2, artist=3, playlist=4)
 TRACK = '<64s192s192s192s64s64s12s9IB3x'      # sba_track_t
@@ -897,6 +897,25 @@ def play(ctx):
     out = m.alloc(struct.calcsize(TRACK))
     t1 = unrow('track', bytes(m.u.mem_read(out, struct.calcsize(TRACK)))) if call(m, 'sba_rec_row', rec[1], out) == 1 else None
     expect(t1 and (t1[0], t1[4], t1[5], t1[6], t1[11]) == ('t1', 'al-t1', 'cv-t1', 'flac', 2000) and not t1[1], 'sba_rec_row: id, album id, cover, suffix and size of the queue record\'s track, the rest zero')
+    # the scrobble: one request, no status record, no generation move; the guard and the server's answer are its result and nobody's news
+    ms = machine(); seen = []
+    ms.curl_site = lambda url, o: (seen.append(url), {'body': ok_json()})[1]
+    g0 = gen(ms)
+    r = run_one(ms, 'sba_scrobble', 't1/x')
+    expect(r == 0 and len(seen) == 1 and '/rest/scrobble.view?' in seen[0] and 'id=t1%2Fx' in seen[0] and seen[0].endswith('&submission=true') and PASSWORD not in seen[0],
+           f'sba_scrobble: scrobble.view with the escaped id and submission=true ({seen})')
+    expect(gen(ms) == g0 and state(ms, K['SCROBBLE'], 't1/x')[0] == ST['NONE'] and not busy(ms), 'it moves no generation and leaves no status record; the worker ends')
+    ms.curl_site = lambda url, o: {'body': err_json(70)}
+    expect(run_one(ms, 'sba_scrobble', 'gone') == 0 and gen(ms) == g0, 'a refusal by the server is nobody\'s news')
+    ms.wifi = -1
+    expect(call(ms, 'sba_scrobble', 't1') == R['NOWIFI'] and call(ms, 'sba_scrobble', '') == R['NOTFOUND'], 'no Wi-Fi: the guard\'s answer, nothing queued; an empty id is refused')
+    # the album artist of a cached album (the download's folder)
+    ma = machine(); out2 = ma.alloc(200)
+    seed(ma, f'{ND}/albums.idx', 'album', [dict(id='a1', name='Kind of Blue', artist='Miles Davis'), dict(id='a2', name='ZZ', artist=''), dict(id='a3', name='Mix', artist='Various Artists')])
+    expect(call(ma, 'sba_album_artist', 'a3', out2, 200) == 1 and ma.read_cstr(out2) == 'Various Artists' and call(ma, 'sba_album_artist', 'a1', out2, 200) == 1 and ma.read_cstr(out2) == 'Miles Davis',
+           'sba_album_artist: the artist of an album in albums.idx')
+    expect(call(ma, 'sba_album_artist', 'a2', out2, 200) == 0 and call(ma, 'sba_album_artist', 'nope', out2, 200) == 0 and call(ma, 'sba_album_artist', '', out2, 200) == 0
+           and call(machine(), 'sba_album_artist', 'a1', out2, 200) == 0, 'an album with no artist, one that is not there, an empty id or no albums.idx: 0')
     expect(call(m, 'sba_rec_row', 7, out) == 0 and call(m, 'sba_rec_row', -999, out) == 0, 'sba_rec_row: a local or unknown record is not ours')
     call(m, 'sba_queue_note', tracks, 1, recs)
     expect(m.read_cstr(call(m, 'sba_rec_track', rec[1])) == '', 'a new queue replaces the map')
@@ -1196,7 +1215,7 @@ def bg(ctx):
     # a download goes first: phase 2 waits for it
     site, songs, ids = bg_lib()
     m = bg_machine(site)
-    sbd_busy = PSYMS['sbd'] + 8
+    sbd_busy = PSYMS['sbd'] + 12   # (patch/sbdl.c: lock, mf, qf, busy)
     m.setword(sbd_busy, 1)
     waits = []
 

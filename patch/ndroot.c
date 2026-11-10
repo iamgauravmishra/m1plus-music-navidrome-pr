@@ -336,6 +336,7 @@ static int nr_tick(const void *timer) {
     }
     {
         int guard = sba_guard();
+        if (nr.guard != SBA_OK && guard == SBA_OK) sbs_dl_resume(); /* and the downloads that waited for it */
         if (nr.guard != SBA_OK && guard == SBA_OK)
             sba_sync_auto(); /* Wi-Fi came back while the page is up (or the clock got set after it, or the card is back): a due sync runs now, not at the next visit */
         nr.guard = guard;
@@ -405,6 +406,7 @@ int nd_root_open(void) {
     sba_retire_old(); /* the pull request's old files, once */
     nr.guard = sba_guard();
     if (sba_configured()) sba_sync_auto();
+    if (sba_configured()) sbs_dl_resume(); /* downloads the card kept waiting (a reboot, a lost Wi-Fi) go on */
     nr.gen = nr_gen();
     nr_refresh(0);
     nr.timer = timer_add(nr_tick, (void *)0, NR_TICK_MS);

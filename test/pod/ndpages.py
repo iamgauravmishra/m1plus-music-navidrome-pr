@@ -718,7 +718,7 @@ def trap(m, names=OPENERS):
     m._hook = hook
 
 
-def root_opened(conf=True, fresh=False, caps=None, **kw):
+def root_opened(conf=True, fresh=False, caps=None, files=None, **kw):
     """The root page open over a card with the PR's conf file (or none). fresh: a finished sync of 5 minutes ago (nothing is due)."""
     m = SB.machine(conf=conf)
     m.window = WIN
@@ -727,6 +727,7 @@ def root_opened(conf=True, fresh=False, caps=None, **kw):
     for n in ROOT_NAMES: Machine.widget(m, n)   # noqa: F821
     for i, t in enumerate(ROOT_LABELS): m.wtext[m.widgets[f'pod_row{i}']] = t
     if fresh: m.put(SB.ND + '/sync.txt', b'1799999700 2431 0')
+    for path, blob in (files or {}).items(): m.put(path, blob)
     trap(m)
     if caps is not None: m.setword(PSYMS['lib_nd'] + F_CAPS, caps)   # lib_src_t.caps: the source's controls (LS_CAP_SEARCH = 2)
     m.calls = []
@@ -762,6 +763,25 @@ def ok_site():
                    getArtists={'body': SB.ok_json(artists={'index': []})}, getPlaylists={'body': SB.ok_json(playlists={'playlist': []})},
                    getStarred2={'body': SB.ok_json(starred2={})}, ping={'body': SB.ok_json()},
                    search3=lambda url, o: {'body': SB.songs_json(['s0'])})   # (a library that has songs: an empty first page would fail the fill)
+
+
+def root_downloads(ctx):
+    """Opening the page (and Wi-Fi coming back while it is up) starts the downloads the card kept waiting: sba_dl_resume, with the keep-awake timer."""
+    expect = ctx.expect
+    waiting = {SB.ND + '/dlq.idx': b'i=k1\tt=One\tx=flac\tp=\ni=k2\tt=Two\tx=flac\tp=\n'}
+    armed = lambda m: sum(1 for c in m.calls if c[0] == 'timer_add' and c[1] == PSYMS['nl_awake_tick'])
+    busy = lambda m: m.call(PSYMS['sba_dl_busy'], count=2000000)
+    m = root_opened(fresh=True, files=waiting)
+    expect(m.thread and m.thread[0] == PSYMS['sbd_main'] and armed(m) == 1 and busy(m) == 1, 'two downloads waiting on the card: the page\'s open starts the download worker and arms the keep-awake timer')
+    m = root_opened(fresh=True)
+    expect(m.thread is None and armed(m) == 0 and not busy(m), 'nothing waiting: no worker, no timer')
+    m = root_opened(fresh=True, files=waiting, wifi=-1)
+    expect(m.thread is None and not busy(m), 'opened with the Wi-Fi off: the downloads keep waiting')
+    tick(m)
+    expect(m.thread is None, 'still off after a tick: nothing')
+    m.wifi = 4
+    tick(m)
+    expect(m.thread and m.thread[0] == PSYMS['sbd_main'] and armed(m) == 1 and busy(m) == 1, 'the Wi-Fi came back while the page is up: they start')
 
 
 def root_asset(ctx):
@@ -1203,7 +1223,7 @@ def root_strings(ctx):
 
 
 def root(ctx):
-    for f in (root_asset, root_rows, root_status, root_progress, root_footer, root_collapse, root_more, root_search, root_empty, root_offline, root_life, root_strings): f(ctx)
+    for f in (root_asset, root_rows, root_status, root_downloads, root_progress, root_footer, root_collapse, root_more, root_search, root_empty, root_offline, root_life, root_strings): f(ctx)
 
 
 SECTIONS = [server, root]
