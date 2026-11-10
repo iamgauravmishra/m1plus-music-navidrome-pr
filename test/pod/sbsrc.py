@@ -698,6 +698,13 @@ def sheet(ctx):
     expect(call(m, F_ACT, LIB, r1, ACT_DOWNLOAD) == 0 and SD.state(m, 't1')[0] == SD.DL['WAIT'], 'Download queues the track (waiting)')
     expect(call(m, F_ACT, LIB, r1, ACT_CANCEL_DL) == 0 and SD.state(m, 't1')[0] == SD.DL['NONE'], 'Cancel Download takes a waiting track out of the queue')
     expect(call(m, F_ACT, LIB, 0, ACT_CANCEL_DL) == -1, 'Cancel Download without a record: -1')
+    mc = machine(); SD.guard(mc, 0)
+    hc = play_setup(mc, [trk(1), trk(2)])
+    call(mc, F_ACT, LIB, deque_row(mc, hc, 0), ACT_DOWNLOAD); call(mc, F_ACT, LIB, deque_row(mc, hc, 1), ACT_DOWNLOAD)
+    mc.fail.add(('write', SD.QUEUE)); mc.fail.add(('read', SD.QUEUE))
+    r = call(mc, F_ACT, LIB, deque_row(mc, hc, 1), ACT_CANCEL_DL)
+    expect(S32(r) == -1 and [c[1] for c in mc.calls if c[0] == 'toast'] == ['Storage unavailable'] and SD.state(mc, 't2')[0] == SD.DL['NONE'],
+           f'a cancel the card does not take: the download stops and a toast says the card is the trouble ({r})')
     # the DSD confirm
     DSD = lambda m_, h_, at: S32(m_.call(PSYMS['ls_dsd_confirm'], a0=LIB, a1=h_, a2=at & 0xffffffff, count=1 << 30))
     m = machine()

@@ -473,7 +473,7 @@ class Machine:
             ret = (-1 if neg else 1) * int(dig) if dig else 0
             self.calls.append(('atoi', s))
         elif name == 'access':
-            p = self.read_cstr(a0); ret = 0 if p in self.present or p in self.fs else -1
+            p = self.fsname(self.read_cstr(a0)); ret = 0 if p in self.present or p in self.fs else -1
             self.calls.append(('access', p))
         elif name == '__xstat':   # a file's state, for the callers that keep a signature (the Home cache check: patch/homecover.c hc_dbsig): path -> [mtime, nsec, size] in self.db; anything else is missing
             p = self.read_cstr(a1); self.calls.append(('__xstat', p)); ret = 0xffffffff
@@ -1118,7 +1118,7 @@ class Machine:
                 self.files[dst] = self.files.pop(src); self.present.discard(src); self.present.add(dst)
             else: ret = -1
         elif name == 'unlink':
-            p = self.read_cstr(a0)
+            p = self.fsname(self.read_cstr(a0))
             if ('unlink', p) in self.fail: ret = -1
             else:
                 self.files.pop(p, None); self.present.discard(p)
@@ -1138,6 +1138,7 @@ class Machine:
             self.u.mem_write(a1, struct.pack('<10I', 0x4d44 if on_card else 0x73717368, 4096, 0, 0, 0, 0, 0,
                                              self.free_mb * 256, 0x1234 if on_card else 0x5678, 0) + bytes(88))
             self.calls.append(('statfs', p))
+            if getattr(self, 'on_statfs', None): self.on_statfs(p)   # a test's way to act between a transfer's end and the worker's handling of it (the download worker asks for the free space there)
             if ('statfs', p) in self.fail: ret = -1
         # ---- Screenshot: the frame buffer. self.fb = {'var': 40 words, 'fix': 17 words, 'mem': bytes} (None: no /dev/fb0)
         elif name == 'ioctl':
@@ -1196,7 +1197,7 @@ class Machine:
             self.u.mem_write(r, bytes(0x58))
         # ---- Home guard: files, descriptors, the window stack
         elif name == 'open':
-            p, fl = self.read_cstr(a0), a1
+            p, fl = self.fsname(self.read_cstr(a0)), a1
             self.calls.append(('open', p, fl))
             if ('open', p) in self.fail: ret = -1
             elif p == '/dev/fb0':
@@ -1211,8 +1212,10 @@ class Machine:
         elif name == 'read':
             p, _, pos = self.fds[a0]
             data = self.fs.get(p, b'')[pos:pos + a2]
+            if ('read', p) in self.fail: data = None   # (a read error: m.fail.add(('read', path)))
             self.u.mem_write(a1, data) if data else None
-            self.fds[a0][2] += len(data); ret = len(data)
+            if data is not None: self.fds[a0][2] += len(data)
+            ret = len(data) if data is not None else -1
             self.calls.append(('read', p))
         elif name == 'write':
             p = self.fds[a0][0]; data = bytes(self.u.mem_read(a1, a2))
@@ -1771,6 +1774,55 @@ def node(root, name):
     for c in root.children:
         r = node(c, name)
         if r: return r
+
+
+def _fsname(self, p):
+    """The file a path names on the mock card: p itself, or, with m.nocase set (a card that folds the case of every script, as exFAT does), the file of self.fs whose name differs from
+    p only in case."""
+    if not getattr(self, 'nocase', False) or p in self.fs: return p
+    k = p.casefold()
+    return next((q for q in self.fs if q.casefold() == k), p)
+
+
+Machine.fsname = _fsname
+
+
+def live_tree(m, asset):
+    """The built page (the path of its ui/*.bin) as the window manager sees it now: every named widget with the place (widget_move / widget_resize) and the visibility / sensitivity the payload's calls left.
+    For stock_target: where does a touch go on the page as it stands?"""
+    root = asset_tree(asset)
+    def sync(n):
+        h = m.widgets.get(n.name)
+        if h is not None:
+            n.x, n.y, n.w, n.h = (m.props.get((h, k), v) for k, v in zip('xywh', (n.x, n.y, n.w, n.h)))
+            for key, bit in (('visible', F_VISIBLE), ('sensitive', F_SENSITIVE)):
+                if (h, key) in m.props: n.flags = n.flags & ~bit | (bit if m.props[(h, key)] else 0)
+        for c in n.children: sync(c)
+    for c in root.children: sync(c)
+    return root
+
+
+def touch(m, root, x, y):
+    """The name of the widget a touch at the window point (x, y) is delivered to (demo's own hit test on a live_tree)."""
+    return stock_target(m, root, x, y)[-1]
+
+
+def touch_misses(m, asset, names):
+    """[(name, what took the touch)] for the controls of `names` whose centre does not reach them on the page as it stands (live_tree): a control drawn where another widget takes the touch,
+    or inside an insensitive parent, is a button that does nothing on the device."""
+    root = live_tree(m, asset)
+    def find(n, ox, oy):
+        for c in n.children:
+            if c.name in want: where[c.name] = (ox + c.x + c.w // 2, oy + c.y + c.h // 2)
+            find(c, ox + c.x, oy + c.y)
+    want, where = set(names), {}
+    find(root, 0, 0)
+    out = [(n, None) for n in names if n not in where]
+    for n in names:
+        if n in where:
+            path = stock_target(m, root, *where[n])
+            if n not in path: out.append((n, path[-1]))
+    return out
 
 
 def cover_page_tree(m, asset, runtime=True):

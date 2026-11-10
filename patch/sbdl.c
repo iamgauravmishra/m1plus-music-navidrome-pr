@@ -53,7 +53,9 @@ typedef struct {
 /* Writable state lives in .scratch (the payload has no .bss). */
 static struct {
     volatile int lock, mf, qf;
-    int busy, loaded, qloaded, stop;
+    int busy, loaded, qloaded, stop,
+        again; /* again: the active track's cancel was withdrawn by an add (sba_dl_add); if the transfer had obeyed the cancel already, the worker puts the track back in line */
+    int qbad; /* dlq.idx was there and could not be read whole: no queue is loaded, the next use reads again */
     int status; /* the HTTP status of the last failed transfer (the worker writes it before it reports the failure) */
     int fail_code, fail_status; /* the newest failure nobody has been told of (0 none) */
     long fail_at; /* when it happened (time(), seconds) */
@@ -88,6 +90,18 @@ static void sbd_bump(void) {
 static unsigned sbd_len(const char *s) { return sbn_len(s); }
 
 static int sbd_same(const char *a, const char *b) { return strcmp(a, b) == 0; }
+
+/* Two file names that are one file on the card: exFAT and FAT fold the case, so "03 Song One.flac" and "03 SONG ONE.flac" are the same file. The ASCII letters only: this is the cheap
+ * first answer; the card folds every script, and sbd_shared asks the card itself before a file is adopted. */
+static int sbd_same_file(const char *a, const char *b) {
+    for (;; ++a, ++b) {
+        unsigned x = (unsigned char)*a, y = (unsigned char)*b;
+        if (x >= 'A' && x <= 'Z') x += 32;
+        if (y >= 'A' && y <= 'Z') y += 32;
+        if (x != y) return 0;
+        if (!x) return 1;
+    }
+}
 
 static void sbd_set(char *dst, unsigned cap, const char *src) {
     unsigned n = sbd_len(src);
@@ -264,16 +278,23 @@ static int sbd_exists(const char *file) {
 /* ---- reading and writing dl.idx ---- */
 
 /* The whole file in a heap buffer (NUL terminated); NULL when it is missing, empty or too large. */
-static char *sbd_slurp(const char *path, unsigned *n) {
+/* A whole file as text (NULL for none, an empty or an oversized one). *bad, when asked for, is 1 when the file is there and was not read whole (it would not open, no memory, a read that
+ * failed or came short): what was read is then no word on what the file holds. */
+static char *sbd_slurp_st(const char *path, unsigned *n, int *bad) {
     int fd = open(path, O_RDONLY, 0);
     long size;
     char *buf;
     unsigned got = 0;
     *n = 0;
-    if (fd < 0) return (char *)0;
+    if (bad) *bad = 0;
+    if (fd < 0) {
+        if (bad) *bad = access(path, 0) == 0;
+        return (char *)0;
+    }
     size = lseek(fd, 0, 2);
     if (size <= 0 || (unsigned long)size > SBD_IDX_MAX || lseek(fd, 0, 0) < 0 ||
         !(buf = (char *)calloc((unsigned)size + 1, 1))) {
+        if (bad) *bad = size < 0 || (size > 0 && (unsigned long)size <= SBD_IDX_MAX);
         close(fd);
         return (char *)0;
     }
@@ -283,10 +304,13 @@ static char *sbd_slurp(const char *path, unsigned *n) {
         got += (unsigned)r;
     }
     close(fd);
+    if (bad) *bad = got < (unsigned)size;
     buf[got] = 0;
     *n = got;
     return buf;
 }
+
+static char *sbd_slurp(const char *path, unsigned *n) { return sbd_slurp_st(path, n, (int *)0); }
 
 /* 1 when the file exists and is larger than SBD_IDX_MAX (sbd_slurp reads it as empty). */
 static int sbd_oversized(const char *path) {
@@ -430,17 +454,51 @@ static int sbd_find(const char *id, sbd_ent_t *out) {
     return r;
 }
 
-/* The index entry that owns a file name (a name collision between two tracks). */
+/* The index entry that owns a file name (a name collision between two tracks), compared as the card compares names. */
 static int sbd_owner(const char *file, char *id, unsigned cap) {
     int i, r = 0;
     sbd_lock();
     for (i = 0; i < sbd.nix; ++i)
-        if (sbd_same(sbd.ix[i].file, file)) {
+        if (sbd_same_file(sbd.ix[i].file, file)) {
             sbd_set(id, cap, sbd.ix[i].id);
             r = 1;
             break;
         }
     sbd_unlock();
+    return r;
+}
+
+/* The card's own word on which file a path is (st_dev, st_ino; struct stat of this ABI has them at 0 and 0x10). */
+static int sbd_ident(const char *path, unsigned *dev, unsigned *ino) {
+    unsigned s[40];
+    memset(s, 0, sizeof s);
+    if (__xstat(3, path, s) != 0) return 0;
+    *dev = s[0], *ino = s[0x10 / 4];
+    return 1;
+}
+
+/* 1 when the file at `final` is the file of another track of the manifest, by the card and not by the names: exFAT and FAT fold the case of every script with a table of the card's own
+ * ("Café.flac" and "CAFÉ.flac" are one file), so two names prove nothing; one inode does. The file is held open meanwhile, so its inode keeps its number. A file that cannot be told
+ * (it will not open or stat) counts as shared: it is not adopted. Worker. */
+static int sbd_shared(const char *final, const char *id) {
+    int fd = open(final, O_RDONLY, 0), i, r = 0;
+    unsigned d0, i0, d, k;
+    char rel[SBD_FILE], full[SBD_PATH];
+    if (fd < 0) return 1;
+    if (!sbd_ident(final, &d0, &i0)) r = 1;
+    for (i = 0; !r; ++i) {
+        int have, other = 0;
+        sbd_lock();
+        have = i < sbd.nix;
+        if (have) {
+            other = !sbd_same(sbd.ix[i].id, id);
+            sbd_set(rel, sizeof rel, sbd.ix[i].file);
+        }
+        sbd_unlock();
+        if (!have) break;
+        if (other && sbd_path(full, sizeof full, rel) && sbd_ident(full, &d, &k) && d == d0 && k == i0) r = 1;
+    }
+    close(fd);
     return r;
 }
 
@@ -532,20 +590,42 @@ static int sbd_q_line(const char *ls, const char *le, char *id, unsigned cap) {
     return le - ls >= 4 && ls[0] == 'i' && ls[1] == '=' && sbd_field(ls, le, 'i', id, cap) && id[0];
 }
 
+/* A line that takes a track out of the queue: "-=<id>" (sbd_q_cancelled). */
+static int sbd_q_gone(const char *ls, const char *le, char *id, unsigned cap) {
+    return le - ls >= 3 && ls[0] == '-' && ls[1] == '=' && sbd_field(ls, le, '-', id, cap) && id[0];
+}
+
 /* The slots, and the queue the card remembers. Once; the caller holds mf (so the index does not move). */
 static void sbd_q_load(void) {
     unsigned n = 0, seq = 0;
-    int cnt = 0, i;
+    int cnt = 0, i, bad = 0;
     sbd_slot_t *q = (sbd_slot_t *)calloc(SBA_DLMAX, sizeof *q);
     char *text;
     const char *p, *end, *ls, *le;
     if (!q) return;
-    text = sbd_slurp(SBD_Q, &n);
+    text = sbd_slurp_st(SBD_Q, &n, &bad);
+    sbd.qbad = bad;
+    if (bad) { /* not read whole: not the queue. Nothing is loaded and the next use reads again (a queue taken as empty here would be removed by the next compaction) */
+        free(text);
+        free(q);
+        return;
+    }
     p = text ? text : "";
     end = p + n;
-    while (cnt < SBA_DLMAX && sbd_next(&p, end, &ls, &le)) {
+    while (sbd_next(&p, end, &ls, &le)) {
         char id[SBA_ID];
-        if (!sbd_q_line(ls, le, id, sizeof id)) continue;
+        if (sbd_q_gone(
+                ls, le, id,
+                sizeof id)) { /* cancelled after its row was written (sbd_q_cancelled): the rows before this line are not the queue's */
+            for (i = 0; i < cnt && !sbd_same(q[i].id, id); ++i) {
+            }
+            if (i < cnt) {
+                memmove(&q[i], &q[i + 1], (unsigned)(cnt - i - 1) * sizeof *q);
+                memset(&q[--cnt], 0, sizeof *q);
+            }
+            continue;
+        }
+        if (cnt >= SBA_DLMAX || !sbd_q_line(ls, le, id, sizeof id)) continue;
         for (i = 0; i < sbd.nix && !sbd_same(sbd.ix[i].id, id); ++i) {
         }
         if (i < sbd.nix) continue; /* downloaded since */
@@ -565,22 +645,54 @@ static void sbd_q_load(void) {
     sbd_unlock();
 }
 
-/* The row of a waiting track, from dlq.idx. 1 found. Worker. */
+/* The row of a waiting track, from dlq.idx. 1 found; 0 the file was read and has no such row; -1 the file could not be read (the card's trouble, not the row's: the track waits). Worker. */
 static int sbd_q_row(const char *id, sba_track_t *t) {
     unsigned n = 0, fsize;
-    int r = 0;
+    int r = 0, bad = 0;
     char *text, rid[SBA_ID], file[8];
     const char *p, *end, *ls, *le;
     sbd_qf_lock();
-    text = sbd_slurp(SBD_Q, &n);
+    text = sbd_slurp_st(SBD_Q, &n, &bad);
     sbd_qf_unlock();
+    if (bad || (!text && !m1_card_mounted())) {
+        free(text);
+        return -1;
+    }
     p = text ? text : "";
     end = p + n;
-    while (!r && sbd_next(&p, end, &ls, &le))
+    while (sbd_next(
+        &p, end, &ls,
+        &le)) { /* the last row of the track: an add after a cancel appends a new one, and that is the one asked for; a cancel's line after it leaves none */
         if (sbd_q_line(ls, le, rid, sizeof rid) && sbd_same(rid, id))
             r = sbd_parse_row(ls, le, t, file, sizeof file, &fsize);
+        else if (sbd_q_gone(ls, le, rid, sizeof rid) && sbd_same(rid, id))
+            r = 0;
+    }
     free(text);
     return r;
+}
+
+/* A track leaves the queue by the user's word (a cancel, an add that could not start): one line "-=<id>" appended to dlq.idx, before the file is compacted. The compaction needs the
+ * whole file read back and may not get it (then it leaves the file alone); this line needs no read, and with it the row does not wait again after a restart. A later add of the same
+ * track appends its row after the line and counts. 1 when the card has it (or has no queue file). Takes qf. */
+static int sbd_q_cancelled(const char *id) {
+    char line[SBA_ID + 4];
+    int fd, n, ok = 0;
+    if (!m1_card_mounted()) return 0;
+    n = snprintf(line, sizeof line, "-=%s\n", id);
+    if (n <= 0 || n >= (int)sizeof line) return 0;
+    sbd_qf_lock();
+    if (access(SBD_Q, 0) != 0)
+        ok = 1; /* no queue file: nothing of the track is on the card */
+    else {
+        fd = open(SBD_Q, O_WRONLY | O_APPEND, 0644);
+        if (fd >= 0) {
+            ok = write(fd, line, (unsigned)n) == n;
+            ok = close(fd) == 0 && ok;
+        }
+    }
+    sbd_qf_unlock();
+    return ok;
 }
 
 /* Append a track's row to dlq.idx. 1 written. The caller holds qf. */
@@ -603,44 +715,59 @@ static int sbd_q_append(const sba_track_t *t) {
 }
 
 /* dlq.idx keeps only the rows of tracks that still wait, run, or failed for a reason a later start may cure (one row a track); with none the file goes. */
-static void sbd_q_compact(void) {
+static int sbd_q_compact(void) {
     unsigned n = 0, out = 0;
+    int bad = 0, ok = 0, pass;
     char *text, *buf;
-    unsigned char *seen;
+    const char **last; /* per slot: the start of the last row of its track */
     const char *p, *end, *ls, *le;
-    if (!m1_card_mounted()) return;
+    if (!m1_card_mounted()) return 0;
     sbd_qf_lock();
-    text = sbd_slurp(SBD_Q, &n);
+    text = sbd_slurp_st(SBD_Q, &n, &bad);
+    if (bad) { /* not read whole: the file stays as it is (rewritten from a part, the rows not read would be lost; the rows of finished tracks cost nothing until the next time) */
+        free(text);
+        text = (char *)0;
+    } else if (!text)
+        ok = 1; /* no file (or an empty one): nothing to drop */
     buf = text ? (char *)calloc(n + 2, 1) : (char *)0;
-    seen = (unsigned char *)calloc(SBA_DLMAX, 1);
-    if (text && buf && seen) {
-        p = text;
-        end = p + n;
-        while (sbd_next(&p, end, &ls, &le)) {
-            char id[SBA_ID];
-            int i, keep = 0;
-            if (!sbd_q_line(ls, le, id, sizeof id)) continue;
-            sbd_lock();
-            i = sbd_slot(id);
-            if (i >= 0 && !seen[i] &&
-                (sbd.q[i].state == SBA_DL_WAIT || (sbd.q[i].state == SBA_DL_ACTIVE && !sbd.stop) ||
-                 (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code))))
-                keep = seen[i] = 1;
-            sbd_unlock();
-            if (!keep) continue;
-            memcpy(buf + out, ls, (unsigned)(le - ls));
-            out += (unsigned)(le - ls);
-            buf[out++] = '\n';
+    last = (const char **)calloc(SBA_DLMAX, sizeof *last);
+    if (text && buf && last) {
+        for (pass = 0; pass < 2;
+             ++pass) { /* 0: where the last row of each track that stays is; 1: those rows, in the file's order */
+            p = text;
+            end = p + n;
+            while (sbd_next(&p, end, &ls, &le)) {
+                char id[SBA_ID];
+                int i, keep = 0;
+                if (!sbd_q_line(ls, le, id, sizeof id)) continue;
+                sbd_lock();
+                i = sbd_slot(id);
+                if (i >= 0 && (sbd.q[i].state == SBA_DL_WAIT || (sbd.q[i].state == SBA_DL_ACTIVE && !sbd.stop) ||
+                               (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code))))
+                    keep = 1;
+                sbd_unlock();
+                if (!keep) continue;
+                if (!pass)
+                    last[i] = ls;
+                else if (last[i] == ls) {
+                    memcpy(buf + out, ls, (unsigned)(le - ls));
+                    out += (unsigned)(le - ls);
+                    buf[out++] = '\n';
+                }
+            }
         }
         if (!out)
-            unlink(SBD_Q);
+            ok = unlink(SBD_Q) == 0 || access(SBD_Q, 0) != 0;
         else if (out != n)
-            m1_card_write(SBA_DIR, SBD_Q, SBD_Q_TMP, buf, out, (const void *)0, 0);
+            ok = m1_card_write(SBA_DIR, SBD_Q, SBD_Q_TMP, buf, out, (const void *)0, 0) == 0;
+        else
+            ok = 1;
     }
-    free(seen);
+    free(last);
     free(buf);
     free(text);
     sbd_qf_unlock();
+    return ok;
 }
 
 /* ---- progress ---- */
@@ -726,16 +853,17 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     /* the name: a free one, or the one an earlier download of this track left (the file is never overwritten) */
     for (v = 0, ok = 0; v < 9; ++v) {
         if (!sbd_file_name(t, artist, v, file, SBD_FILE) || !sbd_path(final, sizeof final, file)) return SBA_STORAGE;
+        owner[0] = 0;
+        if (sbd_owner(file, owner, sizeof owner) && !sbd_same(owner, t->id))
+            continue; /* another track's name (whatever the card says of the file, and in any letter case): the next one */
         if (access(final, 0) != 0) {
             ok = 1;
             break;
         }
-        if (!sbd_owner(file, owner, sizeof owner) ||
-            sbd_same(owner,
-                     t->id)) { /* ours, or a file the manifest does not know: it stays as it is, the track is done */
-            ok = 2;
-            break;
-        }
+        if (!owner[0] && sbd_shared(final, t->id))
+            continue; /* no name of the manifest, and yet another track's file (the card folds more than ASCII): the next one */
+        ok = 2; /* ours, or a file the manifest does not know: it stays as it is, the track is done */
+        break;
     }
     if (!ok) return SBA_STORAGE;
     if (ok == 2) { /* adopt: the file is on the card */
@@ -813,7 +941,7 @@ static void *sbd_main(void *arg) {
         }
         sbd.q[best].state = SBA_DL_ACTIVE;
         sbd.q[best].code = 0;
-        sbd.stop = 0;
+        sbd.stop = sbd.again = 0;
         sbd.got = sbd.total = 0;
         sbd.step = ~0u;
         sbd_set(id, sizeof id, sbd.q[best].id);
@@ -821,7 +949,14 @@ static void *sbd_main(void *arg) {
         sbd_bump();
         tidy = 1;
         file[0] = 0;
-        code = !t ? SBA_MEM : !sbd_q_row(id, t) ? SBA_PARSE : sbd_run(t, file, &size);
+        if (!t)
+            code = SBA_MEM;
+        else {
+            int row = sbd_q_row(id, t);
+            code = row < 0 ? SBA_STORAGE
+                   : !row  ? SBA_PARSE
+                           : sbd_run(t, file, &size); /* (SBA_STORAGE stops the worker and keeps the row: sbd_later) */
+        }
         if (code == SBA_OK) {
             char *row = (char *)calloc(SBD_LINE, 1);
             if (!row)
@@ -840,7 +975,14 @@ static void *sbd_main(void *arg) {
         pause = code != SBA_OK && code != SBA_CANCELLED && sbd_later(code);
         if (pause) sbd_scan(scan); /* (before the worker is seen to have ended) */
         sbd_lock();
-        if (code == SBA_OK || code == SBA_CANCELLED)
+        if (sbd.stop && code != SBA_OK)
+            code = SBA_CANCELLED,
+            pause =
+                0; /* cancelled after the transfer had ended with a fault of its own (the cancel was told yes): the track leaves the queue, it is not kept as failed for sba_dl_resume */
+        if (code == SBA_CANCELLED && sbd.again)
+            sbd.q[best].state =
+                SBA_DL_WAIT; /* the transfer stopped for a cancel that an add took back before this point: the add was told yes and its row is on the card, so the track is fetched again (its place in line is kept) */
+        else if (code == SBA_OK || code == SBA_CANCELLED)
             sbd_slot_free(&sbd.q[best]);
         else {
             sbd.q[best].state = SBA_DL_FAILED;
@@ -882,7 +1024,7 @@ static int sbd_start(void) {
 
 int sba_dl_add(const sba_track_t *t) {
     sbd_ent_t e;
-    int i, slot = -1, g, known = 0;
+    int i, slot = -1, g, known = 0, again;
     unsigned kb = 0;
     if (!t || !t->id[0]) return SBA_PARSE;
     if (sbd_find(t->id, &e)) {
@@ -891,17 +1033,34 @@ int sba_dl_add(const sba_track_t *t) {
     }
     sbd_lock();
     i = sbd_slot(t->id);
-    if (i >= 0 && sbd.q[i].state != SBA_DL_FAILED) { /* waiting or running: asked twice is once */
-        if (sbd.q[i].state == SBA_DL_ACTIVE && sbd.stop)
-            sbd.stop = 0; /* (a cancel the worker has not seen yet is withdrawn) */
-        known = 1;
-    }
+    again = i >= 0 && sbd.q[i].state == SBA_DL_ACTIVE && sbd.stop;
+    if (i >= 0 && sbd.q[i].state != SBA_DL_FAILED) known = 1; /* waiting or running: asked twice is once */
     sbd_unlock();
+    if (again) { /* a cancel the worker has not seen yet is withdrawn: its line is on the card, so the track's row is written again after it first (else a restart would drop the track) */
+        int ok;
+        sbd_qf_lock();
+        ok = sbd_q_append(t);
+        sbd_qf_unlock();
+        if (!ok) return SBA_STORAGE; /* (the cancel stands) */
+        sbd_lock();
+        i = sbd_slot(t->id);
+        if (i >= 0 && sbd.q[i].state == SBA_DL_ACTIVE && sbd.stop)
+            sbd.stop = 0,
+            sbd.again =
+                1; /* (the transfer goes on if it has not looked yet; if it has, the worker queues the track again) */
+        else if (i < 0)
+            known =
+                0; /* the worker ended it meanwhile: a plain add from here (one more row of the track; the last one counts) */
+        sbd_unlock();
+    }
     g = sba_guard();
     if (g) return known && sbd.busy ? SBA_OK : g;
     if (known) return sbd_start(); /* (a queue that stopped or came back from the card starts here) */
     if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
-    if (!sbd.q) return SBA_MEM;
+    if (!sbd.q)
+        return sbd.qbad
+                   ? SBA_STORAGE
+                   : SBA_MEM; /* (the queue on the card would not read: nothing is added on top of rows not seen) */
     if (kb <= SBA_RESERVE_KB || (t->size >> 10) > kb - SBA_RESERVE_KB) return SBA_CARDFULL;
     sbd_qf_lock();
     sbd_lock();
@@ -929,6 +1088,7 @@ int sba_dl_add(const sba_track_t *t) {
         sbd_lock();
         if (sbd.q[slot].state == SBA_DL_WAIT && sbd_same(sbd.q[slot].id, t->id)) sbd_slot_free(&sbd.q[slot]);
         sbd_unlock();
+        sbd_q_cancelled(t->id);
         sbd_q_compact(); /* (a row written for a worker that could not be started does not wait on the card) */
     }
     sbd_bump();
@@ -957,14 +1117,14 @@ int sba_dl_resume(void) {
 
 static void sbd_cancel_locked(int i) {
     if (sbd.q[i].state == SBA_DL_ACTIVE)
-        sbd.stop = 1;
+        sbd.stop = 1, sbd.again = 0;
     else
         sbd_slot_free(&sbd.q[i]); /* waiting or failed */
 }
 
-void sba_dl_cancel(const char *id) {
-    int i, waited = 0;
-    if (!id) return;
+int sba_dl_cancel(const char *id) {
+    int i, waited = 0, kept = 1;
+    if (!id) return SBA_OK;
     sbd_ensure();
     sbd_lock();
     i = sbd_slot(id);
@@ -973,8 +1133,13 @@ void sba_dl_cancel(const char *id) {
         sbd_cancel_locked(i);
     }
     sbd_unlock();
-    if (waited) sbd_q_compact(); /* (the worker drops the row of the one it was on) */
+    if (i >= 0)
+        kept = sbd_q_cancelled(id); /* (first, and whatever the compaction can do: the cancel outlives a restart) */
+    if (waited && sbd_q_compact()) kept = 1; /* (the worker drops the row of the one it was on) */
     sbd_bump();
+    return kept
+               ? SBA_OK
+               : SBA_STORAGE; /* (stopped for this run either way; SBA_STORAGE: the card did not take it, so the track waits again after a restart) */
 }
 
 void sba_dl_cancel_all(void) {
@@ -1036,6 +1201,19 @@ int sba_dl_state(const char *id, int *code, unsigned *got, unsigned *total) {
 unsigned sba_dl_gen(void) { return sbd.gen; }
 
 int sba_dl_busy(void) { return sbd.busy; }
+
+int sba_dl_pending(void) {
+    int i, n = 0;
+    sbd_ensure();
+    if (!sbd.q) return 0;
+    sbd_lock();
+    for (i = 0; i < SBA_DLMAX; ++i)
+        if (sbd.q[i].state == SBA_DL_WAIT || sbd.q[i].state == SBA_DL_ACTIVE ||
+            (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code)))
+            ++n;
+    sbd_unlock();
+    return n;
+}
 
 int sba_dl_path(const char *id, char *path, unsigned cap) {
     sbd_ent_t e;

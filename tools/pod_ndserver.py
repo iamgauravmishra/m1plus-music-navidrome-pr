@@ -79,14 +79,14 @@ def end_h(y):
 # line holds the spinner and "Connecting..." (nl_spin, nl_busy) or the error (nl_err). Everything ends above the candidate strip (y 234): rows y 56..200, the line y 208..228. No colour of its own.
 NL_ROWS = ('Server URL', 'Username', 'Password')
 NL_ROW_H, NL_Y0, NL_X = 48, 56, 24
-NL_FIELD_W, NL_TW = 272, 232            # the field's box (card ink edge to ink edge; the clear button at its right) and the text room of each field (the Password row's ends before the eye)
+NL_VAL_W, NL_FIELD_W, NL_TW = 272, 281, 232   # (NL_FIELD_W is pod_ui.trail_field_w(NL_X), asserted in build_login) the static labels' box (card ink edge to ink edge), the field's box (its clear button's disc is centred on the eye's glyph, x 287) and the text room of each field (the Password row's ends before the eye)
 NL_LINE_Y, NL_LINE_H, NL_LINE_PX = 208, 20, 16
 NL_SPIN_PX, NL_BUSY_X = 14, 46          # the spinner (the Wi-Fi page's frames) at x 24, the "Connecting..." text after it
 
 
 def build_login(page):
     import pod_i18n
-    from pod_ui import Widget, styled, navbar, label, hidden, kb_view, kb_field_widget, eye_button, keyboard_pad_widgets, wf_image, WK_CARD_X, WK_CARD_W, WK_FIELD_PX, WK_EYE_X, WK_EYE_W
+    from pod_ui import Widget, styled, navbar, label, hidden, kb_view, kb_field_widget, trail_field_w, eye_button, keyboard_pad_widgets, wf_image, WK_CARD_X, WK_CARD_W, WK_FIELD_PX, WK_EYE_X, WK_EYE_W
     import pod_keyboard as PK
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
@@ -98,7 +98,7 @@ def build_login(page):
         for st in ('normal', 'disable', 'focused'): styled(hair, (st,), 'bg_color', ST.CARD_HAIR_RGB)
         root.children.append(hair)
     def value(name, i, colour, english=None):
-        lab = label(name, NL_X, NL_Y0 + i * NL_ROW_H, NL_FIELD_W, NL_ROW_H, '', WK_FIELD_PX, colour, 'left')
+        lab = label(name, NL_X, NL_Y0 + i * NL_ROW_H, NL_VAL_W, NL_ROW_H, '', WK_FIELD_PX, colour, 'left')
         if english: lab.set(*pod_i18n.text_prop(english))
         lab.set('sensitive', 'false')
         styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -109,6 +109,7 @@ def build_login(page):
     for i in range(n):
         w = (WK_EYE_X - WK_CARD_X) if i == n - 1 else WK_CARD_W
         root.children.append(Widget('button', WK_CARD_X, NL_Y0 + i * NL_ROW_H, w, NL_ROW_H, [('name', f'nl_hit{i}'), ('enable', 'true'), ('style', 'img_btn_style')]))
+    assert NL_FIELD_W == trail_field_w(NL_X)
     root.children.append(kb_field_widget(NL_X, NL_Y0, NL_FIELD_W, NL_ROW_H, (NL_ROW_H - 22) // 2))
     root.children.append(eye_button('nl_eye', WK_EYE_X, NL_Y0 + (n - 1) * NL_ROW_H, WK_EYE_W, NL_ROW_H))
     root.children.append(hidden(wf_image('nl_spin', NL_X, NL_LINE_Y + (NL_LINE_H - NL_SPIN_PX) // 2, NL_SPIN_PX, NL_SPIN_PX, 'wf_spin0', 'default')))

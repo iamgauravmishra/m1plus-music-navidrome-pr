@@ -60,10 +60,10 @@ def signin_page(s, pg, texts, focus, shown=False, saved_pw=False, touched=False,
         if i == focus:
             t, w = fitted(shown_text(i), PK_TW)
             if texts[i]: s.text(im, 24, y, t, 18, WHITE)
-            else: s.text(im, 24, y, PLACEHOLDER[i], 18, PKV.rgb(by[f'nl_h{i}'].get('style:normal:text_color')))
+            else: s.text(im, 24, y, 'Leave empty to keep' if i == 2 and saved_pw and not touched else PLACEHOLDER[i], 18, PKV.rgb(by[f'nl_h{i}'].get('style:normal:text_color')))
             cx = 24 + (w + 1 if texts[i] else 0)
             ImageDraw.Draw(im).rectangle((cx, BAR + 56 + 48 * i + car.y, cx + car.w - 1, BAR + 56 + 48 * i + car.y + car.h - 1), fill=WHITE)
-            if texts[i] and i == 1:   # (the address and password fields are KB_PASSWORD: no clear button)
+            if texts[i] and (i == 1 or (i == 0 and texts[i] != 'http://')):   # (the name's clear button, and the address's while there is more than the scheme; a password has none)
                 c = s.img(by['kb_clear'].get('style:normal:icon')); cl = by['kb_clear']
                 im.alpha_composite(c, (24 + cl.x + (cl.w - c.width) // 2, int(y - c.height / 2)))
         elif texts[i] or (i == 2 and saved_pw and not touched):
@@ -71,8 +71,9 @@ def signin_page(s, pg, texts, focus, shown=False, saved_pw=False, touched=False,
             s.text(im, 24, y, t, 18, WHITE)
         else:
             s.text(im, 24, y, PLACEHOLDER[i], 18, PKV.rgb(by[f'nl_h{i}'].get('style:normal:text_color')))
-    eye = by['nl_eye']; g = s.img('wf_eye' if shown else 'wf_eyeoff')
-    im.alpha_composite(g, (eye.x + (eye.w - g.width) // 2, BAR + eye.y + (eye.h - g.height) // 2))
+    if texts[2]:   # (no eye while there is nothing to show: an empty field, or the saved password's four dots)
+        eye = by['nl_eye']; g = s.img('wf_eye' if shown else 'wf_eyeoff')
+        im.alpha_composite(g, (eye.x + (eye.w - g.width) // 2, BAR + eye.y + (eye.h - g.height) // 2))
     if status:
         kind, text = status
         if kind == 'busy':

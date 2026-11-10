@@ -40,6 +40,9 @@ int keyboard_refocus(
         on_go); /* another field of the page takes the pad: new flags, text room, placeholder, text and callbacks (the widgets are the page's to move); on_change gets the text; -1 without a keyboard */
 void keyboard_set_mask(
     int on); /* the field shows one dot per character (on) or the text; the caret follows what is shown */
+void keyboard_set_clear(
+    const char *
+        leave); /* after keyboard_attach / keyboard_refocus: the clear button leaves this text (a string that outlives the field; "" nothing) and shows while the field's differs from it; NULL: no button (a KB_PASSWORD field starts so, any other with "") */
 void keyboard_set_go(
     const char *key,
     int enabled); /* the action key reads the translated string `key` (NULL keeps its label) and is dimmed and inert while not enabled (on_go does not fire) */

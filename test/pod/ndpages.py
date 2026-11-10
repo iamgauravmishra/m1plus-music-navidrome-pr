@@ -22,7 +22,7 @@ RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 WIN = 0x24400000
 EVT_DESTROY, EVT_CLICK, EVT_FG = O['EVT_DESTROY'], O['EVT_CLICK'], O['EVT_WINDOW_TO_FG']
 LABELS = ('Server URL', 'Username', 'Password', 'Sync Now', 'Sign Out')
-KEYS = ('Server', 'Server URL', 'Username', 'Password', 'Sync Now', 'Sign Out', 'Sync your Subsonic library now?', 'Sign out of Subsonic? Downloaded songs stay on the card.',
+KEYS = ('Server', 'Server URL', 'Username', 'Password', 'Sync Now', 'Sign Out', 'Sign out of Subsonic? Downloaded songs stay on the card.', 'Leave empty to keep',
         'Enter a valid server address', 'Enter a valid username', 'Enter a valid password', 'Could not save settings', 'Add a server first', 'Connect to Wi-Fi first',
         'Syncing…', 'Sign In', 'Next', 'Connecting…', 'Incorrect username or password', "Can't connect to the server", 'Server certificate not trusted', 'Set the date and time first')
 MUSIC, DLIDX = '/mnt/mmc/Subsonic/ab12cd34-Song.flac', SB.ND + '/dl.idx'
@@ -282,7 +282,7 @@ def server_login_asset(ctx):
     expect(box('nl_card') == (10, 56, 300, 144) and by['nl_card'].get('style:normal:bg_color') == ST.CARD_RGB and by['nl_card'].get('sensitive') == 'false' and box('nl_hair0')[1] == 103 and box('nl_hair1')[1] == 151
            and box('nl_hair0')[0] == 24 and box('nl_hair0')[2] == 286, 'one Settings card of three 48 px rows (y 56, 104, 152) with the hairlines between them')
     f = by['kb_field']
-    expect((f.x, f.y, f.w, f.h) == (24, 56, 272, 48) and by['kb_text'].w == f.w and by['kb_clear'].x == 272 - 36 and by['kb_caret'].y == 13 and f.get('style:normal:bg_color') == '#00000000', 'the keyboard\'s field starts on the first row, ink edge to ink edge')
+    expect((f.x, f.y, f.w, f.h) == (24, 56, 281, 48) and by['kb_text'].w == f.w and f.x + by['kb_clear'].x + by['kb_clear'].w // 2 == by['nl_eye'].x + by['nl_eye'].w // 2 == 287 and by['kb_caret'].y == 13 and f.get('style:normal:bg_color') == '#00000000', 'the keyboard\'s field starts on the first row; its clear button is centred on the eye')
     expect([box(f'nl_hit{i}') for i in range(3)] == [(10, 56, 300, 48), (10, 104, 300, 48), (10, 152, 254, 48)] and box('nl_eye') == (264, 152, 46, 48) and by['nl_eye'].get('style:normal:icon') == 'wf_eyeoff'
            and all(by[f'nl_hit{i}'].get('enable') == 'true' for i in range(3)), 'three buttons take the row taps (the Password row ends at the eye); the eye starts as eye-off')
     expect(all(box(f'nl_v{i}') == (24, 56 + 48 * i, 272, 48) == box(f'nl_h{i}') for i in range(3)) and [by[f'nl_h{i}'].get('tr_text') for i in range(3)] == [pod_i18n.key_for(k) for k in ('Server URL', 'Username', 'Password')]
@@ -325,10 +325,16 @@ def server_login_open(ctx):
     expect(shown(m, 'nl_v1') == 1 and said(m, 'nl_v1') == 'alice' and shown(m, 'nl_h1') == 0 and shown(m, 'nl_v2') == 1 and said(m, 'nl_v2') == DOTS and SB.PASSWORD not in ''.join(m.wtext.values()),
            'the other rows show the user and four dots; the password text is on no widget')
     expect(key(m) == 'Sign In' and go_on(m), 'a saved login is valid: the action key reads Sign In and works')
+    expect(shown(m, 'nl_eye') == 0, 'no eye beside the saved password\'s dots: there is no text behind them to show')
     m = login(row=1)
     expect(text(m, 'kb_text') == 'alice' and shown(m, 'nl_v0') == 1 and shown(m, 'nl_v1') == 0, 'the user row: the field has the name, the address is a label')
     m = login(row=2)
     expect(text(m, 'kb_text') in ('', None) and shown(m, 'nl_v2') == 0 and shown(m, 'nl_h2') == 0 and key(m) == 'Sign In' and go_on(m), 'the password row starts empty (the saved one is kept unless typed over), Sign In works')
+    expect(text(m, 'kb_hint') == 'Leave empty to keep', 'and its placeholder says that leaving it keeps the saved password')
+    ktype(m, 'x'); kdel(m); hit(m, 0); hit(m, 2)
+    expect(text(m, 'kb_hint') == 'Password' and not go_on(m), 'typed in and emptied: the saved one is not kept any more, the placeholder is Password again')
+    m = login(conf=False, row=2)
+    expect(text(m, 'kb_hint') == 'Password', 'with no password saved the placeholder is Password')
     # nothing saved: http:// , grey placeholders, Next dimmed
     m = login(conf=False, row=0)
     expect(text(m, 'kb_text') == 'http://' and key(m) == 'Next' and not go_on(m) and shown(m, 'nl_h1') == 1 and shown(m, 'nl_h2') == 1 and shown(m, 'nl_v1') == 0 and shown(m, 'nl_v0') == 0,
@@ -347,8 +353,8 @@ def server_login_flow(ctx):
     m = login(conf=False, row=0)
     ktype(m, 'nd.example:4533')
     expect(text(m, 'kb_text') == 'http://nd.example:4533' and key(m) == 'Next' and go_on(m), 'a valid address: Next works')
-    kdel(m, 20)
-    expect(not go_on(m), 'an emptied address: Next dimmed')
+    kdel(m, 30)
+    expect(text(m, 'kb_text') in ('', None) and not go_on(m), 'an emptied address: Next dimmed')
     ktype(m, 'ftp://x'); kdel(m, 20)
     ktype(m, 'http://')
     expect(not go_on(m), 'http:// alone is no address: dimmed')
@@ -362,9 +368,9 @@ def server_login_flow(ctx):
     ktype(m, 'Bob')
     expect(go_on(m) and key(m) == 'Next', 'a name: Next works')
     kclick(m, 'kb_go')
-    expect(fld(m) == (24, 152) and key(m) == 'Next' and not go_on(m), 'the password row: the login is not whole, Next is dimmed')
+    expect(fld(m) == (24, 152) and key(m) == 'Next' and not go_on(m) and shown(m, 'nl_eye') == 0, 'the password row: the login is not whole, Next is dimmed; no eye on an empty field')
     ktype(m, 'pw1')
-    expect(key(m) == 'Sign In' and go_on(m) and text(m, 'kb_text') == '•••', 'a password (dots): the key reads Sign In and works')
+    expect(key(m) == 'Sign In' and go_on(m) and text(m, 'kb_text') == '•••' and shown(m, 'nl_eye') == 1, 'a password (dots): the key reads Sign In and works, the eye is there')
     # tapping rows moves the field and keeps the values
     hit(m, 0)
     expect(fld(m) == (24, 56) and text(m, 'kb_text') == 'http://nd' and said(m, 'nl_v2') == '•••' and key(m) == 'Sign In', 'a tap on the address row: the field is there with its text, the password row shows three dots')
@@ -521,8 +527,74 @@ def server_login_fail(ctx):
     expect(not go_on(m) and key(m) == 'Next', 'a password typed and emptied is empty: not the saved one any more, the key is dimmed')
 
 
+def server_login_touch(ctx):
+    """Where a touch goes on the Sign In page as it stands (demo's own hit test on the built page with what the payload moved, showed and hid): every control that is drawn takes the
+    touch at its centre, and one that is hidden takes none."""
+    expect = ctx.expect
+    asset = os.path.join(WORK, UI_LOGIN)   # noqa: F821
+    by = {w.name: w for w in awtk_ui.parse(open(asset, 'rb').read()).walk() if w.name}
+    eye = (by['nl_eye'].x + by['nl_eye'].w // 2, by['nl_eye'].y + by['nl_eye'].h // 2)
+    def clear(m):
+        x, y = fld(m)
+        return (x + by['kb_clear'].x + by['kb_clear'].w // 2, y + by['kb_clear'].y + by['kb_clear'].h // 2)
+    def at(m, xy): return touch(m, live_tree(m, asset), *xy)   # noqa: F821
+    # the user row typed in: its clear button; the other rows take the row tap
+    m = login(row=1)
+    expect(shown(m, 'kb_clear') == 1 and at(m, clear(m)) == 'kb_clear', f'the Username row: a touch on the clear button reaches it ({at(m, clear(m))})')
+    expect(at(m, (160, 56 + 24)) == 'nl_hit0' and at(m, (120, 152 + 24)) == 'nl_hit2', 'the other rows take the tap that moves the field')
+    expect(shown(m, 'nl_eye') == 0 and at(m, eye) != 'nl_eye', f'the saved password: no eye, and no touch for it ({at(m, eye)})')
+    fn_, c = m.bound[(m.widgets['kb_clear'], EVT_CLICK)]
+    rec(m, fn_, a0=c, a1=0)
+    expect(text(m, 'kb_text') in ('', None) and shown(m, 'kb_clear') == 0 and at(m, clear(m)) != 'kb_clear', 'cleared: the button goes and takes no touch')
+    # the password row typed in: the eye takes its touch (the hidden clear button under it takes none)
+    m = login(row=2)
+    ktype(m, 'pw1')
+    expect(shown(m, 'nl_eye') == 1 and at(m, eye) == 'nl_eye' and at(m, clear(m)) != 'kb_clear', f'a typed password: a touch on the eye reaches it ({at(m, eye)})')
+    hit(m, 0)
+    expect(at(m, eye) == 'nl_eye' and at(m, (120, 152 + 24)) == 'nl_hit2', 'with the field on another row the eye still takes its touch, the row beside it the row tap')
+    # the address row: the clear button leaves the scheme, and is not there when the scheme is all there is
+    expect(text(m, 'kb_text') == SB.URL and shown(m, 'kb_clear') == 1 and at(m, clear(m)) == 'kb_clear', f'the address row with an address: its clear button takes the touch ({at(m, clear(m))})')
+    fn_, c = m.bound[(m.widgets['kb_clear'], EVT_CLICK)]
+    rec(m, fn_, a0=c, a1=0)
+    expect(text(m, 'kb_text') == 'http://' and shown(m, 'kb_clear') == 0 and at(m, clear(m)) != 'kb_clear' and not go_on(m), 'cleared: http:// stays to type after, the button goes, the key is dimmed')
+    ktype(m, 'n')
+    expect(text(m, 'kb_text') == 'http://n' and shown(m, 'kb_clear') == 1, 'a character more and the button is back')
+    kdel(m)
+    expect(text(m, 'kb_text') == 'http://' and shown(m, 'kb_clear') == 0, 'deleted back to the scheme: gone again')
+    kdel(m, 7)
+    expect(text(m, 'kb_text') in ('', None) and shown(m, 'kb_clear') == 0 and text(m, 'kb_hint') == 'Server URL', 'the Delete key can empty it: the placeholder shows')
+    ktype(m, 'x'); hit(m, 1); hit(m, 0)
+    rec(m, fn_, a0=c, a1=0)
+    expect(text(m, 'kb_text') == 'http://', 'and the clear button of whatever is typed then leaves the scheme again')
+    hit(m, 1); hit(m, 0)
+    expect(shown(m, 'kb_clear') == 0, 'coming back to a bare scheme: no clear button')
+    m = login(row=2)
+    ktype(m, 'pw1')
+    expect(shown(m, 'kb_clear') == 0, 'a password has no clear button')
+
+
+def page_touch(ctx):
+    """Every control the root and Server pages draw takes the touch at its centre (demo's own hit test on the built pages as the payload left them); the hidden ones take none."""
+    expect = ctx.expect
+    ui = lambda name: os.path.join(WORK, RAW, 'ui', name + '.bin')   # noqa: F821
+    nav = ('btn_return', 'btn_backtoplayer')
+    m = opened()
+    miss = touch_misses(m, ui('m1plus_ndserver'), nav + tuple(f'pod_row{i}' for i in range(5)))   # noqa: F821
+    expect(not miss, f'the Server page: Back, Now Playing and the five rows take their touches ({miss})')
+    m = root_opened(fresh=True)
+    rows = tuple(f'pod_row{i}' for i in range(6))
+    miss = touch_misses(m, ui('m1plus_ndroot'), nav + ('btn_more', 'btn_search') + rows)   # noqa: F821
+    expect(not miss, f'the root page with a server: the navbar buttons and the six rows take their touches ({miss})')
+    hid = touch_misses(m, ui('m1plus_ndroot'), ('nd_es_pill', 'nd_es_dl'))   # noqa: F821
+    expect(len(hid) == 2, f'and the empty state\'s pills, hidden, take none ({hid})')
+    m = root_opened(conf=False)
+    miss = touch_misses(m, ui('m1plus_ndroot'), nav + ('btn_more', 'nd_es_pill', 'nd_es_dl'))   # noqa: F821
+    hid = touch_misses(m, ui('m1plus_ndroot'), ('btn_search',) + rows)   # noqa: F821
+    expect(not miss and len(hid) == 7, f'the root page with no server: Back, Now Playing, "..." and the two pills take theirs ({miss}); Search and the rows under the empty state take none ({hid})')
+
+
 def server_login(ctx):
-    for f in (server_login_asset, server_login_open, server_login_flow, server_login_fail): f(ctx)
+    for f in (server_login_asset, server_login_open, server_login_flow, server_login_fail, server_login_touch): f(ctx)
 
 
 def signin_direct(conf=False):
@@ -575,8 +647,8 @@ def server_sync(ctx):
     expect(text(m, 'pod_value3') == 'Not synced yet' and m.props.get((m.widgets['ns_spin'], 'visible')) in (None, 0), 'at rest with nothing synced: the grey "Not synced yet", no spinner')
     site = SB.Site(); m.curl_site = site
     click(m, 3)
-    expect(confirms(m) == ['Sync your Subsonic library now?'] and m.thread is not None and text(m, 'pod_value3') == 'Syncing…' and m.props.get((m.widgets['ns_spin'], 'visible')) == 1
-           and ('timer_add', PSYMS['ls_spin_tick'], 250) in m.calls, 'after the confirm the row shows Syncing... at once, with the spinner on the shared spinner timer')
+    expect(not confirms(m) and m.thread is not None and text(m, 'pod_value3') == 'Syncing…' and m.props.get((m.widgets['ns_spin'], 'visible')) == 1
+           and ('timer_add', PSYMS['ls_spin_tick'], 250) in m.calls, 'a tap (no question) and the row shows Syncing... at once, with the spinner on the shared spinner timer')
     expect(m.props.get((m.widgets['pod_row3'], 'sensitive')) == 0 and m.props.get((m.widgets['pod_label3'], 'style:normal:text_color')) == '#6C6C70', 'and it is inactive and grey while the sync runs')
     mv = [c for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['ns_spin']]
     expect(mv and mv[-1][2] < 280 - 8 * len('Syncing…') , 'the spinner sits before the text')
@@ -585,9 +657,6 @@ def server_sync(ctx):
     m.call(PSYMS['ns_tick'], a0=0, count=20000000)
     expect(text(m, 'pod_value3') == 'Synced just now' and m.props.get((m.widgets['ns_spin'], 'visible')) == 0 and m.props.get((m.widgets['pod_row3'], 'sensitive')) == 1
            and m.props.get((m.widgets['pod_label3'], 'style:normal:text_color')) == '#FFFFFF', 'when it is done the timer writes the grey "Synced just now" and the row is active again, the spinner gone')
-    m = opened(); m.confirm_yes = False
-    click(m, 3)
-    expect(text(m, 'pod_value3') == 'Not synced yet' and m.thread is None, 'No: the row shows no run')
     m = opened(); m.wifi = 0
     click(m, 3)
     expect(toasts(m) == ['Connect to Wi-Fi first'] and text(m, 'pod_value3') == 'Not synced yet', 'a refusal is the toast and the row shows no run')
@@ -603,19 +672,16 @@ def server_sync(ctx):
 
 
 def server_actions(ctx):
-    """Sync Now: confirm, then the sync. Sign Out: confirm, then the conf and the cache go; the downloads stay."""
+    """Sync Now: the sync, with no question. Sign Out: confirm, then the conf and the cache go; the downloads stay."""
     expect = ctx.expect
     m = opened()
     site = SB.Site(); m.curl_site = site
     click(m, 3)
-    expect(confirms(m) == ['Sync your Subsonic library now?'] and m.thread is not None and not toasts(m), 'Sync Now asks first, then queues the sync')
+    expect(not confirms(m) and m.thread is not None and not toasts(m), 'Sync Now queues the sync without asking (a sync loses nothing)')
     SB.drain(m, m.thread)
     expect(site.views()[0] == 'getAlbumList2' and 'ping' not in site.views()[:1], 'the request is the sync (getAlbumList2 ...)')
     st, code = SB.state(m, SB.K['SYNC'])
     expect(st in (SB.ST['OK'], SB.ST['FAIL']), 'the sync ran to a result')
-    m = opened(); m.confirm_yes = False
-    click(m, 3)
-    expect(confirms(m) == ['Sync your Subsonic library now?'] and m.thread is None, 'No: nothing is queued')
     m = opened(conf=False)
     click(m, 3)
     expect(toasts(m) == ['Add a server first'] and not confirms(m) and m.thread is None, 'no server: a toast, no question, no request')
@@ -660,7 +726,7 @@ def server_strings(ctx):
     for loc in pod_i18n.LOCALES:
         t = pod_i18n.table_for(loc)
         expect(all(pod_i18n.TEXT[k][t] for k in KEYS), f'{loc}: every key of the Server page has a text')
-    for k in ('Sync your Subsonic library now?', 'Sign out of Subsonic? Downloaded songs stay on the card.'):
+    for k in ('Sign out of Subsonic? Downloaded songs stay on the card.',):
         expect(all('Subsonic' in pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for loc in pod_i18n.LOCALES), f'"Navidrome" is not translated in {k!r}')
     src = open(os.path.join(ROOT, 'patch', 'ndserver.c'), encoding='utf-8').read()   # noqa: F821
     used = set(__import__('re').findall(r'TR\("((?:[^"\\]|\\.)*)"\)', src))
@@ -696,7 +762,7 @@ def server(ctx):
 
 ROOT_LABELS = ('Albums', 'Artists', 'Songs', 'Playlists', 'Favorites', 'Downloaded')
 ROOT_NAMES = ('btn_return', 'btn_backtoplayer', 'btn_more', 'btn_search', 'nd_list', 'nd_status', 'nd_st_icon', 'nd_st_spin', 'nd_foot', 'pod_scrollview', 'label_title', 'img_nb_fade', 'vs_scrim', 'vs_card', 'vs_hair', 'nd_es_big', 'nd_es_icon', 'nd_es_title', 'nd_es_text', 'nd_es_pill', 'nd_es_dl') + tuple(f'pod_row{i}' for i in range(6)) + tuple(f'vs_item{i}' for i in range(8)) + tuple(f'vs_label{i}' for i in range(8)) + tuple(f'vs_sub{i}' for i in range(4)) + tuple(f'vs_tick{i}' for i in range(6)) + tuple(f'vs_glyph{i}' for i in range(4, 8))
-ROOT_KEYS = ('Subsonic', 'Albums', 'Artists', 'Songs', 'Playlists', 'Favorites', 'Downloaded', 'Not Connected', 'Syncing…', 'Updating library… %d/%d', 'Loading covers… %d/%d', 'Loading artist images… %d/%d', 'Synced %s', 'Synced just now', 'Not synced yet', '%d song', '%d songs', 'Sync Now', 'Server Settings',
+ROOT_KEYS = ('Downloading 1 song', 'Downloading %d songs', '1 download waiting', '%d downloads waiting', 'Subsonic', 'Albums', 'Artists', 'Songs', 'Playlists', 'Favorites', 'Downloaded', 'Not Connected', 'Syncing…', 'Updating library… %d/%d', 'Loading covers… %d/%d', 'Loading artist images… %d/%d', 'Synced %s', 'Synced just now', 'Not synced yet', '%d song', '%d songs', 'Sync Now', 'Server Settings',
              'Navidrome, Gonic, Airsonic and other Subsonic servers', 'Add Server', 'Just now', '%dm ago', '%dh ago', '%dd ago')
 F_CAPS = 48   # lib_src_t.caps (test/pod/sbsrc.py F_CAPS)
 LS = dict(ALBUMS=0, ARTISTS=1, SONGS=2, PLAYLISTS=3, FAVORITES=4, DOWNLOADED=5)
@@ -779,9 +845,15 @@ def root_downloads(ctx):
     expect(m.thread is None and not busy(m), 'opened with the Wi-Fi off: the downloads keep waiting')
     tick(m)
     expect(m.thread is None, 'still off after a tick: nothing')
+    expect(text(m, 'nd_status') == '2 downloads waiting' and not lit(m, 'nd_st_spin'), f'the status line tells the downloads that wait, with no spinner ({text(m, "nd_status")})')
     m.wifi = 4
     tick(m)
     expect(m.thread and m.thread[0] == PSYMS['sbd_main'] and armed(m) == 1 and busy(m) == 1, 'the Wi-Fi came back while the page is up: they start')
+    expect(text(m, 'nd_status') == 'Downloading 2 songs' and lit(m, 'nd_st_spin'), f'and the status line says so, with the spinner ({text(m, "nd_status")})')
+    m = root_opened(fresh=True, files={SB.ND + '/dlq.idx': b'i=k1\tt=One\tx=flac\tp=\n'})
+    expect(text(m, 'nd_status') == 'Downloading 1 song', 'one download: the singular')
+    m = root_opened(fresh=True)
+    expect(text(m, 'nd_status').startswith('Synced') and not lit(m, 'nd_st_spin'), 'no downloads: the sync line as before')
 
 
 def root_asset(ctx):
@@ -1096,14 +1168,10 @@ def root_more(ctx):
     site = ok_site(); m.curl_site = site
     m.call(m.bound[(m.widgets['btn_more'], EVT_CLICK)][0], a0=0, a1=0, count=20000000)
     expect(item_ok(m, 6)[0] == 1, 'Sync Now is active when no sync runs')
-    m.thread = None; m.confirm_yes = False
+    m.thread = None
     root_click_item(m, 6)
-    expect(confirms(m) == ['Sync your Subsonic library now?'] and m.thread is None and not card_on(m), 'Sync Now asks first (the Server page\'s question); No queues nothing and closes the card')
-    m.call(m.bound[(m.widgets['btn_more'], EVT_CLICK)][0], a0=0, a1=0, count=20000000)
-    m.confirm_yes = True
-    root_click_item(m, 6)
-    expect(confirms(m) == ['Sync your Subsonic library now?'] and m.thread is not None and not card_on(m) and not toasts(m) and text(m, 'nd_status') == 'Syncing…' and lit(m, 'nd_st_spin'),
-           'Yes: the card closes and the sync is asked; the status line says Syncing… at once')
+    expect(not confirms(m) and m.thread is not None and not card_on(m) and not toasts(m) and text(m, 'nd_status') == 'Syncing…' and lit(m, 'nd_st_spin'),
+           'Sync Now: no question, the card closes and the sync is asked; the status line says Syncing… at once')
     m.call(m.bound[(m.widgets['btn_more'], EVT_CLICK)][0], a0=0, a1=0, count=20000000)
     expect(item_ok(m, 6) == (0, '#6C6C70'), f'while the sync runs Sync Now is inactive: not sensitive, grey ({item_ok(m, 6)})')
     SB.drain(m, m.thread)
@@ -1226,4 +1294,4 @@ def root(ctx):
     for f in (root_asset, root_rows, root_status, root_downloads, root_progress, root_footer, root_collapse, root_more, root_search, root_empty, root_offline, root_life, root_strings): f(ctx)
 
 
-SECTIONS = [server, root]
+SECTIONS = [server, root, page_touch]

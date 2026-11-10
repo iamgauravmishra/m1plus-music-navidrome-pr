@@ -2785,9 +2785,15 @@ WK_EYE_X, WK_EYE_W = 264, 46                        # the eye button's touch are
 WK_ERR_Y, WK_ERR_H, WK_ERR_PX = 160, 22, 18
 
 
+def trail_field_w(x):
+    """The width of a kb_field that starts at x on a card with an eye button: its clear button's disc is centred on the eye's glyph (x 287), so the trailing controls of the card's rows are one column."""
+    return WK_EYE_X + WK_EYE_W // 2 + PK.FIELD_CLEAR_W // 2 - x
+
+
 def kb_field_widget(x, y, w, h, caret_y):
     """The keyboard's own field (kb_field with its hint, text, caret and clear button, found by keyboard_attach by name) at x, y, w x h; the caret_y is relative to the field. It has no fill: the card is under it."""
     field = kb_view('kb_field', x, y, w, h, '#00000000')
+    field.set('sensitive', 'true')   # the clear button inside it needs it: stock's hit test does not look into an insensitive parent (a page puts its eye button after the field, so over it)
     hint = label('kb_hint', 0, 0, w, h, '', WK_FIELD_PX, PK.KB_GREY, 'left')
     text = label('kb_text', 0, 0, w, h, '', WK_FIELD_PX, PK.KB_INK, 'left')
     for l in (hint, text):
@@ -2837,7 +2843,8 @@ def build_wifipass_page(page):
 # The keyboard has one field, kb_field, which the payload moves to the row being typed in (Name at x 100, Password at x 144, as the password page's); the other row shows its value in a static label
 # (wo_name_v, or wo_name_h, the grey placeholder, while the name is empty; wo_pass_v, dots or the text). Three buttons take the taps on the rows (wo_hit_*), insensitive widgets pass them through.
 WO_ROW_H, WO_NAME_Y, WO_SEC_Y, WO_PASS_Y, WO_ERR_Y, WO_ERR_H, WO_ERR_PX = 48, 56, 116, 164, 212, 20, 16
-WO_NAME_X, WO_NAME_FIELD_W, WO_NAME_TW = 100, 196, 156      # the Name field: the card's ink edge at 296, room for the text before the clear button
+WO_NAME_X, WO_NAME_TW = 100, 156                            # the Name field: room for the text before the clear button
+WO_NAME_FIELD_W = trail_field_w(WO_NAME_X)                  # (205: the clear button's disc under the eye of the Password row)
 WO_PASS_X, WO_PASS_TW = 144, 118                            # the Password field (the password page's): the same container, 118 px of text room, the eye button right of it
 WO_CARET_Y = (WO_ROW_H - 22) // 2
 WO_LABEL_W = 118

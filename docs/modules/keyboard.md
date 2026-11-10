@@ -118,6 +118,7 @@ void keyboard_detach(void);      /* the page's destroy event: the timer, the eng
 void keyboard_show(int on);      /* the pad and the strip shown / hidden (hidden: invisible and insensitive, the caret goes, a held key and the pop-up are let go) */
 int  keyboard_shown(void);
 void keyboard_set_mask(int on);  /* password field: one dot a character (on) or the text; the caret follows what is shown */
+void keyboard_set_clear(const char *leave);  /* embedded field: the clear button leaves this text ("" nothing) and shows while the field's differs from it; NULL: no button (a KB_PASSWORD field starts so) */
 void keyboard_set_go(const char *key, int enabled);   /* the action key's label (a string key; NULL keeps it) and whether it works */
 void keyboard_go(void);                               /* the action key as if pressed (a page's own Search button): pending pinyin committed, then on_go */
 const char *keyboard_text(void); /* the committed text */

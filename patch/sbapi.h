@@ -341,9 +341,9 @@ enum { SBA_DL_NONE = 0, SBA_DL_WAIT, SBA_DL_ACTIVE, SBA_DL_DONE, SBA_DL_FAILED }
 int sba_dl_add(
     const sba_track_t *
         t); /* queue t: SBA_OK, a guard (SBA_NOWIFI ...), SBA_QFULL, SBA_CARDFULL; a track already on the card is SBA_OK and DONE */
-void sba_dl_cancel(
+int sba_dl_cancel(
     const char *
-        id); /* a waiting (or failed) download leaves the queue; the active one stops (sbn_download then removes its .part, as the PR did; a network fault keeps it for the next try) */
+        id); /* a waiting (or failed) download leaves the queue; the active one stops (sbn_download then removes its .part, as the PR did; a network fault keeps it for the next try). SBA_OK, or SBA_STORAGE when the card did not take the cancel (stopped for this run, but the track waits again after a restart) */
 void sba_dl_cancel_all(void);
 int sba_dl_resume(
     void); /* UI thread: with the guard clear and no worker running, the waiting downloads (a queue the card kept over a reboot, or one the worker stopped at a lost Wi-Fi, a full card ...) start again, the one it stopped at last; the number waiting, 0 when nothing was started */
@@ -354,6 +354,8 @@ int sba_dl_failure(
         status); /* UI thread: the SBA_* of the newest download failure nobody has been told of (0 none; one older than 30 s is dropped), *status its HTTP status for SBA_HTTP. Taking it clears it */
 unsigned sba_dl_gen(void); /* moves with every state change and about every 2 % of the active file */
 int sba_dl_busy(void); /* the download worker runs */
+int sba_dl_pending(
+    void); /* UI thread: the downloads not done yet: the running one, the waiting ones and the one a stopped worker left to try again (sba_dl_resume); reads the queue the card kept */
 /* The path of a finished download of track id (a stat), 1 when there is one. A file deleted by hand is dropped from the manifest. */
 int sba_dl_path(const char *id, char *path, unsigned cap);
 int sba_dl_delete(const char *id); /* the file and its manifest row: 0 gone or never there, -1 could not be removed */

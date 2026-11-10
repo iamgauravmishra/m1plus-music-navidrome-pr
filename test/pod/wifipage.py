@@ -1165,8 +1165,8 @@ def other_tests(ctx):
     expect(box('wo_name_l')[:2] == (24, 56) and box('wo_sec_l')[:2] == (24, 116) and box('wo_pass_l')[:2] == (24, 164) and box('wo_hair') == (24, 163, 286, 1) and box('wo_name_l')[3] == box('wo_sec_l')[3] == box('wo_pass_l')[3] == 48,
            'three 48 px rows, labels at x 24, the hairline between Security and Password from the label to the card\'s edge')
     f = by['kb_field']
-    expect((f.x, f.y, f.w, f.h) == (100, 56, 196, 48) and by['kb_text'].w == by['kb_hint'].w == f.w and by['kb_clear'].x == 160 and by['kb_caret'].y == 13 and by['kb_caret'].h == 22 and f.get('sensitive') == 'false'
-           and f.get('style:normal:bg_color') == '#00000000', 'the keyboard\'s field starts on the Name row (x 100 to the card\'s ink edge, the clear button at its right, text room 156), the caret centred in the row, no fill (it moves over the card)')
+    expect((f.x, f.y, f.w, f.h) == (100, 56, 205, 48) and by['kb_text'].w == by['kb_hint'].w == f.w and f.x + by['kb_clear'].x + by['kb_clear'].w // 2 == by['wo_eye'].x + by['wo_eye'].w // 2 == 287 and by['kb_caret'].y == 13 and by['kb_caret'].h == 22 and f.get('sensitive') == 'true'
+           and f.get('style:normal:bg_color') == '#00000000', 'the keyboard\'s field starts on the Name row (x 100, the clear button\'s disc centred on the eye of the Password row, text room 156), the caret centred in the row, no fill (it moves over the card)')
     expect(box('wo_eye') == (264, 164, 46, 48) and box('wo_hit_pass') == (10, 164, 254, 48) and box('wo_hit_name') == (10, 56, 300, 48) and box('wo_hit_sec') == (10, 116, 300, 48)
            and all(by[n].get('enable') == 'true' for n in ('wo_hit_name', 'wo_hit_sec', 'wo_hit_pass', 'wo_eye')) and by['wo_eye'].get('style:normal:icon') == 'wf_eyeoff', 'the rows take the taps (the password row not under the eye); the eye starts as eye-off')
     expect(box('wo_name_v') == (100, 56, 156, 48) and box('wo_name_h') == (100, 56, 156, 48) and box('wo_pass_v') == (144, 164, 118, 48) and by['wo_name_h'].get('tr_text') == pod_i18n.key_for('Network Name')
@@ -1222,6 +1222,17 @@ def other_tests(ctx):
         m.tap('wo_hit_sec')
         m.tap(f'ws_row{row}')
         close_win(m, 'm1plus_wifisec')
+
+    # where a touch goes (demo's own hit test on the built page as the payload left it): the clear button and the eye take theirs
+    asset = os.path.join(WORK, UI_OTHER)
+    at = lambda m, xy: touch(m, live_tree(m, asset), *xy)   # noqa: F821
+    clear_xy = lambda m: (fld(m)[0] + by['kb_clear'].x + by['kb_clear'].w // 2, fld(m)[1] + by['kb_clear'].h // 2)
+    eye_xy = (by['wo_eye'].x + by['wo_eye'].w // 2, by['wo_eye'].y + by['wo_eye'].h // 2)
+    m = start()
+    expect(shown_(m, 'kb_clear') == (1, 1) and at(m, clear_xy(m)) == 'kb_clear', f'a typed name: a touch on the clear button reaches it ({at(m, clear_xy(m))})')
+    expect(at(m, eye_xy) == 'wo_eye' and at(m, (60, by['wo_hit_pass'].y + 24)) == 'wo_hit_pass' and at(m, (160, by['wo_hit_sec'].y + 24)) == 'wo_hit_sec', 'the eye, the Password row and the Security row take theirs')
+    m.tap('wo_hit_pass')
+    expect(fld(m)[1] == by['wo_hit_pass'].y and at(m, eye_xy) == 'wo_eye' and at(m, (60, 56 + 24)) == 'wo_hit_name', f'with the field on the Password row the eye is still over it ({at(m, eye_xy)}); the Name row takes its tap')
 
     # Other... opens our page; no stock dialog, nothing sent
     m = start(typed=False)

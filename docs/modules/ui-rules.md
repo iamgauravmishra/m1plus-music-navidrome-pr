@@ -8,7 +8,13 @@
   `widget_on_pointer_down_children` (`0x6714ac`) checks the same two bits. The tools model it
   (`check_touch` in `mod_lockscreen.py` / `mod_nowplaying.py`: centre of every control reaches that
   control, at least 44 px each way, the album page's two buttons 44 px high; the cover reaches the gesture parent) and `test/pod/` runs demo's
-  own `widget_find_target` on the built page trees.
+  own `widget_find_target` on the built page trees. A button inside an insensitive parent never gets its touch (the hit test
+  does not look into it): the keyboard's field `kb_field` is sensitive for its clear button, and a page puts its eye button after
+  the field, so over it. A page's test asks the hit test itself, on the page as the payload left it: `touch_misses(m, asset, names)`
+  (`test/pod/harness.py`, with `live_tree` and `touch`) lists the controls whose centre does not reach them; a paint order alone
+  proves nothing (Sign In and Join Wi-Fi Network shipped with a clear button that took no touch).
+- **Trailing controls of a card are one column, and a control with nothing to do is hidden.** The clear button's disc and the eye's
+  glyph share a centre (x 287: `tools/pod_ui.py trail_field_w`); the eye shows only while there is typed text behind the dots.
 - **Normal windows are 450 px tall** (under the 30 px `system_bar`); only fullscreen windows
   (`screensaver_page`) get 480. 68 stock pages end exactly at y = 450 (`systemset/sysset_page.bin`:
   navbar 0-50, list 50-450). Lists use the stock structure `list_view` > `scroll_view` +

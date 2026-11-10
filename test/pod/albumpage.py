@@ -1021,6 +1021,39 @@ def loading_tests(ctx):
     m.call(PSYMS['ls_spin_tick'], a0=0x5a5a5a50, count=4000000)
     expect(not any(c[0] in ('image_base_set_image', 'timer_add') for c in m.calls), 'the spinner timer ends with the wait')
     m.call(PSYMS['ab_on_destroy'], count=4000000)
+    # the cover came (the page is tinted) and then the tracks did not: the status line stands on black, not on the cover's tone (its grey is chosen for black)
+    m = fake_machine(n=5)
+    m.fake_tracks, m.state_ret = [], 1
+    m.call(PSYMS['album_open_src'], a0=m.src, a1=ALBUMS, a2=m.fake_row, count=900000000)
+    tinted = m.win_colors()
+    m.state_ret, m.gen = 2, 2   # LS_ST_FAILED
+    m.call(PSYMS['ab_on_gen'], count=80000000)
+    expect(tinted and tinted[-1] != 0xff000000 and vis(m, 'label_status')[0] == 1 and vis(m, 'view_grid')[0] == 0 and m.win_colors()[-1] == 0xff000000 and m.call(PSYMS['ab_has_tone'], count=20000) == 0,
+           f'loading with a cover tints the page; the failed request leaves the status line on a black window ({[hex(c) for c in m.win_colors()]})')
+    expect(not m.bar_styles() or m.bar_styles()[-1] == BAR_BLACK, 'and the status bar is black again')
+    m.call(PSYMS['ab_cp_ask'], count=80000000)   # the cover poll's callback, late (a cover that arrives after the failure)
+    m.call(PSYMS['ab_relight'], count=80000000)
+    expect(m.win_colors()[-1] == 0xff000000 and m.call(PSYMS['ab_has_tone'], count=20000) == 0, 'a cover that comes after the failure does not tint the page under the status line')
+    m.fake_tracks = [m.record(album='Fake Album', artist='Fake Artist', path=f'nd://t{i}', title=f'Remote {i}', name='', rid=-3 - i) for i in range(3)]
+    m.state_ret, m.gen = 0, 3
+    m.call(PSYMS['ab_on_gen'], count=80000000)
+    expect(vis(m, 'view_grid')[0] == 1 and m.win_colors()[-1] == tinted[-1], 'the tracks come after all: the page is tinted from the cover again')
+    m.call(PSYMS['ab_on_destroy'], count=4000000)
+    # the other order: the tracks fail while the cover is still asked for, the cover comes (the page stays black), then the tracks come: the page takes the cover's tone
+    m = fake_machine(n=5, cover_ret=0)   # (0: asked, not there yet)
+    m.fake_tracks, m.state_ret = [], 1
+    m.call(PSYMS['album_open_src'], a0=m.src, a1=ALBUMS, a2=m.fake_row, count=900000000)
+    m.state_ret, m.gen = 2, 2
+    m.call(PSYMS['ab_on_gen'], count=80000000)
+    m.cover_ret = 1
+    m.call(PSYMS['ab_cp_ask'], count=80000000)
+    late = m.win_colors()
+    m.fake_tracks = [m.record(album='Fake Album', artist='Fake Artist', path=f'nd://t{i}', title=f'Remote {i}', name='', rid=-3 - i) for i in range(3)]
+    m.state_ret, m.gen = 0, 3
+    m.call(PSYMS['ab_on_gen'], count=80000000)
+    expect((not late or late[-1] == 0xff000000) and vis(m, 'view_grid')[0] == 1 and m.win_colors() and m.win_colors()[-1] == tinted[-1] and m.call(PSYMS['ab_has_tone'], count=20000) == 1,
+           f'a cover that came under the status line left the page black ({[hex(c) for c in late]}); with the tracks the page has its tone ({[hex(c) for c in m.win_colors()]})')
+    m.call(PSYMS['ab_on_destroy'], count=4000000)
     # the server answered with no tracks: the empty state, no spinner
     m = fake_machine(n=5)
     m.fake_tracks, m.state_ret = [], 0

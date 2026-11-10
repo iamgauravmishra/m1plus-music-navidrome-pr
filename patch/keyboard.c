@@ -90,6 +90,8 @@ static struct {
     kb_change_fn on_change; /* embedded: called with the field's text whenever it may have changed */
     kb_go_fn on_go; /* embedded: the action key */
     int mask, go_off; /* the field shows dots; the action key is dimmed and inert */
+    const char *
+        clear_to; /* what the clear button leaves ("" nothing; the button shows while the text differs from it); NULL: no button (a KB_PASSWORD field, unless keyboard_set_clear says so) */
     int embedded, hidden, tx, tw,
         cy; /* embedded in another page (keyboard_attach); the pad is hidden; the field's text x, text room and caret y */
     short kx[KB_KEYS], ky[KB_KEYS], kw[KB_KEYS];
@@ -196,6 +198,8 @@ static int kb_fit(void *w, const char *src, unsigned n, int maxw, char *out) {
     return wd;
 }
 
+static void kb_clear_show(void) { m1_show(kb.clear, kb.clear_to && kb.len != 0 && strcmp(kb.buf, kb.clear_to) != 0); }
+
 static void kb_refresh(void) { /* the text and the caret */
     char shown[KB_PASS_MAX * 3 + 8],
         dots[KB_PASS_MAX * 3 + 1]; /* (a masked field is dots, 3 bytes each: KB_PASS_MAX at most) */
@@ -213,7 +217,7 @@ static void kb_refresh(void) { /* the text and the caret */
         shown[0] = 0;
     widget_set_text_utf8(kb.text, shown);
     widget_set_visible(kb.hint, kb.len == 0, 0);
-    m1_show(kb.clear, kb.len != 0 && !(kb.flags & KB_PASSWORD));
+    kb_clear_show();
     widget_move(kb.caret, kb.tx + (kb.len ? w + 1 : 0), kb.cy);
     if (kb.embedded && kb.on_change) kb.on_change(kb.buf);
 }
@@ -878,6 +882,7 @@ static int kb_on_clear(void *ctx, void *e) {
     if (l->reset) l->reset();
     kb.len = 0;
     kb.buf[0] = 0;
+    if (kb.clear_to) kb_insert_fit(kb.clear_to);
     if (kb.page >= P_NUM) kb_page(kb_letters());
     kb_changed();
     return RET_OK;
@@ -1150,6 +1155,7 @@ int keyboard_open(const char *title, const char *placeholder, const char *initia
              : flags & KB_LONG   ? KB_MAX_LONG
                                  : KB_MAX; /* before kb_init, which cuts the initial text to it */
     kb.mask = (flags & KB_PASSWORD) != 0; /* a password: one dot a character (the Server page's) */
+    kb.clear_to = flags & KB_PASSWORD ? (const char *)0 : "";
     kb.tx = KB_TEXT_X, kb.tw = KB_TEXT_W, kb.cy = KB_CARET_Y;
     if (kb_init(placeholder, initial, 0) != 0) {
         navigator_back();
@@ -1173,6 +1179,7 @@ int keyboard_attach(void *win, const char *placeholder, int text_x, int text_w, 
     memset(&zh, 0, sizeof zh);
     kb.win = win, kb.embedded = 1, kb.max = flags & KB_PASSWORD ? KB_PASS_MAX : KB_MAX, kb.flags = flags;
     kb.mask = (flags & KB_PASSWORD) != 0;
+    kb.clear_to = flags & KB_PASSWORD ? (const char *)0 : "";
     kb.tx = text_x, kb.tw = text_w, kb.cy = caret_y;
     if (kb_init(placeholder, (const char *)0, 1) != 0) return -1;
     kb.on_change = on_change, kb.on_go = on_go;
@@ -1194,12 +1201,21 @@ int keyboard_refocus(const char *placeholder, int text_w, unsigned flags, const 
     kb.flags = flags;
     kb.max = flags & KB_PASSWORD ? KB_PASS_MAX : KB_MAX; /* before kb_load, which cuts the text to it */
     kb.mask = (flags & KB_PASSWORD) != 0;
+    kb.clear_to = flags & KB_PASSWORD ? (const char *)0 : "";
     kb.tw = text_w;
     kb.on_change = on_change, kb.on_go = on_go;
     widget_set_text_utf8(kb.hint, placeholder ? placeholder : "");
     kb_load(text);
     kb_start();
     return 0;
+}
+
+/* The clear button of the embedded field leaves `leave` (a string that outlives the field; "" for nothing) and shows while the text differs from it; NULL: no button. A KB_PASSWORD field
+ * has none until this says so (the Sign In page's address is cleared to its scheme). */
+void keyboard_set_clear(const char *leave) {
+    if (!kb.win || !kb.embedded) return;
+    kb.clear_to = leave;
+    kb_clear_show();
 }
 
 /* A password field's eye: dots or the text. The caret is measured on what is shown. */

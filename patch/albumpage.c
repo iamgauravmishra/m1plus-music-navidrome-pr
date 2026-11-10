@@ -373,6 +373,16 @@ static void ab_tint_set(unsigned tone) {
     ab_bar_apply();
 }
 
+/* The page has nothing but its status line to show (a source's album whose tracks did not come after the cover did): black again, as a page that never had a cover. The line's grey is
+ * chosen for black; over a bright cover's tone it is hard to read. A later read that brings the tracks tints the page again (ab_cover). */
+static void ab_tint_drop(void) {
+    if (!ab.tinted) return;
+    ab.tinted = 0;
+    ab_win_color(0xff000000u);
+    widget_invalidate_force(ab.win, (void *)0);
+    ab_bar_black();
+}
+
 /* The page shows a cover's tone now (patch/palette.c pal_cover_page: the Tinted wash leaves it alone). */
 int ab_has_tone(void) { return ab.win && ab.tinted; }
 
@@ -385,16 +395,20 @@ void ab_relight(void) {
 static void ab_tint_cover(const char *file) {
     unsigned tone, px;
     char url[80];
+    int show =
+        ab.count ||
+        ab.wait; /* only the status line shows (ab_tint_drop): a cover that comes late leaves the page black; its tone is still worked out and remembered, for the
+                                     * tracks that may come after it (ab_cover finds it in the tone cache) */
     if (ab.tinted || !ab.cover_key) return;
     if (m1_tone_get(ab.cover_key, &tone)) {
-        ab_tint_set(tone);
+        if (show) ab_tint_set(tone);
         return;
     }
     if (!file) file = cc_url(url, ab.cover_key);
     if (file && cc_decode(ab.win, file, 1, 1, 1, &px)) {
         tone = m1_tone(px & 255, px >> 8 & 255, px >> 16 & 255);
         m1_tone_put(ab.cover_key, tone);
-        ab_tint_set(tone);
+        if (show) ab_tint_set(tone);
     }
 }
 
@@ -474,7 +488,11 @@ static void ab_cover_build(void) {
 static void ab_cover(void) {
     grid_tile_t *t = ab.hg.tiles ? grid_find(&ab.hg, 0) : (grid_tile_t *)0;
     int have;
-    if (!t || t->art == 1) return;
+    if (!t) return;
+    if (t->art == 1) {
+        ab_tint_cover((const char *)0); /* (a tint dropped with the status line comes back: the tone cache has it) */
+        return;
+    }
     have = ab.src ? ab_cover_src() : ab_cover_now();
     if (have < 0) {
         if (!ab.src)
@@ -732,7 +750,10 @@ static void ab_load(int keep) {
     ab_foot(); /* (sizes the content: the footer's lines are part of it) */
     widget_set_prop_int(ab.sv, "yoffset", at < 0 ? 0 : at > ab_max_scroll() ? ab_max_scroll() : at);
     ab_texts();
-    if (ab.count || ab.wait) ab_cover();
+    if (ab.count || ab.wait)
+        ab_cover();
+    else
+        ab_tint_drop();
     ab_durations();
     ab_redraw();
 }

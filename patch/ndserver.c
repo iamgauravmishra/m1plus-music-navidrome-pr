@@ -144,7 +144,7 @@ static int ns_on_scroll(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* Sync Now (this page's row and the root page's card): asks first, then queues the sync; a refusal such as no Wi-Fi is the toast. */
+/* Sync Now (this page's row and the root page's card): queues the sync (nothing is lost by one, so nothing is asked); a refusal such as no Wi-Fi is the toast. */
 void nd_sync_now(void) {
     int rc;
     if (!sba_configured()) {
@@ -152,11 +152,10 @@ void nd_sync_now(void) {
         return;
     }
     rc = sba_guard();
-    if (rc != SBA_OK) { /* no Wi-Fi, no clock...: said at once, nothing to confirm */
+    if (rc != SBA_OK) { /* no Wi-Fi, no clock...: said at once */
         pod_toast(sbs_request_message(rc, 0));
         return;
     }
-    if (!pod_confirm(TR("Sync your Subsonic library now?"))) return;
     rc = sba_sync();
     if (rc != SBA_OK) pod_toast(sbs_request_message(rc, 0));
 }
@@ -202,6 +201,7 @@ static void ns_out(void) {
 #define NL_CY 13 /* the caret's y in the field (a 48 px row) */
 #define NL_MAX KB_PASS_MAX /* the longest field text (the keyboard's cap for a KB_PASSWORD field) */
 #define NL_TICK_MS 250
+#define NL_SCHEME "http://" /* what an empty address starts as, and what its clear button leaves */
 #define NL_WAIT 160 /* ticks (40 s) the page waits for the ping before it gives up */
 
 static struct {
@@ -272,13 +272,14 @@ static void nl_dots(char *out, const char *s) {
     out[n] = 0;
 }
 
-/* The rows that are not typed in show their value (the dots of a password, or its text with the eye open) or, empty, the grey placeholder; the field sits on the typed row. */
+/* The rows that are not typed in show their value (the dots of a password, or its text with the eye open) or, empty, the grey placeholder; the field sits on the typed row; the eye is there
+ * while a password is typed. */
 static void nl_layout(void) {
     char dots[NL_MAX * 3 + 1];
     int i;
     for (i = 0; i < 3; i++) {
         const char *t = nl.text[i];
-        int blank = !t[0] || (i == 0 && nl_prefix(t, "http://") && !t[7]);
+        int blank = !t[0] || (i == 0 && !strcmp(t, NL_SCHEME));
         int kept = i == 2 && !t[0] && nl.saved_pw && !nl.touched;
         int on = i != nl.focus;
         nl_vis(nl.v[i], on && (!blank || kept));
@@ -292,6 +293,7 @@ static void nl_layout(void) {
         }
     }
     widget_move(nl.field, NL_X, NL_Y0 + nl.focus * NL_PITCH);
+    m1_show(nl.eye, nl.text[2][0] != 0);
     memset(dots, 0, sizeof dots);
 }
 
@@ -349,6 +351,11 @@ static void nl_change(const char *text) {
     for (i = 0; text[i] && i < NL_MAX; i++) d[i] = text[i];
     memset(d + i, 0, NL_MAX + 1 - i);
     if (nl.focus == 2 && d[0]) nl.touched = 1;
+    if (nl.focus == 2)
+        m1_show(
+            nl.eye,
+            d[0] !=
+                0); /* the eye only while there is typed text to show (the saved password is not on the device: its four dots have nothing behind them) */
     if (nl.connecting) nl_stop();
     nl_vis(nl.err, 0);
     nl_set_go();
@@ -359,10 +366,15 @@ static void nl_go(void);
 /* The keyboard types row f: the same pad and field moved to that row, the address and the password with the English-only layout (a name keeps the language key), the password masked unless the eye is open. */
 static void nl_focus(int f) {
     static const unsigned flags[3] = {KB_PASSWORD, KB_LITERAL, KB_PASSWORD};
-    const char *ph = f == 0 ? TR("Server URL") : f == 1 ? TR("Username") : TR("Password");
+    /* (an untouched password field with one saved says that leaving it keeps it: the four dots it showed as a label are gone while it is typed in) */
+    const char *ph = f == 0                       ? TR("Server URL")
+                     : f == 1                     ? TR("Username")
+                     : nl.saved_pw && !nl.touched ? TR("Leave empty to keep")
+                                                  : TR("Password");
     nl.focus = f;
     keyboard_refocus(ph, NL_TW, flags[f], nl.text[f], nl_change, nl_go);
     keyboard_set_mask(f == 2 && !nl.shown);
+    if (f == 0) keyboard_set_clear(NL_SCHEME); /* the address has a clear button: it leaves the scheme to type after */
     nl_layout();
     nl_set_go();
 }
@@ -522,7 +534,7 @@ static int nl_open(int focus) {
         return -1;
     }
     nl.kb = 1;
-    snprintf(nl.text[0], sizeof nl.text[0], "%s", sba_url()[0] ? sba_url() : "http://");
+    snprintf(nl.text[0], sizeof nl.text[0], "%s", sba_url()[0] ? sba_url() : NL_SCHEME);
     snprintf(nl.text[1], sizeof nl.text[1], "%s", sba_user());
     nl.saved_pw = sba_password_saved();
     nl_focus(focus);

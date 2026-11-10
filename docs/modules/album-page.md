@@ -104,6 +104,9 @@ Rows passing over the brighter top of the gradient have lower transient contrast
 
 Status-bar tint uses the same single-owner helpers as [Now Playing](nowplaying.md#status-bar).
 Background/destroy restore black only while this page owns the bar; foreground retints.
+A page left with only its status line (a source's album whose cover came and whose tracks then did not) goes back to a black window
+and bar (`ab_tint_drop`): the line's grey (#AAAAAA) is chosen for black and fell to 3.6:1 over a white cover's tone. A cover that comes after that (the cover poll's
+callback) does not tint it (`ab_tint_cover` asks for tracks or a wait) but its tone is worked out and kept in the tone cache; tracks that come later tint it again from the tone cache (`ab_cover`). Test: `albumpage` `loading_tests`.
 Bright tones may require a darker bar than the top window row to preserve 4.5:1 contrast.
 
 ## Playback and selection

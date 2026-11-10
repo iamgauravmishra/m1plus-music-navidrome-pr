@@ -86,6 +86,7 @@ class DM(PCN.NM):
         if self.handlers.get(address, '') == 'scanSpecFolder':
             a0, a1 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1))
             self.scans = (*self.scans, (self.read_cstr(a0), a1))
+            if getattr(self, 'on_scan', None): self.on_scan()   # a test's way to act after a transfer's answer, before the worker has handled it (the scan before a pause)
             u.reg_write(UC_MIPS_REG_V0, 1); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
         if self.handlers.get(address, '') == 'snprintf' and self.read_cstr(u.reg_read(UC_MIPS_REG_A2)) == '%lld-':   # sbnet's Range text: the 64-bit offset is in the stack words after a3's padding
@@ -540,6 +541,84 @@ def control_tests(ctx):
     expect(hits and state(m)[0] == DL['NONE'] and final not in m.fs and 'tr-1' not in m.fs.get(IDX, b'').decode(), 'cancelling the running download stops it: no file, no manifest row, not failed')
     expect(state(m, 'tr-2')[0] == DL['DONE'], 'the next track in the queue still downloads')
     expect(QUEUE not in m.fs, 'and nothing waits on the card')
+    # cancelled and added again before the worker has seen the cancel: the cancel is withdrawn, and on the card the track's row is written again after the cancel's line
+    m = machine(); base = server(m)
+    hits = []
+
+    def again(u, sent, total):
+        if sent >= 300000 and not hits:
+            hits.append(sent); cancel_in(m, 'tr-1')
+            buf = m.alloc(SIZE); m.u.mem_write(buf, pack(t1))
+            hits.append(m.nested(PSYMS['sba_dl_add'], buf)); hits.append(bytes(m.fs.get(QUEUE, b'')))
+    m.curl_site = lambda url, o: dict(base(url, o), xfer=again)
+    r, th = add(m, t1)
+    work(m, th)
+    lines = hits[2].decode().split('\n') if len(hits) == 3 else []
+    expect(len(hits) == 3 and hits[1] == 0 and state(m)[0] == DL['DONE'] and '-=tr-1' in lines and any(x.startswith('i=tr-1\t') for x in lines[lines.index('-=tr-1'):]),
+           f'the download goes on and finishes; dlq.idx has the cancel\'s line and a row of the track after it ({lines})')
+    m2 = machine(); m2.dirs.add('/mnt/mmc/.m1plus/subsonic'); m2.put(QUEUE, hits[2] if len(hits) == 3 else b'')
+    expect(state(m2)[0] == DL['WAIT'], 'a restart at that moment: the track still waits')
+    # the same, but the transfer has already stopped for the cancel when the add comes (the worker has not handled it yet): the add is told yes, so the track is fetched again
+    m = machine(); base = server(m)
+    hits = []
+
+    def stop_only(u, sent, total):
+        if sent >= 300000 and not hits:
+            hits.append(sent); cancel_in(m, 'tr-1')
+
+    def late(p):
+        if len(hits) == 1 and any(c[0] == 'curl_perform' and c[2] == 42 for c in m.calls):
+            hits.append(0)   # (the add asks for the free space too)
+            buf = m.alloc(SIZE); m.u.mem_write(buf, pack(t1))
+            hits[1] = m.nested(PSYMS['sba_dl_add'], buf)
+    m.curl_site = lambda url, o: dict(base(url, o), xfer=stop_only)
+    m.on_statfs = late
+    r, th = add(m, t1)
+    calls = work(m, th)
+    reqs = [c for c in calls if c[0] == 'curl_perform' and 'id=tr-1' in c[1]]
+    expect(len(hits) == 2 and hits[1] == 0 and [c[2] for c in reqs] == [42, 0] and state(m)[0] == DL['DONE'] and m.fs.get(f'{MUSIC}/{name_of(t1)}') == DATA and QUEUE not in m.fs,
+           f'added again after the transfer stopped, before the worker dropped it: fetched a second time and complete ({hits}, {[c[2] for c in reqs]}, {state(m)[0]})')
+    # cancelled after the transfer ended with a network fault and the worker has its answer, before it has marked the track failed (the folder scan before a pause is that moment):
+    # the cancel is told yes, so the track does not come back when the network does
+    m = machine(); base = server(m)
+    m.curl_site = lambda url, o: base(url, o) if 'id=tr-2' not in url else dict(rc=7, code=0, body=b'', length=0)
+    hits = []
+
+    def late_cancel():
+        if not hits and any(c[0] == 'curl_perform' and c[2] == 7 for c in m.calls):
+            hits.append(None)   # (the cancel may come here again)
+            hits[0] = m.nested(PSYMS['sba_dl_cancel'], m.cstr('tr-2'))
+    m.on_scan = late_cancel
+    r, th = add(m, t1); add(m, t2)
+    work(m, th)
+    m.on_scan = None
+    expect(hits == [0] and state(m)[0] == DL['DONE'] and state(m, 'tr-2')[0] == DL['NONE'] and queued(m) == [], f'a cancel between the network fault and its handling: SBA_OK and the track is out ({hits}, {state(m, "tr-2")[0]}, {queued(m)})')
+    m.curl_site = base
+    n, th = resume(m)
+    calls = work(m, th) if th else []
+    expect(n == 0 and not [c for c in calls if c[0] == 'curl_perform'] and state(m, 'tr-2')[0] == DL['NONE'], f'the network is back: nothing is fetched ({n})')
+    # the same, with a card that takes no row: the cancel stands
+    m = machine(); base = server(m)
+    hits = []
+
+    def refused(u, sent, total):
+        if sent >= 300000 and not hits:
+            hits.append(sent); cancel_in(m, 'tr-1')
+            m.fail.add(('write', QUEUE))
+            buf = m.alloc(SIZE); m.u.mem_write(buf, pack(t1))
+            hits.append(m.nested(PSYMS['sba_dl_add'], buf))
+    m.curl_site = lambda url, o: dict(base(url, o), xfer=refused)
+    r, th = add(m, t1)
+    work(m, th)
+    expect(len(hits) == 2 and hits[1] == SBA['STORAGE'] and state(m)[0] == DL['NONE'] and f'{MUSIC}/{name_of(t1)}' not in m.fs, f'the row cannot be written: the add says SBA_STORAGE and the cancel stands ({hits})')
+    # a card that takes neither the cancel's line nor the rewrite: the download stops for this run and the answer says the card did not take it
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2)
+    m.fail.add(('write', QUEUE)); m.fail.add(('read', QUEUE))
+    r = m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('tr-2'), count=2000000)
+    expect(r == SBA['STORAGE'] and state(m, 'tr-2')[0] == DL['NONE'], f'a cancel the card does not take: SBA_STORAGE, the track is out of this run\'s queue ({r})')
+    m.fail.clear()
+    expect(m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('tr-1'), count=2000000) == 0 and m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('nope'), count=2000000) == 0, 'a cancel that is written, and one of a track that is not queued: SBA_OK')
     # cancel all
     m = machine(); m.curl_site = server(m)
     r, th = add(m, t1); add(m, t2); add(m, t3)
@@ -609,6 +688,29 @@ def collision_tests(ctx):
     expect(m.fs[final] == b'other' and m.fs.get(alt) == DATA and len(log) == 1, 'a file of that name owned by another track is not touched: the download gets "(2)"')
     expect(path_of(m) == alt and path_of(m, 'other-id') == final, 'each track has its own file')
     expect(sorted(r['id'] for r in listing(m)) == ['other-id', 'tr-1'], 'both are listed')
+    # the card folds the case of names: a name another track owns in other letters is the same file, never taken (and never adopted: the mock card, like a Linux one, has no such file)
+    m = machine(); log = []; m.curl_site = server(m, log=log)
+    row = (f'i=other-id\tt=SONG ONE\tx=flac\tw=5\tp={name_of(t).upper()}\n').encode()
+    m.put(IDX, b'M1PLUS-DL 1\n' + row); m.put(f'{MUSIC}/{name_of(t).upper()}', b'other')
+    m.dirs.add('/mnt/mmc/.m1plus/subsonic')
+    r, th = add(m, t); work(m, th)
+    expect(path_of(m) == alt and m.fs.get(alt) == DATA and final not in m.fs and len(log) == 1, f'a name that differs only in case from another track\'s file: the download gets "(2)" ({path_of(m)})')
+    expect(m.call(PSYMS['sba_dl_delete'], a0=m.cstr('tr-1'), count=20000000) == 0 and m.fs.get(f'{MUSIC}/{name_of(t).upper()}') == b'other', 'and removing it leaves the other track\'s file')
+    # a card that folds the case of every script (exFAT's own table): a name that differs from another track's in the case of a letter outside ASCII IS that track's file; the card says so
+    # (one inode) and the names do not
+    cafe, CAFE = track('c1', 'Café'), track('c2', 'CAFÉ')
+    m = machine(); m.nocase = True; log = []; m.curl_site = server(m, log=log)
+    r, th = add(m, cafe); work(m, th)
+    r, th = add(m, CAFE); work(m, th)
+    p1, p2 = path_of(m, 'c1'), path_of(m, 'c2')
+    expect(p1 and p2 and p1.casefold() != p2.casefold() and len(log) == 2 and m.fs.get(p1) == DATA and m.fs.get(p2) == DATA, f'two titles that differ in the case of a letter outside ASCII: two files, two downloads ({p1}, {p2})')
+    expect(m.call(PSYMS['sba_dl_delete'], a0=m.cstr('c2'), count=20000000) == 0 and m.fs.get(p1) == DATA and path_of(m, 'c1') == p1, 'removing the second leaves the first one\'s file')
+    # the same card, a file the manifest does not know and nobody else's: still adopted (in whatever case it is on the card)
+    m = machine(); m.nocase = True; m.curl_site = server(m)
+    shout = final.rsplit('/', 1)[0] + '/' + final.rsplit('/', 1)[1].upper()
+    m.put(shout, b'mine, from an earlier run')
+    r, th = add(m, t); calls = work(m, th)
+    expect(state(m)[0] == DL['DONE'] and 'curl_perform' not in [c[0] for c in calls] and m.fs.get(shout) == b'mine, from an earlier run', 'a file of nobody else is adopted on such a card too')
     # characters that cannot be in a name
     m = machine(); m.curl_site = server(m)
     odd = track('x1', 'AC/DC: Back "in" <Black>?')
@@ -756,6 +858,66 @@ def persist_tests(ctx):
     expect(path_of(m, 'k1') == MUSIC + '/Unknown Artist/Unknown Album/One.flac' and path_of(m, 'k2') == MUSIC + '/Unknown Artist/Unknown Album/02 Two.mp3', 'and they download')
 
 
+def qread_tests(ctx):
+    """A queue file that cannot be read is the card's failure, not the track's: the worker stops, the row is kept and the next start downloads it."""
+    expect = ctx.expect
+    m = machine(); log = []; m.curl_site = server(m, log=log)
+    t1, t2 = track('q1', 'One'), track('q2', 'Two')
+    r, th = add(m, t1)
+    add(m, t2)
+    m.fail.add(('read', QUEUE))
+    work(m, th)
+    st1, code1 = state(m, 'q1')[:2]
+    expect(st1 == DL['FAILED'] and code1 == SBA['STORAGE'] and state(m, 'q2')[0] == DL['WAIT'] and not log and not m.call(PSYMS['sba_dl_busy'], count=2000000),
+           f'the queue file will not read: the track fails as a card failure, the next one waits, the worker ends, nothing is fetched ({st1}, {code1})')
+    expect(sorted(queued(m)) == ['q1', 'q2'], f'both rows are still on the card ({queued(m)})')
+    m.fail.discard(('read', QUEUE))
+    m.thread = None
+    n, th = resume(m)
+    work(m, th)
+    expect(n == 2 and state(m, 'q1')[0] == DL['DONE'] and state(m, 'q2')[0] == DL['DONE'] and len(log) == 2 and QUEUE not in m.fs, f'the next start reads it and downloads both ({n}, {len(log)})')
+    # the first read of the run fails: no queue is taken as loaded (an empty one would be compacted away), and the next use reads it
+    rows = b'i=k1\tt=One\tx=flac\tp=\ni=k2\tt=Two\tx=flac\tp=\n'
+    m = machine(); m.curl_site = server(m)
+    m.dirs.add('/mnt/mmc/.m1plus/subsonic'); m.put(QUEUE, rows)
+    m.fail.add(('read', QUEUE))
+    expect(state(m, 'k1')[0] == DL['NONE'] and resume(m) == (0, None) and m.fs.get(QUEUE) == rows, 'the queue file will not read at the first use: nothing waits yet, nothing starts, the file is untouched')
+    r, th = add(m, track('k3', 'Three'))
+    expect(r == SBA['STORAGE'] and th is None and m.fs.get(QUEUE) == rows, f'and nothing is added on top of rows that were not seen: SBA_STORAGE ({r})')
+    m.fail.discard(('read', QUEUE))
+    expect(state(m, 'k1')[0] == DL['WAIT'] and state(m, 'k2')[0] == DL['WAIT'], 'the next use reads it: both wait')
+    # a read that fails while a waiting track is cancelled: the file is not rewritten from nothing (the other track's row stays)
+    m.fail.add(('read', QUEUE))
+    m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('k1'), count=20000000)
+    expect(m.fs.get(QUEUE) == rows + b'-=k1\n' and state(m, 'k2')[0] == DL['WAIT'], 'a compaction that cannot read the file leaves its rows as they are; the cancel is one line appended (no read needed)')
+    m.fail.discard(('read', QUEUE))
+    m2 = reboot(m)
+    expect(state(m2, 'k1')[0] == DL['NONE'] and state(m2, 'k2')[0] == DL['WAIT'], 'a restart before any compaction: the cancelled track does not wait again, the other does')
+    r, th = add(m2, track('k1', 'One'))
+    m3 = reboot(m2)
+    expect(r == 0 and state(m3, 'k1')[0] == DL['WAIT'] and state(m3, 'k2')[0] == DL['WAIT'], 'added again after the cancel: its new row counts')
+    n, th = resume(m); work(m, th)
+    expect(state(m, 'k2')[0] == DL['DONE'] and state(m, 'k1')[0] == DL['NONE'] and QUEUE not in m.fs, 'the track that still waited downloads; the cancelled one does not come back, and the drained queue\'s file goes')
+
+
+def qlast_tests(ctx):
+    """The queue file is a log: the last row of a track is the track's. A row before a cancel's line that a failed rewrite left behind is never the one downloaded or kept."""
+    expect = ctx.expect
+    m = machine(); m.curl_site = server(m)
+    m.dirs.add('/mnt/mmc/.m1plus/subsonic')
+    m.put(QUEUE, b'i=k1\tt=Old Title\tx=flac\tp=\n-=k1\ni=k2\tt=Two\tx=flac\tp=\n')
+    expect(state(m, 'k1')[0] == DL['NONE'] and state(m, 'k2')[0] == DL['WAIT'], 'a row, its cancel and another row on the card: only the other track waits')
+    r, th = add(m, track('k1', 'New Title'))
+    cancel(m, 'k2')
+    text = m.fs.get(QUEUE, b'').decode()
+    expect(r == 0 and text.count('i=k1\t') == 1 and 'New Title' in text and 'Old Title' not in text and '-=' not in text and 'k2' not in text,
+           f'added again with another title, then a rewrite: the file holds the new row alone ({text!r})')
+    m.put(QUEUE, b'i=k1\tt=Old Title\tx=flac\tp=\n-=k1\n' + m.fs[QUEUE])   # (as a failed rewrite would have left it)
+    work(m, th)
+    p = path_of(m, 'k1')
+    expect(p and p.endswith('New Title.flac'), f'the worker downloads the track as its last row says ({p})')
+
+
 def manifest_tests(ctx):
     """dl.idx: replaced whole, tolerant of bad lines, rows with tabs and odd text."""
     expect = ctx.expect
@@ -794,4 +956,4 @@ def manifest_tests(ctx):
     expect(m.fs.get(IDX) == big, 'an oversized manifest is kept, not replaced by one row')
 
 
-SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, scan_tests, layout_tests, persist_tests, manifest_tests]
+SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, scan_tests, layout_tests, persist_tests, qread_tests, qlast_tests, manifest_tests]

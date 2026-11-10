@@ -38,7 +38,14 @@ def page(s, state='connected', scroll=0, search=True, card=False, syncing_card=F
                 from PIL import ImageDraw
                 ImageDraw.Draw(im).rounded_rectangle((w.x, w.y, w.x + w.w - 1, w.y + w.h - 1), radius=w.h // 2, fill=(0x1E, 0x1E, 0x1E))
                 s.text(im, w.x + w.w // 2, w.y + w.h / 2, PS.tr(s, s.shown(w)), 18, anchor='m')
-            else: s.text(im, w.x + (w.w // 2 if n != 'nd_es_text' else 0), w.y + 12, PS.fit(s, PS.tr(s, s.shown(w)), 18, w.w), 18, (255, 255, 255) if n == 'nd_es_title' else (0x8E, 0x8E, 0x93), anchor='m' if n == 'nd_es_title' else 'l')
+            elif n == 'nd_es_title': s.text(im, w.x + w.w // 2, w.y + w.h / 2, PS.fit(s, PS.tr(s, s.shown(w)), 18, w.w), 18, (255, 255, 255), anchor='m')
+            else:   # the sentence: the label's own size, wrapped at words and centred, from the label's top (patch/ndroot.c turns the wrap on)
+                px = int(w.get('style:normal:font_size')); lines = ['']
+                for word in PS.tr(s, s.shown(w)).split(' '):
+                    t = (lines[-1] + ' ' + word).strip()
+                    if s.font.width(t, px) <= w.w or not lines[-1]: lines[-1] = t
+                    else: lines.append(word)
+                for k, t in enumerate(lines): s.text(im, w.x + w.w // 2, w.y + px * 0.7 + k * (px + 4), t, px, GREY, anchor='m')
     else:
         y = NAV - scroll
         for c in by['pod_scrollview'].children:
@@ -50,7 +57,7 @@ def page(s, state='connected', scroll=0, search=True, card=False, syncing_card=F
                 s.text(im, st.x, y + st.y + st.h / 2, s.clip(status_text(s, state), 15, st.w), 15, GREY)
             elif c.name.startswith('pod_row'):
                 for t in c.children:
-                    if t.type == 'image': g = s.img(t.get('image')); im.alpha_composite(g, (t.x, y + t.y))
+                    if t.type == 'image': g = s.img(t.get('image')); im.alpha_composite(g, (t.x + (t.w - g.width) // 2, y + t.y + (t.h - g.height) // 2))   # (draw_type icon: centred in its box)
                     elif t.name.startswith('pod_label'): s.text(im, t.x, y + c.h / 2, PS.tr(s, s.shown(t)), 21)
                     elif t.name.startswith('pod_hair'):
                         from PIL import ImageDraw

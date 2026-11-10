@@ -213,6 +213,15 @@ static void nr_refresh(int force) {
         char line[sizeof nr.s], foot[sizeof nr.f];
         int state = nr_state();
         nr_line(state, line, sizeof line);
+        if (state !=
+            NR_SYNCING) { /* the downloads not done yet: the spinner and their count while the worker runs, their count alone while they wait (no Wi-Fi, a restart) */
+            int left = sba_dl_pending(), busy = left > 0 && sba_dl_busy();
+            if (busy)
+                m1_fmt(line, sizeof line, TR(left == 1 ? "Downloading 1 song" : "Downloading %d songs"), left);
+            else if (left > 0)
+                m1_fmt(line, sizeof line, TR(left == 1 ? "1 download waiting" : "%d downloads waiting"), left);
+            if (busy) state = NR_SYNCING; /* (the glyph: the spinner) */
+        }
         nr_text(nr.status, nr.s, sizeof nr.s, line);
         nr_glyph(state);
         nr_footer(foot, sizeof foot);

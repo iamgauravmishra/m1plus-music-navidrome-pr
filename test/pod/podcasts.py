@@ -67,10 +67,11 @@ class PM(ListMachine):
         elif name == 'closedir':
             self.dh.pop(a0, None); ret = 0
         elif name == '__xstat':
-            path = self.read_cstr(a1)
+            path = self.fsname(self.read_cstr(a1))   # (the file the path names: with m.nocase, whatever its case)
             if ('__xstat', path) in self.fail or not (path in self.fs or path in self.dirs or path in self.files): ret = 0xffffffff
             else:
                 self.u.mem_write(a2, bytes(144)); self.setword(a2 + 0x40, self.mtime.get(path, 0)); self.setword(a2 + 0x30, self.sizes.get(path, len(self.fs.get(path, b'')))); ret = 0
+                self.setword(a2, 1); self.setword(a2 + 0x10, 1000 + sorted(set(self.fs) | set(self.dirs) | set(self.files)).index(path))   # st_dev, st_ino: each file its own
             self.calls.append(('__xstat', a0, path))
         elif name == 'memmove':
             self.u.mem_write(a0, bytes(self.u.mem_read(a1, a2))); ret = a0

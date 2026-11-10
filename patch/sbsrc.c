@@ -751,8 +751,10 @@ static int nd_act(const lib_src_t *s, void *rec, int what) {
     if (what == LS_ACT_CANCEL_DL) {
         const char *id = nd_rec_id(s, rec);
         if (!id[0]) return -1;
-        sba_dl_cancel(id);
-        return 0;
+        if (sba_dl_cancel(id) == SBA_OK) return 0;
+        pod_toast(TR(
+            "Storage unavailable")); /* stopped, but the card did not take it: the download would come back after a restart */
+        return -1;
     }
     if (what == LS_ACT_DELETE_DL) {
         const char *id = nd_rec_id(s, rec);
