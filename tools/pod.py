@@ -43,7 +43,7 @@ LD = os.path.join(LLD, 'ld.lld')
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'charging.c', 'nextalbum.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c',
-           'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
+           'tidalkb.c', 'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
 
 FLAGS = ['--target=mipsel-linux-gnu', '-march=mips32r2', '-mabi=32', '-mfp64',
          '-mno-abicalls', '-fno-pic', '-G0', '-ffreestanding', '-fno-builtin',
@@ -203,6 +203,8 @@ LIGHT_PINS = (   # (address, stock word, what it proves)
 FUNCTIONS = {
     'widget_lookup':           ('void *', 'void *, const char *, int', 0x666a74),
     'widget_on':               ('int', 'void *, int, void *, void *', 0x666d20),
+    'edit_set_focus':          ('int', 'void *, int', 0x62a1dc),   # patch/tidalkb.c: stock's own focus (and so T9) when our keyboard is not used
+    'widget_get_window':       ('void *', 'void *', 0x66a9a8),
     'widget_set_text_utf8':    ('int', 'void *, const char *', 0x66f720),
     'navigator_back':          ('int', 'void', 0x4d20dc),
     'on_backtoplayer_onclick': ('int', 'void *, void *', 0x4cd58c),
@@ -498,6 +500,53 @@ FUNCTIONS.update({
     'wifi_switch':             ('int', 'int', 0x507a8c),
 })
 WIFIHUB_SITE = 0x4b1460   # the Wi-Fi row of the All System Settings hub: its jalr navigator_to("systemset/wifi_page") becomes jal wifi_hub_open (patch/wifipage.c, docs/modules/payload.md hook 21)
+# The stock Tidal > Search page's T9 (patch/tidalkb.c, docs/modules/tidalkb.md, payload hook 27): the bind callback 0x4c1f3c of tidal_tidal_serach_page_init calls edit_set_focus(search_edit, 1) at 0x4c2088
+# (lw t9 GOT @0x4c2080, a1 = 1 @0x4c2084, delay slot move a0, s0 @0x4c208c); that jalr becomes jal tidal_kb_focus. Stock's search routine 0x4c4740 (called by the IM action handler 0x4c4990 with the window's widget) is
+# called by the payload with the edit. Stock facts the design stands on are pinned too: widget_dispatch running the emitter unless on_event answers RET_STOP (a view has no on_event), the list_item's click, and the history row click writing the keyword into search_edit.
+TIDALKB_SITE = 0x4c2088
+TIDALKB_SEARCH = 0x4c4740
+TIDALKB_PINS = (   # (address, stock word, what it proves)
+    (0x4c1f3c, 0x3c1c0054, 'Tidal search bind callback prologue'), (0x4c1f40, 0x279c1f94, 'Tidal search bind callback prologue'), (0x4c1f44, 0x0399e021, 'Tidal search bind callback prologue'),
+    (0x4c1f7c, 0x00a08025, 'bind callback: move s0, a1 (the widget)'), (0x4c2070, 0x24a56ad0, 'bind callback: a1 = "search_edit" (strcmp)'), (0x4c2078, 0x14400051, 'bind callback: bnez v0 (not search_edit: next widget)'),
+    (0x4c2080, 0x8f99a8a8, 'bind callback: lw t9, GOT edit_set_focus'), (0x4c2084, 0x24050001, 'bind callback: a1 = 1'), (TIDALKB_SITE, 0x0320f809, 'bind callback: jalr edit_set_focus'),
+    (0x4c208c, 0x02002025, 'its delay slot: move a0, s0 (the edit)'), (0x4c2090, 0x2405013c, 'bind callback: a1 = 0x13c (IM action) for the widget_on that follows'), (0x4c20ac, 0x24c64990, 'bind callback: a2 = 0x4c4990 (the action handler)'),
+    (0x4c4740, 0x3c1c0054, 'Tidal search routine prologue'), (0x4c4744, 0x279cf790, 'Tidal search routine prologue'), (0x4c4748, 0x0399e021, 'Tidal search routine prologue'),
+    (0x4c4a00, 0x0411ff4f, 'action handler 0x4c4990: bal 0x4c4740(window widget, event)'), (0x4c4a04, 0x02202025, 'its delay slot: move a0, s1 (the page, not the event)'),
+    (0x62a1dc, 0x3c1c003e, 'edit_set_focus prologue'), (0x62a1e0, 0x279c9cf4, 'edit_set_focus prologue'), (0x62a1e4, 0x0399e021, 'edit_set_focus prologue'),
+    # re-search: the tab buttons reset a result struct before 0x4c2380 (tab word 0xa04158, limit 0x32 at +4, deque_clear of *(+0xc), offset 0 at +8, scroll 0xa04150 = 0); 0x4c2380 picks the struct by the tab
+    # (0 tracks 0xa10264 / thread 0x51f164, 1 artists 0xa10254 / 0x52061c, 2 albums 0xa10244 / 0x51f338, the offset passed as the thread argument); the parse pushes onto *(tracks + 0xc); the timer restores 0xa04150
+    (0x4c2888, 0xac404158, 'btn_track 0x4c2854: tab = 0'), (0x4c2898, 0x8f82b118, 'btn_track: GOT tracks struct 0xa10264'), (0x4c289c, 0x24030032, 'btn_track: limit 0x32'),
+    (0x4c28a4, 0x8c44000c, 'btn_track: a0 = *(tracks + 0xc)'), (0x4c28a8, 0xac430004, 'btn_track: limit at +4'), (0x4c28ac, 0x0320f809, 'btn_track: jalr deque_clear'), (0x4c28b0, 0xac400008, 'btn_track: offset 0 at +8'),
+    (0x4c28c8, 0x0411fead, 'btn_track: bal 0x4c2380'), (0x4c28cc, 0xac404150, 'btn_track: scroll offset 0xa04150 = 0 (delay slot)'),
+    (0x4c2774, 0x8f82b110, 'btn_album 0x4c272c: GOT albums struct 0xa10244'), (0x4c2778, 0x24030032, 'btn_album: limit 0x32'), (0x4c2784, 0xac430004, 'btn_album: limit at +4'),
+    (0x4c2788, 0x0320f809, 'btn_album: jalr deque_clear'), (0x4c278c, 0xac400008, 'btn_album: offset 0'), (0x4c27a4, 0x0411fef6, 'btn_album: bal 0x4c2380'), (0x4c27a8, 0xac404150, 'btn_album: scroll 0'),
+    (0x4c2808, 0x8f82b120, 'btn_artist 0x4c27c0: GOT artists struct 0xa10254'), (0x4c2818, 0xac430004, 'btn_artist: limit at +4'), (0x4c281c, 0x0320f809, 'btn_artist: jalr deque_clear'),
+    (0x4c2820, 0xac400008, 'btn_artist: offset 0'), (0x4c2838, 0x0411fed1, 'btn_artist: bal 0x4c2380'), (0x4c283c, 0xac404150, 'btn_artist: scroll 0'),
+    (0x4c2434, 0x8c424158, 'search 0x4c2380: lw tab 0xa04158'), (0x4c2438, 0x14400015, 'search: tab != 0 -> other tabs'), (0x4c2440, 0x8f82b118, 'search: tab 0 = tracks struct 0xa10264'),
+    (0x4c2444, 0x8f86b11c, 'search: tab 0 thread 0x51f164'), (0x4c2448, 0x8c470008, 'search: thread argument = the struct offset (+8)'),
+    (0x4c2498, 0x8f82b120, 'search: tab 1 = artists struct 0xa10254'), (0x4c249c, 0x8f86b124, 'search: tab 1 thread 0x52061c'), (0x4c24b0, 0x8f82b110, 'search: tab 2 = albums struct 0xa10244'), (0x4c24b4, 0x8f86b114, 'search: tab 2 thread 0x51f338'),
+    (0x5200e4, 0x8f82b118, 'parseTidalSearchTracksJson: GOT tracks struct'), (0x5200f0, 0x0320f809, 'parse: jalr _deque_push_back'), (0x5200f4, 0x8c44000c, 'parse: a0 = *(tracks + 0xc) (delay slot)'),
+    (0x4c3c38, 0x8c424158, 'result timer 0x4c3bb4: lw tab'), (0x4c3c70, 0x8c664150, 'result timer: scroll_view_set_offset with 0xa04150 (delay slot lw a2)'),
+    # the tap: the field is the bar's child and a view has no on_event (vtable slot 0x94 is NULL: widget_dispatch goes on to the emitter), so the touch reaches the list_item holding the bar, which sends
+    # EVT_CLICK (list_item_on_event 0x60bb80, pointer up case: no drag and pressed -> event_init 0x10c, widget_dispatch on itself); widget_on_pointer_down 0x67126c runs the parent's widget_dispatch after the child
+    # unless the child answered RET_STOP
+    (0x60bd58, 0x9222007c, 'list_item pointer up: lbu v0, 0x7c(s1): the dragged flag'), (0x60bd68, 0x1040001a, 'list_item pointer up: beqz pressed (0x7d): no click'),
+    (0x60bd8c, 0x2405010c, 'list_item pointer up: event_init type 0x10c (EVT_CLICK)'), (0x60bdcc, 0x0320f809, 'list_item pointer up: widget_dispatch of the click on the list_item itself'),
+    (0x67133c, 0x1051003b, 'widget_on_pointer_down: a child answering RET_STOP skips the parent'), (0x67134c, 0x0411eede, 'widget_on_pointer_down: bal widget_dispatch (the parent, after its children)'),
+    (0x67199c, 0x14530014, 'widget_on_pointer_up: a child answering RET_STOP skips the parent'), (0x6719fc, 0x0411f209, 'widget_on_pointer_up: bal 0x66e224 (widget_dispatch, then the vtable pointer-up slot; the parent, after its children)'),
+    (0x674824, 0x8c90004c, 'widget_find_target_default: lw s0, 0x4c(a0): a grabbed child is the target'),
+    (0x66cf2c, 0x8c590094, 'widget_dispatch: lw t9, 0x94(v0): the vtable on_event'), (0x66cf30, 0x1320001e, 'widget_dispatch: no on_event (a view) -> straight to the emitter'),
+    (0x4c2254, 0x3c1c0054, 'Tidal search page state routine (win, 1): hides the history, shows the results, writes the keyword into search_edit'), (0x4c2edc, 0x0411fcdd, 'history row click: bal 0x4c2254 after copying the row into the keyword buffer'),
+    # the navbar's Search button: the page init creates it (button_create(navbar, x 0x111, y 0, w 0x2f, h 0x32), the last child of the navbar when the widget_foreach that runs the hook starts) and binds EVT_CLICK 0x10c -> 0x4c4740 with the
+    # window as context; the emitter runs the newest handler first and RET_STOP ends the dispatch (payload tk_on_search_btn)
+    (0x4c4a74, 0x8f99ab64, 'page init: lw t9, GOT button_create'), (0x4c4a78, 0x24020032, 'page init: button h = 0x32 (stack arg)'), (0x4c4a7c, 0x2407002f, 'page init: button w = 0x2f'), (0x4c4a80, 0x00003025, 'page init: button y = 0'),
+    (0x4c4a88, 0x0320f809, 'page init: jalr button_create'), (0x4c4a8c, 0x24050111, 'page init: button x = 0x111 (delay slot)'), (0x4c4aac, 0x2405010c, 'page init: widget_on(button, EVT_CLICK 0x10c, ...)'),
+    (0x4c4ab4, 0x02003825, 'page init: a3 = the window (the context)'), (0x4c4ac4, 0x0320f809, 'page init: jalr widget_on'), (0x4c4ac8, 0x24c64740, 'page init: a2 = 0x4c4740 (the stock search; delay slot)'),
+    (0x4c4bc8, 0x0320f809, 'page init: jalr widget_foreach (the hook runs inside; nothing is added to the navbar between the button and here)'),
+    (0x6f450c, 0x2402000b, 'emitter_dispatch: RET_STOP (11) ends the dispatch'),
+    (0x6f466c, 0xac430020, 'emitter_on_with_tag: new->next = emitter->items'), (0x6f4670, 0xae020000, 'emitter_on_with_tag: emitter->items = new (a handler goes to the head: the newest runs first)'),
+    (0x66cf38, 0x0320f809, 'widget_dispatch: jalr the vtable on_event'), (0x66cf48, 0x2402000b, 'widget_dispatch: v0 = 0xb (RET_STOP)'), (0x66cf4c, 0x1202000d, 'widget_dispatch: on_event == RET_STOP skips the emitter'),
+)
 SETTINGS_PINS = (   # (address, stock word, what it proves)
     # the stock pages: each is a plain navigator_to of the name (the string load is the word before the call's delay slot or the shared call), nothing else set first
     # the Wi-Fi hub row's thunk @0x4b1440 (payload hook 21): its jalr navigator_to @0x4b1460 becomes jal wifi_hub_open; the thunk's prologue, GOT loads, delay slot and return value are stock's
@@ -931,6 +980,8 @@ PICKER_PINS = (
 # against .dynsym; the two unnamed ones carry the code that proves them.
 DATA = {
     'ROTATEMODE':         (0xa05a9c, None),   # int, config.ini ROTATEMODE (0/1); 1 swaps the volume keys 0xdc <-> 0xdd (VOLKEYS_PINS)
+    # the stock Tidal search page's result structs { total, limit, offset, deque_t * } (patch/tidalkb.c tk_reset_results; TIDALKB_PINS) and the scroll offset its timer restores
+    'TIDAL_TRACKS':       (0xa10264, None), 'TIDAL_ARTISTS': (0xa10254, None), 'TIDAL_ALBUMS': (0xa10244, None), 'TIDAL_SCROLL': (0xa04150, None),
     'BACKLIGHT_STATUS':   (0x97cae4, 'backlight_status'), # byte: 0 off, 1 lit (awake_screen)
     'PDEQ_SHOWLIST':      (0xa045d8, 'pdeq_showlist'),   # deque_t * of the loaded list
     'PDEQ_TOOLS_TMP':     (0xa03964, 'tools_pdeq_directory'),   # deque_t * the stock song row callback fills (toolsQueryDbTable clears it first; loadLocalClassList assigns it to the show list, then clears it)
@@ -1446,6 +1497,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define stock_np_mode_button ((int (*)(void *))0x{NP_MODE_BUTTON:x}u)')   # Now Playing's mode button picture (patch/nowplaying.c)
     h.append(f'#define stock_playlist_import ((int (*)(void *, void *))0x{PLAYLIST_IMPORT:x}u)')   # the stock Playlists page's Import / Export rows
     h.append(f'#define stock_playlist_export ((int (*)(void *, void *))0x{PLAYLIST_EXPORT:x}u)')
+    h.append(f'#define stock_tidal_search ((int (*)(void *, void *))0x{TIDALKB_SEARCH:x}u)')   # the stock Tidal search page's search routine (patch/tidalkb.c; TIDALKB_PINS)
     h.append(f'#define tf_update_click ((int (*)(void *, void *))0x{TF_UPDATE:x}u)')   # the stock TF card update's click handler (patch/update.c; TFUPDATE_PINS)
     # the engine's dictionary members (patch/search.c pinyin initials; not exported, pinned by PINYIN_PINS): DictList::get_lemma_id(this, char16 *, len), get_splids_for_hanzi(this, hanzi, half_splid, splids, max), SpellingTrie::get_spelling_str(this, id)
     h.append('#define py_lemma_id ((unsigned (*)(void *, const unsigned short *, unsigned))0x5c01a4u)')
@@ -1654,7 +1706,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=stock_playing_init_trampoline', '--undefined=m1plus_bigcover_init', '--undefined=stock_bigcover_init_trampoline', '--undefined=m1plus_lockscreen_init', '--undefined=stock_lockscreen_init_trampoline', '--undefined=m1plus_scroll_event',
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=pd_open_settings', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
-            '--undefined=bc_timed_open', '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=pod_na_site', '--undefined=na_next_key', '--undefined=na_set_cur', '--undefined=na_cur', '--undefined=na_active', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=pod_eq_site', '--undefined=pod_lock_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
+            '--undefined=bc_timed_open', '--undefined=pod_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=pod_na_site', '--undefined=na_next_key', '--undefined=na_set_cur', '--undefined=na_cur', '--undefined=na_active', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=tidal_kb_focus', '--undefined=pod_eq_site', '--undefined=pod_lock_site', '--undefined=pf_items', '--undefined=pf_seen']   # (the last two: accessors of the parser the tests read; nothing in the payload calls them)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
         *keep, *objs, out / 'pod_asm.o', '-o', out / 'patch.elf')
@@ -1829,7 +1881,7 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     patch_radio(patched, ps, len(payload))
-    for a, old, what in LOCKROW_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in LOCKROW_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf
@@ -1847,6 +1899,8 @@ def patch_demo(raw, payload, ps, demo_path):
     target8 = ps['bp_capacity']
     check(BASE <= ps['wifi_hub_open'] < BASE + len(payload), 'Wi-Fi hub hook symbol outside payload')
     struct.pack_into('<I', patched, fileoff(patched, WIFIHUB_SITE), jal(ps['wifi_hub_open'], WIFIHUB_SITE))   # (SETTINGS_PINS checked the site's word, its delay slot and the thunk around it)
+    check(BASE <= ps['tidal_kb_focus'] < BASE + len(payload), 'Tidal keyboard hook symbol outside payload')
+    struct.pack_into('<I', patched, fileoff(patched, TIDALKB_SITE), jal(ps['tidal_kb_focus'], TIDALKB_SITE))   # (TIDALKB_PINS checked the site's word, its delay slot and the bind callback around it)
     check(BASE <= ps['lo_set_text'] < BASE + len(payload), 'Line Out hook symbol outside payload')
     for a, _ in LINEOUT_SITES: struct.pack_into('<I', patched, fileoff(patched, a), jal(ps['lo_set_text'], a))   # (the pins checked each site's lw t9 GOT widget_set_text_utf8, a1, the jalr and the delay slot)
     check(BASE <= target8 < BASE + len(payload), 'battery hook symbol outside payload')
@@ -1884,7 +1938,7 @@ def patch_demo(raw, payload, ps, demo_path):
     check(dynsym(demo_path).get('playsong_id3info') == 0xa0d88c, 'playsong_id3info moved')
     edits = patch_rows(patched, ps)
     # no row edit may touch a PIC prologue (the hooks are the only ones) or a hook site
-    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, BIGCOVER_INIT, LOCKSCREEN_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) != IDLE_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8 and not NEXTALBUM_SITE <= int(a, 16) < NEXTALBUM_SITE + 8
+    check(all(not any(h <= int(a, 16) < h + 12 for h in (HOME_CLICK, HOME_INIT, PLAYING_INIT, BIGCOVER_INIT, LOCKSCREEN_INIT, PLAYMORE_INIT, PULLDOWN_INIT, START_PLAYER, SAVE_STOP, SAVE_START, BACKTOPLAYER, QUERY_DB, QUERY_SORT, STYLE_COLOR, IMAGE_ADD, SETMODE, LOADPL, FILETIME, timezones.SELECT)) and not STYLE_GRADIENT <= int(a, 16) < STYLE_GRADIENT + 8 and not any(int(a, 16) == s for s, _ in MODE_SITES) and int(a, 16) != CLEAR_SITE and not ID3_SITE <= int(a, 16) < ID3_SITE + 4 and not SCAN_SITE <= int(a, 16) < SCAN_SITE + 4 and not BATTERY_SITE <= int(a, 16) < BATTERY_SITE + 4 and not any(int(a, 16) == s for s, _ in LINEOUT_SITES) and int(a, 16) != WIFIHUB_SITE and int(a, 16) != IDLE_SITE and int(a, 16) != TIDALKB_SITE and int(a, 16) not in PULLDOWN_OPEN_SITES and not EQ_ROW <= int(a, 16) < EQ_ROW + 8 and not NEXTALBUM_SITE <= int(a, 16) < NEXTALBUM_SITE + 8
               for a, *_ in edits), 'row edit on a hook')
     check(all(not (SCROLL_SLOT <= int(a, 16) < SCROLL_SLOT + 4 or a in {hex(p[0]) for p in SCROLL_PINS}) for a, *_ in edits),
           'row edit on a list gesture word')
@@ -1912,6 +1966,7 @@ def main():
     assets = pod_ui.write_assets(rootfs, pod_pages.PAGES)
     pod_ui.add_shot_indicator(rootfs)     # the hidden camera in ui/system_bar.bin (patch/shot.c)
     pod_ui.add_battery_label(rootfs)      # the hidden percentage in ui/system_bar.bin and both pull-downs (patch/battery.c)
+    pod_ui.add_tidal_keyboard(rootfs)     # the keyboard's field and pad in ui/tidal/tidal_serach_page.bin (patch/tidalkb.c)
     manifest = {
         'base': BASE, 'gp': GP, 'payload_len': len(payload),
         'payload_sha256': sha(payload), 'scratch_bytes': scratch, 'entry_symbol': ps['m1plus_home_click'],
@@ -1932,6 +1987,7 @@ def main():
         'hook_battery': {'addr': BATTERY_SITE, 'target': ps['bp_capacity']},
         'hook_wifihub': {'addr': WIFIHUB_SITE, 'target': ps['wifi_hub_open']},
         'hook_idle': {'addr': IDLE_SITE, 'target': ps['bc_timed_open']},
+        'hook_tidalkb': {'addr': TIDALKB_SITE, 'target': ps['tidal_kb_focus']},
         'hook_lineout': {'sites': [hex(a) for a, _ in LINEOUT_SITES], 'target': ps['lo_set_text']},
         'hook_timezone': {'addr': timezones.SELECT, 'target': ps['tz_select']}, 'timezone_row': {'addr': timezones.ROW_CALL, 'target': ps['tz_row']}, 'timezone_label': {'addr': timezones.LABEL_CALL, 'target': ps['tz_label']},
         'hook_style_color': {'addr': STYLE_COLOR, 'target': ps['m1plus_style_color']}, 'hook_style_gradient': {'addr': STYLE_GRADIENT, 'target': ps['m1plus_style_gradient']},

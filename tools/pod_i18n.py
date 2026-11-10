@@ -820,6 +820,8 @@ TEXT = dict([
        'Descubrir', 'Scopri', 'ค้นพบ', 'Odkrywaj', 'Обзор', 'Огляд'),   # the Podcasts page's row that opens the Discover charts, and the level's title
     _t('Search Apple Podcasts', '搜索 Apple Podcasts', '搜尋 Apple Podcasts', 'Apple Podcasts を検索', 'Apple Podcasts 검색', 'Chercher sur Apple Podcasts', 'Apple Podcasts durchsuchen',
        'Buscar en Apple Podcasts', 'Cerca su Apple Podcasts', 'ค้นหา Apple Podcasts', 'Szukaj w Apple Podcasts', 'Поиск в Apple Podcasts', 'Пошук в Apple Podcasts'),
+    _t('Search Tidal', '搜索 Tidal', '搜尋 Tidal', 'Tidal を検索', 'Tidal 검색', 'Chercher sur Tidal', 'Tidal durchsuchen',
+       'Buscar en Tidal', 'Cerca su Tidal', 'ค้นหา Tidal', 'Szukaj w Tidal', 'Поиск в Tidal', 'Пошук у Tidal'),   # the Tidal > Search bar's placeholder (patch/tidalkb.c; fits TK_TEXT_W, test/pod/tidalkb.py asset_tests)
     _t('Done', '完成', '完成', '完了', '완료', 'OK', 'Fertig',
        'Hecho', 'Fine', 'เสร็จ', 'Gotowe', 'Готово', 'Готово'),
     # Now Playing's More menu (patch/playmore.c): the row that opens the second page (and that page's back header), the short

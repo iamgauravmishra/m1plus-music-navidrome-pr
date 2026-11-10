@@ -33,6 +33,7 @@ QUERY = (0x5ee77c, 0x5ee9ac)   # toolsQueryDbTable, toolsQueryDbTableAndSort: th
 SCAN_SITE = (0x5ea6a8, 4)  # the library scan's folder test: the jalr strcmp(name, "."), now jal pod_scan_dir (patch/common.c, docs/modules/payload.md hook 5)
 UPDATE_SITE = (0x4e1124, 4)  # update_firmware: the compare's operand addiu a1 (the literal "V2.1" 0x74773c -> the string "about_version" 0x74772c; docs/modules/version.md)
 IDLE_SITE = (pod.IDLE_SITE, 4)  # the timed open's jalr navigator_to, now jal bc_timed_open (patch/bigcover.c, docs/modules/payload.md hook 24)
+TIDALKB_SITE = (pod.TIDALKB_SITE, 4)  # the stock Tidal search page's edit_set_focus call, now jal tidal_kb_focus (patch/tidalkb.c, docs/modules/payload.md hook 27)
 WIFIHUB_SITE = (pod.WIFIHUB_SITE, 4)  # the Wi-Fi row of the All System Settings hub: the jalr navigator_to, now jal wifi_hub_open (patch/wifipage.c, docs/modules/payload.md hook 21)
 PULLDOWN_OPEN = tuple(pod.PULLDOWN_OPEN_SITES)  # on_wm_tsmove_fun: the two `bal navigator_to` that open the page a pull-down tile chose, now jal pd_open_settings (patch/pulldown.c, docs/modules/payload.md hook 22)
 BATTERY_SITE = (0x5450f8, 4)  # show_sysbar_face: the jalr get_battery_capacity, now jal bp_capacity (patch/battery.c, docs/modules/payload.md hook 8)
@@ -103,6 +104,7 @@ def main():
     for q in PULLDOWN_OPEN: allow(va_to_off(s, q), 4, 'pull-down settings tile hook')
     allow(va_to_off(s, WIFIHUB_SITE[0]), WIFIHUB_SITE[1], 'Wi-Fi hub row hook')
     allow(va_to_off(s, IDLE_SITE[0]), IDLE_SITE[1], 'idle view hook (the timed open)')
+    allow(va_to_off(s, TIDALKB_SITE[0]), TIDALKB_SITE[1], 'Tidal search keyboard hook')
     for q in LINEOUT_SITES: allow(va_to_off(s, q), 4, 'Line Out pill hook')
     allow(va_to_off(s, UPDATE_SITE[0]), UPDATE_SITE[1], 'updater version compare')
     allow(va_to_off(s, timezones.SELECT), 8, 'select_timezone hook')   # time zones (tools/timezones.py): the hook, the clamp, the row count and limit, the two call sites
@@ -207,6 +209,10 @@ def main():
     o = va_to_off(s, IDLE_SITE[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
     good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
     print(f'idle view hook {IDLE_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
+    ok = ok and good
+    o = va_to_off(s, TIDALKB_SITE[0]); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]
+    good = sw == 0x0320f809 and mw >> 26 == 3 and 0xb00000 <= (mw & 0x3ffffff) << 2 < 0xb00000 + (len(m) - len(s))
+    print(f'Tidal search keyboard hook {TIDALKB_SITE[0]:#x}: {sw:#010x} -> {mw:#010x}', 'ok' if good else 'WRONG')
     ok = ok and good
     for q in LINEOUT_SITES:
         o = va_to_off(s, q); sw = struct.unpack_from('<I', s, o)[0]; mw = struct.unpack_from('<I', m, o)[0]

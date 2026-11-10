@@ -3076,6 +3076,46 @@ def add_battery_label(rootfs):
     edit_ui(os.path.join(rootfs, 'release/assets/default/raw/ui/dialog/dropdown_dialog.bin'), edit_for(PCT_WIDGET_DD))
 
 
+TIDAL_SEARCH = f'{UI}/tidal/tidal_serach_page.bin'
+TK = cdefs.defines(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'tidalkb.h'))
+TK_HINT_RGB = '#AAAAAA'   # the stock edit's tips_text_color
+
+
+def tidal_field():
+    """The keyboard's field inside the Tidal search bar (patch/tidalkb.c): kb_field with its hint, text, caret and clear button, transparent so that the stock bar shows, in the stock edit's
+    font size and colours. Sensitive: the clear button inside it needs it, and a view has no on_event of its own, so a tap on it still reaches the bar's list_item as a click."""
+    w, h = TK['TK_FIELD_W'], TK['TK_FIELD_H']
+    field = kb_view('kb_field', TK['TK_FIELD_X'], 0, w, h, '#00000000')
+    field.set('sensitive', 'true')
+    hint = label('kb_hint', TK['TK_TEXT_X'], 0, w - TK['TK_TEXT_X'], h, '', TK['TK_PX'], TK_HINT_RGB, 'left')
+    text = label('kb_text', TK['TK_TEXT_X'], 0, w - TK['TK_TEXT_X'], h, '', TK['TK_PX'], PK.KB_INK, 'left')
+    for l in (hint, text):
+        l.set('sensitive', 'false')
+        styled(l, ('normal',), 'text_align_v', 'middle')
+    caret = kb_view('kb_caret', TK['TK_TEXT_X'], TK['TK_CARET_Y'], PK.CARET_W, PK.CARET_H, PK.KB_INK)
+    clear = hidden(Widget('button', w - TK['TK_CLEAR_W'], 0, TK['TK_CLEAR_W'], h, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
+                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
+    field.children = [hint, text, caret, clear]
+    return field
+
+
+def add_tidal_keyboard(rootfs):
+    """Tidal > Search with our keyboard embedded (patch/tidalkb.c, docs/modules/tidalkb.md): the keyboard's field goes into the search bar (listitem_ssid) over the stock edit, and the pad, the
+    candidate strip and the pop-up (keyboard_pad_widgets) end the window, over the history and the results. The window fills the 450 px client area (0, 0, 0, 0), so the pad's bottom is the
+    screen's. The stock layout this relies on is asserted."""
+    def edit(root):
+        bar = root.find('listitem_ssid')
+        assert root.name == 'tidal_search_page' and (root.x, root.y, root.w, root.h) == (0, 0, 0, 0), 'unexpected Tidal search page layout'
+        assert bar is not None and (bar.x, bar.y, bar.w, bar.h) == (33, 6, 240, 38) and bar.type == 'list_item' and root.children.count(bar) == 1, 'unexpected Tidal search bar'
+        assert [(c.type, c.name, c.x, c.y, c.w, c.h) for c in bar.children] == [('edit', 'search_edit', 15, 0, 210, 38)], 'unexpected Tidal search bar children'
+        assert root.find('kb_pad') is None and root.find('kb_field') is None and all(root.find(n) for n in ('view', 'tab_control')), 'unexpected Tidal search page widgets'
+        assert TK['TK_FIELD_X'] + TK['TK_FIELD_W'] <= bar.w and TK['TK_FIELD_H'] == bar.h
+        bar.children.append(tidal_field())
+        root.children += keyboard_pad_widgets()
+    from modlib import edit_ui
+    edit_ui(os.path.join(rootfs, TIDAL_SEARCH), edit)
+
+
 def asset_rels(pages):
     return [f'{UI}/{p.key}.bin' for p in pages]
 
