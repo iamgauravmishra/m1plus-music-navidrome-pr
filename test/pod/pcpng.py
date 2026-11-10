@@ -3,6 +3,7 @@ the five filters, every colour type and depth, transparency over white) feeding 
 file (it must fail cleanly, with no output file and every libjpeg object destroyed). The compiled payload runs under Unicorn; libjpeg is the PIL mock of test/pod/pcnet.py."""
 import io, os, random, struct, zlib
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+from PIL import Image
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -69,7 +70,6 @@ def over_white(r, g, b, a):
 
 def picture(w, h, ctype, depth, filters=(0,), key=None):
     """(raw scanlines, expected RGB image, plte, trns) of a smooth picture with an alpha ramp: what the decoder must produce, by the same formulas."""
-    from PIL import Image
     M = (1 << depth) - 1
     ncol = 1 << min(depth, 4) if ctype == 3 else 0
     plte = bytes(v for i in range(ncol) for v in (i * 255 // max(1, ncol - 1), 255 - i * 255 // max(1, ncol - 1), 90)) if ctype == 3 else None
@@ -108,7 +108,7 @@ def shrink(m, data, dst=DST):
 
 def close_to(m, out, exp, tol_mean=3.0, tol_max=40):
     """The output decodes to the box-average resize of the expected picture, within a tolerance."""
-    from PIL import Image, ImageChops
+    from PIL import ImageChops
     got = Image.open(io.BytesIO(out)); got.load()
     w, h = exp.size; s = min(1.0, 192 / max(w, h))
     size = (max(1, int(w * s)), max(1, int(h * s)))
@@ -124,13 +124,25 @@ def clean(m, label, expect):
     expect(DST not in m.fs and m.jlog.count('create_compress') == m.jlog.count('destroy_compress') and m.jlog.count('create_decompress') == 0, f'{label}: no output file, the encoder destroyed')
 
 
-def run(ctx):
-    expect = ctx.expect
-    from PIL import Image
-    m = PCN.machine()
-    m.folder(DIR)
+def machine():
+    """A new machine with the show's folder."""
+    m = PCN.machine(); m.folder(DIR)
+    return m
 
-    # 1. Every colour type and depth, filters cycling over the rows, dynamic blocks
+
+def pil_png(w, h, mode):
+    """A gradient picture of the mode, encoded by PIL: (the PNG, the image)."""
+    ax = Image.linear_gradient('L').rotate(90).resize((w, h))
+    ay = Image.linear_gradient('L').resize((w, h))
+    bands = [ax, ay, Image.blend(ax, ay, 0.5)] + ([ay.point(lambda v: 255 - v)] if mode == 'RGBA' else [])
+    im = Image.merge(mode, bands)
+    b = io.BytesIO(); im.save(b, 'PNG', optimize=True)
+    return b.getvalue(), im
+
+
+def format_tests(ctx):
+    """Every colour type and depth, filters cycling over the rows, dynamic blocks."""
+    expect, m = ctx.expect, machine()
     for ctype, depths in ((0, (1, 2, 4, 8, 16)), (2, (8, 16)), (3, (1, 2, 4, 8)), (4, (8, 16)), (6, (8, 16))):
         for depth in depths:
             raw, exp, plte, trns = picture(230, 170, ctype, depth, filters=(0, 1, 2, 3, 4))
@@ -139,7 +151,10 @@ def run(ctx):
             ok, why = close_to(m, out, exp, 5.0 if edgy else 3.0, 255 if edgy else 40) if out else (False, 'no output')
             expect(r == 1 and ok, f'colour type {ctype}, {depth} bit: decoded, composited over white and shrunk like PIL ({why})')
 
-    # 2. The filters one at a time, the deflate modes, many IDAT chunks (and an empty one)
+
+def stream_tests(ctx):
+    """The filters one at a time, the deflate modes, many IDAT chunks (and an empty one)."""
+    expect, m = ctx.expect, machine()
     for t in range(5):
         raw, exp, plte, trns = picture(150, 150, 2, 8, filters=(t,))
         r, out = shrink(m, png(150, 150, 2, 8, raw))
@@ -154,7 +169,10 @@ def run(ctx):
     r, out = shrink(m, png(200, 120, 6, 8, raw, extra=[(b'tEXt', b'Comment\0hello'), (b'gAMA', bytes(4))]))
     expect(r == 1 and out, 'ancillary chunks before the data are skipped')
 
-    # 3. Transparency keys, small and not square pictures, odd sizes
+
+def shape_tests(ctx):
+    """Transparency keys, small and not square pictures, odd sizes."""
+    expect, m = ctx.expect, machine()
     raw, exp, plte, trns = picture(64, 64, 0, 8, key=0)
     r, out = shrink(m, png(64, 64, 0, 8, raw, trns=trns))
     ok, why = close_to(m, out, exp) if out else (False, 'no output')
@@ -170,26 +188,31 @@ def run(ctx):
         s = min(1.0, 192 / max(w, h))
         expect(r == 1 and got and got.size == (max(1, int(w * s)), max(1, int(h * s))), f'{w} x {h}: fitted inside 192, never upscaled ({got.size if got else None})')
 
-    # 4. The real shapes (PERF only: stress scale): 2000 x 2000 RGBA (the All-In cover) and 3000 x 3000 RGB, with PIL's own encoder
-    def pil_png(w, h, mode):
-        ax = Image.linear_gradient('L').rotate(90).resize((w, h))
-        ay = Image.linear_gradient('L').resize((w, h))
-        bands = [ax, ay, Image.blend(ax, ay, 0.5)] + ([ay.point(lambda v: 255 - v)] if mode == 'RGBA' else [])
-        im = Image.merge(mode, bands)
-        b = io.BytesIO(); im.save(b, 'PNG', optimize=True)
-        return b.getvalue(), im
-    if PERF:
-        data, im = pil_png(2000, 2000, 'RGBA')
-        r, out = shrink(m, data)
-        ref = Image.alpha_composite(Image.new('RGBA', im.size, 'white'), im).convert('RGB')
-        ok, why = close_to(m, out, ref, 4.0, 40) if out else (False, 'no output')
-        expect(r == 1 and ok, f'2000 x 2000 RGBA ({len(data) // 1024} kB): a 192 x 192 JPEG like PIL\'s ({why})')
-        data, im = pil_png(3000, 3000, 'RGB')
-        r, out = shrink(m, data)
-        ok, why = close_to(m, out, im, 4.0, 40) if out else (False, 'no output')
-        expect(r == 1 and ok and m.jlog.count('std_error') == 1, f'3000 x 3000 RGB ({len(data) // 1024} kB) ({why})')
 
-    # 5. What is refused or damaged: nothing is left, nothing breaks
+def big_rgba_tests(ctx):
+    """A real shape (PERF only: stress scale): 2000 x 2000 RGBA, the All-In cover."""
+    expect, m = ctx.expect, machine()
+    if not PERF: return
+    data, im = pil_png(2000, 2000, 'RGBA')
+    r, out = shrink(m, data)
+    ref = Image.alpha_composite(Image.new('RGBA', im.size, 'white'), im).convert('RGB')
+    ok, why = close_to(m, out, ref, 4.0, 40) if out else (False, 'no output')
+    expect(r == 1 and ok, f'2000 x 2000 RGBA ({len(data) // 1024} kB): a 192 x 192 JPEG like PIL\'s ({why})')
+
+
+def big_rgb_tests(ctx):
+    """A real shape (PERF only: stress scale): 3000 x 3000 RGB."""
+    expect, m = ctx.expect, machine()
+    if not PERF: return
+    data, im = pil_png(3000, 3000, 'RGB')
+    r, out = shrink(m, data)
+    ok, why = close_to(m, out, im, 4.0, 40) if out else (False, 'no output')
+    expect(r == 1 and ok and m.jlog.count('std_error') == 1, f'3000 x 3000 RGB ({len(data) // 1024} kB) ({why})')
+
+
+def damage_tests(ctx):
+    """What is refused or damaged: nothing is left, nothing breaks."""
+    expect, m = ctx.expect, machine()
     raw, exp, plte, trns = picture(300, 300, 2, 8, filters=(0, 1, 2, 3, 4))
     good = png(300, 300, 2, 8, raw)
     r, out = shrink(m, good)
@@ -226,7 +249,10 @@ def run(ctx):
         r, out = shrink(m, data)
         expect(r == 0 and out is None, f'{label}: refused'); clean(m, label, expect)
 
-    # 6. Byte flips and cuts: whatever the damage, the decoder returns 0 or 1 and writes at most a complete JPEG
+
+def fuzz_tests(ctx):
+    """Byte flips and cuts: whatever the damage, the decoder returns 0 or 1 and writes at most a complete JPEG."""
+    expect, m = ctx.expect, machine()
     rng = random.Random(20261030)
     raw, exp, plte, trns = picture(120, 90, 6, 8, filters=(0, 1, 2, 3, 4))
     base = png(120, 90, 6, 8, raw, split=500)
@@ -249,3 +275,6 @@ def run(ctx):
         r, out = shrink(m, bytes(d))
         results += r in (0, 1) and ((out is not None) == (r == 1))
     expect(results == N2, f'{N2} flips in a palette picture with fixed blocks ({results} of {N2})')
+
+
+SECTIONS = [format_tests, stream_tests, shape_tests, big_rgba_tests, big_rgb_tests, damage_tests, fuzz_tests]

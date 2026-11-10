@@ -11,8 +11,10 @@ library, playlist table and canvas mocked. The checks:
   loader       one cover a tick, none while the list moves, the ring
   touch        a row plays the mix from that song, Shuffle, Play, drags, aborts, a song missing on the card, the playlist gone or renamed
   texts        13 languages: every line fits, the description in two lines at most, the Updated line (today, yesterday, a date)
-  free         destroy frees everything and a second open works"""
-import os, random, struct
+  free         destroy frees everything and a second open works
+
+Each section (SECTIONS) is a task of its own and shares nothing with the others: the fixture functions (uniq_songs, page12, opened) build a new machine for every caller."""
+import datetime, os, random, struct
 from unicorn import mips_const
 from unicorn.mips_const import UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_V0, UC_MIPS_REG_PC, UC_MIPS_REG_RA, UC_MIPS_REG_F0
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
@@ -216,18 +218,47 @@ def covers_of(blits):
 def word_of(px): return 0xff000000 | px[0] | px[1] << 8 | px[2] << 16
 
 
-def run(ctx):
+# ---- fixtures: each section builds what it needs with these; nothing is kept from one section to the next
+def sty_of(t, name): return [v for (w, p, v) in t.styled if w == t.page[name] and p == 'normal:bg_color']
+
+
+def uniq_songs():
+    """One song of each album of the library: every row has its own cover."""
+    seen, uniq = set(), []
+    for s_ in dm_t.library()[0]:
+        if s_['album'] not in seen: seen.add(s_['album']); uniq.append(s_)
+    return uniq
+
+
+def page12(count=False):
+    """The page opened from the card on a mix of 12 songs with their covers: (the machine, the calls of the tap)."""
+    m = PG(count=count); m.world(uniq_songs(), 12); m.boot()
+    for n in range(12): m.cover(m.songs[n]['artist'], m.songs[n]['album'], (60 + n * 10, 120, 200 - n * 8))
+    return m, m.card_tap()
+
+
+def opened(n=12, fav=(), cover_rows=None, mk=None, bmp=True, **world):
+    t = PG(**(mk or {})); t.world(uniq_songs(), n, fav=fav, **world); t.boot()
+    t.bitmap_ok = bmp      # (the tests that do not look at pictures make none: the art is 14 million instructions)
+    for i in (range(n) if cover_rows is None else cover_rows): t.cover(t.songs[i]['artist'], t.songs[i]['album'], (60 + i * 7 % 150, 120, 200 - i * 5 % 150))
+    t.bmps0 = set(t.bitmaps)     # the bitmaps before the page (the free test)
+    t.card_tap()
+    return t
+
+def tick(t, count=40000000):
+    t.call(PSYMS['dp_on_load'], count=count)
+    return list(t.calls)
+
+def reopen(t):
+    t.fire_page_window(EVT_DESTROY)
+    t.window = t.pwin
+    return t.card_tap()
+
+
+def constants_tests(ctx):
+    """Constants, the measured rhythm, the asset, the images."""
     expect = ctx.expect
     raw = os.path.join(WORK, RAW)
-    font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
-    width = lambda t, px: StbText(font, px).layout(t)[1]
-    songs, rr = dm_t.library()
-    seen, uniq = set(), []   # one song of each album: every row has its own cover
-    for s_ in songs:
-        if s_['album'] not in seen: seen.add(s_['album']); uniq.append(s_)
-    tones = [(70, 110, 190), (190, 90, 120), (60, 140, 150)]
-
-    # ===== 1. constants, the measured rhythm, the asset, the images
     names = [k for k in O if k.startswith('DP_') and hasattr(D, k)]
     expect(len(names) >= 35 and all(O[k] == getattr(D, k) for k in names), f'patch/offsets.inc DP_* equal tools/pod_dailymix.py ({[k for k in names if O[k] != getattr(D, k)]}; {len(names)} numbers)')
     expect(O['DP_ROWS_Y'] == D.DP_ROWS_Y == ROWS_Y == 371, 'the first song row starts at 371: the description is two lines high in every language')
@@ -292,7 +323,11 @@ def run(ctx):
            f'the plus is centred on the disc and as large as the Shuffle glyph ({pb} against {sb})')
     expect(set(mod_icons.DPAGE) <= set(mod_icons.pod_names()), 'the images are added by the build (pod_names)')
 
-    # ===== 2. the colours over many palettes
+
+def colour_tests(ctx):
+    """The colours over many palettes."""
+    expect = ctx.expect
+    tones = [(70, 110, 190), (190, 90, 120), (60, 140, 150)]
     import preview_dailymix as P
     palettes = [t for _, t in P.PALETTES]
     palettes += [[(255, 255, 255)] * 2, [(0, 0, 0)] * 2, [(255, 255, 0), (0, 255, 255), (255, 0, 255)], [(0, 0, 255)] * 3, [(0, 255, 0)] * 2, [(255, 0, 0)] * 2, [(10, 10, 12)] * 2, [(250, 250, 210)] * 3]
@@ -340,11 +375,11 @@ def run(ctx):
     expect(all(px[0] == ((px[0] >> 3) << 3 | px[0] >> 5) and px[1] == ((px[1] >> 2) << 2 | px[1] >> 6) and px[2] == ((px[2] >> 3) << 3 | px[2] >> 5) for r in a[::9] for px in r[::7]),
            'every art pixel is an RGB565 value expanded to 8 bits (the panel\'s own grid)')
 
-    # ===== 3. the page opens from the card: the stock sequence, the widgets, the tint, the sizes, the events, one timer
-    m = PG(count=PERF); m.world(uniq, 12); m.boot()
-    for n in range(12): m.cover(m.songs[n]['artist'], m.songs[n]['album'], (60 + n * 10, 120, 200 - n * 8))
-    before_bmps = set(m.bitmaps)
-    calls = m.card_tap()
+
+def open_tests(ctx):
+    """The page opens from the card: the stock sequence, the widgets, the tint, the sizes, the events, one timer."""
+    expect = ctx.expect
+    m, calls = page12(count=PERF)
     expect([c for c in calls if c[0] == 'window_open'] == [('window_open', 'm1plus_dailymix')] and not [c for c in calls if c[0] == 'navigator_to_with_context'],
            f'a tap on the card opens ui/m1plus_dailymix.bin and not the stock Songs page ({[c[:2] for c in calls if c[0] in ("window_open", "navigator_to_with_context")]})')
     looked = [c[1] for c in calls if c[0] == 'widget_lookup']
@@ -388,7 +423,11 @@ def run(ctx):
     expect(not written(m, [calls]), 'opening the page writes, renames and deletes nothing')
     expect(not [c for c in calls if c[0] == 'widget_load_image' and 'star' in c[1]], 'no star image is loaded')
 
-    # ===== 4. paint: the header at the top, in window coordinates
+
+def paint_tests(ctx):
+    """Paint: the header at the top, in window coordinates; scrolled into the rows."""
+    expect = ctx.expect
+    m, _ = page12()
     blits, texts, styles, fills = m.paint(0)
     art_b = [b for b in blits if b[1][2:] == (D.DP_W, D.DP_ART_H)]
     expect(len(art_b) == 1 and art_b[0][2] == (0, 0, D.DP_W, D.DP_ART_H) and art_b[0][1] == (0, 0, D.DP_W, D.DP_ART_H) and m.oy_after == 30 - 0, 'at the top the art is one blit of the whole bitmap at (0, 0), full width; the canvas origin is put back')
@@ -433,24 +472,11 @@ def run(ctx):
     expect(len(covers_of(blits)) >= 6 and not [c for c in m.calls if c[0] == 'deque_at_oob'], 'scrolled to the end: the last rows, no read past the playlist')
     m.pscroll(0)
 
-    # ===== 5. the loader: one cover a tick, nothing while the list moves, the ring
-    def opened(n=12, fav=(), cover_rows=None, mk=None, bmp=True, **world):
-        t = PG(**(mk or {})); t.world(uniq, n, fav=fav, **world); t.boot()
-        t.bitmap_ok = bmp      # (the tests that do not look at pictures make none: the art is 14 million instructions)
-        for i in (range(n) if cover_rows is None else cover_rows): t.cover(t.songs[i]['artist'], t.songs[i]['album'], (60 + i * 7 % 150, 120, 200 - i * 5 % 150))
-        t.card_tap()
-        return t
 
-    def tick(t, count=40000000):
-        t.call(PSYMS['dp_on_load'], count=count)
-        return list(t.calls)
-
-    def reopen(t):
-        t.fire_page_window(EVT_DESTROY)
-        t.window = t.pwin
-        return t.card_tap()
-
-    # ===== the status bar: the art's top row while the page is in front, as the album page and Now Playing (patch/dailymix.c dp_bar_*, patch/common.c pod_bar_*)
+def bar_tests(ctx):
+    """The status bar takes the art's top row while the page is in front (dp_bar_*, m1_bar_*)."""
+    expect = ctx.expect
+    uniq = uniq_songs()
     def with_bar(t):
         """The window manager's children plus a navbar and a status bar (the stock widget_get_type runs here: a vtable, and the type property it reads), (navbar, bar)."""
         arr = t.word(t.wm + 0x58)
@@ -485,6 +511,11 @@ def run(ctx):
     t.fire_page_window(EVT_BG); t.fire_page_window(EVT_DESTROY)
     expect(len(bars()) == n_before, 'a page that lost the bar to the next one (Now Playing) never puts the black back over its colour')
 
+
+def loader_tests(ctx):
+    """The loader: one cover a tick, nothing while the list moves, the ring."""
+    expect = ctx.expect
+    uniq = uniq_songs()
     m = opened(25)
     placeholder =[b for b, v in m.bitmaps.items() if (v[1], v[2]) == (52, 52)]
     expect(len(placeholder) == 1, 'the ring\'s placeholder disc, 52 px, is made at open')
@@ -543,12 +574,16 @@ def run(ctx):
     expect(len(covers_of(blits)) >= 3, 'rows without a cover still draw their placeholder disc')
     # scroll events refused: the loader keeps polling for as long as the page is up
     m = opened(12, mk=None)
-    m2 = PG(); m2.world(uniq, 12); m2.boot(); m2.widget_on_fail = frozenset({EVT_SCROLL}); calls = m2.card_tap()
+    m2 = PG(); m2.world(uniq, 12); m2.boot(); m2.widget_on_fail = frozenset({EVT_SCROLL}); m2.card_tap()
     for _ in range(12): tick(m2)
     cs = tick(m2)
     expect([c for c in cs if c[0] == 'timer_add'], 'if the scroll events cannot be registered the loader polls for as long as the page is up')
 
-    # ===== 6. touch: the songs, Play, Shuffle
+
+def touch_tests(ctx):
+    """Touch: the songs, Play, Shuffle."""
+    expect = ctx.expect
+    uniq = uniq_songs()
     def played_paths(t): return [t.read_cstr(t.word(r + O['REC_PATH'])) for r in t.played[0]] if t.played else None
     m = opened(12, bmp=False)
     playlist = [s['path'] for s in m.songs[:12]]
@@ -648,8 +683,11 @@ def run(ctx):
     expect(t.ptarget(30, 30)[-1] == 'btn_return' and t.ptarget(160, 285 - 200)[-1] == 'btn_dp_play' and t.ptarget(160, 285)[-1] != 'btn_dp_play', 'the back disc stays at the top while the list scrolls; the buttons scroll with it')
     expect(O['DP_BACK_BTN'] >= 44, 'the back disc\'s touch square is 44 px')
 
-    # ===== 6b. the Add disc: the mix saved as a new stock playlist (dp_save)
-    import datetime
+
+def add_tests(ctx):
+    """The Add disc: the mix saved as a new stock playlist (dp_save)."""
+    expect = ctx.expect
+    uniq = uniq_songs()
     iso_day = lambda d: (datetime.date(1970, 1, 1) + datetime.timedelta(days=d)).isoformat()
     toasts = lambda t: [c[1] for c in t.calls if c[0] == 'toast']
     G, CI, NT = pod.DATA['G_CLASS_TYPE'][0], pod.DATA['CLASSINFO'][0], pod.DATA['NAV_TITLE'][0]
@@ -736,7 +774,13 @@ def run(ctx):
     calls = t2.card_tap()
     expect(('navigator_back',) in calls and not [c for c in calls if c[0] == 'navigator_to_with_context'], 'an asset without the Add disc is not ours: the window goes again, nothing opens')
 
-    # ===== 7. the texts: 13 languages, the Updated line
+
+def text_tests(ctx):
+    """The texts in 13 languages, the Updated line."""
+    expect = ctx.expect
+    uniq = uniq_songs()
+    font = Ttf(os.path.join(WORK, RAW, 'fonts', 'default.ttf'))
+    width = lambda t, px: StbText(font, px).layout(t)[1]
     mt = opened(12, bmp=False)
     wf = lambda s: sum(16 if ord(c) >= 0x2e80 or c == '…' else 8 for c in s)
     bad = []
@@ -772,7 +816,7 @@ def run(ctx):
     expect(sorted(pod_i18n.DPAGE_KEYS) == sorted(k for k in pod_i18n.TEXT if k in ('Updated today', 'Updated yesterday', 'Updated %s', 'Play', 'Songs you love and some to rediscover, made fresh every day.')) and all(set(pod_i18n.TEXT[k]) == set(D.LOCALES) for k in pod_i18n.DPAGE_KEYS)
            and all(pod_i18n.TEXT['Updated %s'][l].count('%s') == 1 for l in D.LOCALES), 'five new keys in all 13 languages, the date template with one %s')
     # the Updated line
-    today = m.wall // 86400
+    today = mt.wall // 86400
     iso = lambda d: (datetime.date(1970, 1, 1) + datetime.timedelta(days=d)).isoformat()
     for delta, want_ in ((0, 'Updated today'), (1, 'Updated yesterday'), (2, f'Updated {iso(today - 2)}'), (40, f'Updated {iso(today - 40)}'), (400, f'Updated {iso(today - 400)}'), (-3, 'Updated today')):
         t = PG(); t.world(uniq, 12, day=today - delta); t.boot(); t.bitmap_ok = False; t.card_tap()
@@ -789,7 +833,11 @@ def run(ctx):
         blits, texts, styles, fills = t.paint(0)
         expect([t_ for (t_, r), s in zip(texts, styles) if s == 'label_dp_upd'] == [f'Updated {iso(d)}'], f'day {d} is written {iso(d)} by the payload\'s civil date')
 
-    # ===== 8. falling back, freeing
+
+def fallback_tests(ctx):
+    """Falling back to the Home menu."""
+    expect = ctx.expect
+    uniq = uniq_songs()
     t = PG(); t.world(uniq, 12); t.boot(); t.widgets.pop('label_dp_artist'); t.page.pop('label_dp_artist')
     calls = t.card_tap()
     expect(('navigator_back',) in calls and not [c for c in calls if c[0] == 'navigator_to_with_context'], 'an asset that is not ours (a style label missing): the window goes again, nothing else opens')
@@ -816,24 +864,33 @@ def run(ctx):
     t.card_tap(); blits, texts, styles, fills = t.paint(SCR)
     rt_ = [t_ for (t_, r), s in zip(texts, styles) if s == 'label_dp_row']
     expect(rt_[:5] == [t.songs[i]['title'] for i in (0, 2, 4, 5, 6)], f'songs missing from the library or the card are skipped, the rest keep the mix\'s order ({rt_[:5]})')
-    # (PERF only) the cost of opening: the library pass on a small library and on one at the cap (DM_LIB_MAX songs, the mix spread over it); no file is touched
-    if PERF:
-        def open_cost(lib, order):
-            t = PG(count=True); t.world(lib, len(order), order=order); t.boot(); t.bitmap_ok = False
-            t.card_tap()
-            return t.icount, t
-        c_small, _ = open_cost(uniq, list(range(12)))
-        big = [dict(path=f'/mnt/mmc/B/{i // 12}/{i}.flac', artist=f'Band {i // 60}', album=f'Disc {i // 12}', title=f'Track number {i}', name=f'{i}.flac') for i in range(O['DM_LIB_MAX'])]
-        c_big, tb = open_cost(big, [i * 1000 + 11 for i in range(12)])
-        expect(c_big < 15_000_000 and not written(tb, [tb.calls_all]), f'opening the page on {O["DM_LIB_MAX"]} songs: {c_big} instructions without the art ({c_small} on {len(uniq)} songs), under 15 million, nothing written')
-        print(f'  (page open without the art: {c_small} instructions on {len(uniq)} songs, {c_big} on {O["DM_LIB_MAX"]})')
-    # freeing
+
+
+def cost_tests(ctx):
+    """The cost of opening (PERF only): the library pass on a small library and on one at the cap; no file is touched."""
+    expect = ctx.expect
+    if not PERF: return
+    uniq = uniq_songs()
+    def open_cost(lib, order):
+        t = PG(count=True); t.world(lib, len(order), order=order); t.boot(); t.bitmap_ok = False
+        t.card_tap()
+        return t.icount, t
+    c_small, _ = open_cost(uniq, list(range(12)))
+    big = [dict(path=f'/mnt/mmc/B/{i // 12}/{i}.flac', artist=f'Band {i // 60}', album=f'Disc {i // 12}', title=f'Track number {i}', name=f'{i}.flac') for i in range(O['DM_LIB_MAX'])]
+    c_big, tb = open_cost(big, [i * 1000 + 11 for i in range(12)])
+    expect(c_big < 15_000_000 and not written(tb, [tb.calls_all]), f'opening the page on {O["DM_LIB_MAX"]} songs: {c_big} instructions without the art ({c_small} on {len(uniq)} songs), under 15 million, nothing written')
+    print(f'  (page open without the art: {c_small} instructions on {len(uniq)} songs, {c_big} on {O["DM_LIB_MAX"]})')
+
+
+def free_tests(ctx):
+    """Closing frees what the page made; it opens again."""
+    expect = ctx.expect
     t = opened(25)
     for _ in range(12): tick(t)
     live_before = len(t.bitmaps)
     t.fire_page_window(EVT_DESTROY)
     destroyed = [c for c in t.calls if c[0] == 'bitmap_destroy']
-    expect(len(set(t.bitmaps) - set(before_bmps)) == 0 and len(destroyed) >= live_before - len(before_bmps), f'closing destroys every bitmap the page made: the art, the ring ({len(destroyed)} of {live_before - len(before_bmps)})')
+    expect(len(set(t.bitmaps) - set(t.bmps0)) == 0 and len(destroyed) >= live_before - len(t.bmps0), f'closing destroys every bitmap the page made: the art, the ring ({len(destroyed)} of {live_before - len(t.bmps0)})')
     expect(len([c for c in t.calls if c[0] == 'free']) >= 25 * 4 and [c for c in t.calls if c[0] == 'timer_remove'] in ([], [('timer_remove', 0x777)]), 'closing frees the 25 song copies (their strings) and removes the loader timer')
     calls = t.card_tap()
     expect([c for c in calls if c[0] == 'window_open'] and t.paint(0)[1], 'a second open works')
@@ -842,4 +899,4 @@ def run(ctx):
     expect(opened(12) is not None, 'the page opens again on a fresh machine')
 
 
-def sty_of(t, name): return [v for (w, p, v) in t.styled if w == t.page[name] and p == 'normal:bg_color']
+SECTIONS = [constants_tests, colour_tests, open_tests, paint_tests, bar_tests, loader_tests, touch_tests, add_tests, text_tests, fallback_tests, cost_tests, free_tests]

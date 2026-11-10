@@ -11,8 +11,11 @@ scroll_view and pointer code) with the stock library, playlist table, clock and 
                 yesterday's playlist removed, the files, the card; Regenerate; every failure leaving yesterday's mix; the cost in instructions
   text          the title and artists lines in 13 languages against the Python wrap
   touch         the card opens the playlist's songs, the disc plays them, a rename and a reused id
-  menu          the section in the list: order, heights, hidden / shown, the shelf below it, the scroll position"""
-import os, random, re, struct
+  menu          the section in the list: order, heights, hidden / shown, the shelf below it, the scroll position
+
+Each section (SECTIONS) is a task of its own and shares nothing with the others: what several need (the library and the model's mix, a machine on it,
+the sample mix and art files) comes from the fixture functions below (world, fresh, mix_file, art_file, ...), built anew by every section that asks."""
+import collections, os, random, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 import awtk_ui, mod_icons, pod_dailymix as D, pod_mix as X, pod_ui as U
 from awtk_text import Ttf, StbText, awtk_width
@@ -191,14 +194,62 @@ def written(m, logs):
 
 def words_of(rows): return [D.rgb565(px) for row in rows for px in row]
 
+# ---- fixtures: each section builds what it needs with these; nothing is kept from one section to the next
+WALL, TZ = 1800000000, 3600 * 5     # the job tests' clock: the wall time and the zone
+TONES = [(70, 110, 190), (190, 90, 120), (60, 140, 150)]
+World = collections.namedtuple('World', 'songs plays rec fav day mdl picks seed aseed')
 
-def run(ctx):
+
+def raw_dir(): return os.path.join(WORK, RAW)
+
+
+def homeset_rows(raw):
+    """Settings > Home Screen as built: the page and its rows."""
+    homeset = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_homeset.bin'), 'rb').read())
+    return homeset, [w for w in homeset.find('pod_scrollview').children if w.type == 'list_item']
+
+
+def mix_file(day=day_of(WALL), seed=0x1234abcd, aseed=0x0badf00d, regen=0, tones=TONES, names=('Radiohead', 'Björk', 'Air'), paths=PATHS):
+    return X.dump_mix(day, seed, aseed, regen, tones, list(names), list(paths))
+
+
+def art_file(): return X.dump_art([0x1234] * (W * H), 0x0badf00d)    # a valid art file for mix_file()'s art seed
+def old_mix(day): return X.dump_mix(day - 1, 5, 6, 0, [(1, 2, 3), (4, 5, 6)], ['Old'], PATHS[:10])    # yesterday's mix
+def small_library(): return [dict(path=f'/mnt/mmc/S/{i // 7}/{i}.flac', artist=f'Band {i // 7}', album=f'Disc {i // 7}', title=f'T{i}', name=f'{i}.flac') for i in range(X.MIN_LIB)]
+
+
+def world():
+    """The job tests' library with its history, the day of WALL at TZ and the model's mix for that day (regeneration 0). Read only."""
+    songs, rr = library()
+    plays, rec_, fav = history(songs, rr)
+    day = day_of(WALL, TZ)
+    return World(songs, plays, rec_, fav, day, *expect_mix(None, songs, plays, rec_, fav, day, 0))
+
+
+def fresh(wd, songs_=None, plays_=None, rec__=None, fav_=None, tz_=TZ, wall=WALL, mixfile=None, artfile=None, setting=None, start=True, count=False):
+    """A new machine on the world's library (or the one given), the menu started."""
+    m = DM(count=count); m.wall, m.tz = wall, tz_
+    stock_world(m, wd.songs if songs_ is None else songs_, wd.plays if plays_ is None else plays_, wd.rec if rec__ is None else rec__, wd.fav if fav_ is None else fav_)
+    if mixfile is not None: m.fs[MIX] = mixfile
+    if artfile is not None: m.fs[ART] = artfile
+    if setting is not None: m.fs[SET] = setting
+    m.clock = 1000
+    if start: m.start_dm()
+    return m
+
+
+def run_job(m, after=START_MS + 1000):
+    m.clock = after
+    return m.ticks(limit=600)
+
+
+def mix_paths(m): return [p.decode('utf-8') for p in X.parse_mix(m.fs[MIX])[7]]
+
+
+
+def geometry_tests(ctx):
+    """The design's geometry and the constants shared with the payload."""
     expect = ctx.expect
-    raw = os.path.join(WORK, RAW)
-    font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
-    width = lambda t, px: awtk_width(font, t, px)
-
-    # ===== 1. geometry (the design) and constants
     expect(D.DM_X == U.GRID_MARGIN and D.DM_W == U.GRID_COLS * U.GRID_COVER + (U.GRID_COLS - 1) * U.GRID_GAP and D.DM_X + D.DM_W == 308,
            'the card spans the two covers of the shelf (x 12..308) inside the 310 px scroll view')
     expect((D.DM_HEAD_TOP, D.DM_HEAD_H, D.DM_HEAD_PX, D.DM_HEAD_X) == (U.SH_HEAD_TOP, U.SH_HEAD_H, U.SH_HEAD_PX, U.SH_HEAD_X) and D.DM_HEAD_W < U.SH_HEAD_W
@@ -232,8 +283,11 @@ def run(ctx):
            'patch/dailymix.c carries every sRGB table value from tools/pod_dailymix.py --c-table')
     expect(len(set(D.LIN16)) > 200 and D.LIN16[0] == 0 and D.LIN16[255] == 65535 and D.lum16((255, 255, 255)) == 65535, 'the table runs from 0 to 65535, white\'s luminance is 1.0')
 
-    # ===== 2. the generator, the design checks (Python)
-    tones = [(70, 110, 190), (190, 90, 120), (60, 140, 150)]
+
+def generator_tests(ctx):
+    """The art generator and the design checks (Python only)."""
+    expect = ctx.expect
+    tones = TONES
     a, sa = D.art(tones, 7); b, sb = D.art(tones, 7); c, _ = D.art(tones, 8); dd, _ = D.art(tones[::-1], 7)
     expect(a == b and sa == sb, 'the art is a pure function of (tones, seed)')
     expect(a != c and a != dd, 'another seed or another tone order gives another card')
@@ -259,7 +313,13 @@ def run(ctx):
     cov = D.corner_cover(D.DM_R)
     expect(cov[0] == 255 and cov[-1] == 0 and len(cov) == 144 and all(cov[y * 12 + x] >= cov[y * 12 + x + 1] for y in range(12) for x in range(11)), 'the corner coverage: opaque outside the arc, none inside, falling along a row')
 
-    # ===== 3. the texts
+
+def text_tests(ctx):
+    """The texts in 13 languages and their widths."""
+    expect = ctx.expect
+    raw = raw_dir()
+    font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))
+    width = lambda t, px: awtk_width(font, t, px)
     expect(all(set(v) == set(D.LOCALES) for v in D.TEXT.values()) and set(D.TEXT) == {'Made for You', 'Daily Mix', 'Regenerate Daily Mix', '%s and more', '%s, %s'} == set(pod_i18n.DAILY_KEYS),
            'five keys, 13 locales each, in tools/pod_i18n.py')
     expect(all(D.TEXT['%s and more'][l].count('%s') == 1 and D.TEXT['%s and more'][l].count('%') == 1 and D.TEXT['%s, %s'][l].count('%s') == 2 and D.TEXT['%s, %s'][l].count('%') == 2
@@ -267,8 +327,7 @@ def run(ctx):
     probe = StbText(font, 20)
     missing = {c: l for l in D.LOCALES for k in D.TEXT for c in D.TEXT[k][l] if c not in ' %s' and probe.box(c) is None}
     expect(not missing, f'every character of the texts has ink in the font ({missing})')
-    homeset = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_homeset.bin'), 'rb').read())
-    rows = [w for w in homeset.find('pod_scrollview').children if w.type == 'list_item']
+    homeset, rows = homeset_rows(raw)
     lab_w = lambda r: next(w for w in r.children if w.type == 'hscroll_label').w
     expect([r.name for r in rows] == [f'pod_row{i}' for i in range(5)] and lab_w(rows[1]) == lab_w(rows[0]), 'Settings > Home Screen has five rows (Regenerate Daily Mix the last); the Daily Mix switch row has the Recent Albums row\'s label box')
     sw_room, act_room = lab_w(rows[1]), lab_w(rows[4])
@@ -288,7 +347,12 @@ def run(ctx):
     expect(D.artist_lines(lambda t: len(t) * 6, ['Radiohead', 'Björk', 'Air', 'Portishead'], 'en_US') == ['Radiohead, Björk, Air and more'], 'at most three names, as "A, B, C and more"')
     expect(D.join_names('zh_CN', ['甲', '乙', '丙']) == '甲、乙、丙' and D.join_names('en_US', ['a', 'b']) == 'a, b' and D.join_names('en_US', ['a']) == 'a', 'the names are joined by the locale\'s template')
 
-    # ===== 4. assets: the section, the Home Screen rows, the disc images
+
+def asset_tests(ctx):
+    """The built assets: the section, the Home Screen rows, the disc images."""
+    expect = ctx.expect
+    raw = raw_dir()
+    homeset, rows = homeset_rows(raw)
     menu = awtk_ui.parse(open(os.path.join(raw, 'ui', 'm1plus_menu.bin'), 'rb').read())
     sv_n = menu.find('pod_scrollview')
     sec = sv_n.find('pod_daily')
@@ -328,7 +392,10 @@ def run(ctx):
     expect(pod_pages.ACT_DAILY in pod_pages.SWITCH_ACTIONS and pod_pages.ACT_REGEN in pod_pages.NO_CHEVRON_ACTIONS and pod_pages.ACT_REGEN not in pod_pages.SWITCH_ACTIONS,
            'the rows\' kinds in tools/pod_pages.py')
 
-    # ===== 5. the switch file
+
+def setting_tests(ctx):
+    """The switch file."""
+    expect = ctx.expect
     m = Machine(); m.dirs.add('/mnt/data')
     expect(m.call(PSYMS['dailymix_setting'], count=100000) == 1, 'no file: the card is on')
     for content, want in ((b'1\n', 1), (b'0\n', 0), (b'0', 0), (b'', 1), (b'x', 1), (b'10', 1), (b'0x', 1), (b'00', 1)):
@@ -340,12 +407,13 @@ def run(ctx):
     m.fail.add(('write', SET_TMP)); before = m.fs[SET]
     expect(m.call(PSYMS['dailymix_toggle'], count=400000) == 0xffffffff and m.fs[SET] == before, 'a failed save changes nothing and answers -1')
 
-    # ===== 6. the mix file and the art file, read strictly
-    day0 = day_of(1800000000)
-    TONES3 = [(70, 110, 190), (190, 90, 120), (60, 140, 150)]
-    def mk(day=day0, seed=0x1234abcd, aseed=0x0badf00d, regen=0, tones=TONES3, names=('Radiohead', 'Björk', 'Air'), paths=PATHS): return X.dump_mix(day, seed, aseed, regen, tones, list(names), list(paths))
-    good = mk()
-    expect(X.parse_mix(good) == (day0, 0x1234abcd, 0x0badf00d, 0, 25, TONES3, [b'Radiohead', 'Björk'.encode(), b'Air'], [p.encode() for p in PATHS]), 'the model reads its own file')
+
+def file_tests(ctx):
+    """The mix file and the art file, read strictly."""
+    expect = ctx.expect
+    day0 = day_of(WALL)
+    good = mix_file()
+    expect(X.parse_mix(good) == (day0, 0x1234abcd, 0x0badf00d, 0, 25, TONES, [b'Radiohead', 'Björk'.encode(), b'Air'], [p.encode() for p in PATHS]), 'the model reads its own file')
     expect(good.startswith(b'M1X2\n') and good.count(b'\n') == 4 + 25 and good.split(b'\n')[0:1] == [b'M1X2'] and b'.m3u' not in good.lower(), 'M1X2, the header, the tones, the names, then 25 paths one a line; the paths are plain lines, no playlist syntax')
     p255, p256 = '/' + 'a' * 254, '/' + 'a' * 255
     corpus = [good,
@@ -355,9 +423,9 @@ def run(ctx):
               good.replace(b' ', b'', 1), good.replace(b'46 6e', b'46'), good.replace(b'Radiohead', b''), good.replace(b'Radiohead', b'Radio\x01head'),
               good.replace(b'\tAir', b''), good.replace(b'Air', b'Air\tFour'), good.replace(b'Air', b'A' * 95), good.replace(b'Air', b'A' * 96), good.replace(b'Air', b'A' * 300),
               good.replace(b'\n', b'\r\n'), good.replace(b'46', b'4G', 1), b'M1X2\n' + b'\n' * 5, b'M1X2\n' + b'\n' * 40,
-              mk(regen=255, tones=[(1, 2, 3), (4, 5, 6)], names=['x'], paths=PATHS[:10]), mk(paths=PATHS[:9]), mk(paths=PATHS + ['/mnt/mmc/extra.flac']),
-              mk(tones=[(1, 2, 3)] * 5, names=['x']), mk(tones=[(1, 2, 3)], names=['x']), mk(tones=[(1, 2, 3)] * 4, names=['a', 'b', 'c', 'd']),
-              mk(paths=[p255] + PATHS[1:]), mk(paths=[p256] + PATHS[1:]), mk(paths=['/a b/ü ß/日本語.flac'] + PATHS[1:]), mk(paths=[PATHS[0] + '\x7f'] + PATHS[1:]),
+              mix_file(regen=255, tones=[(1, 2, 3), (4, 5, 6)], names=['x'], paths=PATHS[:10]), mix_file(paths=PATHS[:9]), mix_file(paths=PATHS + ['/mnt/mmc/extra.flac']),
+              mix_file(tones=[(1, 2, 3)] * 5, names=['x']), mix_file(tones=[(1, 2, 3)], names=['x']), mix_file(tones=[(1, 2, 3)] * 4, names=['a', 'b', 'c', 'd']),
+              mix_file(paths=[p255] + PATHS[1:]), mix_file(paths=[p256] + PATHS[1:]), mix_file(paths=['/a b/ü ß/日本語.flac'] + PATHS[1:]), mix_file(paths=[PATHS[0] + '\x7f'] + PATHS[1:]),
               good.replace(PATHS[0].encode(), b'/x\x01y'), good.replace(PATHS[0].encode() + b'\n', b'\n', 1), good.replace(PATHS[0].encode(), b'/x\ty'), good.replace(PATHS[24].encode() + b'\n', PATHS[24].encode()),
               good.replace(PATHS[24].encode() + b'\n', b'') + b'\n']
     mm = DM()
@@ -375,7 +443,7 @@ def run(ctx):
     mm.fs[SET] = b'1\n'; mm.hide_all(); mm.start_dm()
     st = mm.stack()
     expect(mm.up() and st.index('daily') + 1 == st.index('shelf') and st[-1] == 'pad' and st.index('daily') == 8, f'a valid mix with the switch on: the section is shown after the shown rows, right before the shelf ({st})')
-    art_ok = X.dump_art([0x1234] * (W * H), 0x0badf00d)
+    art_ok = art_file()
     m3 = DM(); m3.fs[MIX] = good; m3.fs[ART] = art_ok; m3.fs[SET] = b'0\n'; m3.start_dm(); m3.clock = 1
     m3.call(PSYMS['dm_tick'], a0=0, count=2000000)
     expect(not m3.bitmaps and 'timer_add' not in m3.names() and not m3.up(), 'with the card off the art file is not read and no bitmap is made (the timer ends)')
@@ -403,7 +471,11 @@ def run(ctx):
         wrote = m2.fs.get(ART)
         expect(len(cs) > 5 and wrote and X.parse_art(wrote, 0x0badf00d) is not None, f'{name}: the art is made again from the mix\'s tones and seed and written ({len(cs)} ticks)')
 
-    # ===== 7. the art in C against the model, pixel for pixel
+
+def art_tests(ctx):
+    """The art in C against the model, pixel for pixel."""
+    expect = ctx.expect
+    tones, day0, rnd = TONES, day_of(WALL), random.Random(1234)
     arts = [(tones, 0x0badf00d), ([(30, 30, 45)] * 2, 3), ([(255, 255, 255), (250, 250, 210)], 99), ([(255, 255, 0), (0, 255, 0), (255, 255, 120)], 12345),
             ([(0, 255, 255), (255, 0, 255), (255, 255, 0), (255, 255, 255)], 0xdeadbeef), ([(128, 128, 128), (60, 60, 60), (200, 200, 200)], 7), ([(10, 10, 12)] * 2, 0)]
     arts += [([tuple(rnd.randrange(256) for _ in range(3)) for _ in range(rnd.randrange(2, 5))], rnd.getrandbits(32) | 1) for _ in range(1)]
@@ -427,26 +499,12 @@ def run(ctx):
         print(f'  (art: {total_cost // nart} instructions for one card on average over {nart}, at most {worst_cost} in one tick of {O["DM_ROWS"]} rows)')
         expect(worst_cost < 3_000_000, f'one art tick stays under 3 million instructions ({worst_cost})')
 
-    # ===== 8. the whole job on a library
-    songs, rr = library()
-    plays, rec_, fav = history(songs, rr)
-    tz = 3600 * 5
-    def fresh(songs_=songs, plays_=plays, rec__=rec_, fav_=fav, tz_=tz, wall=1800000000, mixfile=None, artfile=None, setting=None, start=True, count=False):
-        m = DM(count=count); m.wall, m.tz = wall, tz_
-        stock_world(m, songs_, plays_, rec__, fav_)
-        if mixfile is not None: m.fs[MIX] = mixfile
-        if artfile is not None: m.fs[ART] = artfile
-        if setting is not None: m.fs[SET] = setting
-        m.clock = 1000
-        if start: m.start_dm()
-        return m
-    def run_job(m, after=START_MS + 1000):
-        m.clock = after
-        return m.ticks(limit=600)
 
-    day = day_of(1800000000, tz)
-    mdl, picks, seed, aseed = expect_mix(None, songs, plays, rec_, fav, day, 0)
-    m = fresh(count=PERF)
+def job_tests(ctx):
+    """The whole job on a library, then Regenerate on the same machine."""
+    expect = ctx.expect
+    wd = world(); songs, plays, rec_, fav, day, mdl, picks, seed, aseed = wd
+    m = fresh(wd, count=PERF)
     m.screen(False); m.clock = START_MS + 1000; m.call(PSYMS['dm_tick'], count=2000000)
     expect([c[2] for c in m.calls if c[0] == 'timer_add'] == [1000] and not any(c[0] == 'loadLocalClassList' for c in m.calls), 'dark Daily Mix defers pending work with one one-second check')
     m.screen(True); m.call(PSYMS['dm_tick'], count=2000000)
@@ -457,7 +515,7 @@ def run(ctx):
     expect([c[2] for c in m.calls if c[0] == 'timer_add'] == [1000] and not any(c[0] in ('loadLocalClassList', 'widget_load_image') for c in m.calls), 'an active job pauses with one one-second check')
     m.fire(EVT_DESTROY); m.call(PSYMS['dm_tick'], count=2000000)
     expect(not m.calls, 'a stray Daily Mix timer after destroy does nothing')
-    m = fresh(count=PERF)
+    m = fresh(wd, count=PERF)
     expect(not m.up(), 'no mix yet: the card is hidden')
     # nothing is made inside the boot guard's window: the first ticks only arm the timer
     m.clock = 3000; m.call(PSYMS['dm_tick'], a0=0, count=2000000)
@@ -467,8 +525,7 @@ def run(ctx):
     costs = run_job(m)
     want_tones = X.fill_tones(found, seed)
     names = X.top_artists(mdl, picks)
-    mpaths = lambda m_: [p.decode('utf-8') for p in X.parse_mix(m_.fs[MIX])[7]]
-    expect(mpaths(m) == [mdl[i]['path'] for i in picks] and len(picks) == 25, f'the mix file holds the model\'s 25 picks\' paths in play order ({len(mpaths(m))} paths)')
+    expect(mix_paths(m) == [mdl[i]['path'] for i in picks] and len(picks) == 25, f'the mix file holds the model\'s 25 picks\' paths in play order ({len(mix_paths(m))} paths)')
     arts_ = [mdl[i]['artist'] for i in picks]; albs = [mdl[i]['album'] for i in picks]
     expect(max(arts_.count(a) for a in set(arts_)) <= 2 and max(albs.count(a) for a in set(albs)) <= 2 and all(a != b for a, b in zip(arts_, arts_[1:])),
            'at most 2 songs of an artist and 2 of an album, no artist twice in a row')
@@ -478,7 +535,7 @@ def run(ctx):
     wr = written(m, m.tick_log)
     expect({MIX, MIX_TMP, ART, ART_TMP} <= wr and all((p == CARD_DIR or p.startswith(CARD_DIR + '/')) and not p.lower().endswith(('.m3u', '.m3u8')) and '_explaylist_data' not in p for p in wr),
            f'every file the job writes or renames is under /mnt/mmc/.m1plus (or is its directory) and is no .m3u / .m3u8 the stock Import could read ({sorted(wr)})')
-    expect(CARD_DIR not in fresh(start=False).dirs and CARD_DIR in wr and CARD_DIR in m.dirs and MIX_DIR in wr and MIX_DIR in m.dirs
+    expect(CARD_DIR not in fresh(wd, start=False).dirs and CARD_DIR in wr and CARD_DIR in m.dirs and MIX_DIR in wr and MIX_DIR in m.dirs
            and m.calls.index(('mkdir', CARD_DIR)) < m.calls.index(('mkdir', MIX_DIR)),
            'the card had no mix directory: the writer made the card folder, then daily-mix in it (mkdir), and the job committed into it')
     rows_art, _ = D.art(want_tones, aseed)
@@ -492,44 +549,22 @@ def run(ctx):
     expect('timer_add' not in m.names() and not [c for c in m.calls if c[0] == 'loadLocalClassList'], 'the same day: no job')
     m.fire(EVT_FG)
     expect('timer_add' not in m.names(), 'the menu in front again on the same day: no job, no timer')
-    main_m = m
-
-    # ---- podcast episodes (docs/modules/podcasts.md) are no candidates: a library with a dozen of them, each the most played song of the card, gives the same mix as the library without
-    eps_p = [dict(path=f'/mnt/mmc/Podcasts/Show {i % 3}/ep{i:02d}.mp3', artist='Narrator', album='A Show', title=f'Episode {i}', name=f'ep{i:02d}.mp3') for i in range(12)]
-    plays_p = dict(plays); plays_p.update({len(songs) + i: 300 for i in range(12)})
-    mp = fresh(songs_=songs + eps_p, plays_=plays_p)
-    put_tones(mp, songs, picks, mdl)
-    run_job(mp)
-    expect(mpaths(mp) == [mdl[i]['path'] for i in picks] and not any('/Podcasts/' in p for p in mpaths(mp)),
-           'the Daily Mix skips podcast episodes (a path under /mnt/mmc/Podcasts/): the mix is the one of the library without them')
-
-    # ---- a previous mix: yesterday's is shown while the new one is made and replaced by the new file; an old "Daily Mix" stock playlist is not our business (no cleanup code)
-    ymix0 = X.dump_mix(day - 1, 5, 6, 3, [(1, 2, 3), (4, 5, 6)], ['Old'], PATHS[:10])   # (yesterday was made three times)
-    m = fresh(mixfile=ymix0)
-    expect(m.up(), 'yesterday\'s mix is shown while the new one is made')
-    put_tones(m, songs, picks, mdl)
-    run_job(m)
-    parsed = X.parse_mix(m.fs[MIX])
-    expect(parsed and parsed[0] == day and parsed[3] == 0 and parsed[1] == seed and mpaths(m) == [mdl[i]['path'] for i in picks] and m.fs[MIX] != ymix0,
-           'the new day replaces the file: the day\'s seed, regeneration 0 (a new day starts again), the model\'s picks')
-    expect(not [c for log in m.tick_log for c in log if c[0] == 'loadLocalClassList' and c[1] in (0xf00b, 0xff13)], 'no stock playlist is read (the playlist-table calls are not even pinned: the source check above)')
 
     # ---- Regenerate (on the machine of the first mix): a new seed, the next regeneration count, a new playlist; two asks are one; with the card off it waits
-    m = main_m
     m.call(PSYMS['dailymix_regen'], count=100000)
     expect([c[1] for c in m.calls if c[0] == 'toast'] == ['New mix when Home opens'], 'an accepted ask shows the toast')
     m.call(PSYMS['dailymix_regen'], count=100000)
     m.fire(EVT_FG)
     expect('timer_add' in m.names(), 'Regenerate Daily Mix: the next time the Home menu is in front a timer starts the job')
     m.clock += 1000
-    cs = m.ticks(limit=600)
+    m.ticks(limit=600)
     mdl1, picks1, seed1, aseed1 = expect_mix(None, songs, plays, rec_, fav, day, 1)
     pm = X.parse_mix(m.fs[MIX])
-    expect(pm and pm[1] == seed1 and pm[3] == 1 and pm[1] != X.seed_for(day, 0) and mpaths(m) == [mdl1[i]['path'] for i in picks1] and picks1 != picks,
+    expect(pm and pm[1] == seed1 and pm[3] == 1 and pm[1] != X.seed_for(day, 0) and mix_paths(m) == [mdl1[i]['path'] for i in picks1] and picks1 != picks,
            'regeneration (asked twice): seed of (day, 1), regen count 1, the model\'s other picks, the file replaced')
     m.call(PSYMS['dm_tick'], a0=0, count=2000000)
     expect('timer_add' not in m.names(), 'and nothing more is asked of the next tick')
-    m = fresh(setting=b'0\n'); m.call(PSYMS['dm_tick'], a0=0, count=2000000)   # (the one-shot of the start, which arms nothing with the card off)
+    m = fresh(wd, setting=b'0\n'); m.call(PSYMS['dm_tick'], a0=0, count=2000000)   # (the one-shot of the start, which arms nothing with the card off)
     m.call(PSYMS['dailymix_regen'], count=100000)
     expect(not [c for c in m.calls if c[0] == 'toast'], 'a refused ask (card off) shows no toast')
     m.fire(EVT_FG); m.clock += 20000; m.fire(EVT_FG)
@@ -537,115 +572,161 @@ def run(ctx):
     m.fs[SET] = b'1\n'; m.fire(EVT_FG)
     expect('timer_add' in m.names(), 'switched on again, the pending Regenerate runs')
 
+
+def library_tests(ctx):
+    """Other libraries: podcast episodes, a previous mix, thin libraries."""
+    expect = ctx.expect
+    wd = world(); songs, plays, rec_, fav, day, mdl, picks, seed, aseed = wd
+    # ---- podcast episodes (docs/modules/podcasts.md) are no candidates: a library with a dozen of them, each the most played song of the card, gives the same mix as the library without
+    eps_p = [dict(path=f'/mnt/mmc/Podcasts/Show {i % 3}/ep{i:02d}.mp3', artist='Narrator', album='A Show', title=f'Episode {i}', name=f'ep{i:02d}.mp3') for i in range(12)]
+    plays_p = dict(plays); plays_p.update({len(songs) + i: 300 for i in range(12)})
+    mp = fresh(wd, songs_=songs + eps_p, plays_=plays_p)
+    put_tones(mp, songs, picks, mdl)
+    run_job(mp)
+    expect(mix_paths(mp) == [mdl[i]['path'] for i in picks] and not any('/Podcasts/' in p for p in mix_paths(mp)),
+           'the Daily Mix skips podcast episodes (a path under /mnt/mmc/Podcasts/): the mix is the one of the library without them')
+
+    # ---- a previous mix: yesterday's is shown while the new one is made and replaced by the new file; an old "Daily Mix" stock playlist is not our business (no cleanup code)
+    ymix0 = X.dump_mix(day - 1, 5, 6, 3, [(1, 2, 3), (4, 5, 6)], ['Old'], PATHS[:10])   # (yesterday was made three times)
+    m = fresh(wd, mixfile=ymix0)
+    expect(m.up(), 'yesterday\'s mix is shown while the new one is made')
+    put_tones(m, songs, picks, mdl)
+    run_job(m)
+    parsed = X.parse_mix(m.fs[MIX])
+    expect(parsed and parsed[0] == day and parsed[3] == 0 and parsed[1] == seed and mix_paths(m) == [mdl[i]['path'] for i in picks] and m.fs[MIX] != ymix0,
+           'the new day replaces the file: the day\'s seed, regeneration 0 (a new day starts again), the model\'s picks')
+    expect(not [c for log in m.tick_log for c in log if c[0] == 'loadLocalClassList' and c[1] in (0xf00b, 0xff13)], 'no stock playlist is read (the playlist-table calls are not even pinned: the source check above)')
+
+    small = small_library()
+    # ---- thin libraries: the limits loosen a step at a time until the mix is full; untagged songs count by their folder
+    def thin(lib, what, most):
+        m = fresh(wd, songs_=lib, plays_={}, rec__=(), fav_=()); run_job(m)
+        p = X.select(model(lib, {}, [], set()), X.seed_for(day, 0))
+        keys = [X.tag_hash(lib[i]['artist'], lib[i]['path']) for i in p]
+        expect(len(p) == 25 and mix_paths(m) == [lib[i]['path'] for i in p] and max(keys.count(k) for k in keys) <= most,
+               f'{what}: the model\'s 25 picks, at most {most} of one artist ({len(mix_paths(m))} paths, {sorted(keys.count(k) for k in set(keys))})')
+    thin(small, f'{X.MIN_LIB} songs of 8 artists, an album each (2 per artist would give 15)', 25)
+    thin([dict(path=f'/mnt/mmc/T/{i % 3}/{i % 6}/{i}.flac', artist=f'Trio {i % 3}', album=f'LP {i % 6}', title=f'T{i}', name=f'{i}.flac') for i in range(300)],
+         '300 songs of 3 artists (2 per artist would give 6)', 25)
+    thin([dict(path=f'/mnt/mmc/U/{i % 30}/{i}.flac', artist='', album='', title=f'T{i}', name=f'{i}.flac') for i in range(300)], '300 untagged songs in 30 folders', 2)
+
+
+def clock_tests(ctx):
+    """The clock decides the day."""
+    expect = ctx.expect
+    wd = world()
     # ---- the clock decides the day (local time) and a clock that is not set makes no mix
     import calendar, datetime
     epoch = datetime.date(1970, 1, 1).toordinal()
-    m = fresh(wall=1000); run_job(m)
+    m = fresh(wd, wall=1000); run_job(m)
     expect(MIX not in m.fs, 'a clock that is not set (before 2020) makes no mix')
     for y, mo, dd_, hh, off in ((2027, 1, 1, 12, 0), (2027, 3, 1, 12, 0), (2028, 2, 29, 12, 0), (2028, 3, 1, 12, 0), (2026, 12, 31, 12, 0), (2037, 3, 1, 12, 0), (2021, 6, 15, 12, 0),
                                 (2027, 6, 15, 22, 5), (2027, 6, 15, 22, 1), (2027, 6, 15, 2, -3), (2027, 6, 15, 2, -2), (2028, 12, 31, 20, 9)):
         w = calendar.timegm((y, mo, dd_, hh, 0, 0))
-        m = fresh(wall=w, tz_=off * 3600, setting=b'0\n')
+        m = fresh(wd, wall=w, tz_=off * 3600, setting=b'0\n')
         v = m.call(PSYMS['dm_today'], count=100000)
         local = datetime.datetime.fromtimestamp(w + off * 3600, datetime.timezone.utc).date()
         expect(v == local.toordinal() - epoch and v == day_of(w, off * 3600), f'dm_today for {y}-{mo:02d}-{dd_:02d} {hh}:00 UTC at UTC{off:+d} is the local day {local} (days since 1970 {v})')
 
 
+def cap_tests(ctx):
+    """A library at the cap."""
+    expect = ctx.expect
+    wd = world(); day = wd.day
     # ---- a library at the cap (DM_LIB_MAX songs, half of them played, 100 recent, 300 favourites): the model's picks and the cost of every tick
     nb, rb = O['DM_LIB_MAX'], random.Random(5)
     bigl = [dict(path=f'/mnt/mmc/B/{i // 12}/{i}.flac', artist=f'Band {i // 60}', album=f'Disc {i // 12}', title=f'Track number {i}', name=f'{i}.flac') for i in range(nb)]
     plays_b = {i: rb.choice([1, 2, 3, 8, 30, 300]) for i in range(nb) if rb.random() < 0.5}
     rec_b = rb.sample(sorted(plays_b), 100)
     fav_b = set(rb.sample(range(nb), 300))
-    m = fresh(songs_=bigl, plays_=plays_b, rec__=rec_b, fav_=fav_b, count=PERF)
+    m = fresh(wd, songs_=bigl, plays_=plays_b, rec__=rec_b, fav_=fav_b, count=PERF)
     costs_b = run_job(m)
     mdl_b = model(bigl, plays_b, rec_b, fav_b)
     picks_b = X.select(mdl_b, X.seed_for(day, 0))
-    expect(mpaths(m) == [mdl_b[i]['path'] for i in picks_b] and len(picks_b) == 25, f'{nb} songs: the same 25 picks as the model')
+    expect(mix_paths(m) == [mdl_b[i]['path'] for i in picks_b] and len(picks_b) == 25, f'{nb} songs: the same 25 picks as the model')
     if PERF: expect(max(costs_b) < 3_000_000 and len(costs_b) < 160, f'{nb} songs: {len(costs_b)} ticks, {sum(costs_b)} instructions in all, the most expensive tick {max(costs_b)} (3 million at most)')
     wr_b = written(m, m.tick_log)
     expect({MIX, MIX_TMP, ART, ART_TMP} <= wr_b and all((p == CARD_DIR or p.startswith(CARD_DIR + '/')) and not p.lower().endswith(('.m3u', '.m3u8')) and '_explaylist_data' not in p for p in wr_b),
            f'{nb} songs: every file the job writes or renames is under /mnt/mmc/.m1plus (or is its directory) and is no .m3u / .m3u8 ({sorted(wr_b)})')
     if PERF: print(f'  (daily mix, {nb} songs: {len(costs_b)} ticks, {sum(costs_b)} instructions in all, at most {max(costs_b)} in one tick)')
 
+
+def failure_tests(ctx):
+    """Failures leave yesterday's mix whole."""
+    expect = ctx.expect
+    wd = world(); songs, plays, rec_, fav, day, mdl, picks, seed, aseed = wd
     # ---- failures: yesterday's mix stays whole
     def stays(m, what, mix=None):
         expect(m.fs.get(MIX) == mix and m.up() == (mix is not None), f'{what}: nothing changed (the mix file, the card)')
-    ymix = X.dump_mix(day - 1, 5, 6, 0, [(1, 2, 3), (4, 5, 6)], ['Old'], PATHS[:10])
-    small = [dict(path=f'/mnt/mmc/S/{i // 7}/{i}.flac', artist=f'Band {i // 7}', album=f'Disc {i // 7}', title=f'T{i}', name=f'{i}.flac') for i in range(X.MIN_LIB)]
-    m = fresh(songs_=small[:-1], plays_={}, rec__=(), fav_=(), mixfile=ymix); run_job(m); stays(m, f'a library of {X.MIN_LIB - 1} songs (under MIX_MIN_LIB)', ymix)
+    ymix, small = old_mix(day), small_library()
+    m = fresh(wd, songs_=small[:-1], plays_={}, rec__=(), fav_=(), mixfile=ymix); run_job(m); stays(m, f'a library of {X.MIN_LIB - 1} songs (under MIX_MIN_LIB)', ymix)
     expect(m.call(PSYMS['dailymix_can_regen'], count=100000) == 0, '... and Regenerate is off (Settings dims the row)')
     m.call(PSYMS['dailymix_regen'], count=100000); m.clock += 5000; m.fire(EVT_FG)
     expect('timer_add' not in m.names(), '... so a tap on it asks for no job')
-    m = fresh(songs_=[], plays_={}, rec__=(), fav_=(), mixfile=ymix); run_job(m); stays(m, 'an empty library', ymix)
+    m = fresh(wd, songs_=[], plays_={}, rec__=(), fav_=(), mixfile=ymix); run_job(m); stays(m, 'an empty library', ymix)
     expect(m.call(PSYMS['dailymix_can_regen'], count=100000) == 0, '... Regenerate is off')
-    m = fresh(mixfile=ymix); m.calloc_fail = True; run_job(m); stays(m, 'no memory', ymix)
+    m = fresh(wd, mixfile=ymix); m.calloc_fail = True; run_job(m); stays(m, 'no memory', ymix)
     expect(m.busy_state() == (False, False), 'no job started: the busy mark stays hidden')
     expect(m.call(PSYMS['dailymix_can_regen'], count=100000) == 1, '... Regenerate stays on (the library was not too small)')
     m.clock += 5000; m.fire(EVT_FG)
     expect('timer_add' not in m.names(), 'a day that failed is not tried again on the next visit (until tomorrow or a restart)')
     m.call(PSYMS['dailymix_regen'], count=100000); m.fire(EVT_FG)
     expect('timer_add' in m.names(), '... but Regenerate asks again')
-    m = fresh(mixfile=ymix); m.fail.add(('write', MIX_TMP)); put_tones(m, songs, picks, mdl); m.clock = START_MS + 1000
+    m = fresh(wd, mixfile=ymix); m.fail.add(('write', MIX_TMP)); put_tones(m, songs, picks, mdl); m.clock = START_MS + 1000
     for _ in range(40): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
     expect(m.busy_state() == (True, False), 'a job that will fail is showing the busy mark')
     m.ticks(limit=600)
     expect(m.busy_state() == (False, False), 'the busy mark is hidden after the job failed')
-    m = fresh(mixfile=ymix); m.clock = START_MS + 1000
+    m = fresh(wd, mixfile=ymix); m.clock = START_MS + 1000
     for _ in range(5): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
     expect(m.busy_state() == (True, False), 'the job started')
     expect(m.busy_seen(), '... and the mark is seen: yesterday\'s mix keeps its section shown')
     m.fire(EVT_DESTROY)
     expect('timer_add' not in m.names(), 'the window goes away with a job running: its timer is removed')
-    m = fresh(); m.clock = START_MS + 1000
+    m = fresh(wd); m.clock = START_MS + 1000
     for _ in range(5): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
     expect(m.busy_state() == (True, False) and not m.busy_seen(), 'the first mix (no mix file yet): the mark is set but not seen, its section stays hidden until the mix exists')
-    m = fresh(setting=b'0\n')
+    m = fresh(wd, setting=b'0\n')
     expect(m.call(PSYMS['dailymix_can_regen'], count=100000) == 0, 'the Daily Mix switch off: Regenerate is off')
-
-    # ---- thin libraries: the limits loosen a step at a time until the mix is full; untagged songs count by their folder
-    def thin(lib, what, most):
-        m = fresh(songs_=lib, plays_={}, rec__=(), fav_=()); run_job(m)
-        p = X.select(model(lib, {}, [], set()), X.seed_for(day, 0))
-        keys = [X.tag_hash(lib[i]['artist'], lib[i]['path']) for i in p]
-        expect(len(p) == 25 and mpaths(m) == [lib[i]['path'] for i in p] and max(keys.count(k) for k in keys) <= most,
-               f'{what}: the model\'s 25 picks, at most {most} of one artist ({len(mpaths(m))} paths, {sorted(keys.count(k) for k in set(keys))})')
-    thin(small, f'{X.MIN_LIB} songs of 8 artists, an album each (2 per artist would give 15)', 25)
-    thin([dict(path=f'/mnt/mmc/T/{i % 3}/{i % 6}/{i}.flac', artist=f'Trio {i % 3}', album=f'LP {i % 6}', title=f'T{i}', name=f'{i}.flac') for i in range(300)],
-         '300 songs of 3 artists (2 per artist would give 6)', 25)
-    thin([dict(path=f'/mnt/mmc/U/{i % 30}/{i}.flac', artist='', album='', title=f'T{i}', name=f'{i}.flac') for i in range(300)], '300 untagged songs in 30 folders', 2)
-    m = fresh(mixfile=ymix, start=False); [m.present.discard(s['path']) for s in songs]; m.start_dm(); run_job(m); stays(m, 'the card is not there (no song file exists)', ymix)
-    m = fresh(mixfile=ymix); m.fail.add(('write', MIX_TMP)); put_tones(m, songs, picks, mdl); run_job(m)
+    m = fresh(wd, mixfile=ymix, start=False); [m.present.discard(s['path']) for s in songs]; m.start_dm(); run_job(m); stays(m, 'the card is not there (no song file exists)', ymix)
+    m = fresh(wd, mixfile=ymix); m.fail.add(('write', MIX_TMP)); put_tones(m, songs, picks, mdl); run_job(m)
     expect(m.fs.get(MIX) == ymix and m.up(), 'the mix file cannot be written: yesterday\'s stays, the file is as it was')
+
+
+def card_tests(ctx):
+    """The mix lives on the card: not mounted, a swap, a job interrupted."""
+    expect = ctx.expect
+    wd = world(); songs, plays, rec_, fav, day, mdl, picks, seed, aseed = wd
+    ymix = old_mix(day)
     # ---- the mix lives on the card (CARD_DIR): not mounted, the directory missing, a card swap
-    m = fresh(mixfile=ymix, start=False); m.card_mounted = False; m.start_dm()
+    m = fresh(wd, mixfile=ymix, start=False); m.card_mounted = False; m.start_dm()
     expect(not m.up(), 'the card is not mounted: a mix file under the mount point is not read, the section stays hidden')
     run_job(m)
     expect(not written(m, [m.calls]) and not [c for c in m.calls if c[0] in ('loadLocalClassList', 'open') and (c[0] == 'loadLocalClassList' or c[1].startswith(CARD_DIR))],
            f'... no job starts, nothing is written or opened under the card ({[c for c in m.calls if c[0] in ("open", "mkdir", "rename")]})')
-    m = fresh(start=False); m.card_mounted = False; m.start_dm(); put_tones(m, songs, picks, mdl); run_job(m)
+    m = fresh(wd, start=False); m.card_mounted = False; m.start_dm(); put_tones(m, songs, picks, mdl); run_job(m)
     expect(not m.up() and MIX not in m.fs and not written(m, [m.calls]) and CARD_DIR not in m.dirs, 'no card and no mix: nothing is made, nothing written, no directory, no crash')
     m.card_mounted = True; m.fire(EVT_FG)
     expect(not [c for c in m.calls if c[0] == 'loadLocalClassList'], 'a card back in does nothing until the menu is opened again')
     today_mix = X.dump_mix(day, 5, 6, 0, [(1, 2, 3), (4, 5, 6)], ['Old'], [mdl[i]['path'] for i in picks][:10])
-    m = fresh(mixfile=today_mix); run_job(m)
+    m = fresh(wd, mixfile=today_mix); run_job(m)
     expect(m.up() and not [c for c in m.calls if c[0] == 'loadLocalClassList'] and MIX not in written(m, [m.calls]), 'the card has today\'s mix: it is shown, no job runs and the mix file is not written (only its art is drawn again, as before)')
-    m = fresh(); put_tones(m, songs, picks, mdl); run_job(m)    # the same day, another card: no mix file there
-    expect(not written(m, [m.tick_log[0]]) and X.parse_mix(m.fs[MIX])[0] == day and m.up() and mpaths(m) == [mdl[i]['path'] for i in picks],
+    m = fresh(wd); put_tones(m, songs, picks, mdl); run_job(m)    # the same day, another card: no mix file there
+    expect(not written(m, [m.tick_log[0]]) and X.parse_mix(m.fs[MIX])[0] == day and m.up() and mix_paths(m) == [mdl[i]['path'] for i in picks],
            'a card swap, same day: the new card has no mix file, so a new mix is made after DM_START_MS and written to it')
     # the library changes under the job (another list was loaded, or it grew)
     big = [dict(path=f'/mnt/mmc/B/{i // 12}/{i}.flac', artist=f'Band {i // 60}', album=f'Disc {i // 12}', title=f'T{i}', name=f'{i}.flac') for i in range(1700)]
-    m = fresh(songs_=big, plays_={}, rec__=(), fav_=(), mixfile=ymix); m.clock = START_MS + 1000
+    m = fresh(wd, songs_=big, plays_={}, rec__=(), fav_=(), mixfile=ymix); m.clock = START_MS + 1000
     for _ in range(200):   # up to the tick that opens the library (1,700 songs: two slices of DM_SLICE), one slice more, then another list replaces it
         m.call(PSYMS['dm_tick'], a0=0, count=60000000)
         if ('loadLocalClassList', CLS_LIB) in m.calls: break
     m.call(PSYMS['dm_tick'], a0=0, count=60000000)
     m.setword(pod.DATA['PDEQ_SHOWLIST'][0], m.new_deque([m.record()]))
-    cs = m.ticks()
+    m.ticks()
     expect(m.fs.get(MIX) == ymix and 'timer_add' not in m.names(),
            'another list loaded under the job (between two slices of the library): it ends, nothing is written')
     # the menu goes to the background in the middle of the job: nothing was written (the files are written at the end), it starts again from the top when the menu is back
-    m = fresh(mixfile=ymix); put_tones(m, songs, picks, mdl); m.clock = START_MS + 1000
+    m = fresh(wd, mixfile=ymix); put_tones(m, songs, picks, mdl); m.clock = START_MS + 1000
     for _ in range(40): m.call(PSYMS['dm_tick'], a0=0, count=60000000)
     expect('timer_add' in m.names() and m.fs.get(MIX) == ymix, 'the job is in the middle of the songs')
     expect(m.busy_state() == (True, False), 'the busy mark is shown while the job runs, and stays insensitive (decorative)')
@@ -653,15 +734,20 @@ def run(ctx):
     expect(m.fs.get(MIX) == ymix and not written(m, [m.calls]), 'the menu goes away in the middle: nothing was written, the files are as they were')
     expect(m.busy_state() == (False, False), 'the busy mark is hidden and insensitive after the menu goes to the background')
     m.fire(EVT_FG); m.clock += 100
-    cs = m.ticks(limit=600)
-    expect(X.parse_mix(m.fs[MIX])[0] == day and mpaths(m) == [mdl[i]['path'] for i in picks], 'and back in front the job starts again from the top and finishes')
+    m.ticks(limit=600)
+    expect(X.parse_mix(m.fs[MIX])[0] == day and mix_paths(m) == [mdl[i]['path'] for i in picks], 'and back in front the job starts again from the top and finishes')
     expect(m.busy_state() == (False, False), 'the busy mark is hidden after the commit')
 
+
+def interrupt_tests(ctx):
+    """A manual job survives the menu going away; the destroy."""
+    expect = ctx.expect
+    wd = world(); songs, plays, rec_, fav, day, mdl, picks, seed, aseed = wd
     # A manual job must keep its request when Home is covered or destroyed before commit.
     # Unlike an automatic job, today's existing mix will not make dm_need retry it.
-    today_mix = main_m.fs[MIX]
+    today_mix = X.dump_mix(day, seed, aseed, 0, TONES, ['Old'], [mdl[i]['path'] for i in picks])
     for event in (EVT_BG, EVT_DESTROY):
-        m = fresh(mixfile=today_mix)
+        m = fresh(wd, mixfile=today_mix)
         m.clock = START_MS + 1000
         m.ticks(limit=600)  # finish loading the existing art before the request
         m.fire(EVT_BG)
@@ -682,14 +768,19 @@ def run(ctx):
         expect('timer_add' not in m.names(), 'a completed manual regeneration does not leave another request pending')
 
     # ---- the menu and the card go away: window destroyed, timer removed, bitmap freed
-    m = fresh(mixfile=good); m.fs[ART] = art_ok; m.clock = 1
+    good, art_ok = mix_file(), art_file()
+    m = fresh(wd, mixfile=good); m.fs[ART] = art_ok; m.clock = 1
     m.ticks()
     destroyed_before = m.destroyed
     m.fire(EVT_DESTROY)
     expect(m.destroyed == destroyed_before + 1, 'the destroy event frees the bitmap')
     m.fire(EVT_BG)
 
-    # ===== 9. text: the lines the card draws, in 13 languages
+
+def draw_tests(ctx):
+    """The lines the card draws, in 13 languages."""
+    expect = ctx.expect
+    tones, day0, art_ok = TONES, day_of(WALL), art_file()
     nm = ['Radiohead', 'Björk', 'Air', 'Portishead']
     mix_txt = X.dump_mix(day0, 0x1234abcd, 0x0badf00d, 0, tones, nm[:3], PATHS)
     wfun = lambda t: sum(16 if ord(c) >= 0x2e80 or c == '…' else 8 for c in t)
@@ -717,7 +808,12 @@ def run(ctx):
     blits, texts, styles = mt.paint_card()
     expect(len(blits) == 1 and blits[0][1] == (0, 0, W, H) and blits[0][2] == (0, 0, W, H) and len(texts) == 4, 'with the bitmap: one blit of the whole card at (0, 0), then the text')
 
-    # ===== 10. touch: the card opens the page, the disc plays the mix (the page itself: test/pod/dmpage.py)
+
+def touch_tests(ctx):
+    """Touch: the card opens the page, the disc plays the mix."""
+    expect = ctx.expect
+    tones, day, art_ok, nm = TONES, day_of(WALL, TZ), art_file(), ['Radiohead', 'Björk', 'Air']
+    songs = library()[0]
     songs_t = songs[:30]
     order_t = [5, 3, 9, 0, 7, 11, 2, 8, 4, 10, 1, 6]          # the mix's songs: not the library's order
     mpaths_t = [songs_t[i]['path'] for i in order_t]
@@ -764,7 +860,13 @@ def run(ctx):
     expect(t.played and qpaths(t) == [p for p in gone if p != gone[2]], 'a song that is not in the library is left out')
     expect("'/mnt/mmc/Music/not-in-the-library''s.flac'" in [c for c in t.calls if c[0] == 'toolsQueryDbTable'][0][2], 'a quote in a path is doubled in the SQL')
 
-    # ===== 11. the section in the list
+
+def menu_tests(ctx):
+    """The section in the menu's list."""
+    expect = ctx.expect
+    songs, rr = library()
+    plays, rec_, fav = history(songs, rr)
+    good, art_ok = mix_file(), art_file()
     sy = lambda mm_: mm_.y_of(mm_.daily)
     mw = DM(bar=True)
     stock_world(mw, songs, plays, rec_, fav)
@@ -795,7 +897,11 @@ def run(ctx):
     mw.hide_all()
     expect(mw.target(160, hy + 100)[-1] != 'pod_dm_card' and mw.target(160, hy + 100)[-1] != 'pod_daily', 'hidden: no touch reaches the section or the card')
 
-    # ===== 12. fall-backs to the plain menu
+
+def fallback_tests(ctx):
+    """Fall-backs to the plain menu."""
+    expect = ctx.expect
+    good, art_ok = mix_file(), art_file()
     def plain(**kw):
         m_ = DM(); m_.fs[MIX] = good; m_.fs[ART] = art_ok
         for k_, v_ in kw.items(): setattr(m_, k_, v_)
@@ -808,7 +914,11 @@ def run(ctx):
     m_ = plain(); m_.timer_fail = True; m_.start_dm()
     expect(not m_.up(), 'no timer: the card is never shown')
 
-    # ===== 13. the previews run on the built tree
+
+def preview_tests(ctx):
+    """The previews run on the built tree."""
+    expect = ctx.expect
+    tones = TONES
     import preview_dailymix as P
     s = P.side(WORK)
     card_im = P.card_image(s, tones)
@@ -817,3 +927,6 @@ def run(ctx):
     expect(sec_im.size == (D.DM_W_VIEW, D.DM_SEC_H) and sec_im.getbbox() is not None, 'the section image')
     page = P.settings_page(s)
     expect(page.size == (320, 450), 'Settings > Home Screen: the three rows in two cards, drawn from the built asset')
+
+
+SECTIONS = [geometry_tests, generator_tests, text_tests, asset_tests, setting_tests, file_tests, art_tests, job_tests, library_tests, clock_tests, cap_tests, failure_tests, card_tests, interrupt_tests, draw_tests, touch_tests, menu_tests, fallback_tests, preview_tests]
