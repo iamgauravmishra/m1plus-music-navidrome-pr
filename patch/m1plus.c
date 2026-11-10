@@ -91,7 +91,8 @@ enum {
     ACT_NEXTALBUM = 90, /* Settings > Playback: Continue Playing, a value row opening its picker */
     ACT_NASET = 91, /* the Continue Playing picker's rows (arg = NA_OFF or NA_ALBUMS) */
     ACT_AREBUILD =
-        92 /* Settings > Library: Rebuild Artist Photos, an action row (a confirm, then the request file Home's pass acts on) */
+        92, /* Settings > Library: Rebuild Artist Photos, an action row (a confirm, then the request file Home's pass acts on) */
+    ACT_SUBSONIC = 93 /* the Navidrome root page (tools/pod_pages.py); ids 93 .. 95 are the Navidrome rows */
 };
 
 extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
@@ -109,6 +110,7 @@ lkwp_open(void); /* patch/lockscreen.c: the Lock Screen's Wallpaper picker, our 
 extern int wifipage_open(
     void); /* patch/wifipage.c: Settings > Wi-Fi, our page; -1 when it did not open (the stock page then opens) */
 extern int radio_open(void); /* patch/radiopage.c: Radio's stations page */
+extern int nd_root_open(void); /* patch/ndroot.c: the Navidrome root page; -1 when it did not open */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
 extern int folders_open(
@@ -424,6 +426,8 @@ static int on_row(void *ctx, void *e) {
         podcasts_open();
     else if (row->action == ACT_RADIO)
         radio_open();
+    else if (row->action == ACT_SUBSONIC)
+        nd_root_open();
     else if (row->action == ACT_SEARCH) {
         if (search_open() < 0)
             navigator_to_with_context(

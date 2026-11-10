@@ -86,7 +86,7 @@ class SM(StockEventMachine):
         if pad:   # the menu's trailing spacer row pod_pad (the mini player bar's list padding): hidden in the asset, the last child, O['MB_PAD'] high
             self.pad = self.widget(LI_VT, 0, rows * ROW_H, 310, O['MB_PAD'], sv); self.u.mem_write(self.pad + 0x24, struct.pack('<H', 0x1))   # enabled, not visible, not sensitive
         self.hdrs = []
-        if hdrs:   # the Extras page's section headers pod_hdr0..3 (tools/pod_ui.py extras_headers): hidden views HDR_H high after the rows, which the list_view layouter sums with their own heights
+        if hdrs:   # the Extras page's section headers pod_hdr0..4 (tools/pod_ui.py extras_headers): hidden views HDR_H high after the rows, which the list_view layouter sums with their own heights
             self.hdrs = [self.widget(LI_VT, 0, 0, 310, pod_pages.HDR_H, sv) for _ in pod_pages.EXTRAS_GROUPS]
             for h in self.hdrs: self.u.mem_write(h + 0x24, struct.pack('<H', 0x1))
         self.kids(sv, self.rows + self.hdrs + ([self.pad] if pad else []))
@@ -199,10 +199,10 @@ def run(ctx):
     for fixed in (False, True):
         tag = 'fixed' if fixed else 'V2.1mY'
         m = world(b'1023456j\n', fixed, rows=ITEMS); m.arrange(extras=1); o = m.order()
-        want = [i for i in pod_pages.EXTRAS_ORDER if 7 <= i < 18 or i >= ITEMS - 4]   # (the Pod, Podcasts, Search and Radio are the last four items)
+        want = [i for i in pod_pages.EXTRAS_ORDER if 7 <= i < 18 or i == 19 or i >= ITEMS - 4]   # the Pod, Podcasts, Radio, Search and Navidrome are on Extras
         expect(o == want, f'{tag}: the Extras page shows the items the menu does not show in the fixed order ({o})')
         m.relayout()
-        expect(m.order() == (want if fixed else list(range(7, 18)) + [ITEMS - 4, ITEMS - 3, ITEMS - 2, ITEMS - 1]),
+        expect(m.order() == (want if fixed else list(range(7, 18)) + [19, ITEMS - 4, ITEMS - 3, ITEMS - 2, ITEMS - 1]),
                f'{tag}: the Extras page after a relayout ' + ('is the same' if fixed else f'is back in id order ({m.order()})'))
         if fixed: expect(m.stack()[:len(want)] == want and m.vh() == len(want) * ROW_H, f'fixed: the Extras children are stacked in that order ({m.stack()})')
     # the Extras page with its section headers: the stock list_view layouter keeps a child's own height (a header is HDR_H high, not 52), so after any relayout the headers
@@ -317,7 +317,7 @@ def run(ctx):
         m = world(b'3210456j\n', fixed, main=True)
         m.call(PSYMS['menu_custom_opened'], a0=m.root, count=4000000)
         if not fixed: m.setword(m.sv + 0xf4, PAINT_HOOK)
-        cm_order = [3, 2, 1, 0, 4, 5, 6, 18] + list(range(7, 18)) + [19, 20, 21, 22]   # Settings, id 18, is shown last in the saved list
+        cm_order = [3, 2, 1, 0, 4, 5, 6, 18] + list(range(7, 18)) + [19, 20, 21, 22, 23]   # Settings, id 18, is shown last in the saved list
         ys = lambda: [i for _, i in sorted((m.s32(r + 4), i) for i, r in enumerate(m.rows))]
         expect(ys() == cm_order, f'{tag} Main Menu: opened in the saved order ({ys()})')
         m.relayout()
