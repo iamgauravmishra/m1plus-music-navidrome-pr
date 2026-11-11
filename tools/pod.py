@@ -41,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'display.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
+SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'display.c', 'keyspower.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'libsrc.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'charging.c', 'nextalbum.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c', 'sbnet.c', 'sbparse.c', 'sbdl.c', 'sbapi.c', 'sbsrc.c', 'ndserver.c', 'ndroot.c',
            'tidalkb.c', 'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
 
@@ -215,6 +215,46 @@ STYLE_COLOR, STYLE_COLOR_PROLOGUE = 0x659fcc, (0x3c1c003b, 0x279c9f04, 0x0399e02
 IMAGE_ADD, IMAGE_ADD_PROLOGUE = 0x655638, (0x3c1c003b, 0x279ce898, 0x0399e021)
 STYLE_GRADIENT, STYLE_GRADIENT_WORDS = 0x659f9c, (0x10800009, 0, 0x8c820000)
 STYLE_COLOR_RET = 0x65a050   # patch/offsets.inc STYLE_COLOR_GRADIENT_RET (the test compares the two)
+# Settings > System > Buttons & Power (patch/keyspower.c, docs/modules/keyspower.md): the four controls of stock's systemset/keylock_page, the sysset list's row 7 and systemset/powermanager_page, as their click handlers
+# do them. Button Lock: the switch 0x4a7a04 xors the byte keylock_flag and saves LOCKFLAG after the refresh 0x4a770c (which saves nothing for the unchanged mode); a choice 0x4a7a7c / 0x4a7ab8 / 0x4a7af4 calls the
+# refresh with 1 / 2 / 3, which stores the word keylock_mode (the store sits in the delay slot of the save) and saves LOCKMODE only when the word differs. Which keys the mode locks is read off the gates: the volume
+# keys (0x47e3a4, 0x4cdc20) pass only for mode 2, the play / prev / next keys (0x4cda60) only for mode 1. Tap to Wake: the case of the shared sysset click handler 0x4ad930 saves DOUBLEWAKE with the byte xor 1 stored in
+# the call's delay slot. Auto-Standby 0x4a97c4 and Auto-Shutdown 0x4a966c: the byte, the word, the saves and reset_poweroptions_timer(1, 1, 0) as pinned; a duration choice (0x4a9cb4 .. 0x4a9b88) returns for the
+# same word, else the refresh 0x4a92a4 stores the word before its save, then reset_poweroptions_timer(0, 1, 0). config_init clamps every value to its range.
+KEYSPOWER_PINS = (   # (address, stock word, what it proves)
+    (0x4a7a24, 0x8f90a94c, 'lock switch 0x4a7a04: lw s0, GOT keylock_flag'), (0x4a7a34, 0x38420001, 'lock switch: xori v0, v0, 1'), (0x4a7a38, 0xa2020000, 'lock switch: sb v0, (s0): the byte first'),
+    (0x4a7a40, 0x0411ff32, 'lock switch: bal refresh 0x4a770c (the word as it is: no mode save)'), (0x4a7a5c, 0x24c64534, 'lock switch: a2 = "LOCKFLAG"'), (0x4a7a60, 0x0320f809, 'lock switch: jalr write_int_config after the refresh'),
+    (0x4a7aa0, 0x0411ff1a, 'lock choice 0x4a7a7c: bal refresh'), (0x4a7aa4, 0x24050001, 'lock choice 1: a1 = 1 (volume keys)'), (0x4a7adc, 0x0411ff0b, 'lock choice 0x4a7ab8: bal refresh'),
+    (0x4a7ae0, 0x24050002, 'lock choice 2: a1 = 2 (the other keys)'), (0x4a7b18, 0x0411fefc, 'lock choice 0x4a7af4: bal refresh'), (0x4a7b1c, 0x24050003, 'lock choice 3: a1 = 3 (both)'),
+    (0x4a7900, 0x12330023, 'lock refresh: beq s1, s3: the same mode saves nothing'), (0x4a7980, 0x24c67fa8, 'lock refresh: a2 = "LOCKMODE"'), (0x4a7984, 0xae910000, 'lock refresh: sw s1, (s4): the word in the save\'s call slot'),
+    (0x4a7988, 0x0320f809, 'lock refresh: jalr write_int_config'),
+    (0x47e3a8, 0x24030002, 'volume key gate 0x47e38c: mode 2 lets the keys through'), (0x47e3b0, 0x14a30006, 'volume key gate: bne mode, 2: locked otherwise'),
+    (0x4cda68, 0x24030001, 'play key gate 0x4cda44: mode 1 lets the keys through'), (0x4cda6c, 0x1483005e, 'play key gate: bne mode, 1: locked otherwise'),
+    (0x4cdc28, 0x24020002, 'volume key gate 0x4cdc04: mode 2'), (0x4cdc2c, 0x1462ff98, 'volume key gate: bne mode, 2'),
+    (0x4e6318, 0x2c430002, 'config_init: LOCKFLAG sltiu v1, v0, 2'), (0x4e6338, 0xa0620000, 'config_init: LOCKFLAG stored as a byte'),
+    (0x4e6378, 0x2443ffff, 'config_init: LOCKMODE addiu v1, v0, -1'), (0x4e6380, 0x2c630003, 'config_init: LOCKMODE sltiu v1, v1, 3: 1 .. 3 kept'), (0x4e6384, 0x02a3100a, 'config_init: movz v0, s5 (1): else 1'),
+    (0x4ad930, 0x8f92b06c, 'tap to wake case 0x4ad930: lw s2, GOT doublewake_flag'), (0x4ad944, 0x92440000, 'tap to wake: lbu a0, (s2)'), (0x4ad948, 0x24c689b4, 'tap to wake: a2 = "DOUBLEWAKE"'),
+    (0x4ad954, 0x38840001, 'tap to wake: xori a0, a0, 1'), (0x4ad958, 0x0320f809, 'tap to wake: jalr write_int_config'), (0x4ad95c, 0xa2440000, 'tap to wake: sb a0, (s2) in the delay slot: the byte first'),
+    (0x4e62b8, 0x2c430002, 'config_init: DOUBLEWAKE sltiu v1, v0, 2'), (0x4e62d0, 0x30420001, 'config_init: DOUBLEWAKE andi v0, v0, 1'), (0x4e62d8, 0xa0620000, 'config_init: DOUBLEWAKE stored as a byte'),
+    (0x4a9794, 0x8f82afd8, 'shutdown switch 0x4a966c, from off: lw v0, GOT standbyflag'), (0x4a9798, 0x90430000, 'shutdown switch: lbu v1, (v0)'), (0x4a979c, 0x1060ffe0, 'shutdown switch: beqz v1: a standby that is off is not saved'),
+    (0x4a97b0, 0xa0400000, 'shutdown switch: sb zero: Auto-Standby off'), (0x4a97b4, 0x0320f809, 'shutdown switch: jalr write_int_config'), (0x4a97b8, 0x24c68374, 'shutdown switch: a2 = "STANDBYMODE"'),
+    (0x4a978c, 0x24020001, 'shutdown switch, from off: v0 = 1'), (0x4a9790, 0xae020000, 'shutdown switch: sw v0, (s0): the word 1 before the standby save'),
+    (0x4a971c, 0xae000000, 'shutdown switch, from on: sw zero, (s0): the word 0'), (0x4a9724, 0x26454540, 'shutdown switch: a1 = "SYSSET"'), (0x4a972c, 0x8e040000, 'shutdown switch: a0 = the word'),
+    (0x4a975c, 0x8f99a874, 'shutdown switch: lw t9, GOT reset_poweroptions_timer'), (0x4a9760, 0x0320f809, 'shutdown switch: jalr reset_poweroptions_timer'), (0x4a9764, 0x24040001, 'shutdown switch: a0 = 1 (a1 = 1, a2 = 0)'),
+    (0x4a97f8, 0x8f90afd8, 'standby switch 0x4a97c4: lw s0, GOT standbyflag'), (0x4a9800, 0x92020000, 'standby switch: lbu v0, (s0)'), (0x4a9804, 0x1040001e, 'standby switch: beqz v0: from off'),
+    (0x4a980c, 0xa2000000, 'standby switch, from on: sb zero, (s0)'), (0x4a981c, 0x92040000, 'standby switch: a0 = the byte, saved as STANDBYMODE'),
+    (0x4a9880, 0x8e920000, 'standby switch, from off: lw s2, (s4): the Auto-Shutdown word'), (0x4a9888, 0x1a40ffe1, 'standby switch: blez s2: no shutdown to clear'), (0x4a988c, 0xa2020000, 'standby switch: sb v0 (1), (s0) in the delay slot'),
+    (0x4a9910, 0xae800000, 'standby switch: sw zero, (s4): the word 0, then the save of SAVEPOWERMODE (0x4a9918)'), (0x4a9918, 0x24c68364, 'standby switch: a2 = "SAVEPOWERMODE"'),
+    (0x4a9848, 0x24050001, 'standby switch: a1 = 1'), (0x4a984c, 0x8f99a874, 'standby switch: lw t9, GOT reset_poweroptions_timer'), (0x4a9854, 0x24040001, 'standby switch: a0 = 1 (a1 = 1, a2 = 0)'),
+    (0x4a95a8, 0xaed10000, 'duration refresh 0x4a92a4: sw s1, (s6): the word before the save'), (0x4a9520, 0x8ed30000, 'duration refresh: lw s3, (s6): the old word'), (0x4a9524, 0x12710024, 'duration refresh: beq s3, s1: the same word saves nothing'),
+    (0x4a95a4, 0x24c68364, 'duration refresh: a2 = "SAVEPOWERMODE"'),
+    (0x4a9ba8, 0x24020004, 'duration choice 0x4a9b88: v0 = 4 (10min)'), (0x4a9bac, 0x1062000c, 'duration choice: the same word returns'), (0x4a9bc0, 0x24050004, 'duration choice: refresh(win, 4)'),
+    (0x4a9bcc, 0x24050001, 'duration choice 10min: a1 = 1'), (0x4a9bd4, 0x0320f809, 'duration choice: jalr reset_poweroptions_timer'), (0x4a9bd8, 0x00002025, 'duration choice: a0 = 0 (a1 = 1, a2 = 0)'),
+    (0x4a9cd4, 0x24020001, 'duration choice 0x4a9cb4: v0 = 1 (1min)'), (0x4a9cec, 0x24050001, 'duration choice: refresh(win, 1)'), (0x4a9cf8, 0x24050001, 'duration choice 1min: a1 = 1'),
+    (0x4a9c70, 0x24020002, 'duration choice 0x4a9c50: v0 = 2 (3min)'), (0x4a9c0c, 0x24020003, 'duration choice 0x4a9bec: v0 = 3 (5min)'),
+    (0x4e5fd4, 0x2c430002, 'config_init: STANDBYMODE sltiu v1, v0, 2'), (0x4e5fec, 0x30420001, 'config_init: STANDBYMODE andi v0, v0, 1'), (0x4e6034, 0x2c430005, 'config_init: SAVEPOWERMODE sltiu v1, v0, 5: 0 .. 4'),
+)
+
 LIGHT_PINS = (   # (address, stock word, what it proves)
     (0x659fd8, 0x27bdff80, 'style_get_color: addiu sp, sp, -0x80 (the trampoline resumes here)'),
     (0x65a048, 0x0411ffd4, 'style_get_color: bal style_get_gradient (0x659f9c), returning to STYLE_COLOR_GRADIENT_RET: unmapped there'),
@@ -1233,6 +1273,12 @@ DATA.update({
     'LIGHT_MODE':         (0xa05a7c, 'backlighttime_mode'),   # int: stock's backlight time index, 0 never .. 4 five minutes ([SYSSET] LIGHTTIME; patch/display.c disp_light)
     'LED_MODE':           (0xa05a75, 'atmosphereled_mode'),   # byte: stock's lamp mode, 0 off, 1 orange, 2 blue ([SYSSET] ATMOSPHERELEDMODE; patch/display.c disp_led)
     'LED_FOLLOW':         (0xa05a74, 'ledfollowscreen_flag'),   # byte: stock's Follow Screen switch ([SYSSET] LEDFOLLOWSCREEN; patch/display.c disp_follow)
+    # Settings > System > Buttons & Power (patch/keyspower.c, docs/modules/keyspower.md): stock's own state words
+    'KEY_LOCK_FLAG':      (0xa05aa0, 'keylock_flag'),   # byte: Button Lock on ([SYSSET] LOCKFLAG; the Control Center tile system_keylock writes it too)
+    'KEY_LOCK_MODE':      (0x97caec, 'keylock_mode'),   # int: the lock's mode, 1 volume keys, 2 the other keys, 3 both ([SYSSET] LOCKMODE)
+    'TAP_WAKE':           (0xa05aa1, 'doublewake_flag'),   # byte: Tap to Wake ([SYSSET] DOUBLEWAKE)
+    'STANDBY_FLAG':       (0xa05a8c, 'standbyflag'),   # byte: Auto-Standby on ([SYSSET] STANDBYMODE)
+    'SHUTDOWN_MODE':      (0xa05a84, 'savepowermode'),   # int: Auto-Shutdown, 0 off, 1 .. 4 = 1, 3, 5, 10 minutes ([SYSSET] SAVEPOWERMODE)
     # stock's brightness page code, bound to our slider (patch/display.c; no symbols: the entries and stock's own bindings are pinned, LOCKSCREEN_PINS)
     'BRIGHT_REFRESH':     (0x4a4450, None),   # int (window): label_brightness and slider_brightness from the word lightness
     'BRIGHT_CHANGED':     (0x4a4678, None),   # int (window, event): the slider's EVT_VALUE_CHANGED handler
@@ -1641,6 +1687,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_DEVELOPER_PAGE {pod_pages.DEVELOPER_PAGE_INDEX}')
     h.append(f'#define POD_CACHE_PAGE {pod_pages.CACHE_PAGE_INDEX}')
     h.append(f'#define POD_DISPLAY_PAGE {pod_pages.DISPLAY_PAGE_INDEX}')
+    h.append(f'#define POD_KEYSPOWER_PAGE {pod_pages.KEYSPOWER_PAGE_INDEX}')
     h.append(f'#define POD_FILES_PAGE {pod_pages.FILES_PAGE_INDEX}')
     h.append(f'#define POD_PULLDOWN_PAGE {pod_pages.PULLDOWN_PAGE_INDEX}')
     h.append(f'#define POD_PEQ_PAGE {pod_pages.PEQ_PAGE_INDEX}')
@@ -1931,7 +1978,7 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     patch_radio(patched, ps, len(payload))
-    for a, old, what in LOCKROW_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in LOCKROW_PINS + KEYSPOWER_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf

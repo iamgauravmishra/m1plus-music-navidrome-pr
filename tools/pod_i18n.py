@@ -550,6 +550,34 @@ TEXT = dict([
        'Luz LED', 'Luce LED', 'ไฟ LED', 'Dioda LED', 'Светодиод', 'Світлодіод'),
     _t('Never', '常亮', '常亮', 'しない', '안 함', 'Jamais', 'Nie',
        'Nunca', 'Mai', 'ไม่เลย', 'Nigdy', 'Никогда', 'Ніколи'),
+    # Settings > System > Buttons & Power (patch/keyspower.c, docs/modules/keyspower.md). Our own short labels, as Display's: stock's long texts do not fit the switch row, and some of its translations are wrong
+    # (keylock_volume is "album" in Korean, powerm_saver the screen saver in Thai). The Tap to Wake row's room is the switch row's 173 px: test/pod/i18n.py measures every language. (Button Lock and Off are above.)
+    _t('Buttons & Power', '按键与电源', '按鍵與電源', 'ボタンと電源', '버튼 및 전원', 'Touches et énergie', 'Tasten & Energie',
+       'Botones y energía', 'Tasti e energia', 'ปุ่มและพลังงาน', 'Przyciski i zasilanie', 'Кнопки и питание', 'Кнопки й живлення'),
+    _t('Tap to Wake', '点按唤醒', '點按喚醒', 'タップで復帰', '탭하여 깨우기', 'Réveil tactile', 'Antippen weckt',
+       'Tocar para activar', 'Tocca per riattivare', 'แตะเพื่อปลุก', 'Dotyk wybudza', 'Касание будит', 'Дотик будить'),
+    _t('Auto-Standby', '自动待机', '自動待機', '自動スタンバイ', '자동 대기', 'Veille auto', 'Auto-Standby',
+       'Espera auto', 'Standby auto', 'สแตนด์บายอัตโนมัติ', 'Auto-gotowość', 'Автоожидание', 'Автоочікування'),
+    _t('Auto-Shutdown', '自动关机', '自動關機', '自動電源オフ', '자동 종료', 'Arrêt auto', 'Auto-Abschaltung',
+       'Autoapagado', 'Spegni auto', 'ปิดเครื่องอัตโนมัติ', 'Auto-wyłączanie', 'Автовыключение', 'Автовимкнення'),
+    _t('Volume', '音量', '音量', '音量', '볼륨', 'Volume', 'Lautstärke',
+       'Volumen', 'Volume', 'ระดับเสียง', 'Głośność', 'Громкость', 'Гучність'),
+    _t('Buttons', '按键', '按鍵', 'ボタン', '버튼', 'Touches', 'Tasten',
+       'Botones', 'Tasti', 'ปุ่ม', 'Przyciski', 'Кнопки', 'Кнопки'),
+    _t('Both', '全部', '全部', '両方', '모두', 'Les deux', 'Beides',
+       'Ambos', 'Entrambi', 'ทั้งคู่', 'Oba', 'Оба', 'Обидва'),
+    _t('Lock Volume Only', '仅锁定音量', '僅鎖定音量', '音量のみロック', '볼륨만 잠금', 'Verrouiller le volume', 'Nur Lautstärke sperren',
+       'Bloquear solo volumen', 'Blocca solo volume', 'ล็อกเฉพาะระดับเสียง', 'Blokuj tylko głośność', 'Только громкость', 'Лише гучність'),
+    _t('Lock Buttons Only', '仅锁定按键', '僅鎖定按鍵', 'ボタンのみロック', '버튼만 잠금', 'Verrouiller les touches', 'Nur Tasten sperren',
+       'Bloquear solo botones', 'Blocca solo tasti', 'ล็อกเฉพาะปุ่ม', 'Blokuj tylko przyciski', 'Только кнопки', 'Лише кнопки'),
+    _t('Lock Volume & Buttons', '锁定音量和按键', '鎖定音量與按鍵', '音量とボタンをロック', '볼륨 및 버튼 잠금', 'Verrouiller vol. et touches', 'Lautstärke & Tasten sperren',
+       'Bloquear volumen y botones', 'Blocca volume e tasti', 'ล็อกระดับเสียงและปุ่ม', 'Blokuj głośność i przyciski', 'Громкость и кнопки', 'Гучність і кнопки'),
+    _t('Only effective when the screen is off', '仅在屏幕关闭时有效', '僅在螢幕關閉時有效', '画面がオフのときのみ有効', '화면이 꺼져 있을 때만 작동', 'Actif uniquement écran éteint', 'Nur bei ausgeschaltetem Bildschirm',
+       'Solo con la pantalla apagada', 'Solo a schermo spento', 'ใช้ได้เฉพาะเมื่อปิดหน้าจอ', 'Tylko przy wyłączonym ekranie', 'Только при выключенном экране', 'Лише за вимкненого екрана'),
+    _t('Only one of Auto-Standby and Auto-Shutdown is on at a time', '自动待机和自动关机只能开启其中一个', '自動待機和自動關機只能開啟其中一個', '自動スタンバイと自動電源オフは同時にオンにできません', '자동 대기와 자동 종료 중 하나만 켤 수 있습니다',
+       'Veille auto et Arrêt auto ne peuvent pas être activés ensemble', 'Auto-Standby und Auto-Abschaltung sind nie gleichzeitig aktiv', 'Espera auto y Autoapagado no pueden estar activos a la vez',
+       'Standby auto e Spegni auto non possono essere attivi insieme', 'เปิดได้ครั้งละหนึ่งอย่างระหว่างสแตนด์บายอัตโนมัติและปิดเครื่องอัตโนมัติ', 'Auto-gotowość i Auto-wyłączanie nie mogą działać jednocześnie',
+       'Автоожидание и Автовыключение не работают одновременно', 'Автоочікування й Автовимкнення не працюють одночасно'),
     # A-Z lists (patch/azlist.c, docs/modules/settings.md): Settings > Library, the Index Rail and Section Headers switches
     _t('Index Rail', '索引栏', '索引欄', '索引バー', '색인 막대', 'Index latéral', 'Index-Leiste',
        'Índice lateral', 'Indice laterale', 'แถบดัชนี', 'Indeks boczny', 'Указатель', 'Покажчик'),
@@ -1522,7 +1550,7 @@ def english(key):
 
 
 import pod_pages
-BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',) + tuple(f'{p}%' for p in pod_pages.CHGLIMIT_VALUES) + pod_pages.LIGHTTIME_VALUES[1:]   # shown as they are, no key (the Settings Files labels are file names)
+BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',) + tuple(f'{p}%' for p in pod_pages.CHGLIMIT_VALUES) + pod_pages.LIGHTTIME_VALUES[1:] + pod_pages.SHUTDOWN_VALUES[1:]   # shown as they are, no key (the Settings Files labels are file names)
 
 
 def key_for(english):

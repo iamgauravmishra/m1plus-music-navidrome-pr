@@ -25,6 +25,9 @@ STATE = {
     'm1plus_chargelimit': {'shown': {'pod_check0'}},
     'm1plus_display': {'values': {'pod_value0': '30s', 'pod_value2': 'Orange'}, 'switches': {'pod_switch3': True}},
     'm1plus_lighttime': {'shown': {'pod_check2'}},
+    'm1plus_keyspower': {'values': {'pod_value0': 'Both', 'pod_value3': '5min'}, 'switches': {'pod_switch1': True, 'pod_switch2': False}},
+    'm1plus_keylock': {'shown': {'pod_check3'}},
+    'm1plus_shutdown': {'shown': {'pod_check3'}},
     'm1plus_ledlight': {'shown': {'pod_check1'}},
     'm1plus_nextalbum': {'shown': {'pod_check0'}},
     'm1plus_lockscreen': {'switches': {'pod_switch0': True, 'pod_switch2': True}, 'values': {'pod_value3': 'Large Cover'}},
@@ -380,8 +383,19 @@ def main():
            ('Settings > Display', draw_page(s, 'm1plus_display')),
            ('Settings > Display > Screen Timeout', draw_page(s, 'm1plus_lighttime')),
            ('Settings > Display > LED Light', draw_page(s, 'm1plus_ledlight')),
+           ('Settings > Buttons & Power', draw_page(s, 'm1plus_keyspower')),
+           ('Buttons & Power > Button Lock', draw_page(s, 'm1plus_keylock')),
+           ('Buttons & Power > Auto-Shutdown', draw_page(s, 'm1plus_shutdown')),
            ('Settings > Playback > Continue Playing', draw_page(s, 'm1plus_nextalbum')),
            ], out)
+    # Buttons & Power (docs/modules/keyspower.md): the Settings list with the new System row, the page and its two pickers, in English and in two long languages (out/preview/keyspower/)
+    for loc, tag in (('en_US', 'en'), ('ge_DE', 'de'), ('ru_RU', 'ru')):
+        t = PI.Side(sys.argv[1], True, loc); t.mark = lambda *a: None
+        tr = lambda k: t.strings.get(k, k)
+        sheet([('Settings, whole list', draw_page(t, 'm1plus_settings', full=True)),
+               ('Buttons & Power', draw_page(t, 'm1plus_keyspower', state={'values': {'pod_value0': tr('Both'), 'pod_value3': '5min'}, 'switches': {'pod_switch1': True}})),
+               ('Button Lock', draw_page(t, 'm1plus_keylock')),
+               ('Auto-Shutdown', draw_page(t, 'm1plus_shutdown'))], os.path.join(os.path.dirname(out), 'keyspower', f'keyspower-{tag}.png'))
     # Light Mode (docs/modules/accent.md): the same pages with the hooks' colours and images (tools/palette.py); the Settings page with Light Mode On, and the picker
     lit = os.path.join(os.path.dirname(out), 'settings-light.png')
     sheet([('Light Mode: Settings, first screen', draw_page(s, 'm1plus_settings', lit=True)),

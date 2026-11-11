@@ -177,7 +177,7 @@ def settings_tests(ctx):
     V, D, L, E = P.SETTINGS_PAGE, P.DISPLAY_PAGE, P.LIGHTTIME_PAGE, P.LED_PAGE
     labels = [r.label for r in V.rows]
     di = labels.index('Display')
-    expect(V.rows[di].action == P.ACT_PAGE and V.rows[di].arg == P.DISPLAY_PAGE_INDEX == 70 and P.row_kind(V.rows[di]) == 'link' and labels[di + 1] == 'Appearance',
+    expect(V.rows[di].action == P.ACT_PAGE and V.rows[di].arg == P.DISPLAY_PAGE_INDEX == 70 and P.row_kind(V.rows[di]) == 'link' and labels[di + 1] == 'Buttons & Power',
            'Settings > System > Display opens our page')
     lay = [x.label if isinstance(x, P.Row) else x for x in V.layout]
     expect(lay[-4:] == ['About', P.GAP, 'All System Settings', 'Developer'], f'the last card: All System Settings, then Developer ({lay[-4:]})')
