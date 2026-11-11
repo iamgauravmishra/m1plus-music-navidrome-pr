@@ -326,6 +326,7 @@ def scan_tests(ctx):
 def ring_tests(ctx):
     """The ring of places: save, load, the edges, played marks, the file format, capacity, and what a card that is not there does."""
     expect = ctx.expect
+    SLOTS = O['PC_RING_SLOTS']
     ep = lambda n: f'{ROOT}/Alpha Show/ep{n}.mp3'
     H1, H2 = pc_hash(ep(1)), pc_hash(ep(2))
     m = PM()
@@ -395,15 +396,21 @@ def ring_tests(ctx):
     expect(m2.ring()[1][0][0] == pc_hash('y') and [s[0] for s in m2.ring()[1]][1:] == [s[0] for s in m.ring()[1]], 'and kept when a new slot is written')
     # damaged files are an empty ring
     good = m.fs[RING]
-    for what, data in (('bad magic', b'XXXX' + good[4:]), ('count over 512', b'PCR1' + struct.pack('<I', 513) + bytes(16 * 513)), ('truncated', good[:-5]), ('empty', b''), ('short', b'PCR1')):
+    for what, data in (('bad magic', b'XXXX' + good[4:]), ('count over the ring', b'PCR1' + struct.pack('<I', SLOTS + 1) + bytes(16 * (SLOTS + 1))), ('truncated', good[:-5]), ('empty', b''), ('short', b'PCR1')):
         m3 = PM(); m3.fs[RING] = data
         expect(m3.state(H2)[0] == 0, f'{what}: an empty ring')
     # capacity
-    m4 = PM()
-    for i in range(520): m4.call(PSYMS['pc_mark'], a0=1000 + i, a1=1, count=60000000)
+    m4 = PM()   # (a full ring from the file: its slots are 1000 .. 1000 + SLOTS - 1, the oldest first in time, so the last in the file)
+    m4.fs[RING] = b'PCR1' + struct.pack('<I', SLOTS) + b''.join(struct.pack('<4I', 1000 + i, 0, 0, 1) for i in range(SLOTS - 1, -1, -1))
+    for i in range(SLOTS, SLOTS + 8): m4.call(PSYMS['pc_mark'], a0=1000 + i, a1=1, count=60000000)
     n, slots = m4.ring()
-    expect(n == 512 and slots[0][0] == 1519 and slots[-1][0] == 1008 and len(m4.fs[RING]) == 8 + 512 * 16 and m4.state(1000)[0] == 0 and m4.state(1519)[0] == 2,
-           f'512 places (q2-pod\'s ring): the newest first, the oldest 8 gone ({n}, {slots[0][0]}, {slots[-1][0]})')
+    expect(SLOTS == 4096 and n == SLOTS and slots[0][0] == 1000 + SLOTS + 7 and slots[-1][0] == 1008 and len(m4.fs[RING]) == 8 + SLOTS * 16 and m4.state(1000)[0] == 0 and m4.state(1000 + SLOTS + 7)[0] == 2,
+           f'4096 places: the newest first, the oldest 8 gone ({n}, {slots[0][0]}, {slots[-1][0]})')
+    m4 = PM()   # a ring file of the 512 slots of before is read as it is and grows
+    m4.fs[RING] = b'PCR1' + struct.pack('<I', 512) + b''.join(struct.pack('<4I', 1000 + i, 0, 0, 1) for i in range(511, -1, -1))
+    m4.call(PSYMS['pc_mark'], a0=5000, a1=1, count=60000000)
+    n, slots = m4.ring()
+    expect(n == 513 and slots[0][0] == 5000 and m4.state(1000)[0] == 2, f'a file of 512 slots: every one read, the next mark is the 513th ({n})')
     # a card that is not there
     m5 = PM(); m5.card_mounted = False
     m5.call(PSYMS['pc_mark'], a0=H1, a1=1, count=30000000)
@@ -664,7 +671,7 @@ def cover_tests(ctx):
 SHEET_ROWS = [r[0] for r in pod_ui.PS_SHEET_ROWS]
 PG_WIDGETS = (['podcasts_listview', 'view_grid', 'label_status', 'label_title', 'img_nb_fade', 'label_row_title', 'label_row_sub', 'pg_big', 'img_ah_tint',
                'btn_return', 'btn_backtoplayer', 'btn_more', 'btn_globe', 'btn_search', 'ps_field', 'ps_hint', 'ps_text', 'ps_clear', 'ps_mag', 'btn_selall', 'pg_bar', 'pg_del', 'pg_unsubp', 'pod_pd_scrim', 'pod_pd_card', 'pod_pd_title', 'pod_pd_name', 'pod_pd_track', 'pod_pd_fill', 'pod_pd_count', 'pod_pd_cancel',
-               'pg_sh_scrim', 'pg_sh_card', 'pg_sh_speed_vl', 'pg_sh_refresh_vl', 'pg_sh_order_vl'] + [n for n, *_ in pod_ui.PS_STYLES] + [f'pg_sh_{r}{s}' for r in SHEET_ROWS for s in ('', '_tx', '_hr')])
+               'pg_sh_scrim', 'pg_sh_card', 'pg_sh_speed_vl', 'pg_sh_refresh_vl', 'pg_sh_order_vl', 'pg_sh_filter_vl'] + [n for n, *_ in pod_ui.PS_STYLES] + [f'pg_sh_{r}{s}' for r in SHEET_ROWS for s in ('', '_tx', '_hr')])
 T0 = 1700000000   # 2023-11-14 22:13:20 UTC
 DAY = 86400
 
@@ -1135,7 +1142,7 @@ def asset_tests(ctx):
     expect(tree.find('label_status').h >= 60, 'the hint has room for three lines')
     # the item
     item = next(i for i, r in enumerate(P.ITEMS) if r.label == 'Podcasts')
-    expect(item == 20 == len(P.ITEMS) - 4 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.THEME_PAGE, P.ABOUT_PAGE, P.SEARCH, P.ALBUM_PAGE, P.VINYL, P.FOLDERS, P.QUEUE_PAGE, P.RECORD_PAGE, P.VINYL_WHITE, P.VTHEME_PAGE, P.ONLINEART, P.CACHE_PAGE, P.COVLIST, P.FILES_PAGE, P.UPDATE, P.RELNOTES, P.BG_PAGE, P.ACCENT_PAGE, P.APPEARANCE_PAGE, P.PULLDOWN_PAGE, P.RADIO, P.RADIONP, P.RADIOINFO, P.SONGINFO, P.REGION_PAGE, P.WIFI_PAGE, P.WIFIINFO_PAGE, P.WIFIPASS_PAGE, P.WIFIOTHER_PAGE, P.WIFISEC_PAGE, P.PEQ_PAGE, P.PEQP_PAGE, P.PEQLIB_PAGE, P.TENBAND_PAGE, P.TENCURVE_PAGE, P.TENPREAMP_PAGE, P.AUTOEQ_PAGE, P.PEQBAND_PAGE, P.BATTERY_PAGE, P.CHGLIMIT_PAGE, P.IDLE_PAGE, P.LOCK_PAGE, P.LOCKWALL_PAGE, P.LOCKSTYLE_PAGE, P.LOCKINFO_PAGE, P.NEXTALBUM_PAGE, P.NDLOGIN_PAGE, P.NDSERVER_PAGE, P.NDROOT_PAGE, P.DISPLAY_PAGE, P.LIGHTTIME_PAGE, P.LED_PAGE, P.KEYSPOWER_PAGE, P.KEYLOCK_PAGE, P.SHUTDOWN_PAGE]
+    expect(item == 20 == len(P.ITEMS) - 4 and P.ITEMS[item].action == P.ACT_PODCASTS == 23 and P.ID_CHARS[item] == 'l' and item not in P.DEFAULT_MENU and P.PAGES[P.PAGES.index(P.PODCASTS) + 1:] == [P.TAPE, P.NPSET_PAGE, P.KEYBOARD, P.KEYBOARDS_PAGE, P.THEME_PAGE, P.ABOUT_PAGE, P.SEARCH, P.ALBUM_PAGE, P.VINYL, P.FOLDERS, P.QUEUE_PAGE, P.RECORD_PAGE, P.VINYL_WHITE, P.VTHEME_PAGE, P.ONLINEART, P.CACHE_PAGE, P.COVLIST, P.FILES_PAGE, P.UPDATE, P.RELNOTES, P.BG_PAGE, P.ACCENT_PAGE, P.APPEARANCE_PAGE, P.PULLDOWN_PAGE, P.RADIO, P.RADIONP, P.RADIOINFO, P.SONGINFO, P.REGION_PAGE, P.WIFI_PAGE, P.WIFIINFO_PAGE, P.WIFIPASS_PAGE, P.WIFIOTHER_PAGE, P.WIFISEC_PAGE, P.PEQ_PAGE, P.PEQP_PAGE, P.PEQLIB_PAGE, P.TENBAND_PAGE, P.TENCURVE_PAGE, P.TENPREAMP_PAGE, P.AUTOEQ_PAGE, P.PEQBAND_PAGE, P.BATTERY_PAGE, P.CHGLIMIT_PAGE, P.IDLE_PAGE, P.LOCK_PAGE, P.LOCKWALL_PAGE, P.LOCKSTYLE_PAGE, P.LOCKINFO_PAGE, P.NEXTALBUM_PAGE, P.NDLOGIN_PAGE, P.NDSERVER_PAGE, P.NDROOT_PAGE, P.DISPLAY_PAGE, P.LIGHTTIME_PAGE, P.LED_PAGE, P.KEYSPOWER_PAGE, P.KEYLOCK_PAGE, P.SHUTDOWN_PAGE, P.PCFIND_PAGE]
            and P.PODCASTS.kind == 'podcasts', 'Podcasts is item 20 (saved as "l"), before Search, hidden from the menu by default; its page follows the Pod (the Tape pages come after it)')
     expect(P.EXTRAS_GROUPS[1][1][-3] == 'Podcasts' and P.EXTRAS_GROUP_OF[item] == 1 and P.EXTRAS_GROUPS[0][1] == ('Now Playing', 'Shuffle', 'Pod')
            and P.parse_menu_full(b'123456l\n') == ([1, 2, 3, 4, 5, 6, 20], []) and P.format_menu([1, 2, 20]) == '12l\n', 'Extras lists it in the Library group, before Radio and Search; the saved list carries it as l')

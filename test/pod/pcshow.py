@@ -106,7 +106,7 @@ def machine(card=deep_card, up=True, **kw):
     """The page open on the Shows level (up=False: not opened yet), the font model set for the style labels."""
     m = PCP.page_machine(lambda mm: card(mm, **kw) if kw else card(mm), SM)
     m.px = {m.widgets[n]: px for n, px, *_ in pod_ui.PS_STYLES}
-    m.px.update({m.widgets['pg_sh_speed_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_refresh_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_order_vl']: pod_ui.PS_SHEET_PX})
+    m.px.update({m.widgets['pg_sh_speed_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_refresh_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_order_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_filter_vl']: pod_ui.PS_SHEET_PX})
     m.px.update({m.widgets[n]: px for n, px in (('label_row_title', 21), ('label_row_sub', 18))})
     for r, _, label, *_ in pod_ui.PS_SHEET_ROWS:
         m.px[m.widgets[f'pg_sh_{r}_tx']] = pod_ui.PS_SHEET_PX
@@ -181,9 +181,9 @@ def asset_tests(ctx):
     expect(scrim.type == 'button' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and scrim.get('visible') == 'false' and scrim.get('sensitive') == 'false' and scrim.get('style:normal:bg_color') == pod_ui.PL_DIM,
            'the scrim covers the client area, dimmed as the Playlists menu\'s, hidden and insensitive')
     rh = O['PM_ROW_H']
-    expect((card.x, card.y, card.w, card.h) == (0, 450 - 6 * rh, 320, 6 * rh) and card.get('style:normal:bg_image') == 'pc_sheet6' and card.get('visible') == 'false',
-           'the card is the six-row sheet at the bottom of the window (the payload sets its size and picture)')
-    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 14, 'fourteen rows (Episode Order last): the show sheet\'s five, the episode sheet\'s five (Save Episode), the Shows level\'s Import from Card and Subscriptions, the Subscriptions level\'s Export OPML (Select is the show sheet\'s, relabelled)')
+    expect((card.x, card.y, card.w, card.h) == (0, 450 - 7 * rh, 320, 7 * rh) and card.get('style:normal:bg_image') == 'pc_sheet7' and card.get('visible') == 'false',
+           'the card is the seven-row sheet at the bottom of the window (the payload sets its size and picture)')
+    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 15, 'fifteen rows (Filter last): the show sheet\'s five, the episode sheet\'s five (Save Episode), the Shows level\'s Import from Card and Subscriptions, the Subscriptions level\'s Export OPML (Select is the show sheet\'s, relabelled)')
     for r, icon, label, value, red in pod_ui.PS_SHEET_ROWS:
         row = tree.find(f'pg_sh_{r}')
         ic, tx, hr = tree.find(f'pg_sh_{r}_ic'), tree.find(f'pg_sh_{r}_tx'), tree.find(f'pg_sh_{r}_hr')
@@ -248,7 +248,7 @@ def layout_tests(ctx):
     expect([t for t, _ in meta] == ['Technology · All-In Podcast'] and meta[0][1] == (16, h['y_meta'], 288, 22), f'the meta line: Category · Author, no cadence ({meta})')
     head = texts_of(m, 'label_ps_head', 100)
     expect(head == [('Episodes', (16, h['y_head'] - 100, 288, 28))] and h['h'] == h['y_head'] + 34, f'the Episodes header ({head}); the cells start at {h["h"]}')
-    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.content_height(h['h'], 8), f'the content: header, eight cells of {CELL} px, 20 px of air ({m.props.get((m.sv, "virtual_h"))})')
+    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.content_height(h['h'], 8, more=True), f'the content: header, eight cells of {CELL} px, the Show All Episodes row, 20 px of air ({m.props.get((m.sv, "virtual_h"))})')
     # the latest pill's place: centred under the name, 40 px high
     lat = texts_of(m, 'label_ps_latest')
     expect(len(lat) == 1 and lat[0][0] == 'Latest Episode' and lat[0][1][1] == h['y_latest'] and lat[0][1][3] == 40 and h['y_latest'] == h['y_name'] + 2 * 26 + 12, f'the Latest Episode label ({lat})')
@@ -288,7 +288,7 @@ def layout_tests(ctx):
                      (dict(author='Someone', category=''), 'an author only')):
         m2 = shown(**kw)
         h2 = hdr_model(m2, desc=kw.get('desc', SHOW_DESC), category=kw.get('category', 'Technology'), author=kw.get('author', 'All-In Podcast'))
-        expect(PCP.hdr(m2) == h2['h'] and m2.props.get((m2.sv, 'virtual_h')) == pod_show.content_height(h2['h'], 8), f'{what}: the blocks that are not there leave no gap (header {PCP.hdr(m2)} = {h2["h"]})')
+        expect(PCP.hdr(m2) == h2['h'] and m2.props.get((m2.sv, 'virtual_h')) == pod_show.content_height(h2['h'], 8, more=True), f'{what}: the blocks that are not there leave no gap (header {PCP.hdr(m2)} = {h2["h"]})')
 
 
 def cell_parts(m, i):
@@ -365,7 +365,7 @@ def cell_tests(ctx):
     m2 = shown(entries=[entry(0, t='Short', x=''), entry(1, t=LONG_TITLE, x=LONG_DESC)], files=(0, 1))
     sp, tx_, fl_ = cell_parts(m2, 0)
     expect(tx_['label_ps_ctitle'] == [('Short', (16, 32, 288, 24))] and 'label_ps_cdesc' not in tx_ and tx_['label_ps_pill'][0][1][1] == 131, 'a one line title and no description leave the pill where it is (a fixed height)')
-    expect(PCP.hdr(m2) + 2 * CELL + 20 == m2.props.get((m2.sv, 'virtual_h')), 'two cells, two heights')
+    expect(PCP.hdr(m2) + 2 * CELL + O['PS_MORE_H'] + 20 == m2.props.get((m2.sv, 'virtual_h')), 'two cells, two heights')
 
 
 def tap_tests(ctx):
@@ -642,12 +642,12 @@ def show_sheet(m):
 def sheet_tests(ctx):
     """The show's sheet: each row shown only where it applies, in the More sheet's layout; and the cell's."""
     expect = ctx.expect
-    GLASS = {n: f'pc_sheet{n}' for n in range(1, 7)}
+    GLASS = {n: f'pc_sheet{n}' for n in range(1, 8)}
     m = shown()
     rows, h, glass, moves = show_sheet(m)
-    expect(rows == ['speed', 'order', 'refresh', 'select', 'markall', 'unsub'] and h == 300 and glass == GLASS[6], f'a subscribed show with files and unplayed episodes: Playback Speed, Episode Order, Refresh Feed, Select Episodes, Mark All as Played, Unsubscribe ({rows}, {h}, {glass})')
-    expect(all(moves[r][2] == 0 and moves[r][3] == i * 50 for i, r in enumerate(rows)) and ('widget_move', m.widgets['pg_sh_card'], 0, 150) in m.calls and ('widget_resize', m.widgets['pg_sh_card'], 320, 300) in m.calls,
-           'the rows are 50 px each from the top of the card, which is 300 px high at the bottom of the window (y 150 of 450)')
+    expect(rows == ['speed', 'order', 'filter', 'refresh', 'select', 'markall', 'unsub'] and h == 350 and glass == GLASS[7], f'a subscribed show with files and unplayed episodes: Playback Speed, Episode Order, Filter, Refresh Feed, Select Episodes, Mark All as Played, Unsubscribe ({rows}, {h}, {glass})')
+    expect(all(moves[r][2] == 0 and moves[r][3] == i * 50 for i, r in enumerate(rows)) and ('widget_move', m.widgets['pg_sh_card'], 0, 100) in m.calls and ('widget_resize', m.widgets['pg_sh_card'], 320, 350) in m.calls,
+           'the rows are 50 px each from the top of the card, which is 350 px high at the bottom of the window (y 100 of 450)')
     expect(all(flags(m, f'pg_sh_{r}') == (0, 0) for r in ('dl', 'rm', 'mark', 'unmark')) and flags(m, 'pg_sh_scrim') == (1, 1) and flags(m, 'pg_sh_card') == (1, 1), 'the episode rows stay hidden and insensitive; the scrim and the card show')
     hair = [r for r in rows if m.props.get((m.widgets[f'pg_sh_{r}_hr'], 'visible')) == 1]
     expect(hair == rows[1:], 'a hairline on the top of every row but the first')
@@ -678,16 +678,16 @@ def sheet_tests(ctx):
     # a show without a feed (bravo): no Refresh Feed, no Unsubscribe
     m = machine(); open_show(m, 'bravo')
     rows, h, glass, _ = show_sheet(m)
-    expect(rows == ['speed', 'order', 'select', 'markall'] and h == 200 and glass == GLASS[4], f'a show of files (no feed): Playback Speed, Episode Order, Select Episodes, Mark All as Played; a 200 px sheet ({rows}, {h}, {glass})')
+    expect(rows == ['speed', 'order', 'filter', 'select', 'markall'] and h == 250 and glass == GLASS[5], f'a show of files (no feed): Playback Speed, Episode Order, Filter, Select Episodes, Mark All as Played; a 250 px sheet ({rows}, {h}, {glass})')
     # all played: no Mark All as Played
     for i in (1, 2, 3): m.call(PSYMS['pc_mark'], a0=PCP.pc_hash(f'{RP}/bravo/b{i}.mp3'), a1=1, count=2000000)
     PCP.click(m, 'pg_sh_scrim')
     rows, h, glass, _ = show_sheet(m)
-    expect(rows == ['speed', 'order', 'select'] and h == 150 and glass == GLASS[3], f'every episode played: Mark All as Played is gone ({rows})')
+    expect(rows == ['speed', 'order', 'filter', 'select'] and h == 200 and glass == GLASS[4], f'every episode played: Mark All as Played is gone ({rows})')
     # a subscribed show with nothing on the card: no Select Episodes
     m = machine(entries=[entry(i) for i in range(3)], files=()); open_show(m)
     rows, h, glass, _ = show_sheet(m)
-    expect(rows == ['speed', 'order', 'refresh', 'markall', 'unsub'] and h == 250 and glass == GLASS[5], f'nothing on the card: no Select Episodes ({rows}, {h}, {glass})')
+    expect(rows == ['speed', 'order', 'filter', 'refresh', 'markall', 'unsub'] and h == 300 and glass == GLASS[6], f'nothing on the card: no Select Episodes ({rows}, {h}, {glass})')
     # a show with no episode and no mark: its own sheet (speed, refresh, unsubscribe)
     m = machine(entries=[]); open_show(m)
     rows, h, glass, _ = show_sheet(m)
@@ -824,7 +824,7 @@ def mark_all_tests(ctx):
     c = PCP.all_cells(m)
     expect(all(c[i]['played'] for i in range(8)), 'every title is grey')
     PCP.click(m, 'btn_more')
-    expect(sheet_state(m)[0] == ['speed', 'order', 'refresh', 'select', 'unsub'], 'and the row is gone from the sheet')
+    expect(sheet_state(m)[0] == ['speed', 'order', 'filter', 'refresh', 'select', 'unsub'], 'and the row is gone from the sheet')
     expect(m.ring() is not None, 'the ring is written')
 
 
@@ -901,7 +901,7 @@ def unsub_tests(ctx):
     expect(m.word(DL.pn_at(DL.DCANCEL)) == DL.key_of(DEEP, 'e5.mp3') and DL.fn(m, 'pn_dl_count') <= 1, 'the running download is told to stop (the worker drops it) and nothing else of the show is queued')
     expect(PCP.title_text(m).startswith('All-In') and flags(m, 'btn_more') == (1, 1), 'the page is still the show (it has files)')
     PCP.click(m, 'btn_more')
-    expect(sheet_state(m)[0] == ['speed', 'order', 'select', 'markall'], 'its sheet has no Refresh Feed and no Unsubscribe now')
+    expect(sheet_state(m)[0] == ['speed', 'order', 'filter', 'select', 'markall'], 'its sheet has no Refresh Feed and no Unsubscribe now')
     PCP.click(m, 'pg_sh_scrim')
     shows, _ = m.shows()
     expect([s['feed'] for s in shows if s['dir'] == DEEP] == [''], 'the show is no subscription: pc_scan_shows reads no feed address')

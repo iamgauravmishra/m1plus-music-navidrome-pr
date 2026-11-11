@@ -103,7 +103,7 @@ def select_tests(ctx):
            'Select All and the bar show; the "..." and Now Playing go (hidden and insensitive)')
     expect(m.props.get((t, 'visible')) == 1, 'the title shows (in select mode it is "N Selected", not the collapsing show title)')
     expect(m.props.get((back, 'style:normal:icon')) == 'ah_nav_close' and m.props.get((back, 'style:pressed:icon')) == 'ah_nav_close_down', 'Back becomes the glass x')
-    expect(m.props.get((m.sv, 'virtual_h')) == h0 + SG_BAR_H, 'the content is the bar\'s height longer')
+    expect(m.props.get((m.sv, 'virtual_h')) == h0 + SG_BAR_H - O['PS_MORE_H'], 'the content is the bar\'s height longer (the Show All Episodes row goes while rows are marked)')
     mk = all_marks(m)
     expect(sorted(mk) == [0, 1, 3] and len({b for _, b in mk.values()}) == 1, f'a mark on each cell that can be marked (the two files and the .part), all unselected ({sorted(mk)})')
     expect(all(x == O['PS_CELL_X'] + (O['SG_SEL_COL'] - 6 - SG_MARK) // 2 for x, _ in mk.values()), 'in the mark column that opens left of the texts')

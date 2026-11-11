@@ -769,8 +769,8 @@ def downloads_page(s, ip, dl, scroll=0, marked=None, line='7 episodes · 217 MB 
     im = Image.new('RGBA', (W, max(L['h'], WIN - NAV)), (0, 0, 0, 255))
     s.text(im, o['SG_TITLE_X'], o['PP_TITLE_H'] / 2, 'Downloads', o['PP_TITLE_PX'], WHITE)   # (the large heading scrolls with the content; the navbar takes the small title past SG_COLLAPSE)
     if line: s.text(im, o['PP_LINE_X'], L['y_line'] + o['PP_LINE_H'] / 2, PS.fit(s, line, 15, W - 2 * o['PP_LINE_X']), 15, GREY)
-    if ip: s.text(im, o['PP_SHOWS_X'], L['y_ip'] + o['PP_HEAD_H'] / 2, 'In Progress', 20, WHITE)
-    if dl: s.text(im, o['PP_SHOWS_X'], L['y_dh'] + o['PP_HEAD_H'] / 2, 'Downloaded', 20, WHITE)
+    if L['y_ip'] is not None: s.text(im, o['PP_SHOWS_X'], L['y_ip'] + o['PP_HEAD_H'] / 2, 'In Progress', 20, WHITE)
+    if L['y_dh'] is not None: s.text(im, o['PP_SHOWS_X'], L['y_dh'] + o['PP_HEAD_H'] / 2, 'Downloaded', 20, WHITE)
     for i, y in enumerate(L['rows'] if not empty else []):
         if i < len(ip): sh, title, sub = ip[i]; played = False
         else:

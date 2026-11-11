@@ -114,6 +114,14 @@ static struct {
      * ("Source/Kind/Name", as the index writes it); estamp: the comment line that goes first into the file. The state is written after the code. */
     volatile int estate, ecode, emode;
     char epath[PN_PATH], estamp[PN_PATH];
+    /* The archive job (docs/modules/podcasts.md "All episodes"): arstate PN_AR_*, arcode the PN_* of a failure, arhash the show's hash (pc_show_t.hash), ardir its folder, arroot the Podcasts folder. */
+    volatile int arstate, arcode;
+    volatile unsigned arn; /* the items the running attempt has written */
+    volatile unsigned
+        arfh; /* the show whose job failed last (not a cancel) and the PN_* why: kept while the app runs, so that the show's row can offer a retry; 0 = none */
+    volatile int arfc;
+    unsigned arhash;
+    char ardir[PC_FILE], arroot[PC_FILE + 20];
 } pn __attribute__((section(".scratch")));
 
 enum {
@@ -125,7 +133,8 @@ enum {
     PN_KIND_PICK = 6,
     PN_KIND_UPDATE = 7,
     PN_KIND_CHART = 8,
-    PN_KIND_EQ = 9
+    PN_KIND_EQ = 9,
+    PN_KIND_ARCH = 10
 };
 enum { PN_Q_FREE = 0, PN_Q_WAIT = 1, PN_Q_ACTIVE = 2 };
 
@@ -176,9 +185,9 @@ static void pn_set(unsigned feed, int code, unsigned fresh) {
 
 int pn_busy(void) { return pn.busy && (pn.kind == PN_KIND_REFRESH || !pn.kind); }
 int pn_job_busy(void) {
-    return pn.busy &&
-           (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW || pn.kind == PN_KIND_ART ||
-            pn.kind == PN_KIND_PICK || pn.kind == PN_KIND_UPDATE || pn.kind == PN_KIND_CHART || pn.kind == PN_KIND_EQ);
+    return pn.busy && (pn.kind == PN_KIND_SEARCH || pn.kind == PN_KIND_PREVIEW || pn.kind == PN_KIND_ART ||
+                       pn.kind == PN_KIND_PICK || pn.kind == PN_KIND_UPDATE || pn.kind == PN_KIND_CHART ||
+                       pn.kind == PN_KIND_EQ || pn.kind == PN_KIND_ARCH);
 }
 void pn_cancel(void) { pn.cancel = 1; }
 int pn_cancelling(void) { return pn_busy() && pn.cancel; }
@@ -785,11 +794,26 @@ static int pn_part_size(const char *part, unsigned *size) {
     return 1;
 }
 
+/* The enclosure url and length of the episode whose file is name: from the show's .episodes, else (an episode of the feed's archive) from its .archive. 1 when found. dir: the show folder's path. */
+static int pn_find_url(const char *dir, const char *name, char *url, unsigned usize, unsigned *length) {
+    static const char *const files[2] = {".episodes", ".archive"};
+    static const unsigned caps[2] = {PN_EPS_MAX, PC_ARCH_BYTES};
+    char path[PN_PATH];
+    int k, found = 0;
+    for (k = 0; k < 2 && !found; ++k) {
+        unsigned n = 0;
+        char *buf =
+            pn_join(path, sizeof path, dir, files[k], (const char *)0) ? m1_read_file(path, caps[k], &n) : (char *)0;
+        found = buf && pf_find_episode(buf, n, name, url, usize, length);
+        free(buf);
+    }
+    return found;
+}
+
 /* The slot's episode, to the end: PN_OK when the file is in place, PN_CANCELLED / PN_PAUSED for the page's say, else the failure. */
 static int pn_dl_run(struct dx *d, const char *show, const char *name, unsigned key) {
-    char file[PN_PATH], eps_path[PN_PATH], url[PF_URL];
-    char *eps;
-    unsigned n = 0, length = 0, tries = 0, start, kb, i;
+    char file[PN_PATH], url[PF_URL];
+    unsigned n, length = 0, tries = 0, start, kb, i;
     int code, retry, again, restarted = 0;
     if (!pn_join(d->dir, sizeof d->dir, pn.droot, show, (const char *)0) ||
         !pn_join(file, sizeof file, d->dir, name, (const char *)0) || strlen(file) + sizeof(".part") > PN_DL_PATH_MAX)
@@ -801,10 +825,7 @@ static int pn_dl_run(struct dx *d, const char *show, const char *name, unsigned 
         unlink(d->part);
         return PN_OK;
     }
-    pn_join(eps_path, sizeof eps_path, d->dir, ".episodes", (const char *)0);
-    eps = m1_read_file(eps_path, PN_EPS_MAX, &n);
-    i = eps && pf_find_episode(eps, n, name, url, sizeof url, &length);
-    free(eps);
+    i = pn_find_url(d->dir, name, url, sizeof url, &length);
     if (!i || !(pn_starts(url, "http://") || pn_starts(url, "https://")))
         return PN_GONE; /* the entry is gone, or has no address */
     d->buf = calloc(PN_DL_BUF, 1);
@@ -2348,14 +2369,14 @@ int pn_unsubscribe(const char *root, const pc_show_t *s) {
  * downloads of the show go; with no episode file left on the card the show's own files (.show, .episodes, cover.jpg) and its folder (rmdir: one with anything else in it is left) go too. No audio file is ever
  * deleted, so the playing episode stays. 0: the .show could not be written (nothing else was touched); 1: the show stays on the card (episode files are left); 2: it is gone. */
 int pn_unsubscribe_show(const char *root, const pc_show_t *s) {
-    static const char *const own[] = {".show", ".episodes", "cover.jpg"};
+    static const char *const own[] = {".show", ".episodes", ".archive", "cover.jpg"};
     char path[PN_PATH];
     pc_ep_t *all;
-    int m, i, left = 0;
+    int m, i, left = 0, cap = pc_eps_cap(s);
     if (!pn_unsubscribe(root, s)) return 0;
-    all = calloc(PC_MAX_EPS, sizeof *all);
+    all = calloc((unsigned)cap, sizeof *all);
     if (!all) return 1; /* (what is left is not known: everything stays) */
-    m = pc_load_show(s, all, PC_MAX_EPS);
+    m = pc_load_show(s, all, cap);
     for (i = 0; i < m; ++i) {
         unsigned key;
         if (!all[i].file[0]) continue;
@@ -2796,4 +2817,219 @@ int pn_eq_code(void) { return pn.ecode; }
 int pn_eq_mode(void) { return pn.emode; }
 void pn_eq_reset(void) {
     if (!pn.busy) pn.estate = PN_E_IDLE, pn.ecode = 0;
+}
+
+/* ---------------------------------------------------------------------------
+ * All episodes (docs/modules/podcasts.md "All episodes")
+ *
+ * One job of the worker slot (PN_KIND_ARCH): the show's feed is fetched again and every enclosed item (at most PC_ARCH_MAX, PC_ARCH_BYTES) is written as a line of the show's .archive, in the .episodes format, as the parser
+ * reads it (pf_set_sink: nothing is held; the sink writes). An item whose guid the show's .episodes has takes that line's file name and description, so a downloaded episode keeps its file; the others are named as a refresh names them
+ * (pf_item_file, a number when two of one day have one title: the names are looked up by their hash). The text goes to .archive.tmp and replaces .archive at the end (m1_commit); a failed or cancelled job leaves none.
+ */
+#define PN_ARCH_CAP 33554432u /* a feed this large (decoded) is parsed up to here and cut */
+#define PN_ARCH_OUT 16384
+#define PN_ARCH_TRIES 3 /* requests for the feed before its error shows (as the charts) */
+#define PN_ARCH_WAIT 1 /* seconds between two of them */
+#define PN_ARCH_LIMIT 300 /* seconds for one request */
+
+struct ax {
+    int fd, werr, full, capped;
+    unsigned n, bytes, used, nknown;
+    unsigned long long total;
+    pc_ep_t *known; /* the .episodes entries: guid hash, file name, description */
+    unsigned *names; /* pc_hash of every file name written (PC_ARCH_MAX) */
+    char *out; /* PN_ARCH_OUT bytes waiting for their write */
+    pf_parser_t *p;
+};
+
+static int pn_ax_flush(struct ax *x) {
+    if (x->used && !m1_write_all(x->fd, x->out, x->used)) x->werr = 1;
+    x->used = 0;
+    return !x->werr;
+}
+
+static int pn_ax_sink(void *ctx, const pf_item_t *it) {
+    struct ax *x = ctx;
+    char f[PC_FILE], od[PC_DESC], ln[1536];
+    unsigned g, i, lo, h, tries;
+    if (x->full || x->werr) return 0;
+    if (x->n >= PC_ARCH_MAX) return x->full = 1, 0;
+    f[0] = od[0] = 0;
+    g = pc_guid_hash(it->guid, strlen(it->guid));
+    for (i = 0; i < x->nknown; ++i)
+        if (x->known[i].guid == g) {
+            memcpy(f, x->known[i].file, sizeof f), memcpy(od, x->known[i].desc, sizeof od);
+            break;
+        }
+    for (tries = 1; !f[0] && tries < 10;
+         ++tries) { /* a name no earlier line has (the .episodes names are the earlier lines' own) */
+        pf_item_file(it, tries, f, sizeof f);
+        h = pc_hash(f);
+        for (i = 0; i < x->n; ++i)
+            if (x->names[i] == h) {
+                f[0] = 0;
+                break;
+            }
+    }
+    if (!f[0]) pf_item_file(it, 1, f, sizeof f); /* (ten of one day and one title: the last two share a name) */
+    lo = pf_item_line(it, f, od, ln, sizeof ln);
+    if (x->bytes + lo > PC_ARCH_BYTES) return x->full = 1, 0;
+    if (x->used + lo > PN_ARCH_OUT && !pn_ax_flush(x)) return 0;
+    memcpy(x->out + x->used, ln, lo);
+    x->used += lo, x->bytes += lo;
+    x->names[x->n++] = pc_hash(f);
+    pn.arn = x->n; /* (the page's count) */
+    return 1;
+}
+
+static unsigned pn_ax_write(char *d, unsigned size, unsigned nmemb, void *user) {
+    struct ax *x = user;
+    unsigned len = size * nmemb;
+    if (x->full || x->werr) return 0; /* (the archive is complete, or the card failed: the transfer stops) */
+    if (x->total + len > PN_ARCH_CAP) {
+        pf_push(x->p, d, (unsigned)(PN_ARCH_CAP - x->total));
+        x->total = PN_ARCH_CAP, x->capped = 1;
+        return 0;
+    }
+    x->total += len;
+    pf_push(x->p, d, len);
+    return x->full || x->werr ? 0 : len;
+}
+
+/* One attempt at the feed: a fresh .archive.tmp and parser, the count back at 0, the transfer; the temp file replaces dst (m1_commit) when the attempt succeeded and is removed when it did not. *retry: the failure may pass (the network,
+ * a time-out, a stall, a 5xx, 408, 429); a 404, a page that is not a feed, storage, memory and a cancel are final. */
+static int pn_arch_try(struct ax *x, const char *feed, const char *tmp, const char *dst, int *retry) {
+    char err[160];
+    void *h;
+    long http = 0;
+    int rc = 0, code = 0, ok;
+    *retry = 0;
+    x->werr = x->full = x->capped = 0;
+    x->n = x->bytes = x->used = 0;
+    x->total = 0;
+    pn.arn = 0;
+    x->p = pf_new();
+    x->fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (!x->p)
+        code = PN_MEM;
+    else if (x->fd < 0 || !m1_write_all(x->fd, "M1PLUS-EPISODES 1\n", 18))
+        code = PN_STORAGE;
+    else {
+        pf_set_sink(x->p, pn_ax_sink, x);
+        h = pn_easy(feed, pn_ax_write, x, err, (void *)0);
+        if (!h)
+            code = PN_MEM;
+        else {
+            curl_easy_setopt(h, CURLOPT_TIMEOUT, PN_ARCH_LIMIT); /* (a feed of two thousand items is 10 MB and more) */
+            curl_easy_setopt(h, CURLOPT_LOW_SPEED_LIMIT,
+                             1); /* a stall: under 1 byte a second for PN_DL_STALL seconds, as the downloads */
+            curl_easy_setopt(h, CURLOPT_LOW_SPEED_TIME, PN_DL_STALL);
+            rc = curl_easy_perform(h);
+            curl_easy_getinfo(h, CURLINFO_RESPONSE_CODE, &http);
+            curl_easy_cleanup(h);
+            if (x->werr)
+                code = PN_STORAGE;
+            else if (rc == 0 || (rc == CURLE_WRITE_ERROR && (x->full || x->capped)))
+                code = pf_is_feed(x->p) ? PN_OK : PN_NOTFEED;
+            else
+                code = pn_rc(rc, http);
+            if (!code && !x->n) code = PN_NOTFEED; /* (a feed with no enclosed item gives no archive) */
+            if (code == PN_NET || (rc == CURLE_HTTP_RETURNED_ERROR && (http >= 500 || http == 408 || http == 429)))
+                *retry = 1;
+        }
+    }
+    if (!code && pn.cancel) code = PN_CANCELLED; /* (it arrived all the same: a cancel leaves no archive) */
+    if (x->fd >= 0) {
+        ok = !code && pn_ax_flush(x) && m1_card_mounted();
+        if (!m1_commit(x->fd, ok, tmp, dst) && !code) code = PN_STORAGE;
+        x->fd = -1;
+    }
+    pf_free(x->p);
+    x->p = (pf_parser_t *)0;
+    return code;
+}
+
+#define pn_arch_end(state, code) pn_job_end(&pn.arstate, &pn.arcode, state, code)
+
+static void pn_arch_run(void) {
+    struct ax x;
+    char dir[PN_PATH], file[PN_PATH], tmp[PN_PATH], dst[PN_PATH];
+    char *buf;
+    unsigned n = 0;
+    pc_show_t s;
+    int code = 0, attempt, retry = 0;
+    memset(&x, 0, sizeof x);
+    memset(&s, 0, sizeof s);
+    x.fd = -1;
+    if (!pn_join(dir, sizeof dir, pn.arroot, pn.ardir, (const char *)0) ||
+        !pn_join(file, sizeof file, dir, ".show", (const char *)0))
+        return pn_arch_end(PN_AR_FAILED, PN_STORAGE);
+    buf = m1_read_file(file, PN_SHOW_MAX, &n);
+    if (!buf) return pn_arch_end(PN_AR_FAILED, PN_STORAGE);
+    pc_parse_show(buf, n, &s);
+    free(buf);
+    if (!s.feed[0]) return pn_arch_end(PN_AR_FAILED, PN_NOTFEED);
+    x.known = calloc(PC_MAX_EPS, sizeof *x.known);
+    x.names = calloc(PC_ARCH_MAX + 1, sizeof *x.names);
+    x.out = calloc(1, PN_ARCH_OUT);
+    if (!x.known || !x.names || !x.out)
+        code = PN_MEM;
+    else if (!m1_card_mounted() || !pn_join(file, sizeof file, dir, ".episodes", (const char *)0) ||
+             !pn_join(tmp, sizeof tmp, dir, ".archive.tmp", (const char *)0) ||
+             !pn_join(dst, sizeof dst, dir, ".archive", (const char *)0))
+        code = PN_STORAGE;
+    if (!code) {
+        buf = m1_read_file(file, PN_EPS_MAX, &n);
+        if (buf) x.nknown = (unsigned)pc_parse_eps(buf, n, x.known, PC_MAX_EPS);
+        free(buf);
+        for (attempt = 0; attempt < PN_ARCH_TRIES; ++attempt) {
+            if (pn.cancel) {
+                code = PN_CANCELLED;
+                break;
+            }
+            code = pn_arch_try(&x, s.feed, tmp, dst, &retry);
+            if (!code || !retry) break;
+            if (attempt + 1 < PN_ARCH_TRIES && !pn.cancel) sleep(PN_ARCH_WAIT);
+        }
+    }
+    free(x.known);
+    free(x.names);
+    free(x.out);
+    if (code && code != PN_CANCELLED)
+        pn.arfc = code, pn.arfh = pn.arhash;
+    else if (pn.arfh == pn.arhash)
+        pn.arfh = 0; /* (a success or a cancel: nothing to retry) */
+    pn_arch_end(code ? PN_AR_FAILED : PN_AR_DONE, code);
+}
+
+static void *pn_armain(void *arg) {
+    (void)arg;
+    pn_arch_run();
+    return (void *)0;
+}
+
+int pn_arch_start(const char *root, const pc_show_t *s) {
+    int g;
+    if (pn.busy) return PN_BUSY;
+    if (!s->feed[0]) return PN_NOFEED;
+    g = pn_guard();
+    if (g) return g;
+    pn.arroot[0] = pn.ardir[0] = 0;
+    pn_cat(pn.arroot, sizeof pn.arroot, root);
+    pn_cat(pn.ardir, sizeof pn.ardir, s->dir);
+    pn.arhash = s->hash, pn.arcode = 0, pn.arn = 0;
+    if (pn.arfh == s->hash) pn.arfh = 0;
+    __sync_synchronize();
+    pn.arstate = PN_AR_RUNNING;
+    g = pn_spawn(pn_armain, PN_KIND_ARCH);
+    if (g) pn.arstate = PN_AR_IDLE;
+    return g;
+}
+int pn_arch_state(void) { return pn.arstate; }
+int pn_arch_code(void) { return pn.arcode; }
+int pn_arch_failed(unsigned hash) { return pn.arfh == hash ? pn.arfc : 0; }
+unsigned pn_arch_count(void) { return pn.arn; }
+unsigned pn_arch_hash(void) { return pn.arhash; }
+void pn_arch_reset(void) {
+    if (!pn.busy) pn.arstate = PN_AR_IDLE, pn.arcode = 0;
 }

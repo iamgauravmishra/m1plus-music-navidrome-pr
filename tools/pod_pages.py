@@ -295,6 +295,7 @@ LED_PAGE_INDEX = 72       # ... and its LED Light picker
 KEYSPOWER_PAGE_INDEX = 73 # Settings > System > Buttons & Power, then its Button Lock and Auto-Shutdown pickers
 KEYLOCK_PAGE_INDEX = 74
 SHUTDOWN_PAGE_INDEX = 75
+PCFIND_PAGE_INDEX = 76    # the Podcasts page's search inside one show (last)
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -850,6 +851,9 @@ WIFIPASS_PAGE = Page('m1plus_wifipass', 'm1plus_wifipass_page', 'Enter Password'
 WIFIOTHER_PAGE = Page('m1plus_wifiother', 'm1plus_wifiother_page', 'Join Wi-Fi Network', kind='wifiother')
 WIFISEC_PAGE = Page('m1plus_wifisec', 'm1plus_wifisec_page', 'Security', kind='wifisec')
 
+# The search inside one show (patch/pcfind.c, docs/modules/podcasts.md "Search inside a show"): the Search page's field and keyboard over a list of one show's episodes; opened by the Show page's search button, no menu row.
+PCFIND_PAGE = Page('m1plus_pcfind', 'm1plus_pcfind_page', 'Search Episodes', kind='pcfind')
+
 # PAGES[0] is the entry page.
 # Settings > Playback > EQ (patch/peq_ui.c, docs/modules/peq.md): stock's Equalizer switch, the 10-Band EQ (our ten-band curve; its curve's name in grey before the check) and a row per APO / AutoEQ preset in
 # /mnt/mmc/EQ, the one that plays checked. A cards page whose rows the payload binds itself (so kind 'peq', no exported rows): the switch in a card of its own, then a card of 10-Band EQ and
@@ -948,7 +952,7 @@ NDLOGIN_PAGE = Page('m1plus_ndlogin', 'm1plus_ndlogin_page', 'Sign In', kind='nd
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE]
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -963,6 +967,6 @@ assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] 
 assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
 assert PAGES[NEXTALBUM_PAGE_INDEX] is NEXTALBUM_PAGE and NEXTALBUM_PAGE_INDEX == PAGES.index(NDLOGIN_PAGE) - 1
 assert PAGES[NDLOGIN_PAGE_INDEX] is NDLOGIN_PAGE and PAGES[NDSERVER_PAGE_INDEX] is NDSERVER_PAGE and PAGES[NDROOT_PAGE_INDEX] is NDROOT_PAGE
-assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 4
-assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 5
+assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 2 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 1
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

@@ -33,6 +33,14 @@ typedef struct pf_parser pf_parser_t;
 pf_parser_t *pf_new(void); /* NULL when there is no memory */
 void pf_free(pf_parser_t *p);
 void pf_push(pf_parser_t *p, const char *data, unsigned n); /* the next bytes of the feed, any split */
+/* The streaming mode (the archive, docs/modules/podcasts.md "All episodes"): with a sink set every enclosed item goes to fn(ctx, item) as its end tag is read and none is kept (pf_items stays 0, pf_seen counts them).
+ * The item (and its note) is valid during the call only. Set before the first pf_push. */
+typedef int (*pf_sink_t)(void *ctx, const pf_item_t *it);
+void pf_set_sink(pf_parser_t *p, pf_sink_t fn, void *ctx);
+/* One .episodes line (with its LF) for an item with file name f and, when the feed gave none, description od ("" = none), into ln (cap bytes); its length. A line that does not fit is cut at the field before: callers give 1536. */
+unsigned pf_item_line(const pf_item_t *it, const char *f, const char *od, char *ln, unsigned cap);
+/* The item's file name as a refresh makes it: "YYYY-MM-DD Title.ext" (tries 1), or numbered for tries 2..9 (two items of one day and one title). */
+void pf_item_file(const pf_item_t *it, unsigned tries, char *out, unsigned size);
 int pf_is_feed(const pf_parser_t *p); /* an <rss> or <channel> element was seen */
 int pf_items(const pf_parser_t *p); /* items kept (at most PF_KEEP), newest first */
 const pf_item_t *pf_item(const pf_parser_t *p, int i); /* kept item i, 0 <= i < pf_items (newest first), else NULL */

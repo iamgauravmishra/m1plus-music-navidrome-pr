@@ -49,7 +49,7 @@ ORDER = ['Sub One', 'bravo', 'Alpha Show', 'Sub Two']
 def style_px(m):
     m.px = {m.widgets[n]: px for n, px, *_ in pod_ui.PS_STYLES}
     m.px.update({m.widgets[n]: px for n, px in (('label_row_title', 21), ('label_row_sub', 18))})
-    m.px.update({m.widgets['pg_sh_speed_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_refresh_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_order_vl']: pod_ui.PS_SHEET_PX})
+    m.px.update({m.widgets['pg_sh_speed_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_refresh_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_order_vl']: pod_ui.PS_SHEET_PX, m.widgets['pg_sh_filter_vl']: pod_ui.PS_SHEET_PX})
 
 
 def machine(extra=None, cardf=card):

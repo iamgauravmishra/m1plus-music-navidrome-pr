@@ -427,7 +427,7 @@ void m1_pill_place(m1_pill_t *p, int y) {
 
 void m1_sheet_rows(void *scrim, void *card, int w, void *const *rows, void *const *hrs, int n) {
     static const char *const glass[] = {"",          "pc_sheet1", "pc_sheet2", "pc_sheet3",
-                                        "pc_sheet4", "pc_sheet5", "pc_sheet6"};
+                                        "pc_sheet4", "pc_sheet5", "pc_sheet6", "pc_sheet7"};
     int i, h = n * PM_ROW_H;
     for (i = 0; i < n; ++i) {
         widget_move(rows[i], 0, i * PM_ROW_H);

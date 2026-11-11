@@ -106,6 +106,7 @@ static struct {
     ls_cpoll_t
         cp; /* a source's cover was asked for and is not there yet: the shared cover poll (patch/libsrc.c ls_cover_poll) */
     void *spin; /* a source's page: the loading spinner (se_spin) */
+    int titles; /* search_titles_open: the matcher is held for the Podcasts page's in-show search (no page of ours) */
 } se __attribute__((section(".scratch")));
 
 static void se_redraw(void) { grid_sv_redraw(se.sv); }
@@ -458,6 +459,90 @@ static unsigned se_key(void *rec, int kind, unsigned *key, unsigned *pn, int py)
 }
 
 /* ---------------------------------------------------------------------------
+ * Titles: the same folding, terms and initials for a list of titles that is not the library (the Podcasts page's search inside one show, patch/pcfind.c). The state is this file's `se`, so
+ * it refuses while a Search page exists; one title is one key. A term that is all digits is a whole number: it matches a run of digits (leading zeros dropped on both sides) that is bounded by
+ * characters that are not digits, so 37 is in "Ep 37", "EP037" and "#37", not in "137", "2037" or "370".
+ */
+static void se_py_hold(void);
+static int se_digit(unsigned c) { return c - '0' < 10u; }
+
+static int se_num_find(const unsigned *key, unsigned n, const unsigned *t, unsigned tn) {
+    unsigned i = 0, j, a, b, z = 0;
+    while (z < tn && t[z] == '0') ++z; /* the term without its leading zeros */
+    while (i < n) {
+        if (!se_digit(key[i])) {
+            ++i;
+            continue;
+        }
+        a = i;
+        while (i < n && se_digit(key[i])) ++i;
+        b = i; /* the run [a, b) */
+        while (a < b && key[a] == '0') ++a;
+        if (b - a != tn - z) continue;
+        for (j = 0; j < b - a && key[a + j] == t[z + j]; ++j) {
+        }
+        if (j == b - a) return 1;
+    }
+    return 0;
+}
+
+static int se_titles_test(const unsigned *key, unsigned n) {
+    int t;
+    if (!se.nterms) return 0;
+    for (t = 0; t < se.nterms; ++t) {
+        const unsigned *q = se.q + se.toff[t];
+        unsigned l = se.tlen[t], i;
+        for (i = 0; i < l && se_digit(q[i]); ++i) {
+        }
+        if (i == l ? !se_num_find(key, n, q, l) : se_find(key, n, q, l) < 0) return 0;
+    }
+    return 1;
+}
+
+int search_titles_open(void) {
+    if (se.win || se.titles) return -1;
+    memset(&se, 0, sizeof se);
+    se.titles = 1;
+    return 0;
+}
+
+void search_titles_close(void) {
+    if (!se.titles) return;
+    if (se.py) pinyin_release();
+    free(se.hz);
+    memset(&se, 0, sizeof se);
+}
+
+void search_titles_hold(void) {
+    if (se.titles) se_py_hold();
+}
+
+int search_titles_hanzi(const char *title) {
+    unsigned c;
+    while ((c = se_next(&title))) {
+        if (c - SE_HZ0 < SE_HZN) return 1;
+    }
+    return 0;
+}
+
+int search_titles_query(const char *text) {
+    if (!se.titles) return 0;
+    se_set_query(text);
+    return se.nterms;
+}
+
+int search_titles_match(const char *title) {
+    unsigned key[SE_KEY + 2], n;
+    if (!se.titles || !se.nterms) return 0;
+    se.seen = 0;
+    n = se_cat(title, key, 0, SE_KEY, 0);
+    if (se_titles_test(key, n)) return 1;
+    if (!se.py || !se.seen) return 0;
+    n = se_cat(title, key, 0, SE_KEY, 1);
+    return se_titles_test(key, n);
+}
+
+/* ---------------------------------------------------------------------------
  * The library: read once, searched in memory
  */
 static void se_kick(void);
@@ -483,6 +568,16 @@ static int se_valid(void) {
 /* The four stock queries, the songs last so that *pdeq_showlist is the library when it is done, and g_class_type is 0xf001 (as allmusic_page_init leaves it): a stock page under this one
  * (the album page) sees that g_class_type is no longer its own class (its to-foreground handler @0x5266d4 compares it with the class it saved) and runs its own query and list again
  * when this page is gone. */
+/* The engine's dictionary for the initials, held for the page's life; without it the search just has none. */
+static void se_py_hold(void) {
+    int k;
+    if (se.py || pinyin_hold() != 0) return;
+    if (!(se.hz = calloc(SE_HZN, 1))) pinyin_release();
+    se.py = se.hz != (unsigned char *)0;
+    for (k = 0; k < 26; ++k) se.pal[k] = 1u << k;
+    se.npal = 26;
+}
+
 static void se_load(void) {
     void *list;
     int k;
@@ -493,13 +588,7 @@ static void se_load(void) {
         se.lists[SE_SONG] = se.src->list(se.src, LS_SEARCH_SONGS, (void *)0);
         goto sized;
     }
-    if (!se.py &&
-        pinyin_hold() == 0) { /* the engine's dictionary for the initials; without it the search just has none */
-        if (!(se.hz = calloc(SE_HZN, 1))) pinyin_release();
-        se.py = se.hz != (unsigned char *)0;
-        for (k = 0; k < 26; ++k) se.pal[k] = 1u << k;
-        se.npal = 26;
-    }
+    se_py_hold();
     if (loadLocalClassList(CLASS_ARTISTS) > 0 && (list = *(void **)PDEQ_SHOWLIST) != (void *)0 && deque_size(list))
         se.lists[SE_ARTIST] = cc_copy_list(list);
     se.lists[SE_ALBUM] = cc_albums();
@@ -1313,7 +1402,7 @@ static int se_on_destroy(void *ctx, void *e) {
  * exists already, or the window or its widgets are not there): the caller opens the stock search page. scope is SEARCH_ALL or one type: that page shows its one chip (selected, the others
  * not drawn or tappable) and matches only that type. */
 static int se_open(int scope, const lib_src_t *src) {
-    if (se.win || scope < SEARCH_ALL || scope >= SE_CHIPS) return -1;
+    if (se.win || se.titles || scope < SEARCH_ALL || scope >= SE_CHIPS) return -1;
     memset(&se, 0, sizeof se);
     se.src = src;
     se.lo = scope == SEARCH_ALL ? 0 : scope, se.hi = scope == SEARCH_ALL ? SE_CHIPS : scope + 1;

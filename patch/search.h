@@ -85,3 +85,14 @@ int search_open_src_in(const lib_src_t *src, int scope);
 #define SE_TICK_MS 40 /* the page's one timer: the debounce counts these, the covers load one a tick */
 #define SE_DEBOUNCE 5 /* ticks without a key before the results refresh: 200 ms */
 #define SE_DEBOUNCE_SRC 12 /* the same for a source, which asks a server: 480 ms */
+
+/* The matcher for a list of titles (the Podcasts page's search inside one show, patch/pcfind.c; docs/modules/podcasts.md "Search inside a show"): the folding, terms and Chinese initials of this
+ * page without its library or its page. search_titles_open: 0, or -1 while a Search page exists; one user at a time. search_titles_hold: the pinyin engine (1 MB, patch/keyboard.c pinyin_hold) is held
+ * until search_titles_close, for titles with characters of U+4E00 .. U+9FFF (search_titles_hanzi says one has); without it, or without the dictionary, the initials are just not matched.
+ * search_titles_query sets the query (the field's text) and returns its number of terms (0: nothing matches); search_titles_match: every term is in the title (a term of digits is a whole number). */
+int search_titles_open(void);
+void search_titles_close(void);
+void search_titles_hold(void);
+int search_titles_hanzi(const char *title);
+int search_titles_query(const char *text);
+int search_titles_match(const char *title);

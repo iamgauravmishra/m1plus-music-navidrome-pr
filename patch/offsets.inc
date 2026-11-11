@@ -1124,7 +1124,7 @@
 #define PC_SH_HASH 996
 #define PC_SH_CHECKED 1004        /* seconds since 1970 of the last successful refresh (the show file's checked=), 0 = never */
 #define PC_SH_NEW 1000            /* episodes with no saved place and not played (the dot count), set by pc_load_show_counts */
-#define PC_RING_SLOTS 512         /* places kept (q2-pod's ring size); a slot is 16 bytes: hash, pos, len, flags */
+#define PC_RING_SLOTS 4096        /* places kept (two lists of PC_ALL_MAX: Mark All as Played on a show with an archive keeps every mark; a file of fewer slots, as the 512 of before, is read as it is); a slot is 16 bytes: hash, pos, len, flags */
 #define PC_SLOT_SIZE 16
 #define PC_RING_HEAD 8            /* "PCR1" and the slot count */
 #define PC_SPEED_SLOTS 64         /* per-show speed modes: 8 bytes each (show hash, mode), after "PCS1" and the count */
@@ -1173,6 +1173,7 @@
 #define PS_HEAD_H 34
 #define PS_COLLAPSE_BACK 12
 #define PS_CELL_H 173
+#define PS_MORE_H 56              /* the Show All Episodes row under the last cell of a subscribed show that has no archive yet (docs/modules/podcasts.md "All episodes") */
 #define PS_PCELL_H 137            /* the preview's cell (docs/modules/podcasts.md "Search"): the date line, the title and the description of a normal cell without the pill row: PS_CDESC_Y + 2 * PS_CDESC_PITCH + 14 under it */
 #define PS_CELL_X 16
 #define PS_CELL_W 288

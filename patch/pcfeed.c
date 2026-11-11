@@ -64,6 +64,8 @@ struct pf_parser {
     char image[PC_URL];
     pf_item_t cur;
     pf_item_t items[PF_KEEP];
+    pf_sink_t sink; /* pf_set_sink: every item goes there and none is kept */
+    void *sink_ctx;
 };
 
 /* ---------------------------------------------------------------------------
@@ -370,6 +372,7 @@ void pf_free(pf_parser_t *p) {
 const char *pf_note(const pf_parser_t *p, int i) {
     return i >= 0 && i < p->nitems && p->items[i].note ? p->items[i].note : "";
 }
+void pf_set_sink(pf_parser_t *p, pf_sink_t fn, void *ctx) { p->sink = fn, p->sink_ctx = ctx; }
 int pf_is_feed(const pf_parser_t *p) { return p->saw_feed; }
 int pf_items(const pf_parser_t *p) { return p->nitems; }
 const pf_item_t *pf_item(const pf_parser_t *p, int i) {
@@ -695,6 +698,10 @@ static void pf_keep(pf_parser_t *p) {
     if (!c->url[0]) return;
     if (!c->guid[0]) pf_norm(c->guid, PF_GUID, c->url, strlen(c->url));
     ++p->seen;
+    if (p->sink) { /* the streaming mode (the archive): the item is handed over whole and not kept; its note stays in cur until the next item */
+        p->sink(p->sink_ctx, c);
+        return;
+    }
     if (p->nitems == PF_KEEP) {
         if (c->pub <= p->items[PF_KEEP - 1].pub) return;
         i = PF_KEEP - 1;
@@ -1113,6 +1120,35 @@ unsigned pf_render_note(const pf_parser_t *p, int i, char *out, unsigned cap) {
     return o;
 }
 
+unsigned pf_item_line(const pf_item_t *it, const char *f, const char *od, char *ln, unsigned cap) {
+    unsigned lo = 0;
+    pf_app(ln, &lo, cap, "g=");
+    pf_app_plain(ln, &lo, cap, it->guid);
+    pf_app(ln, &lo, cap, "\tp=");
+    pf_app_u(ln, &lo, cap, it->pub);
+    pf_app(ln, &lo, cap, "\td=");
+    pf_app_u(ln, &lo, cap, it->dur);
+    pf_app(ln, &lo, cap, "\tl=");
+    pf_app_u(ln, &lo, cap, it->length);
+    pf_app(ln, &lo, cap, "\tf=");
+    pf_app(ln, &lo, cap, f);
+    pf_app(ln, &lo, cap, "\tt=");
+    pf_app_plain(ln, &lo, cap, it->title);
+    pf_app(ln, &lo, cap, "\tu=");
+    pf_app_plain(ln, &lo, cap, it->url);
+    if (it->desc[0] || od[0]) {
+        pf_app(ln, &lo, cap, "\tx=");
+        pf_app_plain(ln, &lo, cap, it->desc[0] ? it->desc : od);
+    }
+    pf_app(ln, &lo, cap, "\n");
+    return lo;
+}
+
+void pf_item_file(const pf_item_t *it, unsigned tries, char *out, unsigned size) {
+    pf_fname(it, out, size);
+    if (tries > 1) pf_numbered(out, size, tries);
+}
+
 unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *old, unsigned oldn, char *out,
                             unsigned cap, unsigned *fresh) {
     unsigned o = 0, k, n = 0, lo;
@@ -1158,26 +1194,8 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
         }
         memcpy(names[n], f, strlen(f) + 1);
         ++n;
-        lo = 0; /* the line is made whole, and added whole: a full buffer never ends in half a line */
-        pf_app(ln, &lo, sizeof ln, "g=");
-        pf_app_plain(ln, &lo, sizeof ln, it->guid);
-        pf_app(ln, &lo, sizeof ln, "\tp=");
-        pf_app_u(ln, &lo, sizeof ln, it->pub);
-        pf_app(ln, &lo, sizeof ln, "\td=");
-        pf_app_u(ln, &lo, sizeof ln, it->dur);
-        pf_app(ln, &lo, sizeof ln, "\tl=");
-        pf_app_u(ln, &lo, sizeof ln, it->length);
-        pf_app(ln, &lo, sizeof ln, "\tf=");
-        pf_app(ln, &lo, sizeof ln, f);
-        pf_app(ln, &lo, sizeof ln, "\tt=");
-        pf_app_plain(ln, &lo, sizeof ln, it->title);
-        pf_app(ln, &lo, sizeof ln, "\tu=");
-        pf_app_plain(ln, &lo, sizeof ln, it->url);
-        if (it->desc[0] || od[0]) {
-            pf_app(ln, &lo, sizeof ln, "\tx=");
-            pf_app_plain(ln, &lo, sizeof ln, it->desc[0] ? it->desc : od);
-        }
-        pf_app(ln, &lo, sizeof ln, "\n");
+        lo = pf_item_line(it, f, od, ln,
+                          sizeof ln); /* made whole, and added whole: a full buffer never ends in half a line */
         if (o + lo < cap) memcpy(out + o, ln, lo), o += lo;
     }
     if (old) /* the old entries that are not in the feed's window any more but have their file (or a started download) stay, as they were written */

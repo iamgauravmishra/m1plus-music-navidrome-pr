@@ -517,7 +517,7 @@ def pill_tests(ctx):
     open_ep(m, 5, off=off)
     expect(is_page(m) and m.props.get((m.sv, 'yoffset')) == 0, 'opened from a list scrolled to 800: the page starts at its top')
     PCP.click(m, 'btn_return')
-    expect(not is_page(m) and m.props.get((m.sv, 'yoffset')) == off and m.props[(m.sv, 'virtual_h')] == m.hdr_h + 8 * O['PS_CELL_H'] + 20, 'Back: the list at the same scroll offset (800)')
+    expect(not is_page(m) and m.props.get((m.sv, 'yoffset')) == off and m.props[(m.sv, 'virtual_h')] == m.hdr_h + 8 * O['PS_CELL_H'] + O['PS_MORE_H'] + 20, 'Back: the list at the same scroll offset (800)')
     # a drag or a tap off the cell opens nothing
     m.calls = []
     open_ep(m, 5, off=off, move=40)

@@ -366,13 +366,14 @@ static int ip_pc_run(int d) {
     }
     {
         pc_ep_t *all;
-        int n;
+        int n, cap;
         free(ip.pc_eps);
         ip.pc_eps = (pc_ep_t *)0, ip.pc_neps = 0;
         if (d < 1 || ip.st[d - 1].kind != K_PODCASTS || !ip.pc_shows || ip.st[d - 1].sel >= ip.pc_n) return 0;
-        all = calloc(PC_MAX_EPS, sizeof *all);
+        cap = pc_eps_cap(&ip.pc_shows[ip.st[d - 1].sel]);
+        all = calloc((unsigned)cap, sizeof *all);
         if (!all) return 0;
-        n = pc_load_show(&ip.pc_shows[ip.st[d - 1].sel], all, PC_MAX_EPS);
+        n = pc_load_show(&ip.pc_shows[ip.st[d - 1].sel], all, cap);
         for (k = 0; k < n; ++k)
             if (all[k].state == PC_LOCAL) memcpy(&all[m++], &all[k], sizeof *all);
         ip.pc_eps = all, ip.pc_neps = m;

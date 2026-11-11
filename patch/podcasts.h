@@ -14,6 +14,11 @@
 
 /* (the PC_* sizes are patch/offsets.inc's: include it first) */
 
+/* The archive (.archive, docs/modules/podcasts.md "All episodes"): at most PC_ARCH_MAX items and PC_ARCH_BYTES bytes are written and read; the list of a show with an archive holds at most PC_ALL_MAX episodes (the newest). */
+#define PC_ARCH_MAX 2000
+#define PC_ARCH_BYTES 1572864u
+#define PC_ALL_MAX PC_ARCH_MAX
+
 typedef struct {
     char file[PC_FILE]; /* the file name in the show folder; "" = no file (yet) */
     char title[PC_TITLE]; /* the metadata title, else the file name without its extension */
@@ -53,6 +58,10 @@ int pc_scan_shows(pc_show_t *out, int max);
 int pc_any_episode(void);
 /* The episodes of a show in the show's order (pc_order_get): newest first (publication date, then file name, digit runs by value, descending; a show of copied files only, no metadata entry, by file name alone), or the exact reverse, PC_LOCAL / PC_PART / PC_REMOTE together; at most max. Returns the count. */
 int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max);
+/* With an archive (.archive: every item of the feed) the list is the union of .episodes and .archive, an episode once (the .episodes entry wins), and holds the newest PC_ALL_MAX; without one it is as before, the newest PC_MAX_EPS of
+ * .episodes and the files. pc_eps_cap: how many entries out needs for the show (PC_ALL_MAX with an archive, else PC_MAX_EPS); callers allocate that and pass it as max. */
+int pc_has_archive(const pc_show_t *show);
+int pc_eps_cap(const pc_show_t *show);
 /* One file of a show folder: its modification time and its size in KB; 1 when it exists. */
 int pc_stat(const char *root, const char *dir, const char *file, unsigned *mtime, unsigned *kb);
 /* The audio files and .part files of a show folder, one callback each (name, size in KB, 1 for a .part); the count. No .episodes is read (the Shows page's totals). */
@@ -82,8 +91,12 @@ int pc_pic_info(const char *path, unsigned *w, unsigned *h, unsigned *sof);
 /* The resume ring and the played marks. pc_state: PC_NEW (nothing saved), PC_PROGRESS (a place, *pos and *len set), PC_DONE (played). */
 enum { PC_NEW = 0, PC_PROGRESS = 1, PC_DONE = 2 };
 int pc_state(unsigned hash, unsigned *pos, unsigned *len);
-void pc_mark(unsigned hash,
-             int played); /* played: the episode is done (place cleared); else it is new again (forgotten) */
+void pc_mark(
+    unsigned hash,
+    int played); /* played: the episode is done (place cleared); else it is new again (forgotten); written at once */
+void pc_mark_hold(
+    unsigned hash,
+    int played); /* the same with nothing written: the caller's pc_flush does (one write for a loop of marks) */
 void pc_flush(void); /* write the ring if it changed (the page's own actions) */
 unsigned pc_rev(void); /* grows with every change a list shows (a place, a mark) */
 typedef struct { /* an episode partly played, for Continue Listening */
@@ -130,3 +143,14 @@ int podcasts_open(void); /* the shows on the card and their episodes */
 int podcasts_go(void);
 void pg_relight(void); /* the open cover-tinted pages tint again (see ab_relight, patch/entries.h) */
 int pg_has_tone(void); /* the Show page shows a cover's tone now (not the shows list or an episode) */
+
+/* The Show page's list for the search inside the show (patch/pcfind.c): the episodes in the show's order, whether one is played, the open show's key, and the episode page of episode i opened on the
+ * Show page (1; 0 when it will not: Back from it opens the search again). */
+int pg_find_count(void);
+const pc_ep_t *pg_find_ep(int i);
+int pg_find_played(int i);
+unsigned pg_find_show(void);
+int pg_find_pick(int i);
+int pg_find_more(char *out, unsigned size);
+void pg_find_more_tap(void);
+int pg_find_sync(void);

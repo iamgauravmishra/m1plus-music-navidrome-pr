@@ -164,6 +164,10 @@ Tried on the device with zEQLAAAAB and working: the embedded keyboard on the pag
 3. The CJK text cut in recent rows (the test's measure is the harness's 8 / 16 px per character).
 4. The scoped mode (`search_open_in`, below): emulation only, and nothing opens it yet.
 
+## Titles of another list
+
+`search_titles_open / _hold / _query / _match / _close` (`patch/search.h`) give the Podcasts page's search inside a show ([podcasts](podcasts.md) "Search inside a show") this page's folding, terms and pinyin initials for a list of titles: one key per title (`se_cat`, `SE_KEY` code points), no page and no library; the state is `se` (`se.titles`), so it refuses while a Search page exists and the Search page refuses while it is held. The initials engine is held only on request (`search_titles_hold`, `se_py_hold`, the same code as `se_load`'s). A term of only digits is a whole number there (`se_num_find`: a run of digits bounded by non-digits, leading zeros ignored); the library search keeps its plain substring test.
+
 ## Over a library source
 
 `search_open_src(src)` (NULL or `&lib_stock` = `search_open`). For Navidrome the page keeps its field, chips, rows and covers, but does not match in memory: the debounced text calls

@@ -38,7 +38,9 @@ _Static_assert(
 #define PM_DNAME 11 /* struct dirent (32-bit, MIPS o32): d_ino, d_off, d_reclen (2), d_type (1), d_name at 11 */
 #define PM_PATH 400
 #define PM_MAX_FILES 400 /* files looked at in one show folder */
-#define PM_WORK (PC_MAX_EPS + PM_MAX_FILES) /* pc_load_show's merged entries at most */
+#define PM_ARCH_FILES \
+    (PC_ALL_MAX + \
+     PM_MAX_FILES) /* the same for a show with an archive: a file for every episode it lists, and as many again as a show without one may have */
 #define PM_META_MAX 65536 /* bytes of a metadata file read */
 #define PM_LINE_MAX 4096
 
@@ -499,7 +501,7 @@ int pc_scan_shows(pc_show_t *out, int max) {
  */
 typedef struct {
     char name[PC_FILE];
-    unsigned mtime;
+    unsigned mtime, hash; /* hash: pm_name_hash of the name (pm_find compares it first) */
 } pm_file_t;
 
 static pc_ep_t *pm_sort_eps __attribute__((section(".scratch")));
@@ -529,10 +531,19 @@ static void pm_title_of(char *out, const char *name) {
     pm_cpy(out, PC_TITLE, tmp);
 }
 
+/* FNV-1a over a file name's bytes as they are (the names are compared exactly). */
+static unsigned pm_name_hash(const char *s) {
+    unsigned h = FNV_SEED;
+    for (; *s; ++s) h = (h ^ (unsigned char)*s) * FNV_PRIME;
+    return h;
+}
+
+/* (A show with an archive has thousands of entries and files: the hash keeps the merge from comparing every pair of names.) */
 static int pm_find(const pm_file_t *files, int nf, const char *name) {
+    unsigned h = pm_name_hash(name);
     int i;
     for (i = 0; i < nf; ++i)
-        if (!strcmp(files[i].name, name)) return i;
+        if (files[i].hash == h && !strcmp(files[i].name, name)) return i;
     return -1;
 }
 
@@ -589,6 +600,7 @@ static int pm_files(const char *root, const char *dir, pm_file_t *files, int max
         char full[PM_PATH];
         if (!*name || name[0] == '.' || strlen(name) >= PC_FILE || !(pm_audio(name) || pm_part(name))) continue;
         pm_cpy(files[n].name, PC_FILE, name);
+        files[n].hash = pm_name_hash(files[n].name);
         files[n].mtime = 0;
         memset(st, 0, sizeof st);
         if (pm_join(full, sizeof full, root, dir, name) && __xstat(3, full, st) == 0) files[n].mtime = st[0x40 / 4];
@@ -610,7 +622,7 @@ int pc_stat(const char *root, const char *dir, const char *file, unsigned *mtime
     return 1;
 }
 
-/* The audio files and .part files of a show folder, one callback each (the name, the audio's or .part's size in KB, 1 for a .part): the Shows page's totals. No .episodes is read. At most PM_MAX_FILES files. */
+/* The audio files and .part files of a show folder, one callback each (the name, the audio's or .part's size in KB, 1 for a .part): the Shows page's totals. No .episodes is read. At most PM_ARCH_FILES files (a show with an archive may have that many). */
 int pc_walk(const char *root, const char *dir, void (*cb)(void *ctx, const char *name, unsigned kb, int part),
             void *ctx) {
     char path[PM_PATH];
@@ -619,7 +631,7 @@ int pc_walk(const char *root, const char *dir, void (*cb)(void *ctx, const char 
     char *ent;
     int n = 0;
     if (!pm_join(path, sizeof path, root, dir, (const char *)0) || !(d = opendir(path))) return 0;
-    while (n < PM_MAX_FILES && (ent = readdir(d)) != (char *)0) {
+    while (n < PM_ARCH_FILES && (ent = readdir(d)) != (char *)0) {
         const char *name = pm_name(ent);
         char full[PM_PATH];
         int part;
@@ -635,17 +647,56 @@ int pc_walk(const char *root, const char *dir, void (*cb)(void *ctx, const char 
     return n;
 }
 
+/* Whether the show has an archive (.archive: every item of the feed, written by the Show All Episodes job). */
+int pc_has_archive(const pc_show_t *show) {
+    char root[PC_FILE + 20], path[PM_PATH];
+    return pc_root(root) && pm_join(path, sizeof path, root, show->dir, ".archive") && !access(path, F_OK);
+}
+
+/* The room pc_load_show's out needs for the show: PC_ALL_MAX with an archive, else PC_MAX_EPS. */
+int pc_eps_cap(const pc_show_t *show) { return pc_has_archive(show) ? PC_ALL_MAX : PC_MAX_EPS; }
+
+/* The archive's entries (at most room) parsed into eps after the nm entries of .episodes already there; one whose guid (or, with no guid, file name) a .episodes entry has is dropped, so the union holds an
+ * episode once and the .episodes entry wins (it is the fresher, and keeps a started download's file name). Returns the entries now in eps (nm when the archive cannot be read). */
+static int pm_add_archive(pc_ep_t *eps, int nm, int room, const char *path) {
+    unsigned got;
+    char *buf = m1_read_file(path, PC_ARCH_BYTES, &got);
+    int na, i, j, n = nm;
+    if (!buf) return nm;
+    na = pc_parse_eps(buf, got, eps + nm, room);
+    free(buf);
+    for (i = 0; i < na; ++i) {
+        const pc_ep_t *a = &eps[nm + i];
+        int dup = 0;
+        for (j = 0; j < nm && !dup; ++j)
+            dup = a->guid ? eps[j].guid == a->guid : eps[j].file[0] && !strcmp(eps[j].file, a->file);
+        if (!dup) {
+            if (n != nm + i) memcpy(&eps[n], a, sizeof *a);
+            ++n;
+        }
+    }
+    return n;
+}
+
 int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
     char root[PC_FILE + 20], path[PM_PATH];
     pm_file_t *files;
     pc_ep_t *work;
     unsigned *order, got;
     char *buf;
-    int nf, nm = 0, n, i, skip;
+    int nf, nm = 0, n, i, skip, arch = 0, wk, mf;
     if (!pc_root(root) || max <= 0) return 0;
-    files = calloc(PM_MAX_FILES, sizeof *files);
+    arch = pm_join(path, sizeof path, root, show->dir, ".archive") && !access(path, F_OK);
+    mf =
+        arch
+            ? PM_ARCH_FILES
+            : PM_MAX_FILES; /* (every episode of an archive can be a file on the card: a scan that stopped at PM_MAX_FILES left the rest as not downloaded) */
+    files = calloc((unsigned)mf, sizeof *files);
+    nf = files ? pm_files(root, show->dir, files, mf) : 0;
+    wk = (arch ? PC_ALL_MAX + PC_MAX_EPS : PC_MAX_EPS) +
+         nf; /* the entries .episodes holds, the archive's, the files found */
     work = calloc(
-        1, PM_WORK *
+        1, (unsigned)wk *
                (sizeof *work +
                 sizeof *order)); /* the entries, then the sort's index (one allocation: no list is returned unsorted) */
     if (!files || !work) {
@@ -653,14 +704,15 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
         free(work);
         return 0;
     }
-    nf = pm_files(root, show->dir, files, PM_MAX_FILES);
     if (pm_join(path, sizeof path, root, show->dir, ".episodes") &&
         (buf = m1_read_file(path, PM_META_MAX, &got)) != (char *)0) {
         nm = pc_parse_eps(buf, got, work, PC_MAX_EPS);
         free(buf);
     }
-    n = pm_merge(work, nm, PM_WORK, files, nf, root, show->dir);
-    order = (unsigned *)(work + PM_WORK);
+    if (arch && pm_join(path, sizeof path, root, show->dir, ".archive"))
+        nm = pm_add_archive(work, nm, PC_ARCH_MAX, path);
+    n = pm_merge(work, nm, wk, files, nf, root, show->dir);
+    order = (unsigned *)(work + wk);
     for (i = 0; i < n; ++i) order[i] = (unsigned)i;
     pm_sort_eps = work;
     pm_sort_name = nm == 0; /* no metadata entry: copied files only */
@@ -896,6 +948,11 @@ static void pm_set(unsigned hash, unsigned pos, unsigned len) {
 }
 
 void pc_mark(unsigned hash, int played) {
+    pc_mark_hold(hash, played);
+    pc_flush();
+}
+
+void pc_mark_hold(unsigned hash, int played) {
     int at;
     pm_ring_load();
     if (!pm.s) return;
@@ -910,7 +967,6 @@ void pc_mark(unsigned hash, int played) {
         return;
     pm.dirty = 1;
     ++pm.rev;
-    pc_flush();
 }
 
 void pc_restart(unsigned hash) {
@@ -928,7 +984,7 @@ int pc_continue(const pc_show_t *shows, int nshows, pc_cont_t *out, int max) {
     pc_cont_t cand[PM_CONT_SCAN];
     char got[PM_CONT_SCAN];
     unsigned i, nc = 0, left;
-    int s, k, n = 0;
+    int s, k, n = 0, cap;
     pc_ep_t *all;
     pm_ring_load();
     for (i = 0; pm.s && i < pm.n && nc < PM_CONT_SCAN; ++i) {
@@ -938,12 +994,16 @@ int pc_continue(const pc_show_t *shows, int nshows, pc_cont_t *out, int max) {
         cand[nc].hash = t->hash, cand[nc].pos = t->pos, cand[nc].len = t->len;
         got[nc++] = 0;
     }
-    if (!nc || max <= 0 || !(all = calloc(PC_MAX_EPS, sizeof *all))) return 0;
+    if (!nc || max <= 0) return 0;
+    for (s = 0, cap = PC_MAX_EPS; s < nshows; ++s)
+        if (shows[s].count && pc_has_archive(&shows[s]))
+            cap = PC_ALL_MAX; /* (a downloaded old episode is in the archive's entries) */
+    if (!(all = calloc((unsigned)cap, sizeof *all))) return 0;
     left = nc;
     for (s = 0; s < nshows && left; ++s) {
         int cnt;
         if (!shows[s].count) continue;
-        cnt = pc_load_show(&shows[s], all, PC_MAX_EPS);
+        cnt = pc_load_show(&shows[s], all, cap);
         for (k = 0; k < cnt && left; ++k) {
             if (all[k].state != PC_LOCAL || !all[k].hash) continue;
             for (i = 0; i < nc; ++i)

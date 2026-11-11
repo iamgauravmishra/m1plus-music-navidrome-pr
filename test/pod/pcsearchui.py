@@ -255,7 +255,7 @@ def entry_tests(ctx):
     # a show opened: "... | Now Playing" (the middle piece is only for the Shows level), the globe gone; back on the Shows level the row, the globe and the middle "..." are there again
     m = opened(imp=True)
     PCP.tap_show(m, 'Alpha')
-    expect(flags(m, 'btn_globe') == (0, 0) and flags(m, 'btn_more') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_more', 'on a Show page: "... | Now Playing", no globe')
+    expect(flags(m, 'btn_globe') == (0, 0) and flags(m, 'btn_more') == (1, 1) and flags(m, 'btn_search') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_moremid', 'on a Show page: "Search | ... | Now Playing" (the search inside the show: test/pod/pcfind.py), no globe')
     PCP.click(m, 'btn_return')
     expect(has_row(m) and flags(m, 'btn_globe') == (1, 1) and icon(m, 'btn_more') == 'pod_nav_moremid', 'back on the Shows level: the Discover row, the globe and the middle "..."')
     # the assets
@@ -505,12 +505,12 @@ def preview_tests(ctx):
     s = next((x for x in shows if x['feed'] == first), None)
     expect(s and s['dir'] == 'WSJ Minute Briefing' and f'{RP}/WSJ Minute Briefing/.episodes' in m.fs and f'{RP}/WSJ Minute Briefing/.show' in m.fs and f'{RP}/WSJ Minute Briefing/cover.jpg' in m.fs
            and not [p for p in m.fs if p.endswith('.tmp')], 'Subscribe makes the show: its folder named from the feed\'s title with .episodes, .show and cover.jpg')
-    expect(text(m, 'label_title') == 'WSJ Minute Briefing' and flags(m, 'btn_more') == (1, 1) and [t for (t, r), st in zip(*PCP.paint(m, 0)[1:3]) if st in ('label_ps_latest', 'label_ps_latestw')][0].startswith('Latest Episode'),
+    expect(text(m, 'label_title') == 'WSJ Minute Br…' and flags(m, 'btn_more') == (1, 1) and [t for (t, r), st in zip(*PCP.paint(m, 0)[1:3]) if st in ('label_ps_latest', 'label_ps_latestw')][0].startswith('Latest Episode'),
            'the page is now the normal Show page, in place: the "..." is back and the pill says Latest Episode')
     hh = PCP.hdr(m)
     _, t3, s3, f3 = PCP.paint(m, hh - 60)
     pills = [t for t, s in zip((t for t, r in t3), s3) if s == 'label_ps_pill']
-    expect(pills and all(p.endswith('MB') or p == 'Download' for p in pills) and m.props.get((m.sv, 'virtual_h')) == hh + 3 * O['PS_CELL_H'] + 20, f'the real cells: the download pills ({pills}) and the full cell height')
+    expect(pills and all(p.endswith('MB') or p == 'Download' for p in pills) and m.props.get((m.sv, 'virtual_h')) == hh + 3 * O['PS_CELL_H'] + O['PS_MORE_H'] + 20, f'the real cells: the download pills ({pills}) and the full cell height (and the Show All Episodes row under them: the show has a feed)')
     PCP.click(m, 'btn_return')
     expect(at_search(m) and len(level_rows(m)) >= 5, 'its Back returns to the search results')
     PCP.click(m, 'btn_return')

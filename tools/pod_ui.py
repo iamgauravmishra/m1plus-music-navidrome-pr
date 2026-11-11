@@ -496,21 +496,21 @@ def build_podcasts_page(page):
 # 320 px glass from the bottom of the window (pc_sheet6 .. pc_sheet1, a picture for each number of rows: tools/mod_icons.py PC_SHEETS; the payload sets the image
 # and the card's height and place for the rows it shows), PM_ROW_H rows, each a button (transparent, 6 % white pressed) with its 24 px glyph at x PS_SHEET_ICON_X (the geometry of the track rows' menu, row_menu: 14 and 48), the label from
 # PS_SHEET_TEXT_X and, for the two rows that have one, the grey value right aligned to PS_SHEET_VALUE_R; a 1 px hairline child on the top of every row but the first (the payload shows it).
-# One widget set serves both sheets: the fourteen rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
+# One widget set serves both sheets: the fifteen rows are fixed (glyph and label each), the payload shows and places the ones the sheet needs. Everything starts hidden and insensitive.
 PS_SHEET_ROWS = (('speed', 'pc_ic_speed', 'Playback Speed', True, False), ('refresh', 'pc_ic_refresh', 'Refresh Feed', True, False), ('select', 'pc_ic_select', 'Select Episodes', False, False),
                  ('markall', 'pc_ic_check', 'Mark All as Played', False, False), ('unsub', 'pc_ic_unsub', 'Unsubscribe', False, True),
                  ('dl', 'pc_ic_down', 'Download', False, False), ('rm', 'pc_ic_trash', 'Remove Download', False, False),
                  ('mark', 'pc_ic_check', 'Mark as Played', False, False), ('unmark', 'pc_ic_undo', 'Mark as Unplayed', False, False),
                  ('import', 'pc_ic_import', 'Import from Card', False, False), ('delplayed', 'pc_ic_trash', 'Delete Played Episodes', False, False),
-                 ('export', 'pod_ic_export', 'Export OPML', False, False), ('save', 'pod_ic_save', 'Save Episode', False, False), ('order', 'pod_ic_order', 'Episode Order', True, False))   # id, glyph, label, has a value, red; import is the Shows level's sheet, select (relabelled Select, or Select Shows) and delplayed the Downloads page's, select and export the Subscriptions page's, save (relabelled Unsave Episode when it is saved) an episode's
+                 ('export', 'pod_ic_export', 'Export OPML', False, False), ('save', 'pod_ic_save', 'Save Episode', False, False), ('order', 'pod_ic_order', 'Episode Order', True, False), ('filter', 'pod_ic_filter', 'Filter', True, False))   # id, glyph, label, has a value, red; import is the Shows level's sheet, select (relabelled Select, or Select Shows) and delplayed the Downloads page's, select and export the Subscriptions page's, save (relabelled Unsave Episode when it is saved) an episode's
 PS_SHEET_ICON_X, PS_SHEET_TEXT_X, PS_SHEET_VALUE_R, PS_SHEET_VALUE_W, PS_SHEET_GAP = (OFFSETS[k] for k in ('PS_SHEET_ICON_X', 'PS_SHEET_TEXT_X', 'PS_SHEET_VALUE_R', 'PS_SHEET_VALUE_W', 'PS_SHEET_GAP'))   # patch/offsets.inc
 PS_SHEET_RED = RED_RGB
 PS_SHEET_PX = 18   # the labels (Now Playing's More sheet: 18 px)
 
 
 def podcasts_sheet():
-    """(scrim, card) of the Show page's sheets: the card at its tallest (six rows, pc_sheet6), at the bottom of the window."""
-    return sheet_widgets('pg_sh', PS_SHEET_ROWS, 6)
+    """(scrim, card) of the Show page's sheets: the card at its tallest (seven rows, pc_sheet7), at the bottom of the window."""
+    return sheet_widgets('pg_sh', PS_SHEET_ROWS, 7)
 
 
 def sheet_widgets(prefix, sheet_rows, tallest):
@@ -1167,6 +1167,35 @@ def build_search_page(page):
     root.children[-1].set(*pod_i18n.text_prop(page.title))
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB), ('label_chip', PS.SE_CHIP_PX, PS.CHIP_INK, 'center'),
                                    ('label_chip_on', PS.SE_CHIP_PX, PS.CHIP_ON_INK, 'center')), {'label_chip_on': PS.CHIP_ON_RGB})   # the dark text is on the selected pill (the contrast scan reads the label's own background)
+    root.children += keyboard_pad_widgets()
+    return root
+
+
+PF_LIST_Y = PS.SE_FIELD_Y + PS.SE_FIELD_H + 8   # the in-show search's list: under the field (patch/pcfind.h PF_LIST_Y), to the window's bottom
+
+
+def build_pcfind_page(page):
+    """The search inside one show (patch/pcfind.c, docs/modules/podcasts.md "Search inside a show"): the Search page's field (the keyboard's own field widgets) and its round X (pf_close), a stock list
+    holding one content view that paints the rows (a title, a grey line), the dim "No results" line and the keyboard's pad, strip and pop-up. Hidden labels carry the text styles (a played
+    episode's title is the dim one); label_title (hidden) is the page's title, which the asset tests read from every page."""
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
+    lv = stock_list([], True, top=PF_LIST_Y)
+    lv.set('name', 'pf_listview')
+    sv = lv.children[0]
+    sv.set('name', 'pf_scrollview')
+    grid = Widget('view', 0, 0, SCREEN_W, CLIENT_H - PF_LIST_Y, [('name', 'pf_view')])
+    styled(grid, ('normal',), 'bg_color', '#000000')
+    sv.children.append(grid)
+    root.children.append(lv)
+    root.children.append(search_field_widget())
+    root.children.append(Widget('button', PS.SE_CLOSE_X, PS.SE_CLOSE_Y, PS.SE_CLOSE_W, PS.SE_CLOSE_H, [
+        ('name', 'pf_close'), ('enable', 'true'), ('style', 'img_btn_style'),
+        ('style:over:icon', 'se_close'), ('style:normal:icon', 'se_close'), ('style:pressed:icon', 'se_close_down')]))
+    root.children.append(hidden(label('pf_status', 10, 150, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
+    root.children.append(hidden(label('label_title', 0, 0, 200, 22, '', 16, INK_RGB, 'left')))
+    root.children[-1].set(*pod_i18n.text_prop(page.title))
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_dim', LIST_TITLE_PX, PS.SUB_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB)))
     root.children += keyboard_pad_widgets()
     return root
 
@@ -2886,6 +2915,8 @@ def build_page(page):
         return build_search_page(page)
     if page.kind == 'autoeq':
         return build_autoeq_page(page)
+    if page.kind == 'pcfind':
+        return build_pcfind_page(page)
     if page.kind == 'ndlogin':
         import pod_ndserver; return pod_ndserver.build_login(page)
     if page.kind == 'ndserver':

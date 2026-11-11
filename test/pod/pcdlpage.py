@@ -481,6 +481,66 @@ def played_tests(ctx):
     expect(m.props.get((m.sv, 'virtual_h'), 0) <= 400, 'and the empty page fits the view: it does not scroll')
 
 
+def heads_tests(ctx):
+    """The section headers: drawn (and given height) only when both In Progress and Downloaded have rows. Alone, a section has no header (the page would read Downloads, then Downloaded) and its rows start where the
+    first header would have; the hit testing, the select marks and the heights follow the model."""
+    expect = ctx.expect
+    heads = lambda m: list(dict.fromkeys(t for off in range(0, max(m.props.get((m.sv, 'virtual_h'), 0) - 300, 100), 100) for t, _ in texts_at(m, 'label_ps_sech', off)))
+    no_part = lambda mm: (card(mm), [mm.fs.pop(p) for p in [p for p in mm.fs if p.endswith('.part')]])
+    no_files = lambda mm: (card(mm), [mm.fs.pop(p) for p in [p for p in mm.fs if p.endswith('.mp3')]])
+    # both: headers as before
+    m = page(ip_state)
+    to_page(m)
+    L = lay(4, 7)
+    expect(heads(m) == ['In Progress', 'Downloaded'] and L['y_ip'] == O['PDL_LINE_PITCH'] and L['y_dh'] is not None, f'both sections: both headers ({heads(m)})')
+    # only Downloaded
+    m = page(cardf=no_part)
+    to_page(m)
+    L = lay(0, 7)
+    got = rows(m)
+    expect([t for t, _ in got] == TITLES and heads(m) == [] and L['y_ip'] is None and L['y_dh'] is None, f'only downloaded rows: no section header, the seven rows ({heads(m)}, {[t for t, _ in got]})')
+    expect(sorted(rows_y(m)) == L['rows'] and L['rows'][0] == O['PDL_LINE_PITCH'] and m.props.get((m.sv, 'virtual_h')) == L['h'] == O['PDL_LINE_PITCH'] + 7 * ROW + O['PP_BOTTOM'],
+           f'the rows start where the first header started, y {O["PDL_LINE_PITCH"]}; the height is the rows and PP_BOTTOM ({L["rows"][0]}, {m.props.get((m.sv, "virtual_h"))})')
+    expect(texts_at(m, 'label_ps_meta')[0][1][1] == O['PDL_LINE_Y'] and title(m) == 'Downloads', 'the storage line and the large title are where they are with headers')
+    m.calls = []
+    tap_row(m, 2, 0, 7)
+    opened = [PCS.fixed(t) for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_head']
+    expect(opened == ['ep1'], f'a tap on the third row opens its episode page, ep1, at the model\'s place ({opened})')
+    PCP.click(m, 'btn_return')
+    start_select(m)
+    mk = marks_of(m, 0, 7)
+    expect(sorted(mk) == list(range(7)) and m.props.get((m.sv, 'virtual_h')) == lay(0, 7, True)['h'], f'select mode: a mark on each of the seven rows at the model\'s places ({sorted(mk)})')
+    tap_row(m, 2, 0, 7)
+    expect(title(m) == '1 Selected', f'a tap on the third row marks it ({title(m)})')
+    m.calls = []
+    PCP.click(m, 'pg_del')
+    expect(unlinks(m) == [A1.replace(RP + '/', ''), A1.replace(RP + '/', '') + '.part'], f'Delete takes the marked row\'s file, ep1 ({unlinks(m)})')
+    # only In Progress
+    m = page(ip_state, cardf=no_files)
+    to_page(m)
+    L = lay(4, 0)
+    got = rows(m)
+    expect([t for t, _ in got] == ['Ep E', 'Ep C', 'Ep F', 'Ep D'] and heads(m) == [] and L['y_ip'] is None, f'only in-progress rows: no section header ({heads(m)}, {[t for t, _ in got]})')
+    expect(sorted(rows_y(m)) == L['rows'] and L['rows'][0] == O['PDL_LINE_PITCH'] and m.props.get((m.sv, 'virtual_h')) == L['h'], f'the rows start at y {O["PDL_LINE_PITCH"]} ({sorted(rows_y(m))[:1]})')
+    m.calls = []; m.thread = None
+    tap_row(m, 1, 4, 0)
+    expect(DL.fn(m, 'pn_dl_count') == 0 or DL.state(m, 'c.mp3', 'Sub One')[0] == 0, 'a tap on the waiting row takes it out of the queue (the model\'s place)')
+    # the headers come when the other section gets a row: a download finishing
+    m = page(ip_state, cardf=no_files)
+    to_page(m)
+    f = f'{RP}/Sub One/e.mp3'
+    m.put(f, b'done', NOW - 5); m.sizes[f] = 3 << 20
+    DL.poke_slot(m, 0, 'Sub One', 'e.mp3', 0)
+    m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.KIND), 0)
+    m.setword(DL.pn_at(12), 500)
+    PCS.tick(m)
+    expect(heads(m) == ['In Progress', 'Downloaded'] and sorted(rows_y(m)) == lay(3, 1)['rows'], f'a finished download gives the page both sections: the headers come ({heads(m)})')
+    # the empty page has no header either
+    m = page(cardf=lambda mm: (card(mm), [mm.fs.pop(p) for p in [p for p in mm.fs if p.endswith(('.part', '.mp3'))]]))
+    to_page(m)
+    expect(heads(m) == [] and 'No downloads' in ' '.join(t for t, _ in texts_at(m, 'label_ps_cdim')), f'nothing: the hint only ({heads(m)}, {PCP.hint(m)!r})')
+
+
 def off_tests(ctx):
     """The screen-off rule on this page: a dark tick makes no list and reads nothing; a lit one does; no new timer."""
     expect = ctx.expect
@@ -545,4 +605,4 @@ def width_tests(ctx):
     print('  a played Downloaded row leaves the show\'s name less than 40 px (so the name is left out and the line is the date and size) in', [loc for loc, w in worst.items() if w['tail'] > O['LIST_TEXT_W'] - O['PS_BADGE_CHECK_W'] - 40])
 
 
-SECTIONS = [page_tests, scan_tests, inprogress_tests, open_tests, select_tests, played_tests, off_tests, width_tests]
+SECTIONS = [page_tests, scan_tests, inprogress_tests, open_tests, select_tests, played_tests, heads_tests, off_tests, width_tests]

@@ -322,6 +322,21 @@ void pn_up_reset(void);
 
 enum { PN_E_IDLE = 0, PN_E_RUNNING = 1, PN_E_DONE = 2, PN_E_FAILED = 3 };
 
+/* Show All Episodes (docs/modules/podcasts.md "All episodes"): the show's feed fetched again with every item kept, into its .archive. pn_arch_start: the guards, then the worker (0 when it runs; PN_BUSY while another job or a
+ * download runs, the page pauses the downloads and asks again; PN_NOFEED for a show with no feed address). State: PN_AR_*, of the show pn_arch_hash() (pc_show_t.hash); after a failure pn_arch_code() is the PN_* why. pn_arch_reset forgets a
+ * finished job (nothing while one runs). A finished job bumps pn_gen. */
+enum { PN_AR_IDLE = 0, PN_AR_RUNNING = 1, PN_AR_DONE = 2, PN_AR_FAILED = 3 };
+int pn_arch_start(const char *root, const pc_show_t *s);
+int pn_arch_state(void);
+int pn_arch_code(void);
+int pn_arch_failed(
+    unsigned
+        hash); /* the PN_* the last job of that show failed with (not a cancel), 0 when it did not; kept until the next start of that show, a success or a cancel */
+unsigned pn_arch_count(
+    void); /* the items the running attempt has written to the archive so far (0 at the start of every attempt) */
+unsigned pn_arch_hash(void);
+void pn_arch_reset(void);
+
 /* Download the list (the guards, then the worker): it is renamed over PN_EQ_INDEX only when it came whole and starts with the project's heading. 0 when the worker runs; PN_BUSY when another job runs; else the guard's PN_*
  * (also the state: PN_E_FAILED). */
 int pn_eq_index(void);

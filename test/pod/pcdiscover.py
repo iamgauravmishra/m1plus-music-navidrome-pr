@@ -606,13 +606,13 @@ def tap_tests(ctx):
     y_latest = [r[1] for (t, r), s in zip(hdr[1], hdr[2]) if s == 'label_ps_latest'][0]
     PCP.tap(m, 160, y_latest + 10)
     shows, _ = m.shows()
-    expect(any(s['feed'] == FEED_DAILY for s in shows) and SU.text(m, 'label_title') == 'WSJ Minute Briefing' and flags(m, 'btn_more') == (1, 1), 'Subscribe: the show is made from the preview and the page is its real Show page in place')
+    expect(any(s['feed'] == FEED_DAILY for s in shows) and SU.text(m, 'label_title') == 'WSJ Minute Br…' and flags(m, 'btn_more') == (1, 1), 'Subscribe: the show is made from the preview and the page is its real Show page in place')
     PCP.click(m, 'btn_return')
     expect(on_disc(m), 'Back from it: the chart')
     # the subscribed show opens its real page at once, with no request
     site.log.clear(); m.thread = None
     PCP.tap(m, 150, L['rows'][0] + 30, off=130); SU.work(m); SU.tick(m)
-    expect(SU.text(m, 'label_title') == 'WSJ Minute Briefing' and flags(m, 'btn_more') == (1, 1), 'a show that is subscribed already: its real Show page after the lookup (nothing is previewed)')
+    expect(SU.text(m, 'label_title') == 'WSJ Minute Br…' and flags(m, 'btn_more') == (1, 1), 'a show that is subscribed already: its real Show page after the lookup (nothing is previewed)')
     PCP.click(m, 'btn_return')
     expect(on_disc(m), 'Back: the chart')
     # an episode: the show's id from the url
