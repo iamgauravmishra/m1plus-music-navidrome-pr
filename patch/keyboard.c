@@ -26,8 +26,6 @@
 #include "keyboard.h"
 #include "utf8.h"
 
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-
 #define PY_ENGINE_PTR \
     (*(void *volatile *) \
          PY_ENGINE) /* the engine's global MatrixSearch*; its first byte is inited_ (docs/modules/addresses.md) */
@@ -114,12 +112,6 @@ static struct {
 static int kb_memo __attribute__((section(
     ".scratch"))); /* the layer the last keyboard ended on: the session's choice (the page's state is cleared with the page) */
 
-static unsigned kb_slen(const char *s) {
-    unsigned n = 0;
-    while (s[n]) n++;
-    return n;
-}
-
 static unsigned kb_clen(const char *s) { /* the bytes of the UTF-8 character at s */
     unsigned char c = (unsigned char)*s;
     return c < 0x80 ? 1 : c < 0xe0 ? 2 : c < 0xf0 ? 3 : 4;
@@ -168,7 +160,7 @@ static int kb_measure(
     void *w,
     const char
         *s) { /* the text's width in widget w's own font; a text that cannot be measured is taken as 9 px a character */
-    unsigned wide[160], n = kb_slen(s);
+    unsigned wide[160], n = strlen(s);
     float f;
     memset(wide, 0, sizeof wide);
     tk_utf8_to_utf16_ex(s, n, wide, 159);
@@ -236,7 +228,7 @@ static void kb_changed(void) {
 }
 
 static void kb_insert(const char *s) {
-    unsigned n = kb_slen(s), i;
+    unsigned n = strlen(s), i;
     if (kb.len + n > kb.max) return;
     for (i = 0; i < n; ++i) kb.buf[kb.len + i] = s[i];
     kb.len += n;
@@ -244,7 +236,7 @@ static void kb_insert(const char *s) {
 }
 
 static void kb_insert_fit(const char *s) { /* as many whole characters of s as there is room for */
-    unsigned n = kb_slen(s), c = 0, l, i;
+    unsigned n = strlen(s), c = 0, l, i;
     while (c < n && c + (l = kb_clen(s + c)) <= n && kb.len + c + l <= kb.max) c += l;
     for (i = 0; i < c; ++i) kb.buf[kb.len + i] = s[i];
     kb.len += c;
@@ -435,7 +427,7 @@ static void zh_render(void) {
     }
     if (zh.src == S_PINYIN) {
         zh_label(lab);
-        zh.pyw = kb_fit(kb.py, lab, kb_slen(lab), KB_PY_MAX, shown);
+        zh.pyw = kb_fit(kb.py, lab, strlen(lab), KB_PY_MAX, shown);
         widget_set_text_utf8(kb.py, shown);
         cx = KB_PY_X + zh.pyw + KB_PY_X;
         widget_move(kb.sep, cx - KB_PY_X / 2, KB_SEP_Y);
@@ -1043,7 +1035,7 @@ static void kb_load(const char *initial) {
     kb.len = 0;
     kb.buf[0] = 0;
     if (!initial) return;
-    n = kb_slen(initial);
+    n = strlen(initial);
     while (c < n && c + (l = kb_clen(initial + c)) <= kb.max && c + l <= n) c += l;
     for (i = 0; i < c; ++i) kb.buf[i] = initial[i];
     kb.len = c;

@@ -116,10 +116,10 @@ def coex_tests(ctx):
     cancellation of a Bluetooth start in progress runs (bt_exit_init is never written, no wait, no switch-off), so Bluetooth keeps starting and stays on. Cancel changes nothing. The Bluetooth-side
     handlers have no preamble: their `beqz v0` after OK is `b`. Every neighbouring word is stock's, and the two question keys are called at the pinned addresses."""
     import struct
-    import coex, paths
+    import coex
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     expect([a for a, *_ in coex.EDITS] == [0x474d98, 0x474fd8, 0x4a3b64, 0x4b0b9c], 'the four callers of the switch-on question are patched')
     for a, old, new, what in coex.EDITS:

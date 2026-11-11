@@ -39,11 +39,7 @@
 #include "pcwrap.h"
 #include "palette.h"
 
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
-
 #define I(w, off) (*(int *)((char *)(w) + (off)))
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 #define PG_W 320
@@ -209,7 +205,7 @@ static struct {
     int press, down, down_part;
     m1_tap_t
         tap; /* the row under the finger + 1; the row a press began on + 1 (0 none), what of it (PH_*), and where */
-    int fg, noscroll;
+    int fg;
     unsigned rev; /* pc_rev() the rows were made at */
     unsigned timer, load_timer, dlg_timer,
         awake; /* awake: the downloads' timer (keeps the device awake, starts the queue again): scoped to the window, in front or not */
@@ -244,8 +240,7 @@ static struct {
         dls_off; /* the Show level (the episode page) was opened from the Downloads page: Back returns there, to this offset */
     int dlg; /* the refresh dialog is up */
     unsigned dlg_name_hash; /* pc_hash of the feed whose name the dialog shows */
-    unsigned dlg_px,
-        dlg_done; /* what the dialog last drew: the fill's width, and the "n of m" it showed (so a tick without news changes nothing) */
+    unsigned dlg_px; /* what the dialog last drew: the fill's width (so a tick without news changes nothing) */
     unsigned
         feed_hash; /* pc_hash of the open show's feed url (0: none): a refresh may rename the folder, so the show is found again by it */
     unsigned tint,
@@ -4063,8 +4058,6 @@ static void pg_dls_tap(int a) {
     pg_dls_sync();
 }
 
-extern int pod_confirm(const char *text); /* patch/m1plus.c: the stock confirm dialog, modal; nonzero for Yes */
-
 /* Whether the player has this file (the stock playing record's path, as the tag reader and the resume code compare). */
 static int pg_playing(const char *path) {
     void *t = cc_playing();
@@ -4955,8 +4948,8 @@ int podcasts_open(void) {
     pg.mark[1] = m1_make_mark(pg.win, "selected");
     if (!pg.mark[1] && pg.mark[0]) bitmap_destroy(pg.mark[0]), pg.mark[0] = (void *)0;
     pg.fg = 1;
-    pg.noscroll = !widget_on(pg.sv, EVT_SCROLL, pg_on_scroll, (void *)0) ||
-                  !widget_on(pg.sv, EVT_SCROLL_END, pg_on_scroll, (void *)0);
+    widget_on(pg.sv, EVT_SCROLL, pg_on_scroll, (void *)0);
+    widget_on(pg.sv, EVT_SCROLL_END, pg_on_scroll, (void *)0);
     widget_on(pg.win, EVT_WINDOW_TO_FG, pg_on_fg, (void *)0);
     widget_on(pg.win, EVT_WINDOW_TO_BG, pg_on_bg, (void *)0);
     widget_on(pg.view, EVT_POINTER_DOWN, pg_on_down, (void *)0);

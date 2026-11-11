@@ -37,9 +37,6 @@
 #include "songops.h"
 #include "viewsort.h"
 
-extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1 */
 extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask,
                     void *buf); /* patch/filetime.c: the statx syscall (demo imports none) */
 
@@ -88,7 +85,6 @@ static const char *const FO_ICON_NAME[FO_ICONS] = {"pod_ic_folders",   "fo_ic_sd
 
 enum { T_LIST = 1, T_SD = 2, T_OTG = 3, T_DIR = 4, T_FILE = 8 }; /* a record's type (+0x34) */
 
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
@@ -1150,11 +1146,7 @@ static int fo_open_page(void) {
     m1_centre_pill(fo.btn_shuffle, SG_PILL_W);
     m1_centre_pill(fo.btn_add, SG_BAR_PILL_W);
     m1_centre_pill(fo.btn_del, SG_BAR_PILL_W);
-    fo.mark[0] = m1_make_mark(fo.win, "unselect");
-    fo.mark[1] = m1_make_mark(fo.win, "selected");
-    if (!fo.mark[0] || !fo.mark[1])
-        fo.mark[0] = fo.mark[1] =
-            (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
+    m1_make_marks(fo.win, fo.mark); /* all or none */
     fo.chev = m1_make_chevron();
     for (i = 0; i < FO_ICONS; ++i) fo.ic[i] = fo_bitmap(fo.win, FO_ICON_NAME[i]);
     fo.noscroll = !widget_on(fo.sv, EVT_SCROLL, fo_on_scroll, (void *)0) ||

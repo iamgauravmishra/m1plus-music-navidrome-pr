@@ -773,7 +773,7 @@ def run(ctx):
            'stock canvas_get_width / _height go through the lcd at CANVAS_LCD and read LCD_W / LCD_H')
     m.call(0x695034, a0=lcd, a1=640)
     expect(m.word(lcd + O['LCD_LINE']) == 640 and m.word(lcd + 0x124) == 640, 'the 565 lcd\'s set_line_length (0x695034, slot 0x8c) writes LCD_LINE')
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     word = lambda a: struct.unpack_from('<I', d, pod.fileoff(image, a))[0]
     pins = ((0x695ec4, 0xae020000, 'init stores its begin_frame word at lcd + 0 (sw v0, 0(s0))'),
             (0x695eb4, 0x24420000 | (O['LCD_565_BEGIN'] & 0xffff), 'the begin_frame word is LCD_565_BEGIN, 0x69 << 16 + 0x5cb0 (addiu v0, v0, 0x5cb0)'),

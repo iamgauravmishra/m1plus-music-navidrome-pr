@@ -69,12 +69,6 @@ struct pf_parser {
 /* ---------------------------------------------------------------------------
  * Small helpers
  */
-static unsigned pf_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 static int pf_lc(int c) { return (unsigned)(c - 'A') < 26u ? c + 32 : c; }
 
 static int pf_is(const char *nm, unsigned len, const char *s) {
@@ -699,7 +693,7 @@ static void pf_keep(pf_parser_t *p) {
     int i;
     pf_item_t *c = &p->cur;
     if (!c->url[0]) return;
-    if (!c->guid[0]) pf_norm(c->guid, PF_GUID, c->url, pf_len(c->url));
+    if (!c->guid[0]) pf_norm(c->guid, PF_GUID, c->url, strlen(c->url));
     ++p->seen;
     if (p->nitems == PF_KEEP) {
         if (c->pub <= p->items[PF_KEEP - 1].pub) return;
@@ -735,7 +729,7 @@ static void pf_open(pf_parser_t *p, int code, int selfclose) {
         if (!p->in_item && !p->in_image && !p->author[0]) pf_start_text(p, W_AUTHOR);
     } else if (code == E_CAT) {
         if (!p->in_item && !p->category[0] && pf_attr(p->tag, n, "text", buf, sizeof buf))
-            pf_norm(p->category, PC_CAT, buf, pf_len(buf));
+            pf_norm(p->category, PC_CAT, buf, strlen(buf));
     } else if (code == E_IMAGE) {
         if (!p->in_item) p->in_image = 1;
     } else if (code == E_TITLE) {
@@ -757,8 +751,8 @@ static void pf_open(pf_parser_t *p, int code, int selfclose) {
             type[0] = 0;
             pf_attr(p->tag, n, "type", type, sizeof type); /* a picture or a page is no episode */
             if (!(type[0] == 'i' || type[0] == 't')) {
-                pf_norm(p->cur.url, PF_URL, buf, pf_len(buf));
-                pf_norm(p->cur.type, PF_TYPE, type, pf_len(type));
+                pf_norm(p->cur.url, PF_URL, buf, strlen(buf));
+                pf_norm(p->cur.type, PF_TYPE, type, strlen(type));
                 if (pf_attr(p->tag, n, "length", len, sizeof len)) {
                     unsigned v = 0, i;
                     for (i = 0; len[i] && (unsigned)(len[i] - '0') < 10u && v < 429496729u; ++i)
@@ -769,7 +763,7 @@ static void pf_open(pf_parser_t *p, int code, int selfclose) {
         }
     } else if (code == E_ITUNES_IMAGE) {
         if (!p->in_item && !p->img_itunes && pf_attr(p->tag, n, "href", buf, sizeof buf)) {
-            pf_norm(p->image, PC_URL, buf, pf_len(buf));
+            pf_norm(p->image, PC_URL, buf, strlen(buf));
             p->img_itunes = p->image[0] != 0;
         }
     }
@@ -877,7 +871,7 @@ void pf_push(pf_parser_t *p, const char *d, unsigned n) {
  * (cut before a split character), no leading dot or space, no trailing dot or space. */
 static void pf_slug(char *out, unsigned cap, const char *title, unsigned max) {
     char tmp[PC_TITLE + 8];
-    unsigned i, o = 0, n = pf_len(title);
+    unsigned i, o = 0, n = strlen(title);
     if (max > cap - 1) max = cap - 1;
     pf_norm(tmp, sizeof tmp, title, n);
     for (i = 0; tmp[i]; ++i) {
@@ -888,7 +882,7 @@ static void pf_slug(char *out, unsigned cap, const char *title, unsigned max) {
     }
     for (i = 0; tmp[i] == '.' || tmp[i] == ' ' || tmp[i] == '-'; ++i) {
     }
-    n = pf_len(tmp);
+    n = strlen(tmp);
     for (; i < n && o < max; ++i) out[o++] = tmp[i];
     if (i < n && ((unsigned char)tmp[i] & 0xc0) == 0x80) {
         while (o && ((unsigned char)out[o - 1] & 0xc0) == 0x80) --o;
@@ -926,11 +920,11 @@ static const char *pf_ext(const pf_item_t *it, char *ext) { /* ext: 8 bytes (the
         ext[n] = 0;
         return ext;
     }
-    if (pf_is(it->type, pf_len(it->type), "audio/mp4") || pf_is(it->type, pf_len(it->type), "audio/x-m4a") ||
-        pf_is(it->type, pf_len(it->type), "audio/m4a"))
+    if (pf_is(it->type, strlen(it->type), "audio/mp4") || pf_is(it->type, strlen(it->type), "audio/x-m4a") ||
+        pf_is(it->type, strlen(it->type), "audio/m4a"))
         return "m4a";
-    if (pf_is(it->type, pf_len(it->type), "audio/aac")) return "aac";
-    if (pf_is(it->type, pf_len(it->type), "audio/ogg")) return "ogg";
+    if (pf_is(it->type, strlen(it->type), "audio/aac")) return "aac";
+    if (pf_is(it->type, strlen(it->type), "audio/ogg")) return "ogg";
     return "mp3";
 }
 
@@ -948,7 +942,7 @@ static void pf_fname(const pf_item_t *it, char *out, unsigned size) {
         out[o++] = '-', out[o++] = (char)('0' + d / 10), out[o++] = (char)('0' + d % 10);
         out[o++] = ' ';
     }
-    room = PF_MAX_FILE - o - pf_len(ext) - 1;
+    room = PF_MAX_FILE - o - strlen(ext) - 1;
     pf_slug(slug, sizeof slug, it->title, room);
     if (!slug[0]) memcpy(slug, "episode", 8);
     for (k = 0; slug[k] && o + 1 < size; ++k) out[o++] = slug[k];
@@ -959,7 +953,7 @@ static void pf_fname(const pf_item_t *it, char *out, unsigned size) {
 
 /* f with " (n)" before its extension: "2026-10-30 Title.mp3" becomes "2026-10-30 Title (2).mp3". */
 static void pf_numbered(char *f, unsigned size, unsigned n) {
-    unsigned fl = pf_len(f), dot = fl, tl;
+    unsigned fl = strlen(f), dot = fl, tl;
     char tail[12];
     while (dot && f[dot - 1] != '.') --dot;
     dot = dot ? dot - 1 : fl;
@@ -993,7 +987,7 @@ static void pf_app_u(char *out, unsigned *o, unsigned cap, unsigned v) {
 /* Text with white space and control bytes as single spaces: the text formats have no tab or newline inside a value. */
 static void pf_app_plain(char *out, unsigned *o, unsigned cap, const char *s) {
     char tmp[PF_URL];
-    pf_norm(tmp, sizeof tmp, s, pf_len(s));
+    pf_norm(tmp, sizeof tmp, s, strlen(s));
     pf_app(out, o, cap, tmp);
 }
 
@@ -1142,7 +1136,7 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
         const pf_item_t *it = &p->items[k];
         char f[PC_FILE], od[PC_DESC];
         const char *fv = (const char *)0;
-        unsigned fn = 0, gl = pf_len(it->guid), j, tries;
+        unsigned fn = 0, gl = strlen(it->guid), j, tries;
         f[0] = od[0] = 0;
         if (old) { /* an old line with this guid keeps its file name (and its description when the feed has none now) */
             for (q = old; q < stop; q = next) {
@@ -1162,18 +1156,18 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
         if (!f[0]) {
             char base[PC_FILE];
             pf_fname(it, f, sizeof f);
-            memcpy(base, f, pf_len(f) + 1);
+            memcpy(base, f, strlen(f) + 1);
             for (tries = 2; tries < 10;
                  ++tries) { /* two items of one day with one title: a number before the extension */
                 int clash = 0;
                 for (j = 0; j < n; ++j)
-                    if (pf_same(names[j], pf_len(names[j]), f)) clash = 1;
+                    if (pf_same(names[j], strlen(names[j]), f)) clash = 1;
                 if (!clash) break;
-                memcpy(f, base, pf_len(base) + 1);
+                memcpy(f, base, strlen(base) + 1);
                 pf_numbered(f, sizeof f, tries);
             }
         }
-        memcpy(names[n], f, pf_len(f) + 1);
+        memcpy(names[n], f, strlen(f) + 1);
         ++n;
         lo = 0; /* the line is made whole, and added whole: a full buffer never ends in half a line */
         pf_app(ln, &lo, sizeof ln, "g=");
@@ -1205,7 +1199,7 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
             if (!len || q[0] == '#' || !pf_field(q, len, 'f', &fvv, &fnn) || !pf_file_here(dir, fvv, fnn)) continue;
             if (pf_field(q, len, 'g', &v, &vn))
                 for (k = 0; k < (unsigned)p->nitems; ++k)
-                    if (vn == pf_len(p->items[k].guid) && pf_same(v, vn, p->items[k].guid)) listed = 1;
+                    if (vn == strlen(p->items[k].guid) && pf_same(v, vn, p->items[k].guid)) listed = 1;
             if (listed || o + len + 2 >= cap) continue;
             pf_app_n(out, &o, cap, q, len);
             pf_app(out, &o, cap, "\n");

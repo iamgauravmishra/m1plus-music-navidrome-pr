@@ -23,9 +23,9 @@
 Usage: mod_boot.py SRC_WORKDIR OUT_WORKDIR
   OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
-import hashlib, os, struct, sys
+import os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from modlib import clone_workdir, edit_ui, write_keep_mode
+from modlib import clone_workdir, edit_ui, write_keep_mode, sha256
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMAGES = 'rootfs/release/assets/default/raw/images/xx'
@@ -40,7 +40,6 @@ ANIM = 'slide_left(duration=200,easing=cubic_out)'                   # stock scr
 ANIM_DIRS = ('rootfs/release/assets/default/raw/ui/systemset',)
 ANIM_SKIP = ('fwupdate_page.bin', 'fwdownload_page.bin')
 
-def sha256(b): return hashlib.sha256(b).hexdigest()
 def check(ok, msg):
     if not ok: raise SystemExit(f'mod_boot: {msg}')
 

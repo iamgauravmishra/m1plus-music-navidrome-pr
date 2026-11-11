@@ -46,6 +46,7 @@ L_MIN, L_MAX, L_MAX_GREY = 30, 56, 66         # HLS lightness bounds of a prepar
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pod_i18n
+from pod_mix import xorshift32
 LOCALES = pod_i18n.LOCALES
 TEXT = {k: pod_i18n.TEXT[k] for k in pod_i18n.DAILY_KEYS}
 
@@ -54,12 +55,6 @@ def tr(loc, key): return TEXT[key][loc]
 
 
 # ---- the art generator --------------------------------------------------------------------------------------------------------------------
-def xorshift32(x):
-    x &= 0xFFFFFFFF
-    x ^= (x << 13) & 0xFFFFFFFF; x ^= x >> 17; x ^= (x << 5) & 0xFFFFFFFF
-    return x
-
-
 def tone_prep(rgb):
     """A cover's tone made card-ready, in integers (patch/dailymix.c dm_prep is this line by line). HLS with lightness l2 = max + min (0..510) and
     chroma d = max - min: a colourful tone (saturation d / min(l2, 510 - l2) above 0.10) gets at least 0.55 saturation and a lightness in

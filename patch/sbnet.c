@@ -3,6 +3,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "sbnet.h"
+#include "sbapi.h" /* SBA_RESERVE_KB */
 #include "utf8.h"
 #include "common.h"
 #include "curlopts.h"
@@ -555,7 +556,7 @@ static unsigned sbn_write(void *ptr, unsigned size, unsigned nmemb, void *ctx) {
                 s->werr = SBN_W_CARD;
                 return 0;
             }
-            if (free_kb <= 32768) {
+            if (free_kb <= SBA_RESERVE_KB) {
                 s->werr = SBN_W_SPACE;
                 return 0;
             }
@@ -903,7 +904,7 @@ int sbn_download(const char *url, const char *part, const char *final, const cha
         sink->werr = SBN_W_CARD;
         return -1;
     }
-    if (free_kb <= 32768) {
+    if (free_kb <= SBA_RESERVE_KB) {
         sink->werr = SBN_W_SPACE;
         return -1;
     }

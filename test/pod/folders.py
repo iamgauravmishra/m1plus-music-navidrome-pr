@@ -160,15 +160,9 @@ def opened(**kw):
     return m
 
 
-def scroll_to(m, v):
-    m.setword(m.sv + SC_YOFF, v & 0xffffffff)
-    fn, ctx = m.bound[(m.sv, O['EVT_SCROLL'])]
-    m.call(fn, a0=ctx, a1=0, count=80000000)
-
-
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts with their styles, fills) of that frame."""
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SCREEN_Y0 - m.word(m.sv + SC_YOFF)) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['fo_on_paint'], a0=0, a1=ev, count=400000000)

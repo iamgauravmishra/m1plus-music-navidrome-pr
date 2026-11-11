@@ -651,8 +651,8 @@ def gapless_tests(ctx):
 def pin_tests(ctx):
     """The hook's words: stock's in the stock demo, only the two site words changed in the build, the stub as designed, the manifest, and a changed word differs from its pin."""
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     site = pod.NEXTALBUM_SITE
     expect(site == 0x5d5988 and pod.NEXTALBUM_AGAIN == 0x5d5950 and pod.NEXTALBUM_RESUME == 0x5d5990, 'the site is 0x5d5988, the end test 0x5d5950, the resume 0x5d5990')

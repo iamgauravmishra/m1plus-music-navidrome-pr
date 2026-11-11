@@ -23,7 +23,6 @@
 #include "sbsrc.h"
 
 #define NS_ROWS 5
-#define NS_VALUES 3
 /* The value box's right edge in its row (tools/pod_ndserver.py VALUE_RIGHT: the chevron's left edge less the gap). */
 #define NS_VALUE_RIGHT 280
 #define NS_LABEL_X 24 /* the labels' left edge (card inset + padding) */

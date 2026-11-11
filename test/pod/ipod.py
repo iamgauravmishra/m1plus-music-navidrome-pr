@@ -144,7 +144,7 @@ class IM(Machine):
         if not animated and self.call(PSYMS['ip_render_active']):
             self.clock += 301
             self.call(PSYMS['ip_tick'], count=40000000)
-        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        ev = self.paint_event()
         self.texts, self.fills, self.blits, self.text_styles, self.img_ox = [], [], [], [], []
         self.call(PSYMS['ip_on_paint'], a0=0, a1=ev, count=8000000)
         return list(self.texts), list(self.fills), list(self.blits)
@@ -203,10 +203,7 @@ def rows_of(texts): return [t for t, r in sorted(texts, key=lambda tr: tr[1][1])
 
 
 def pc_hash(name):   # patch/pcmodel.c pc_hash: FNV-1a over the lower-cased bytes (a show's key)
-    h = 2166136261
-    for c in name.encode('utf-8'):
-        h = ((h ^ (c + 32 if 65 <= c <= 90 else c)) * 16777619) & 0xffffffff
-    return h or 1
+    return fnv_fold(name) or 1
 
 
 def pc_rows(texts):   # the episode rows: their text is indented for the dot

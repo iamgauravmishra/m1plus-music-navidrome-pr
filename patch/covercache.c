@@ -1400,12 +1400,6 @@ static int art_embedded(const char *track, const char *dst, unsigned px, int asp
     0x600000 /* toolsGetExternCover (0x5eb760, 0x5eb7bc) passes a picture file by its size in bytes: a PNG up to 1 MiB, a JPEG up to 6 MiB */
 #define FL_STOCK_PNG 0x100000
 
-static unsigned fl_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 static int fl_ext(const char *name) { /* the last extension is .jpg, .png or .jpeg, any case */
     const char *dot = (const char *)0;
     for (; *name; ++name)
@@ -1423,14 +1417,14 @@ static int art_folder(const char *track, const char *dst, unsigned px, int aspec
     static const char *const ext[3] = {".png", ".jpg", ".jpeg"};
     char dir[FL_NAME], base[FL_NAME], path[FL_NAME * 2 + 2], want[FL_NAME + 8], (*names)[FL_NAME];
     int rank[FL_MAX], n = 0, i, p, r = 0, done = 0;
-    unsigned len = fl_len(track), slash = len, dot;
+    unsigned len = strlen(track), slash = len, dot;
     void *d;
     char *ent;
     while (slash && track[slash - 1] != '/') --slash;
     if (!slash || slash >= sizeof dir || len - slash >= FL_NAME) goto stock;
     memcpy(dir, track, slash - 1), dir[slash - 1] = 0;
     memcpy(base, track + slash, len - slash + 1);
-    for (dot = fl_len(base); dot && base[dot - 1] != '.'; --dot) {
+    for (dot = strlen(base); dot && base[dot - 1] != '.'; --dot) {
     }
     if (dot) base[dot - 1] = 0; /* the name without its last extension */
     names = calloc(FL_MAX, FL_NAME);
@@ -1442,8 +1436,8 @@ static int art_folder(const char *track, const char *dst, unsigned px, int aspec
     }
     while (n < FL_MAX && (ent = readdir(d)) != (char *)0) {
         const char *name = ent + 11; /* struct dirent: d_type at 10, d_name at 11 */
-        if (ent[10] != 8 || fl_len(name) >= FL_NAME || !fl_ext(name)) continue;
-        memcpy(names[n], name, fl_len(name) + 1);
+        if (ent[10] != 8 || strlen(name) >= FL_NAME || !fl_ext(name)) continue;
+        memcpy(names[n], name, strlen(name) + 1);
         rank[n] = 9; /* the others */
         for (p = 0; p < 9; ++p) {
             if (p < 6)
@@ -1535,7 +1529,7 @@ void cc_clear_bad(void) {
 
 /* The line `name` (with its colon and space) of the record in b, as a pointer to the value, or NULL. */
 static const char *r_field(const char *b, const char *name) {
-    unsigned n = fl_len(name);
+    unsigned n = strlen(name);
     for (; *b; ++b) {
         unsigned i = 0;
         while (i < n && b[i] == name[i]) ++i;

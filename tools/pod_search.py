@@ -18,7 +18,6 @@ FIELD_PX = 18
 CHIP_RGB, CHIP_INK, CHIP_ON_INK, CHIP_ON_RGB = INK_RGB, INK_RGB, SURFACE_RGB, '#E5E5EA'   # the selected chip: a light grey pill with dark text
 SEP_RGB = RAISED_RGB                                                                         # the line under the chips
 TITLE_RGB, HAIR_RGB, PRESS_RGB = INK_RGB, '#222222', '#333334'       # the rows (the library lists' own: LIST_HAIR, LIST_PRESS of offsets.inc)
-ART_BG = THUMB_RGB                                                                         # the thumbnail's placeholder grey
 CHIPS = ('Top Results', 'Artists', 'Albums', 'Songs', 'Playlists')
 KINDS = ('Artist', 'Album', 'Song', 'Playlist')
 

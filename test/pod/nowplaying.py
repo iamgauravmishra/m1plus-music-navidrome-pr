@@ -159,7 +159,7 @@ def run(ctx):
     expect = ctx.expect
     raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
     stock = open(os.path.join(paths.find_stock() or os.path.join(os.path.dirname(WORK), 'stock'), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    built = built_demo_bytes()
     word = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
 
     # ------------------------------------------------------------------ the hook is installed as pinned
@@ -678,7 +678,6 @@ def run(ctx):
         m.jpeg('/tmp/coverpic.jpg', data=bytes(range(256)) * 256, pix=bytes([200, 40, 40, 255]) * 4, size=(2, 2)); m.init()   # 64 KiB
         return m
     def reads(m): return sum(1 for c in m.calls if c[0] == 'fopen' and c[1] == '/tmp/coverpic.jpg')
-    def bytes_read(m): return sum(len(m.blobs['/tmp/coverpic.jpg']) for c in m.calls if c[0] == 'fopen')
     m = big_run().count(); n = len(m.styles)
     m.tick(count=50000000)
     steady = m.icount

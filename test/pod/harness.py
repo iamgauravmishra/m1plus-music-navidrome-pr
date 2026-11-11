@@ -6,7 +6,7 @@ Modelled on q2-pod's test/patch.py.
 Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/manifest.json).
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
 """
-import importlib.util, json, math, os, re, struct, sys, unicodedata
+import functools, importlib.util, json, math, os, re, struct, sys, unicodedata
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK, UC_HOOK_INTR
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0, UC_MIPS_REG_F12, UC_MIPS_REG_F14,
@@ -205,7 +205,7 @@ _IMAGES = {}
 def _demo_image():
     """(the built demo's bytes, its LOAD segments as (vaddr, file offset, file size, memory size)), read once per path: every Machine loads the same immutable image."""
     if DEMO not in _IMAGES:
-        data = open(DEMO, 'rb').read()
+        data = built_demo_bytes()
         _IMAGES[DEMO] = data, [(v, o, f, m) for _, (t, o, v, _, f, m, _, _) in pod.segments(data) if t == 1]
     return _IMAGES[DEMO]
 
@@ -380,6 +380,11 @@ class Machine:
     def word(self, a): return struct.unpack('<I', self.u.mem_read(a, 4))[0]
     def s32(self, a): return struct.unpack('<i', self.u.mem_read(a, 4))[0]
     def setword(self, a, v): self.u.mem_write(a, struct.pack('<I', v & 0xffffffff))
+
+    def paint_event(self):
+        """A zeroed 0x40 byte event whose paint canvas is the machine's own canvas; returns its address."""
+        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        return ev
 
     def icon(self, name):
         """A fake widget whose +W_NAME word points at the name string (what the dispatcher reads)."""
@@ -1935,6 +1940,20 @@ def fnv(h, s):
     return h * 16777619 & 0xffffffff
 
 
+def fnv_plain(s):
+    """FNV-1a of the bytes of s (a str is taken as UTF-8) from the seed, no trailing multiplication (patch/fnv.h without the NUL: the sbapi ids, the guid, the table checksums)."""
+    h = O['FNV_SEED']
+    for c in (s.encode() if isinstance(s, str) else s): h = (h ^ c) * 16777619 & 0xffffffff
+    return h
+
+
+def fnv_fold(s):
+    """FNV-1a from the seed over the UTF-8 bytes of s with ASCII A-Z folded to lower case, no trailing multiplication (cmap_hash, pc_hash)."""
+    h = O['FNV_SEED']
+    for c in s.encode(): h = (h ^ (c + 32 if 65 <= c <= 90 else c)) * 16777619 & 0xffffffff
+    return h
+
+
 def album_key(artist, album):
     """The cover cache's key of an album: FNV-1a of artist then album, never 0 (patch/covercache.c)."""
     return fnv(fnv(O['FNV_SEED'], artist), album) or 1
@@ -2097,6 +2116,18 @@ def put_value(m, v): m.setword(_pos(0), v)
 def put_off(m, v): m.setword(_pos(1), v)
 
 
+@functools.cache
+def stock_demo_bytes():
+    """The stock demo binary (read once per process)."""
+    return open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+
+
+@functools.cache
+def built_demo_bytes():
+    """The built demo binary of the work directory (read once per process; test/patch.py initialises the harness once)."""
+    return open(DEMO, 'rb').read()
+
+
 def paint(m):
     """One EVT_AFTER_PAINT on the touch layer, as stock's widget_paint dispatches it."""
     event = m.alloc(0x40); m.u.mem_write(event, bytes(0x40))
@@ -2137,11 +2168,45 @@ def click(m, name):
 def toasts(m): return [c[1] for c in m.calls if c[0] == 'toast']
 
 
+def scroll_to(m, v):
+    """The scroll_view's offset to v, and the page told as the stock setter's EVT_SCROLL tells it."""
+    m.setword(m.sv + O['SC_YOFF'], v & 0xffffffff)
+    fn, ctx = m.bound[(m.sv, O['EVT_SCROLL'])]
+    m.call(fn, a0=ctx, a1=0, count=80000000)
+
+
+def tone_word(rgb):
+    import mod_nowplaying as mn
+    t = mn.tone(*rgb)
+    return 0xff000000 | t[0] | t[1] << 8 | t[2] << 16
+
+
+def said(m, name):
+    """The text of a named widget as the user reads it (None when it has none)."""
+    t = m.wtext.get(m.widgets[name])
+    return None if t is None else t.encode('latin-1').decode('utf-8')
+
+
+def pixel(m, bmp, x, y):
+    data, w, h = m.bitmaps[bmp]
+    return struct.unpack('<I', m.u.mem_read(data + (y * w + x) * 4, 4))[0]
+
+
+def body(n):
+    """n bytes that are different everywhere (a resume that is off by one shows)."""
+    return bytes((i * 7 + i // 251 + i // 65536) & 255 for i in range(n))
+
+
+def work(m, th):
+    m.call(th[0], a0=th[1], count=1 << 40)
+    return list(m.calls)
+
+
 def undo(s):
     """A mocked text as the user reads it: UTF-8 bytes read as latin-1 (the payload's own strings come back twice over from the mocked translation)."""
     for _ in range(2):
         try: s = s.encode('latin-1').decode('utf-8')
-        except (UnicodeDecodeError, UnicodeEncodeError): break
+        except (UnicodeDecodeError, UnicodeEncodeError, AttributeError): break
     return s
 
 

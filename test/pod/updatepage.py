@@ -651,7 +651,7 @@ def notes_page(m):
 
 def rn_paint(m, off=0):
     m.setword(m.sv + 0x84, off)
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.texts, m.text_styles = [], []
     fn_, ctx = m.bound[(m.rview, O['EVT_AFTER_PAINT'])]
     m.call(fn_, a0=ctx, a1=ev, count=40000000)

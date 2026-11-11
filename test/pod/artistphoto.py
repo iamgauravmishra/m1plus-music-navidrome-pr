@@ -327,7 +327,7 @@ def home_tests(ctx):
     m = machine(); new = HC.scan(m); s = build_state(m)
     expect(s['running'] == 1 and s['mode'] == 0 and s['total'] == 3 and HC.texts(m, new) == ['Preparing artist photos 0/3'] and HC.pill_up(m), f'three artists, three jobs ({s["total"]}, {HC.texts(m, new)})')
     expect(sorted(k for k, _ in jobs(m)) == sorted(key(m, f'Artist {i}') for i in range(3)) and all(f == 0 for _, f in jobs(m)), 'one job each, not forced')
-    expect(('fopen', PUR + '.tmp', 'w') in new, 'the scan writes the purity map when its snapshot is whole (before the worker starts; this machine\'s stdio does not keep the bytes)')
+    expect(('rename', PUR + '.tmp', PUR) in new and purity_map(m), 'the scan writes the purity map when its snapshot is whole (before the worker starts)')
     m.call(PSYMS['cc_worker'], count=50000000)
     new = HC.fired(m, 'hc_on_poll', 40000000)
     expect(not HC.pill_up(m) and m.fs.get(HC.STAMP, b'').decode().startswith('covers 3 '), f'done: the line is hidden and the covers line written ({m.fs.get(HC.STAMP)})')

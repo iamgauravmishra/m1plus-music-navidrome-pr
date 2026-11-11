@@ -71,12 +71,19 @@ def versions():
         except md.PackageNotFoundError: out.append(f'{d}=none')
     return H(*out)
 
+# The steps (and the modules they import) that read anything under patch/ (checked per step in 2026-11: cdefs.defines of
+# patch/offsets.inc in palette.py, ah_ink.py and mod_lockscreen.py; patch/webapi.c in mod_webapp.py; mod_player and pod read it all).
+# palette is imported by mod_icons, so mod_icons, mod_overlays, mod_nowplaying and mod_lockscreen read it too. A step not in this set
+# reads only the tree it is given, assets/ and tools/. When unsure whether a new step reads patch/, add it here.
+PATCH_STEPS = frozenset({'mod_nowplaying', 'mod_lockscreen', 'mod_icons', 'mod_overlays', 'mod_webapp', 'mod_player'})
+
 @functools.cache  # once per build: no stage writes into assets/, patch/ or tools/
-def data_sha():
-    """The repo's data inputs: assets/, patch/ and the non-Python files in tools/ (coarse on purpose)."""
+def data_sha(with_patch=True):
+    """The repo's data inputs: assets/, patch/ (unless with_patch is false) and the non-Python files in tools/ (coarse on purpose)."""
     extra = [x for f in sorted(os.listdir(TOOLS)) if os.path.isfile(os.path.join(TOOLS, f)) and not f.endswith('.py')
              for x in (f, file_sha(os.path.join(TOOLS, f)))]
-    return H(dir_sha(os.path.join(paths.ROOT, 'assets')), dir_sha(os.path.join(paths.ROOT, 'patch')), *extra)
+    patch = [dir_sha(os.path.join(paths.ROOT, 'patch'))] if with_patch else []
+    return H(dir_sha(os.path.join(paths.ROOT, 'assets')), *patch, *extra)
 
 def base_key(zip_sha, *modules):
     # Battery art and space recovery use only Python code and stock. The font stage
@@ -84,7 +91,7 @@ def base_key(zip_sha, *modules):
     return H('base', zip_sha, code_sha(*modules), dir_sha(os.path.join(paths.ROOT, 'assets/fonts')), versions())
 
 def step_key(prev, module, args):
-    return H('step', prev, code_sha(module), json.dumps(args), data_sha(), versions())
+    return H('step', prev, code_sha(module), json.dumps(args), data_sha(module in PATCH_STEPS), versions())
 
 # ---------------------------------------------------------------- trees and deltas
 def snap(root):

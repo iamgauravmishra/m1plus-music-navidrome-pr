@@ -18,12 +18,6 @@ char up_repo[48] = M1PLUS_REPO;
 char up_about[UP_TAG] = M1PLUS_TAG;
 char up_base[UP_BASE] __attribute__((section(".scratch")));
 
-static unsigned up_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 int up_parse(const char *s, unsigned v[3]) {
     int part, digits;
     unsigned n;
@@ -67,7 +61,7 @@ int up_redirect_tag(const char *loc, const char *repo, char *out, unsigned size)
     for (i = 0; head[i]; ++i)
         if (loc[i] != head[i]) return 0;
     loc += i;
-    n = up_len(repo);
+    n = strlen(repo);
     for (i = 0; i < n; ++i)
         if (loc[i] != repo[i]) return 0;
     loc += n;
@@ -75,7 +69,7 @@ int up_redirect_tag(const char *loc, const char *repo, char *out, unsigned size)
         if (loc[i] != mid[i]) return 0;
     loc += i;
     if (!up_parse(loc, v)) return 0;
-    n = up_len(loc);
+    n = strlen(loc);
     for (i = 0; i <= n; ++i) out[i] = loc[i];
     return 1;
 }
@@ -124,7 +118,7 @@ int up_chan_tag(const char *loc, const char *base, char *out, unsigned size) {
     static const char mid[] = "/releases/tag/";
     unsigned v[3], i, n;
     if (!loc || !base || !out || size < UP_TAG) return 0;
-    n = up_len(base);
+    n = strlen(base);
     for (i = 0; i < n; ++i)
         if (loc[i] != base[i]) return 0;
     loc += n;
@@ -132,7 +126,7 @@ int up_chan_tag(const char *loc, const char *base, char *out, unsigned size) {
         if (loc[i] != mid[i]) return 0;
     loc += i;
     if (!up_parse(loc, v) && !up_devtag(loc)) return 0;
-    n = up_len(loc);
+    n = strlen(loc);
     for (i = 0; i <= n; ++i) out[i] = loc[i];
     return 1;
 }

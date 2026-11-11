@@ -36,7 +36,7 @@ import argparse, hashlib, io, math, os, re, shutil, stat, subprocess, sys, tarfi
 import xml.etree.ElementTree as ET
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
-from modlib import clone_workdir, edit_ui, write_keep_mode
+from modlib import clone_workdir, edit_ui, write_keep_mode, sha256, load_pins as _load_pins, stock_img_dir, write_pins
 import pod_i18n
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1734,30 +1734,19 @@ def added_rels(stock_rootfs=None, *args):
     """Rootfs-relative paths of the files this step adds (fwtool --allow-added): the M1+ Music row icons."""
     return [f'{IMG.removeprefix("rootfs/")}/{n}.png' for n in pod_names()]
 
-def sha256(b): return hashlib.sha256(b).hexdigest()
-
-def load_pins():
-    pins = {}
-    for line in open(_PIN_FILE):
-        if line.strip() and not line.startswith('#'):
-            h, n = line.split(); pins[n] = h
-    return pins
+def load_pins(): return _load_pins(_PIN_FILE)
 
 def read_png(path):
     from PIL import Image
     im = Image.open(path); im.load(); return im
 
 def find_stock_img():
-    stock = paths.find_stock(paths.ZIP)
-    if not stock: sys.exit('no unpacked stock tree found (run tools/build.py once)')
-    return os.path.join(stock, IMG)
+    return stock_img_dir(IMG)
 
 # ---------------------------------------------------------------- commands
 def cmd_pins():
     d = find_stock_img()
-    with open(_PIN_FILE, 'w') as o:
-        o.write('# SHA-256 of the stock V2.1 images/xx files tools/mod_icons.py replaces (tools/mod_icons.py --pins)\n')
-        for n in replaced_names(): o.write(f'{sha256(open(os.path.join(d, n + ".png"), "rb").read())}  {n}\n')
+    write_pins(_PIN_FILE, '# SHA-256 of the stock V2.1 images/xx files tools/mod_icons.py replaces (tools/mod_icons.py --pins)\n', d, replaced_names())
 
 def cmd_generate():
     d = find_stock_img(); sizes = {}

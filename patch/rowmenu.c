@@ -17,8 +17,6 @@
 #include "songinfo.h"
 #include "rowmenu.h"
 
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-
 int rowmenu_zone_x(int right) { return right - RM_MORE_W; }
 
 /* The "..." as a bitmap: the image rm_dots is white on transparent (cc_decode flattens it over black, so the red channel is the coverage), the bitmap's alpha is that coverage and its
@@ -224,10 +222,6 @@ void rowmenu_paint(void *canvas, const rowmenu_t *rm, int right, int flush, int 
     dst[0] = flush ? right - RM_DOTS_PX : rowmenu_zone_x(right) + (RM_MORE_W - RM_DOTS_PX) / 2, dst[1] = cy + top,
     dst[2] = RM_DOTS_PX, dst[3] = bottom - top;
     canvas_draw_image(canvas, rm->dots, src, dst);
-}
-
-int rowmenu_open(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add) {
-    return rowmenu_open_src(rm, row, rec, add, (const lib_src_t *)0);
 }
 
 /* The third row's words and glyph: Add to Playlist for the stock library; for a source Download, Cancel Download (waiting or running) or Remove Download (on the card). */

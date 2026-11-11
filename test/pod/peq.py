@@ -850,7 +850,7 @@ def ppage(files, name, bitmap_ok=True, drop=(), count=False):
     return m
 
 
-def u8(t): return t.encode('latin-1').decode('utf-8')   # (the harness reads C strings as latin-1)
+u8 = utf8   # (the harness reads C strings as latin-1)
 def ptexts(m, base, i): return [u8(c[2]) for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'{base}{i}']]
 def ptext(m, name): return [u8(c[2]) for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[name]]
 def pbitmap(m):
@@ -1589,7 +1589,6 @@ def presets_page_tests(ctx):
 
 
 # ---- Preset editing: the band page (patch/peqband.c) with its unsaved-changes dialog, and the Preset page's Save, Save As, Revert and Rename (patch/peqpage.c)
-STAMPED = b'# AutoEq: oratory1990/over-ear/Sennheiser HD 600\n' + AUTOEQ
 BALANCED = b'Preamp: -3 dB\nChannel: L\nPreamp: -2 dB\nChannel: all\nFilter 1: ON PK Fc 1000 Hz Gain 3 dB Q 1\nChannel: R\nFilter 2: ON PK Fc 2000 Hz Gain -4 dB Q 2\nChannel: all\nFilter 3: ON LSC Fc 100 Hz Gain 2 dB Q 0.7\n'
 BAND_NAMES = 'pod_graph pod_gr_top pod_gr_bot pod_seg pod_hsl pod_scrollview label_title btn_bprev btn_bnext btn_return btn_backtoplayer pq_scrim pq_card pq_name pq_item0 pq_item1 pq_item2 pq_item3 bk_scrim bk_card bk_title bk_range bk_val bk_unit bk_caret bk_unitk bk_sign bk_dot bk_del bk_cancel bk_done'.split() + [f'bk_k{d}' for d in range(10)] + [f'pod_seg_l{k}' for k in range(3)] + [f'pod_hs_v{k}' for k in range(3)]
 HD = 'Sennheiser HD 600.txt'
@@ -1731,7 +1730,7 @@ def edit_band_tests(ctx):
     # ---- a drag on the Gain slider plays at once and is saved at most every 150 ms, and once more at the release
     m.hist.clear()
     pev(m, m.bw['pod_hsl'], 'EVT_POINTER_DOWN', TRK0 + px(0.5), 88, 1000)
-    expect(('widget_grab', m.window, m.bw['pod_hsl']) in m.hist or ('widget_grab',) == m.hist and False or any(c[0] == 'widget_grab' and c[2] == m.bw['pod_hsl'] for c in m.hist), 'a touch on a track grabs the touch')
+    expect(('widget_grab', m.window, m.bw['pod_hsl']) in m.hist or any(c[0] == 'widget_grab' and c[2] == m.bw['pod_hsl'] for c in m.hist), 'a touch on a track grabs the touch')
     expect(rec_mode(m) == 1 and NAME_OF(m.fs[STATE]) == HD.encode() and abs(rec_preset(m)['bands'][1][3] - gain_of(0.5)) < 1e-9 and rec_preset(m)['bands'][0] == base['bands'][0], f'the first touch sets the gain ({gain_of(0.5)}) and plays it: the record is the preset of this file with that band changed')
     n_save = hsaves(m)
     pev(m, m.bw['pod_hsl'], 'EVT_POINTER_MOVE', TRK0 + px(0.55), 88, 1040)
@@ -2825,8 +2824,8 @@ def layout_tenband_tests(ctx):
 
 def retire_tests(ctx):
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     row, stub = pod.EQ_ROW, PSYMS['pod_eq_site']
     expect(all(w(stock_demo, a) == old and (a in (row, row + 4) or w(built, a) == old) for a, old, _ in pod.EQ_PINS), 'every pinned word of the Play Settings Equalizer row is stock\'s in the stock demo and unchanged in the build (but the two edited)')

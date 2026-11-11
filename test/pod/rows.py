@@ -195,7 +195,7 @@ def rows_tests(expect):
     target = PSYMS['compact_set_row_layout']
     # 37. Pins: every edit as rows.json says, on the stock word, in the built demo; nothing else.
     stock_demo = open(os.path.join(paths.find_stock() or os.path.join(os.path.dirname(WORK), 'stock'), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     kinds = {k: sum(e[3] == k for e in edits) for k in ('immediate', 'call', 'nop', 'icon')}
     expect(kinds == {'immediate': sum(len(g['sites']) for g in J['immediates']),

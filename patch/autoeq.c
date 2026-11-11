@@ -106,12 +106,6 @@ static struct {
 static int ae_off(void) { return ae.sv ? I(ae.sv, SC_YOFF) : 0; }
 static void ae_redraw(void) { widget_invalidate_force(ae.sv, (void *)0); }
 
-static unsigned ae_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 static int ae_same(const char *a, const char *b, unsigned n) { /* the first n bytes are equal */
     unsigned i;
     for (i = 0; i < n; ++i)
@@ -249,7 +243,7 @@ __attribute__((noinline)) int ae_parse(const char *l, unsigned n, ae_ent *e) {
             unsigned char f;
         } kinds[] = {{"over-ear", 1}, {"in-ear", 2}, {"earbud", 3}};
         for (k = 0; k < 3; ++k) {
-            unsigned kn = ae_len(kinds[k].s);
+            unsigned kn = strlen(kinds[k].s);
             if (dn >= kn && ae_same(dir + dn - kn, kinds[k].s, kn)) e->form = kinds[k].f;
         }
     }
@@ -271,7 +265,7 @@ static void ae_set_terms(const char *q) {
         if (o < AE_TERM - 1) ae.term[t][o++] = (char)ae_lower((unsigned char)*q);
     }
     ae.nterms = o ? t + 1 : t;
-    for (t = 0; t < ae.nterms; ++t) ae.qn += (int)ae_len(ae.term[t]) + (t ? 1 : 0);
+    for (t = 0; t < ae.nterms; ++t) ae.qn += (int)strlen(ae.term[t]) + (t ? 1 : 0);
 }
 
 static int ae_has(const char *name, unsigned n,
@@ -287,7 +281,7 @@ static int ae_has(const char *name, unsigned n,
 
 /* The tier of a name that holds every word: 0 it is the whole query (the words joined by single spaces), 1 it starts with the first word, 2 otherwise. */
 static int ae_tier(const char *name) {
-    unsigned n = ae_len(name), i, k = 0;
+    unsigned n = strlen(name), i, k = 0;
     int t;
     if ((int)n == ae.qn) {
         for (t = 0, i = 0; t < ae.nterms; ++t) {
@@ -317,7 +311,7 @@ static void ae_consider(const char *l, unsigned n) {
         if (!ae_has(l + 3, i - 3, ae.term[k])) return;
     if (!ae_parse(l, n, &t)) return;
     for (k = 0; k < ae.nterms; ++k)
-        if (!ae_has(t.name, ae_len(t.name), ae.term[k])) return; /* (the name as kept: cut at 63 bytes) */
+        if (!ae_has(t.name, strlen(t.name), ae.term[k])) return; /* (the name as kept: cut at 63 bytes) */
     tier = ae_tier(t.name);
     for (pos = ae.nres; pos > 0 && ae.rows[pos - 1].e.tier > tier; --pos) {
     }
@@ -364,7 +358,7 @@ static void ae_cand(const ae_ent *e, int k, char *out) {
         snprintf(suf, sizeof suf, " (%s)", e->src);
     else if (k > 1)
         snprintf(suf, sizeof suf, " (%s %d)", e->src, k);
-    room = PEQ_NAME - 1 - 4 - ae_len(suf);
+    room = PEQ_NAME - 1 - 4 - strlen(suf);
     for (i = 0; e->name[i] && o < room; ++i) {
         unsigned char c = (unsigned char)e->name[i];
         if (c < ' ' || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' ||
@@ -389,7 +383,7 @@ static int ae_stamped(const char *file, const ae_ent *e) { /* the file's first l
     unsigned w;
     snprintf(path, sizeof path, "%s/%s", PEQ_DIR, file);
     ae_stamp(e, want, sizeof want);
-    w = ae_len(want);
+    w = strlen(want);
     fd = open(path, O_RDONLY, 0);
     if (fd < 0) return 0;
     n = read(fd, buf, sizeof buf);
@@ -914,7 +908,7 @@ int autoeq_open(void) {
         const char *h = TR("Try Again");
         float f;
         memset(ae.hint, 0, sizeof ae.hint);
-        tk_utf8_to_utf16_ex(h, ae_len(h) < 40 ? ae_len(h) : 40, ae.hint, 23);
+        tk_utf8_to_utf16_ex(h, strlen(h) < 40 ? strlen(h) : 40, ae.hint, 23);
         while (ae.hint[ae.hint_n]) ae.hint_n++;
         f = widget_measure_text(ae.st_sub, ae.hint);
         ae.hint_w = (unsigned)(f > 0.0f ? (int)(f + 0.999f) : ae.hint_n * 9);

@@ -103,9 +103,8 @@ def target(m, root, x, y): return stock_target(m, root, x, y)[-1]
 
 def hook_tests(ctx):
     expect = ctx.expect
-    import paths
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock = stock_demo_bytes()
+    built = built_demo_bytes()
     word = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
 
     # -- 0. the hook, its pins
@@ -221,8 +220,7 @@ def layout_tests(ctx):
 
 def life_tests(ctx):
     expect = ctx.expect
-    import paths
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    stock = stock_demo_bytes()
     w = lambda a: struct.unpack_from('<I', stock, pod.fileoff(stock, a))[0]
 
     # -- 7. nothing of stock's page code moves a widget again: the refresh, the 20 ms timer, the swipe and the button handlers (0x53f1a0..0x53feac) reach no geometry or style call,
@@ -600,7 +598,7 @@ def setting_tests(ctx):
 
     def paint(m, off=0):
         m.setword(m.sv + 0x84, off)
-        ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+        ev = m.paint_event()
         m.texts, m.text_styles = [], []
         fn_, ctx = m.bound[(m.widgets['rn_view'], O['EVT_AFTER_PAINT'])]
         m.call(fn_, a0=ctx, a1=ev, count=40000000)
@@ -849,9 +847,8 @@ def wallpaper_tests(ctx):
 def redirect_tests(ctx):
     """The Display page's Lock Screen row (stock's click handler 0x4a5c10, case 2) opens our Lock Screen page: the pinned two-word edit, the stub, the fallbacks and the Display page fresh or restacked."""
     expect = ctx.expect
-    import paths
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     site, stub = pod.LOCKROW, PSYMS['pod_lock_site']
     expect(site == 0x4a5ca8 and all(w(stock, a) == old and (a in (site, site + 4) or w(built, a) == old) for a, old, _ in pod.LOCKROW_PINS),
@@ -899,11 +896,11 @@ def redirect_tests(ctx):
 def date_tests(ctx):
     """The date line (docs/modules/lockscreen.md "The date"): demo's formatter run for real on the built demo in every language, against the model the preview draws with."""
     expect = ctx.expect
-    import datetime, paths
+    import datetime
     import pod_i18n
     import preview_lockscreen as PL
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock = stock_demo_bytes()
+    built = built_demo_bytes()
     at = lambda b, a, n: bytes(b[pod.fileoff(b, a):pod.fileoff(b, a) + n])
     FMT, KEY = pod.FUNCTIONS['digit_clock_set_format'][2], pod_i18n.LOCK_DATE_KEY
 

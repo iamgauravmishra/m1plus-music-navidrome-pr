@@ -223,6 +223,14 @@ extern int pod_confirm_dialog(
 extern int homecover_clear(
     void); /* Settings > Developer > Clear Cover Cache, after its confirm: 1 under way, 0 the cover worker is busy */
 extern void pod_toast(const char *text); /* patch/shuffle.c */
+extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: 0 .. n - 1, the shuffle generator (seeded once) */
+extern void pod_set_mode(
+    int mode); /* patch/shuffle.c: the stock play mode, set as the Play settings page does (the queue is reordered now) */
+extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
+extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern int pod_confirm_code(
+    const char
+        *text); /* patch/m1plus.c: the stock confirm dialog's raw result (CONFIRM_YES 0xa, btn_cancel 4, else 0) */
 extern int pod_play_mode(
     void); /* patch/shuffle.c: the play mode as shown (2 while Shuffle is on, whatever stock's mode is), else stock's */
 extern int pod_shuffle_on(void); /* the Shuffle flag */

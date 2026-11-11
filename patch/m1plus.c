@@ -130,7 +130,6 @@ extern int folders_open(
     int home); /* patch/folders.c: Folders, the card's folders and audio files; a window that will not open leaves the stock folder_page through the Home tile home */
 extern int songs_open_list(
     int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
-extern void menu_arrange(void *win, int extras); /* patch/menu.c: the menu / Extras rows as the saved list says */
 extern void menu_custom_opened(void *win); /* patch/menu.c: the Main Menu page's switches and arrows */
 extern void pulldown_page_opened(void *win); /* patch/pulldown.c: the Pull-down page's switches and arrows */
 extern void menu_extras_opened(void *win); /* patch/menu.c: the Settings > Extras page's switches */

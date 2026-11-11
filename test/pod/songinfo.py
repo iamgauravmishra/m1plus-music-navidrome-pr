@@ -11,11 +11,7 @@ WIDGETS = ('gi_view', 'img_nb_fade', 'label_head', 'label_sub', 'label_key', 'la
 SC_YOFF = O['SC_YOFF']
 
 
-def u8(s):
-    for _ in range(2):
-        try: s = s.encode('latin-1').decode('utf-8')
-        except (UnicodeDecodeError, UnicodeEncodeError, AttributeError): break
-    return s
+u8 = undo
 
 
 def flac(rate=44100, bits=16, channels=2, total=44100 * 185):
@@ -69,7 +65,7 @@ def open_page(m, rec=None):
 def paint(m, off=0):
     """One EVT_AFTER_PAINT of the content view at scroll offset off: [(style, text, x, y, w)]."""
     m.setword(m.sv + SC_YOFF, off)
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.texts.clear(); m.text_styles.clear(); m.blits.clear()
     fn, c = m.bound[(m.widgets['gi_view'], O['EVT_AFTER_PAINT'])]
     m.call(fn, a0=c, a1=ev, count=40000000)

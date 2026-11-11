@@ -20,8 +20,7 @@ def table(entries, magic=MAGIC, count=None, check=None, sort=True):
     ents = [((key(p) if isinstance(p, str) else p), s, t) for p, s, t in entries]
     if sort: ents.sort()
     body = b''.join(struct.pack('<III', *e) for e in ents)
-    h = 2166136261
-    for c in body: h = (h ^ c) * 16777619 & 0xffffffff
+    h = fnv_plain(body)
     return struct.pack('<III', magic, len(ents) if count is None else count, h if check is None else check) + body
 
 
@@ -30,8 +29,7 @@ def parse(data):
     if len(data) < 12 or (len(data) - 12) % 12: return None
     magic, n, check = struct.unpack_from('<III', data)
     body = data[12:]
-    h = 2166136261
-    for c in body: h = (h ^ c) * 16777619 & 0xffffffff
+    h = fnv_plain(body)
     ents = [struct.unpack_from('<III', body, 12 * i) for i in range(len(body) // 12)]
     ok = magic == MAGIC and n == len(ents) and check == h and all(ents[i][0] < ents[i + 1][0] for i in range(len(ents) - 1))
     return ents if ok else None

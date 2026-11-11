@@ -10,7 +10,6 @@ from harness import *   # noqa: F401,F403  (test/patch.py initialises the harnes
 
 KILL = '/mnt/mmc/m1plus-off'
 SET_TZ, ROW = pod.FUNCTIONS['toolsSetTimeZone'][2], pod.FUNCTIONS['timezone_listitem_layout'][2]
-STOCK_RESUME = tz.SELECT + 12
 STOCK_ZONES = ('Pacific/Kwajalein', 'Pacific/Midway', 'Pacific/Honolulu', 'America/Anchorage', 'America/Tijuana', 'America/Denver', 'America/Mexico_City', 'America/New_York',
                'Canada/Atlantic', 'America/St_Johns', 'America/Argentina/Buenos_Aires', 'Atlantic/Azores', 'Europe/London', 'Europe/Amsterdam', 'Europe/Bucharest', 'Asia/Kuwait',
                'Asia/Tehran', 'Asia/Muscat', 'Asia/Kabul', 'Asia/Karachi', 'Asia/Almaty', 'Asia/Bangkok', 'Asia/Shanghai', 'Asia/Tokyo', 'Australia/Adelaide', 'Australia/Sydney',
@@ -52,8 +51,8 @@ class TZM(Machine):
 
 def run(ctx):
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     n = tz.COUNT
 

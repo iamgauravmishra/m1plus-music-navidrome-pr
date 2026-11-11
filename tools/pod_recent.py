@@ -14,20 +14,15 @@ most MAX lines of exactly six fields, non-zero ids and cover keys (no id twice),
 every line ended by a newline, names under STR bytes and paths under PATH, the whole file at most FILE_MAX bytes. Anything else is an empty list. Written only when the
 most recent album changes (and once more when a cover key is resolved).
 """
+import os, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pod_mix
 MAGIC = b'M1R2\n'
 MAX = 6            # patch/offsets.inc RC_MAX
 STR = 96           # RC_STR: bytes of a name with its NUL
 PATH = 256         # RC_PATH
 FILE_MAX = 3072    # RC_FILE_MAX
-FNV_SEED = 2166136261
-
-
-def identity(album):
-    """rc_id: the album title (str or UTF-8 bytes) folded to lower case ASCII, FNV-1a, never 0."""
-    b = album.encode('utf-8') if isinstance(album, str) else album
-    h = FNV_SEED
-    for c in b: h = (h ^ (c + 32 if 65 <= c <= 90 else c)) * 16777619 & 0xffffffff
-    return h or 1
+identity = pod_mix.fold_hash   # rc_id: the album title (str or UTF-8 bytes) folded to lower case ASCII, FNV-1a, never 0
 
 
 def _clean(b):

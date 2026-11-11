@@ -23,9 +23,11 @@ by value/SHA before anything is written.
 
 Usage: pod.py WORKDIR
 """
-import argparse, concurrent.futures, hashlib, io, json, os, pathlib, re, stat, struct, subprocess, sys
+import argparse, concurrent.futures, io, json, os, pathlib, re, stat, struct, subprocess, sys
 from elftools.elf.elffile import ELFFile
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+import modlib
+from modlib import sha256 as sha
 import autotime, coex, palette, pcregion, pod_pages, pod_ui, textgamma, themeoff, timezones
 from build import TAG, VERSION, REPO, about   # the About row of the iPod page shows about(tag) (patch/m1plus.c M1PLUS_TAG)
 
@@ -1436,9 +1438,7 @@ PLAYMORE_PINS = (   # (address, stock word, what it proves)
 def patch_playmore(image, ps, payload_len):
     target = ps['m1plus_playmore_init']
     check(BASE <= target < BASE + payload_len, 'playmore entry symbol outside payload')
-    for a, old, what in PLAYMORE_PINS:
-        got = struct.unpack_from('<I', image, fileoff(image, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(image, PLAYMORE_PINS)
     hook(image, PLAYMORE_INIT, PLAYMORE_INIT_PROLOGUE, target, 'dialog_playmore_dialog_init')
 
 
@@ -1489,12 +1489,8 @@ PULLDOWN_SITE_WORDS = ((PULLDOWN_OPEN_SITES[0], 0x0411113a), (PULLDOWN_OPEN_SITE
 def patch_pulldown(image, ps, payload_len):
     target = ps['m1plus_pulldown_init']
     check(BASE <= target < BASE + payload_len, 'pulldown entry symbol outside payload')
-    for a, old, what in PULLDOWN_PINS:
-        got = struct.unpack_from('<I', image, fileoff(image, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
-    for a, old in PULLDOWN_SITE_WORDS:
-        got = struct.unpack_from('<I', image, fileoff(image, a))[0]
-        check(got == old, f'{a:#x} (on_wm_tsmove_fun: bal navigator_to): {got:#010x} != pinned {old:#010x}')
+    check_pins(image, PULLDOWN_PINS)
+    check_pins(image, [(a, old, 'on_wm_tsmove_fun: bal navigator_to') for a, old in PULLDOWN_SITE_WORDS])
     hook(image, PULLDOWN_INIT, PULLDOWN_INIT_PROLOGUE, target, 'dialog_dropdown_dialog_init')
     check(BASE <= ps['pd_open_settings'] < BASE + payload_len, 'pull-down page open symbol outside payload')
     for a in PULLDOWN_OPEN_SITES: struct.pack_into('<I', image, fileoff(image, a), jal(ps['pd_open_settings'], a))   # (PULLDOWN_PINS checked each site's word and its delay slot)
@@ -1506,10 +1502,10 @@ def gen_scroll_h(out):
         f'#define stock_scroll_done ((int (*)(void *, void *))0x{SCROLL_DONE:x}u)\n')
 
 
-def sha(b): return hashlib.sha256(b).hexdigest()
 def j(addr): return 0x08000000 | (addr >> 2)
 def check(cond, msg):
     if not cond: raise ValueError(msg)
+def check_pins(buf, pins): modlib.check_pins(buf, pins, fileoff)
 
 
 def segments(b):
@@ -1941,9 +1937,7 @@ def patch_scroll(image, ps, payload_len, demo_path):
     target = ps['m1plus_scroll_event']
     check(BASE <= target < BASE + payload_len, 'scroll entry symbol outside payload')
     check(dynsym(demo_path).get('g_scroll_view_vtable') == SCROLL_VTABLE, 'g_scroll_view_vtable moved')
-    for a, old, what in SCROLL_PINS:
-        got = struct.unpack_from('<I', image, fileoff(image, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(image, SCROLL_PINS)
     struct.pack_into('<I', image, fileoff(image, SCROLL_SLOT), target)
     return [hex(SCROLL_SLOT), '0x0', hex(target)]
 
@@ -1955,9 +1949,7 @@ def patch_timezones(image, ps, payload_len):
     check(timezones.COUNT < 0x8000 - 3 and timezones.COUNT == len(timezones.ORDER) and sorted(timezones.ORDER) == list(range(timezones.COUNT)), 'bad zone table')
     check(all(len(label) <= timezones.MAX_LABEL for label, _ in timezones.TIMEZONES), 'zone label too long')
     edits = timezones.edits(jal(ps['tz_row'], timezones.ROW_CALL), jal(ps['tz_label'], timezones.LABEL_CALL))
-    for a, old, what in timezones.PINS + tuple((a, old, what) for a, old, _, what in edits):
-        got = struct.unpack_from('<I', image, fileoff(image, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(image, timezones.PINS + tuple((a, old, what) for a, old, _, what in edits))
     hook(image, timezones.SELECT, timezones.SELECT_PROLOGUE, ps['tz_select'], 'select_timezone')
     for a, _, new, _ in edits:
         struct.pack_into('<I', image, fileoff(image, a), new)
@@ -1975,34 +1967,22 @@ def patch_demo(raw, payload, ps, demo_path):
     hook(patched, PLAYING_INIT, PLAYING_INIT_PROLOGUE, target4, 'playing_page_init')
     target5 = ps['m1plus_bigcover_init']
     check(BASE <= target5 < BASE + len(payload), 'bigcover init entry symbol outside payload')
-    for a, old, what in VOLKEYS_PINS:   # no hook: the volume keys are taken on our own page; the premises must still hold
-        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
-    for a, old, what in BIGCOVER_PINS:
-        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(patched, VOLKEYS_PINS)   # no hook: the volume keys are taken on our own page; the premises must still hold
+    check_pins(patched, BIGCOVER_PINS)
     hook(patched, BIGCOVER_INIT, BIGCOVER_INIT_PROLOGUE, target5, 'bigcover_page_init')
     target6 = ps['m1plus_lockscreen_init']
     check(BASE <= target6 < BASE + len(payload), 'lockscreen init entry symbol outside payload')
-    for a, old, what in LOCKSCREEN_PINS:
-        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(patched, LOCKSCREEN_PINS)
     hook(patched, LOCKSCREEN_INIT, LOCKSCREEN_INIT_PROLOGUE, target6, 'screensaver_page_init')
     check(BASE <= ps['bc_timed_open'] < BASE + len(payload), 'idle view hook symbol outside payload')
-    for a, old, what in IDLE_PINS:
-        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(patched, IDLE_PINS)
     struct.pack_into('<I', patched, fileoff(patched, IDLE_SITE), jal(ps['bc_timed_open'], IDLE_SITE))   # (the pins above checked the site's word, its delay slot, the GOT load and the callback round it)
     patch_playmore(patched, ps, len(payload))
     patch_timezones(patched, ps, len(payload))
     patch_pulldown(patched, ps, len(payload))
-    for a, old, what in RADIO_PINS:
-        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(patched, RADIO_PINS)
     patch_radio(patched, ps, len(payload))
-    for a, old, what in LOCKROW_PINS + KEYSPOWER_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + PLAYREC_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
-        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
-        check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+    check_pins(patched, LOCKROW_PINS + KEYSPOWER_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + PLAYREC_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS)   # stock code the Playlists and Songs pages call: checked, not written
     for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf
         want = text.encode() + b'\0'
         check(bytes(patched[fileoff(patched, at):fileoff(patched, at) + len(want)]) == want, f'{at:#x}: not the string "{text}" the album cover map reproduces')

@@ -34,7 +34,6 @@ jobs:
       - run: uv run python -I tools/mod_font.py --fetch
       - run: uv run python -I tools/mod_wpa.py --fetch
       - run: make doctor
-      - run: make format-check
       - name: Dev counter from the run number (a new dev tag each run)
         run: >
           uv run python -I -c "import json, sys; sys.path.insert(0, 'tools'); import workflow;

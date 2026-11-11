@@ -186,7 +186,7 @@ def open_page(m):
 
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts, styles, fills) of that frame, the canvas where the scroll_view leaves it."""
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SCREEN_Y0 - m.word(m.sv + SC_YOFF)) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['sg_on_paint'], a0=0, a1=ev, count=400000000)
@@ -194,7 +194,7 @@ def paint(m):
 
 
 def rail_paint(m):
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['sg_on_rail_paint'], a0=0, a1=ev, count=40000000)
     return list(m.blits), list(m.texts), list(m.text_styles)
@@ -217,19 +217,7 @@ def settle(m, limit=300):
     raise AssertionError('the page never finished loading')
 
 
-def scroll_to(m, v):
-    """The scroll_view's offset to v, and the page told as the stock setter's EVT_SCROLL tells it."""
-    m.setword(m.sv + SC_YOFF, v & 0xffffffff)
-    fn, ctx = m.bound[(m.sv, O['EVT_SCROLL'])]
-    m.call(fn, a0=ctx, a1=0, count=80000000)
-
-
 def off_of(m): return m.s32(m.sv + SC_YOFF)
-
-
-def pixel(m, bmp, x, y):
-    data, w, h = m.bitmaps[bmp]
-    return struct.unpack('<I', m.u.mem_read(data + (y * w + x) * 4, 4))[0]
 
 
 def is_shown(m, name): return m.props.get((m.widgets[name], 'visible'), 0) == 1   # (a widget the asset builds hidden: never shown unless the page showed it)

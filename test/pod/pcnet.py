@@ -8,7 +8,6 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FEEDS = os.path.join(ROOT, 'test', 'data', 'feeds')
 CA, ROOT_DIR, KILL = '/etc/m1plus-cacert.pem', '/mnt/mmc/Podcasts', '/mnt/mmc/m1plus-off'
 PN = dict(OK=0, NOWIFI=1, NOCLOCK=2, NOCERT=3, CERT=4, NET=5, GONE=6, HTTP=7, NOTFEED=8, STORAGE=9, MEM=10, BUSY=11)
-EPS_MAX = 65536
 
 
 PCP = sibling('podcasts')

@@ -142,7 +142,7 @@ class TM(Machine):
         self.call(PSYMS['tp_tick'], a0=0, count=200000000)
 
     def paint(self):
-        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        ev = self.paint_event()
         self.blits = []
         self.call(PSYMS['tp_on_paint'], a0=0, a1=ev, count=200000000)
         return list(self.blits)
@@ -227,7 +227,7 @@ def number_tests(ctx):
     expect(O['TP_SCREW_X'] == A.mark_rects()[2][0] and A.CLOSE_RECT == (O['TP_CLOSE_X0'], O['TP_CLOSE_Y0'], O['TP_CLOSE_X1'], O['TP_CLOSE_Y1']), 'the close screw\'s cell and touch area')
     expect(O['TP_LUT_N'] > (2 * (A.PACK_MAX + 1)) ** 2, 'the distance table reaches a full pack')
     expect(O['TP_PLAY_MS'] < O['TP_IDLE_MS'] and 60 <= O['TP_PLAY_MS'] <= 80, 'the timer: 70 ms while playing, 500 ms paused')
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     expect(all(struct.unpack_from('<I', d, pod.fileoff(image, a))[0] == old for a, old, _ in pod.TAPE_PINS) and len(pod.TAPE_PINS) == 3,
            'the stock words the page relies on are as pinned: widget_invalidate_force passes its rectangle (16 bytes, the widget\'s own coordinates) to widget_invalidate')
     # the label's fields: rectangles that do not overlap, inside the label, text boxes inside their rectangle
@@ -1275,7 +1275,7 @@ def quality_tests(ctx):
     expect(all(font.width(s_, f['px']) + 1 <= f['room'] for s_ in tape_art.BADGE_TEXT) and f['rect'] == (O['TP_BADGE_X'], O['TP_BADGE_Y'], O['TP_BADGE_X'] + O['TP_BADGE_W'], O['TP_BADGE_Y'] + O['TP_BADGE_H'])
            and (tape_art.BADGE_W, tape_art.BADGE_H) == (O['TP_BADGE_W'], O['TP_BADGE_H']) and f['rect'][3] <= tape_art.SCREWS[2][1] - 13 and f['rect'][1] >= tape_art.LABEL[3] + 8,
            'the sticker: its cell is the badge field\'s rectangle, on the shell between the label and the bottom left screw; HI-RES and DSD fit it')
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     expect(struct.unpack_from('<I', d, pod.fileoff(image, 0x5d354c))[0] == 0x24060034 and struct.unpack_from('<I', d, pod.fileoff(image, 0x5d357c))[0] == 0x24a5ab50,
            'stock: mclGetInfo copies 0x34 bytes of the player\'s record (0xa0ab50) to its argument')
 

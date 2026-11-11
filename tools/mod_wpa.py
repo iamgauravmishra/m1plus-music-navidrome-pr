@@ -23,10 +23,10 @@ Usage: mod_wpa.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
        mod_wpa.py --fetch                      download and verify the pinned inputs
        mod_wpa.py --build                      build and verify the binary only (prints its path)
 """
-import argparse, hashlib, io, lzma, os, shutil, subprocess, sys, tarfile
+import argparse, io, lzma, os, shutil, subprocess, sys, tarfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import paths
-from modlib import clone_workdir, write_keep_mode
+from modlib import clone_workdir, write_keep_mode, sha256
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSETS = os.path.join(ROOT, 'assets', 'wpa')
@@ -102,7 +102,6 @@ def rewrite_script(old):
     return old.replace(SCRIPT_OLD, SCRIPT_NEW)
 
 
-def sha256(b): return hashlib.sha256(b).hexdigest()
 def fail(msg): raise SystemExit(f'mod_wpa: {msg}')
 def check(ok, msg):
     if not ok: fail(msg)

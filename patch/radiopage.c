@@ -30,8 +30,6 @@
 #include "pcnet.h"
 #include "radio.h"
 
-extern int rn_open(void); /* patch/radionp.c: Radio's Now Playing page */
-
 #define RP_ASSET "m1plus_radio"
 #define RP_W 320
 #define RP_ROW_ROOT POD_ROW_H /* the menu rows' pitch (52); the countries' rows too (the Genres page's) */
@@ -72,7 +70,6 @@ static const char *const RP_ROW_TEXT[RR_N] = {"Now Playing",  "My Stations", "Re
                                               "Top Stations", "By Country",  "By Genre"};
 static const int RP_ROW_ICON[RR_N] = {RI_NOW, RI_STATIONS, RI_RECENT, RI_BROWSER, RI_TOP, RI_COUNTRY, RI_GENRE};
 
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
@@ -82,7 +79,7 @@ static struct {
     void *chev, *ic[RI_N];
     az_t al; /* the countries' sections, rail and pinned header */
     grid_t g; /* the text ring of the rows and the stations' tiles */
-    int level, from, nrows, note, loading, genre, fg, press, down, title_on, noscroll, favs, sheet;
+    int level, from, nrows, note, loading, genre, press, down, title_on, noscroll, favs, sheet;
     m1_tap_t tap;
     int vlist, seen,
         dir; /* the station lists' mode (1 list, 0 grid), the offset the logo tick last saw, the way it went */
@@ -932,7 +929,6 @@ static int rp_on_back(void *ctx, void *e) {
 static int rp_on_fg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    rp.fg = 1;
     if (!rp.view) return RET_OK;
     if (rp.level == L_ROOT && !rp.note)
         rp_show_level(L_ROOT, 1); /* Now Playing may have appeared */
@@ -960,7 +956,6 @@ static int rp_on_rail_paint(void *ctx, void *e) {
 
 static int rp_on_bg(void *ctx, void *e) {
     az_rail_end(&rp.al);
-    rp.fg = 0;
     return rp_on_abort(ctx, e);
 }
 
@@ -1119,7 +1114,6 @@ int radio_open(void) {
     widget_on(rp.view, EVT_POINTER_UP, rp_on_up, (void *)0);
     widget_on(rp.view, EVT_POINTER_ABORT, rp_on_abort, (void *)0);
     widget_on(rp.view, EVT_AFTER_PAINT, rp_on_paint, (void *)0);
-    rp.fg = 1;
     rp.vlist = set_read(RD_VIEW_FILE, '0') != '1'; /* the list unless the file says the grid */
     rp.dir = 1;
     widget_on(rp.field, EVT_POINTER_UP, rp_on_field, (void *)0);

@@ -51,7 +51,7 @@ def is_cur(s, k):
     return s[k][1] == fade(255, s[k][0], s[k][3] // LINE_H)
 
 
-def utf8(s): return s.encode('utf-8').decode('latin-1')   # what the machine's read_cstr gives for a text
+def as_read(s): return s.encode('utf-8').decode('latin-1')   # what the machine's read_cstr gives for a text
 
 
 class LyMachine(nowplaying.NowMachine):
@@ -90,7 +90,7 @@ class LyMachine(nowplaying.NowMachine):
         """Stock builds the rows again (destroy children, then one per line): new handles every time."""
         rows = []
         for t, s in lines:
-            h = self.alloc(0x80); rows.append(h); self.props[(h, 'lrc_time')] = t; self.texts[h] = utf8(s)
+            h = self.alloc(0x80); rows.append(h); self.props[(h, 'lrc_time')] = t; self.texts[h] = as_read(s)
         self.children[self.src_w] = rows
         return rows
 
@@ -371,7 +371,7 @@ def asset_tests(ctx):
     expect = ctx.expect
     raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
     stock = open(os.path.join(paths.find_stock() or os.path.join(os.path.dirname(WORK), 'stock'), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    built = built_demo_bytes()
     word = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     ui = awtk_ui.parse(open(os.path.join(raw, 'ui', 'playing_page.bin'), 'rb').read())
     f = ui.find
@@ -679,7 +679,7 @@ def overflow_tests(ctx):
     m = LyMachine(); h = m.widget('probe_text')
     def run_(text=None, size=256, cps=None, pad=8):
         """m1_text_utf8 into a buffer of `size` bytes among 0xAA canaries: (result, the buffer's string, canaries intact)."""
-        if text is not None: m.texts[h] = utf8(text)
+        if text is not None: m.texts[h] = as_read(text)
         if cps is not None: m.wide[h] = cps
         buf = m.alloc(size + 2 * pad); m.u.mem_write(buf, b'\xaa' * (size + 2 * pad))
         r = m.call(PSYMS['m1_text_utf8'], h, buf + pad, a2=size, count=200000)

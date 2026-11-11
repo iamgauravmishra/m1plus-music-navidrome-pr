@@ -14,10 +14,9 @@ Usage: mod_overlays.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place; a
        mod_overlays.py --generate                  redraw assets/overlays/
        mod_overlays.py --pins                      rewrite tools/mod_overlays_pins.txt from the stock tree
 """
-import hashlib, os, sys
+import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import paths
-from modlib import clone_workdir, edit_ui, write_keep_mode
+from modlib import clone_workdir, edit_ui, write_keep_mode, sha256, png_bytes, load_pins as _load_pins, stock_img_dir, write_pins
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ASSET = os.path.join(ROOT, 'assets', 'overlays')
@@ -34,9 +33,7 @@ BTN_RADIUS = DIALOG_R - 1                                      # the buttons sit
 
 
 # ---------------------------------------------------------------- the art
-def _png(im):
-    import io
-    b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return b.getvalue()
+_png = png_bytes
 
 def dialog(confirm):
     """The 260 x 180 card: glass, and for the confirm one the horizontal divider above the buttons."""
@@ -61,8 +58,6 @@ NAMES = ['msginfo_bg', 'confirminfo_bg', 'shutdown']
 
 
 # ---------------------------------------------------------------- the style edits
-def sha256(b): return hashlib.sha256(b).hexdigest()
-
 def _states(w, key, value, states=('normal', 'pressed', 'over', 'disable', 'focused')):
     for st in states: w.set(f'style:{st}:{key}', value)
 
@@ -124,17 +119,13 @@ def edit_card(image):
 
 # ---------------------------------------------------------------- pins, generate, apply
 def load_pins():
-    return {n: h for h, n in (l.split() for l in open(PINS) if l.strip() and not l.startswith('#'))}
+    return _load_pins(PINS)
 
 def stock_dir():
-    stock = paths.find_stock(paths.ZIP)
-    if not stock: sys.exit('no unpacked stock tree found (run tools/build.py once)')
-    return os.path.join(stock, IMG)
+    return stock_img_dir(IMG)
 
 def cmd_pins():
-    with open(PINS, 'w') as o:
-        o.write('# SHA-256 of the stock V2.1 images/xx files tools/mod_overlays.py replaces (tools/mod_overlays.py --pins)\n')
-        for n in NAMES: o.write(f'{sha256(open(os.path.join(stock_dir(), n + ".png"), "rb").read())}  {n}\n')
+    write_pins(PINS, '# SHA-256 of the stock V2.1 images/xx files tools/mod_overlays.py replaces (tools/mod_overlays.py --pins)\n', stock_dir(), NAMES)
 
 def cmd_generate():
     from PIL import Image

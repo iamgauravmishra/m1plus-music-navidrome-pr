@@ -44,14 +44,8 @@ _Static_assert(
 #define PM_LINE_MAX 4096
 
 /* ---------------------------------------------------------------------------
- * Small helpers (the payload links no libc string functions of its own)
+ * Small helpers
  */
-static unsigned pm_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 static int pm_lc(int c) { return (unsigned)(c - 'A') < 26u ? c + 32 : c; }
 
 /* The first n bytes of a and b equal, ASCII case aside (b is never shorter). */
@@ -83,7 +77,7 @@ static void pm_cpy(char *out, unsigned size, const char *s) { pm_cpy_n(out, size
 
 /* out (size) ends with s appended; 0 when it does not fit. */
 static int pm_cat(char *out, unsigned size, const char *s) {
-    unsigned n = pm_len(out), m = pm_len(s);
+    unsigned n = strlen(out), m = strlen(s);
     if (n + m + 1 > size) return 0;
     memcpy(out + n, s, m + 1);
     return 1;
@@ -182,9 +176,9 @@ void pc_when(unsigned pub, unsigned now, char *out, unsigned size) {
     pc_fmt(out, size, TR(mon[tm[4] < 0 || tm[4] > 11 ? 0 : tm[4]]), (unsigned)tm[3]);
     if (tm[5] + 1900 != year_now) {
         char yr[24];
-        unsigned o = pm_len(out);
+        unsigned o = strlen(out);
         pc_fmt(yr, sizeof yr, TR(", %d"), (unsigned)(tm[5] + 1900));
-        if (o + pm_len(yr) + 1 <= size) memcpy(out + o, yr, pm_len(yr) + 1);
+        if (o + strlen(yr) + 1 <= size) memcpy(out + o, yr, strlen(yr) + 1);
     }
 }
 
@@ -195,19 +189,19 @@ void pc_when(unsigned pub, unsigned now, char *out, unsigned size) {
 /* Whether the extension of name is one the player takes for spoken audio. */
 static int pm_audio(const char *name) {
     static const char *const ext[] = {"mp3", "m4a", "m4b", "aac", "ogg", "opus", "flac", "wav", "wma"};
-    unsigned n = pm_len(name), i, e;
+    unsigned n = strlen(name), i, e;
     const char *dot = name + n;
     while (dot > name && dot[-1] != '.') --dot;
     if (dot == name || dot[-1] != '.' || dot == name + 1) return 0;
     for (i = 0; i < sizeof ext / sizeof *ext; ++i) {
-        e = pm_len(ext[i]);
-        if (pm_len(dot) == e && pm_ieq_n(dot, ext[i], e)) return 1;
+        e = strlen(ext[i]);
+        if (strlen(dot) == e && pm_ieq_n(dot, ext[i], e)) return 1;
     }
     return 0;
 }
 
 static int pm_part(const char *name) {
-    unsigned n = pm_len(name);
+    unsigned n = strlen(name);
     return n > 5 && pm_ieq_n(name + n - 5, ".part", 5);
 }
 
@@ -231,9 +225,9 @@ int pc_root(char *out) {
     while (!found && (ent = readdir(d)) != (char *)0) {
         const char *n = pm_name(ent);
         char path[PC_FILE + 20];
-        if (pm_len(n) != 8 || !pm_ieq_n(n, "podcasts", 8)) continue;
+        if (strlen(n) != 8 || !pm_ieq_n(n, "podcasts", 8)) continue;
         memcpy(path, PM_ROOT "/", sizeof(PM_ROOT "/"));
-        if (pm_cat(path, sizeof path, n) && pm_is_dir(path)) memcpy(out, path, pm_len(path) + 1), found = 1;
+        if (pm_cat(path, sizeof path, n) && pm_is_dir(path)) memcpy(out, path, strlen(path) + 1), found = 1;
     }
     closedir(d);
     return found;
@@ -263,7 +257,7 @@ static unsigned pm_line(const char *p, const char *stop, const char **next) {
 
 static int pm_header(const char *buf, unsigned n, const char *magic, const char **after) {
     const char *stop = buf + n, *next;
-    unsigned m = pm_len(magic), len = pm_line(buf, stop, &next);
+    unsigned m = strlen(magic), len = pm_line(buf, stop, &next);
     if (len != m || !pm_ieq_n(buf, magic, m)) return 0;
     *after = next;
     return 1;
@@ -358,9 +352,9 @@ int pc_parse_show(const char *buf, unsigned n, pc_show_t *show) {
 static int pm_cover_rank(const char *name) {
     static const char *const names[] = {"cover.jpg",  "cover.png",  "cover.jpeg",
                                         "folder.jpg", "folder.png", "folder.jpeg"};
-    unsigned i, n = pm_len(name);
+    unsigned i, n = strlen(name);
     for (i = 0; i < sizeof names / sizeof *names; ++i)
-        if (pm_len(names[i]) == n && pm_ieq_n(name, names[i], n)) return (int)i;
+        if (strlen(names[i]) == n && pm_ieq_n(name, names[i], n)) return (int)i;
     return -1;
 }
 
@@ -438,7 +432,7 @@ static int pm_summary(const char *root, pc_show_t *s) {
             if (pm_eq(name, ".episodes") || pm_eq(name, ".show")) meta = 1;
             continue;
         }
-        if (pm_len(name) >= PC_FILE) continue;
+        if (strlen(name) >= PC_FILE) continue;
         rank = pm_cover_rank(name);
         if (rank >= 0 && rank < best) best = rank, pm_cpy(s->cover, PC_FILE, name);
         if (!pm_audio(name)) continue;
@@ -471,11 +465,11 @@ int pc_any_episode(void) {
     while (!found && (ent = readdir(d)) != (char *)0) {
         const char *name = pm_name(ent);
         char path[PM_PATH];
-        if (!*name || name[0] == '.' || pm_len(name) >= PC_FILE) continue;
+        if (!*name || name[0] == '.' || strlen(name) >= PC_FILE) continue;
         if (!pm_join(path, sizeof path, root, name, (const char *)0) || !(sd = opendir(path))) continue;
         while (!found && (sent = readdir(sd)) != (char *)0) {
             const char *f = pm_name(sent);
-            found = f[0] != '.' && pm_len(f) < PC_FILE && pm_audio(f);
+            found = f[0] != '.' && strlen(f) < PC_FILE && pm_audio(f);
         }
         closedir(sd);
     }
@@ -494,7 +488,7 @@ int pc_scan_shows(pc_show_t *out, int max) {
         const char *name = pm_name(ent);
         char path[PM_PATH];
         pc_show_t *s = &out[count];
-        if (!*name || name[0] == '.' || pm_len(name) >= PC_FILE) continue;
+        if (!*name || name[0] == '.' || strlen(name) >= PC_FILE) continue;
         if (!pm_join(path, sizeof path, root, name, (const char *)0) || !pm_is_dir(path)) continue;
         memset(s, 0, sizeof *s);
         pm_cpy(s->dir, PC_FILE, name);
@@ -544,7 +538,7 @@ static int pm_ep_cmp(unsigned a, unsigned b) {
 
 /* A title from a file name: the name without its extension. */
 static void pm_title_of(char *out, const char *name) {
-    unsigned n = pm_len(name);
+    unsigned n = strlen(name);
     char tmp[PC_FILE];
     pm_cpy(tmp, sizeof tmp, name);
     while (n && tmp[n - 1] != '.') --n;
@@ -610,7 +604,7 @@ static int pm_files(const char *root, const char *dir, pm_file_t *files, int max
     while (n < max && (ent = readdir(d)) != (char *)0) {
         const char *name = pm_name(ent);
         char full[PM_PATH];
-        if (!*name || name[0] == '.' || pm_len(name) >= PC_FILE || !(pm_audio(name) || pm_part(name))) continue;
+        if (!*name || name[0] == '.' || strlen(name) >= PC_FILE || !(pm_audio(name) || pm_part(name))) continue;
         pm_cpy(files[n].name, PC_FILE, name);
         files[n].mtime = 0;
         memset(st, 0, sizeof st);
@@ -646,7 +640,7 @@ int pc_walk(const char *root, const char *dir, void (*cb)(void *ctx, const char 
         const char *name = pm_name(ent);
         char full[PM_PATH];
         int part;
-        if (!*name || name[0] == '.' || pm_len(name) >= PC_FILE) continue;
+        if (!*name || name[0] == '.' || strlen(name) >= PC_FILE) continue;
         part = pm_part(name);
         if (!part && !pm_audio(name)) continue;
         memset(st, 0, sizeof st);
@@ -742,7 +736,7 @@ const char *pc_show_cover(const char *path, char *url, unsigned size) {
     best[0] = 0;
     while ((ent = readdir(d)) != (char *)0) {
         const char *name = pm_name(ent);
-        if (pm_len(name) >= PC_FILE) continue;
+        if (strlen(name) >= PC_FILE) continue;
         rank = pm_cover_rank(name);
         if (rank >= 0 && rank < top) top = rank, pm_cpy(best, PC_FILE, name);
     }
@@ -1282,7 +1276,7 @@ static char *pq_filter(char *out, const char *sql) {
     }
     if (!sql[n]) return 0;
     rest = sql + n + sizeof tbl - 1;
-    end = pm_len(rest);
+    end = strlen(rest);
     semi = end && rest[end - 1] == ';'; /* stock's trailing ';' stays last */
     end -= semi;
     for (i = 0; i < n && sql[i] != '('; ++i) {

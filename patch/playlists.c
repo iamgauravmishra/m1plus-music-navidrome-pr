@@ -43,7 +43,6 @@
 #include "songops.h"
 #include "playlists.h"
 
-extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int
 songs_open_playlist(int id,
                     const char *name); /* patch/songs.c: our Songs page on a playlist; -1 when it did not open */
@@ -63,7 +62,6 @@ songs_open_playlist(int id,
 #error GRID_TILES cannot hold the visible rows, the next two and the history
 #endif
 
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
@@ -1342,13 +1340,7 @@ static int pl_open_page(const lib_src_t *src) {
         pl.g.st_title = st_title, pl.g.st_sub = st_sub;
         if (pl.src) pl.g.url = sbs_cover_url; /* (a source's mosaic keys are its cover files' hashes) */
     }
-    pl.mark[0] = m1_make_mark(pl.win, "unselect");
-    pl.mark[1] = m1_make_mark(pl.win, "selected");
-    if (!pl.mark[0] || !pl.mark[1]) { /* the pair is all or none (no marks: no select mode) */
-        if (pl.mark[0]) bitmap_destroy(pl.mark[0]);
-        if (pl.mark[1]) bitmap_destroy(pl.mark[1]);
-        pl.mark[0] = pl.mark[1] = (void *)0;
-    }
+    m1_make_marks(pl.win, pl.mark); /* all or none (no marks: no select mode) */
     if (pl_v() && !pick.star) pick.star = pl_make_star();
     pl.list = pl_v() || !pl_use_grid(); /* the picker is always the list (the saved choice is the page's own) */
     pl_shape(pl.list);

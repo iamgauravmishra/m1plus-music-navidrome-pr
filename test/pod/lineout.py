@@ -34,8 +34,8 @@ def run(ctx):
     expect = ctx.expect
     import awtk_ui, statusbar, mod_icons
     from PIL import Image
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
 
     # 1. The hooks: two call-site words, everything around them stock's.

@@ -99,21 +99,21 @@ class AM(PCN.NM):
         self.setword(self.sv + 0x84, off); self.props[(self.sv, 'yoffset')] = off
 
     def paint(self):
-        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        ev = self.paint_event()
         self.blits, self.fills, self.texts, self.text_styles = [], [], [], []
         fn_, ctx = self.bound[(self.view, EVT_PAINT)]
         self.call(fn_, a0=ctx, a1=ev, count=40000000)
         return list(self.blits), list(self.fills), list(self.texts)
 
     def paint_chips(self):
-        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        ev = self.paint_event()
         self.texts = []
         fn_, ctx = self.bound[(self.chips, EVT_PAINT)]
         self.call(fn_, a0=ctx, a1=ev, count=4000000)
         return list(self.texts)
 
     def paint_dc(self):
-        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        ev = self.paint_event()
         self.blits = []
         fn_, ctx = self.bound[(self.widgets['oa_dc_art'], EVT_PAINT)]
         self.call(fn_, a0=ctx, a1=ev, count=4000000)
@@ -155,10 +155,6 @@ class AM(PCN.NM):
         fn_, ctx = self.bound[(self.window, EVT_DESTROY)]
         self.calls = []
         self.call(fn_, a0=ctx, a1=0, count=4000000)
-
-    def open_cover(self, i):
-        """A page ready on the Covers tab, cover i tapped, its larger picture fetched and decoded."""
-        self.tap_tile(i); self.work(); self.ticks(3)
 
     def open_lyrics(self, r):
         self.chip(1); self.tap_row(r)
@@ -569,11 +565,7 @@ def cover_failure_tests(ctx):
 
 
 def OA_key(artist, album):
-    h = 2166136261   # cc_fnv twice: each ends with one more multiplication (the NUL)
-    for s in (artist, album):
-        for c in s.encode('utf-8'): h = ((h ^ c) * 16777619) & 0xffffffff
-        h = (h * 16777619) & 0xffffffff
-    return h or 1
+    return album_key(artist, album)   # cc_fnv twice: each ends with one more multiplication (the NUL)
 
 
 def lyrics_tests(ctx):

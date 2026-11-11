@@ -160,7 +160,7 @@ def settle(m):
 def run(ctx):
     expect = ctx.expect
     # -- what the fix relies on is what the stock code is ---------------------------------------------------------------
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     word = lambda a: struct.unpack_from('<I', d, pod.fileoff(image, a))[0]
     for a, w, what in ((0x60c164, 0x3c1c003f, 'list_view paint hook prologue (lui gp, 0x3f)'), (0x60c168, 0x279c7d6c, 'list_view paint hook prologue (addiu gp, gp, 0x7d6c)'),
                        (0x60cd08, 0x2463c164, 'list_view_on_add_child: v1 = 0x60c164'), (0x60cd10, 0xac4300f4, 'list_view_on_add_child: sw v1, 0xf4(v0)'),

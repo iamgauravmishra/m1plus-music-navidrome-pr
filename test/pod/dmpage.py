@@ -151,7 +151,7 @@ class PG(dm_t.DM):
     def paint(self, off=None):
         """One EVT_AFTER_PAINT on the content view, the canvas where the stock scroll_view leaves it (origin = the window's top 30 less the offset). Returns (blits, texts, text styles, fills)."""
         if off is not None: self.pscroll(off)
-        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        ev = self.paint_event()
         self.setword(self.canvas + O['CANVAS_OY'], u32(30 - self.poff()))
         self.blits.clear(); self.texts.clear(); self.measures.clear(); self.fills.clear(); self.text_styles.clear(); self.draw_oy.clear()
         self.oy_canvas = self.canvas
@@ -205,9 +205,6 @@ class PG(dm_t.DM):
     def row_xy(self, i, dx=100, dy=30):
         """The window point inside song row i at the current scroll (the list is the whole window: window coordinates are the content's less the offset)."""
         return dx, ROWS_Y + i * ROW + dy - self.poff()
-
-    def timer_fn(self):
-        return [c for c in self.timers if c[0] == PSYMS['dp_on_load']]
 
 
 def covers_of(blits):

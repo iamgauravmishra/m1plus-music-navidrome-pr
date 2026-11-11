@@ -39,13 +39,9 @@
 extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
 extern const char *
 np_cover_file(int *busy); /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern unsigned pod_rand(unsigned n); /* patch/shuffle.c: the shuffle generator (seeded once) */
-extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode, set as the Play settings page does */
 extern void *pg_episode_queue(
     const char *root, const pc_show_t *s, const pc_ep_t *eps, int neps, int at,
     int *idx); /* patch/podcasts.c: the queue of a show's local episodes, set up as an episode start does */
-extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
 /* patch/ipod_cf.c: the Cover Flow screen (level K_CF: the albums list drawn as covers; docs/modules/ipod-coverflow.md) */
 extern int ipcf_open(void *win), ipcf_up(void), ipcf_busy(void), ipcf_tick(void *list, unsigned count);
 extern void ipcf_close(void), ipcf_goto(int sel), ipcf_paint(void *canvas, void *list, unsigned count, void *style);
@@ -183,12 +179,6 @@ static struct {
 /* ---------------------------------------------------------------------------
  * Small helpers
  */
-static unsigned ip_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) n++;
-    return n;
-}
-
 static unsigned ip_lerp(unsigned a, unsigned b, int i,
                         int n) { /* the colour a .. b (r | g << 8 | b << 16) at i of n - 1 */
     unsigned c = 0, k;
@@ -295,7 +285,7 @@ unsigned ip_fit(void *canvas, unsigned *s, int maxw) {
 static void ip_text(void *canvas, const char *utf8, int x, int y, int w, int h) {
     unsigned wide[64], n;
     int rect[4];
-    n = ip_len(utf8);
+    n = strlen(utf8);
     if (!n) return;
     tk_utf8_to_utf16_ex(utf8, n, wide, 64);
     n = ip_fit(canvas, wide, w);
@@ -1280,7 +1270,7 @@ static void ip_paint_pane(void *canvas) {
         src[0] = src[1] = 0, src[2] = IP_PANE_W, src[3] = IP_PANE_H;
         if (ip.pc_img_ok) canvas_draw_image(canvas, ip.pc_img, src, dst);
         if (!ip.pc_any) {
-            unsigned wide[64], n = ip_len(TR("No Podcasts"));
+            unsigned wide[64], n = strlen(TR("No Podcasts"));
             int w, rect[4];
             widget_prepare_text_style(ip.st_sel, canvas);
             tk_utf8_to_utf16_ex(TR("No Podcasts"), n, wide, 64);
@@ -1308,7 +1298,7 @@ static void ip_paint_pane(void *canvas) {
 
 /* A text in the canvas' current style, right aligned so that it ends at x2 (a Settings row's value; at most 120 px). Its width. */
 static int ip_text_right(void *canvas, const char *utf8, int x2, int y, int h) {
-    unsigned wide[64], n = ip_len(utf8);
+    unsigned wide[64], n = strlen(utf8);
     int rect[4], w;
     if (!n) return 0;
     tk_utf8_to_utf16_ex(utf8, n, wide, 64);
@@ -1321,7 +1311,7 @@ static int ip_text_right(void *canvas, const char *utf8, int x2, int y, int h) {
 
 /* A text of at most 50 px that starts at x (left) or ends at x, whatever the style's alignment (Now Playing's times). */
 static void ip_text_edge(void *canvas, const char *utf8, int x, int left, int y, int h) {
-    unsigned wide[16], n = ip_len(utf8);
+    unsigned wide[16], n = strlen(utf8);
     int rect[4], w;
     if (!n || n > 15) return;
     tk_utf8_to_utf16_ex(utf8, n, wide, 16);

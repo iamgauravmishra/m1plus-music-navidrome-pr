@@ -9,15 +9,15 @@ as a style property in styles/*.bin, or as a NUL-delimited string in bin/demo (i
 code, formats like "bar_wifi%d" are expanded by hand in EXPAND). Prints a table of the images that are
 still byte-identical to stock in the release tree and are referenced somewhere.
 """
-import hashlib, os, re, sys
+import os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui, awtk_style, paths
+from modlib import file_sha256 as sha
 
 RAW = 'assets/default/raw'
 STOCK = os.path.join(paths.find_stock(paths.ZIP), 'rootfs/release')
 EXPAND = {'bar_wifi%d': [f'bar_wifi{i}' for i in range(5)], 'bar_vol%d': [f'bar_vol{i}' for i in range(5)]}
 
-def sha(p): return hashlib.sha256(open(p, 'rb').read()).hexdigest()
 
 def refs(root):
     xx = os.path.join(root, RAW, 'images/xx')

@@ -11,9 +11,9 @@ Every stock file is pinned by SHA-256 and every link by target; a mismatch fails
 
 Usage: mod_webapp.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
 """
-import hashlib, os, subprocess, sys, tempfile
+import os, subprocess, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from modlib import clone_workdir, write_keep_mode
+from modlib import clone_workdir, write_keep_mode, file_sha256 as sha256
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, 'patch', 'webapi.c')
@@ -82,8 +82,6 @@ def build_cgi():
         return open(exe, 'rb').read()
 
 
-def sha256(path):
-    return hashlib.sha256(open(path, 'rb').read()).hexdigest()
 
 
 def apply(out):

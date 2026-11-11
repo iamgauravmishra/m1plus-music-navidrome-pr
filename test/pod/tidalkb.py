@@ -160,9 +160,8 @@ def sent(m): return (m.wtext.get(m.edit) or '').encode('latin-1').decode('utf-8'
 
 def hook_tests(ctx):
     expect = ctx.expect
-    import paths
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     site = pod.TIDALKB_SITE
     expect(site == 0x4c2088 and w(stock_demo, site) == 0x0320f809 and w(built, site) >> 26 == 3 and (w(built, site) & 0x3ffffff) << 2 == PSYMS['tidal_kb_focus'],

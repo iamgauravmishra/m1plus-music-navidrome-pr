@@ -51,7 +51,7 @@ def run(ctx):
     want = dict(l.split()[::-1] for l in open(DIGESTS) if l.strip() and not l.startswith('#'))
     got = stock_digests(assets)
     expect(not os.path.exists(os.path.join(assets, 'theme1')), 'stock theme1 is not in the rootfs (tools/mod_space.py; it is safe only with the config_init clamp, tools/themeoff.py)')
-    got['demo-builders'] = builder_digest(open(DEMO, 'rb').read())
+    got['demo-builders'] = builder_digest(built_demo_bytes())
     expect(got == want, f'every stock ui / style / image / string / font file and the stock pages\' navbar builders in demo are byte-identical to main\'s build: {[k for k in got if got[k] != want.get(k)]} differ ({ {k: got[k] for k in got if got[k] != want.get(k)} }: the new digests, for test/navbars-stock.sha256 when the change is intended)')
 
     # ------------------------------------------------------------------ our pages

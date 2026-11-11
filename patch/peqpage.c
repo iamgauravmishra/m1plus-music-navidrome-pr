@@ -274,12 +274,6 @@ void peq_graph_scale(const peq_graph *g, void *top, void *bot) {
 /* ---------------------------------------------------------------------------
  * Editing: the working preset, the file it is written to
  */
-static unsigned pg_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 /* A band for band: the same bands, the same preamp (an edited preset differs from its file by exactly these). */
 static int pg_same(const peq_preset *a, const peq_preset *b) {
     int i;
@@ -536,7 +530,7 @@ int peqpage_commit(int play) {
     s.mode = PEQ_FILE;
     s.preset = pg.work;
     memset(s.name, 0, sizeof s.name);
-    memcpy(s.name, pg.file, pg_len(pg.file) + 1);
+    memcpy(s.name, pg.file, strlen(pg.file) + 1);
     if (!play) return peq_record(&s);
     if (!peq_commit(&s)) return 0;
     pg.owner =
@@ -670,8 +664,8 @@ __attribute__((used, retain)) void peqpage_named(const char *text) {
     peq_preset back, work = pg.work, saved = pg.saved;
     int skipped = pg.skipped;
     if (!pg.win || !peq_save_new(text, &pg.work, file, &back)) return;
-    memcpy(prev, pg.file, pg_len(pg.file) + 1);
-    memcpy(pg.file, file, pg_len(file) + 1);
+    memcpy(prev, pg.file, strlen(pg.file) + 1);
+    memcpy(pg.file, file, strlen(file) + 1);
     pg.saved = pg.work = back;
     pg.skipped = 0;
     if (!pg_refresh(
@@ -679,7 +673,7 @@ __attribute__((used, retain)) void peqpage_named(const char *text) {
             0)) { /* the record or slot was not written ("Not saved"): the new file goes, the page stays on the old one with its edit unsaved */
         snprintf(path, sizeof path, "%s/%s", PEQ_DIR, file);
         unlink(path);
-        memcpy(pg.file, prev, pg_len(prev) + 1);
+        memcpy(pg.file, prev, strlen(prev) + 1);
         pg.work = work, pg.saved = saved, pg.skipped = skipped;
     }
 }
@@ -702,7 +696,7 @@ __attribute__((used, retain)) void peqpage_renamed(const char *text) {
         return;
     }
     peq_renamed(pg.file, name);
-    memcpy(pg.file, name, pg_len(name) + 1);
+    memcpy(pg.file, name, strlen(name) + 1);
     pg_title();
 }
 

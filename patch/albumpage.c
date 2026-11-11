@@ -1145,11 +1145,7 @@ static int ab_open(const lib_src_t *src, unsigned cls, void *row) {
     ab.fg = 1;
     ab.barok = widget_on(ab.win, EVT_WINDOW_TO_FG, ab_on_fg, (void *)0) &&
                widget_on(ab.win, EVT_WINDOW_TO_BG, ab_on_bg, (void *)0);
-    ab.mark[0] = m1_make_mark(ab.win, "unselect");
-    ab.mark[1] = m1_make_mark(ab.win, "selected");
-    if (!ab.mark[0] || !ab.mark[1])
-        ab.mark[0] = ab.mark[1] =
-            (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
+    m1_make_marks(ab.win, ab.mark); /* all or none */
     ab.wave = ab_make_wave(ab.win);
     rowmenu_bind(&ab.rm, ab.win); /* the rows' "..." menu (optional: no widgets means no "...") */
     widget_on(ab.view, EVT_POINTER_DOWN, ab_on_down, (void *)0);

@@ -37,8 +37,7 @@ PINS = (
 def apply(patched, fileoff):
     """Check every stock word in the bytearray `patched` (word at `fileoff(patched, address)`), then write the four branches."""
     import struct
-    for a, w, _ in PINS + tuple((a, old, what) for a, old, _, what in EDITS):
-        got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
-        if got != w: raise ValueError(f'{a:#x} ({_}): {got:#010x} != pinned {w:#010x}')
+    from modlib import check_pins
+    check_pins(patched, PINS + tuple((a, old, what) for a, old, _, what in EDITS), fileoff)
     for a, _, new, _ in EDITS:
         struct.pack_into('<I', patched, fileoff(patched, a), new)

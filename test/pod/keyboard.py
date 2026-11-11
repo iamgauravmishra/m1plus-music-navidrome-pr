@@ -92,11 +92,6 @@ def geo(m, name):
 
 
 def shown(m, name): return (m.props.get((m.widgets[name], 'visible'), 1), m.props.get((m.widgets[name], 'sensitive'), 1))
-def said(m, name):
-    t = m.wtext.get(m.widgets[name])
-    return None if t is None else t.encode('latin-1').decode('utf-8')
-
-
 def keys(m): return [said(m, f'kb_k{i}') for i in range(PK.KB_KEYS)]
 
 
@@ -774,7 +769,7 @@ def setting_tests(ctx):
     m.call(*m.bound[(m.window, DESTROY)][:1], a0=m.bound[(m.window, DESTROY)][1], count=4000000)
     expect(m.word(ENG) == live and m.engine()[1] == 1, 'and left open when the page closes')
     expect('hook_pinyin' not in MANIFEST and all(n in pod.FUNCTIONS for n in ('im_get_spl_start_pos', 'im_get_fixed_len')) and len(pod.PINYIN_PINS) >= 26, 'no new hook; the two extra engine functions are declared and pinned')
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    stock_demo = stock_demo_bytes()
     wd = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     expect(all(wd(stock_demo, a) == old and wd(m.data, a) == old for a, old, _ in pod.PINYIN_PINS), 'every pinned word of the engine is stock\'s in the stock demo and unchanged in the build')
     expect({n: pod.FUNCTIONS[n][2] for n in PY.IM} == {'im_open_decoder': 0x5c7350, 'im_close_decoder': 0x5c7534, 'im_search': 0x5c760c, 'im_reset_search': 0x5c76e8, 'im_get_candidate': 0x5c7754,

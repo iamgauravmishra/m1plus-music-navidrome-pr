@@ -32,11 +32,11 @@ Usage: mod_theme.py SRC_WORKDIR OUT_WORKDIR       (OUT == SRC edits in place)
   --scan checks a finished tree (all looks applied, window themes included) against stock and fails
   on any text that drops below 4.5:1 and got worse; build.py runs it after the steps.
 """
-import argparse, hashlib, os, stat, sys
+import argparse, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_style, awtk_ui, statusbar
 from awtk_style import T_INT32, T_UINT32
-from modlib import clone_workdir, edit_ui
+from modlib import clone_workdir, edit_ui, sha256, write_keep_mode, png_bytes
 
 from awtk_ui import RAW
 STYLE = f'{RAW}/styles/default.bin'
@@ -214,13 +214,6 @@ def apply_toggles(root):
         write_keep_mode(p, out); changed.append((rel, len(data), len(out)))
     return changed
 
-def sha256(b): return hashlib.sha256(b).hexdigest()
-
-def write_keep_mode(path, data):
-    mode = stat.S_IMODE(os.stat(path).st_mode)
-    os.chmod(path, mode | 0o200)
-    with open(path, 'wb') as f: f.write(data)
-    os.chmod(path, mode)
 
 def _val(key, v): return awtk_style.color_from_str(v) if isinstance(v, str) else v
 
@@ -450,10 +443,6 @@ def draw_status(name, size):
         line([(36.5, 6.5), (45.5, 13.8), (41, 17.8), (41, 2.2), (45.5, 6.2), (36.5, 13.5)], col, 1.7)
     else: raise ValueError(name)
     return im.resize((w, h), Image.LANCZOS)
-
-def png_bytes(im):
-    import io
-    b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return b.getvalue()   # no metadata chunks
 
 def accent_to(im, target, knob=None):
     """The orange of a stock image to `target`: per pixel the HSV saturation against the accent's says

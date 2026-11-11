@@ -18,7 +18,6 @@
 #define AZ_ACT_PAD \
     16 /* the text button takes a touch this far left of its text (and to the screen's edge on the right) */
 
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 

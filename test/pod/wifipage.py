@@ -1861,10 +1861,9 @@ def life_tests(ctx):
 def hub_tests(ctx):
     """The Wi-Fi row of the stock All System Settings hub (payload hook 21, tools/pod.py WIFIHUB_SITE, patch/wifipage.c wifi_hub_open)."""
     expect = ctx.expect
-    import paths
     NAME = 'systemset/wifi_page'
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     site = pod.WIFIHUB_SITE
     expect(site == 0x4b1460 and w(stock_demo, site) == 0x0320f809 and w(built, site) >> 26 == 3 and (w(built, site) & 0x3ffffff) << 2 == PSYMS['wifi_hub_open'],

@@ -22,7 +22,6 @@ ROW_H, LIST_H = D['SE_ROW_H'], D['SE_LIST_H']
 ARTIST, ALBUM, SONG, PLAYLIST = 0, 1, 2, 3
 CH_TOP, CH_ARTISTS, CH_ALBUMS, CH_SONGS, CH_PLAYLISTS = range(5)
 CAPS = {ARTIST: D['SE_CAP_ARTISTS'], ALBUM: D['SE_CAP_ALBUMS'], SONG: D['SE_CAP_SONGS'], PLAYLIST: D['SE_CAP_PLAYLISTS']}
-KIND_OF_CHIP = {CH_ARTISTS: ARTIST, CH_ALBUMS: ALBUM, CH_SONGS: SONG, CH_PLAYLISTS: PLAYLIST}
 TICK_MS, DEBOUNCE = D['SE_TICK_MS'], D['SE_DEBOUNCE']
 RET_REPEAT = 8
 # struct se (patch/search.c), field by field: the offsets are worked out from the declaration, and checked against the payload's own state in `state()`
@@ -94,11 +93,6 @@ def search_widgets(m, window=0x20003000, asset=ASSET, key='m1plus_search', list_
     return m
 
 
-def said(m, name):
-    t = m.wtext.get(m.widgets[name])
-    return None if t is None else t.encode('latin-1').decode('utf-8')
-
-
 PY_DICT_PATH = '/release/assets/default/raw/data/gpinyin.dat'   # PINYIN_DICT (patch/keyboard.h)
 
 
@@ -166,7 +160,7 @@ def titles(m, kind=None):
 
 
 def paint(m):
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (LIST_Y0 - m.word(m.sv + SC_YOFF)) & 0xffffffff)
     m.texts.clear(); m.text_styles.clear(); m.fills.clear(); m.blits.clear()
     m.call(PSYMS['se_on_paint'], a0=0, a1=ev, count=400000000)
@@ -450,7 +444,7 @@ def chips_tests(ctx):
     chips_touch('down', 100); chips_touch('move', 100 + 900, 1030); chips_touch('up', 100 + 900, 1090)
     expect(state(m, 'chip_sx') == 0, 'and at its start')
     # the paint: the selected chip in the dark style over its pill, the others white
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.texts.clear(); m.text_styles.clear()
     m.call(m.bound[(m.widgets['se_chips'], O['EVT_AFTER_PAINT'])][0], a0=0, a1=ev, count=2000000)
     on = [t for t, s in zip(m.texts, m.text_styles) if s == 'label_chip_on']
@@ -489,7 +483,7 @@ def scope_tests(ctx):
         x = lay[k][0] + lay[k][1] // 2
         touch('down', x, 1000); touch('up', x, 1080)
         expect(state(m, 'chip') == CH_ALBUMS and all(kd == ALBUM for kd, _ in rows(m)), f'a tap where chip {k} would be changes nothing')
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.texts.clear(); m.text_styles.clear()
     m.call(m.bound[(m.widgets['se_chips'], O['EVT_AFTER_PAINT'])][0], a0=0, a1=ev, count=2000000)
     expect([t[0] for t in m.texts] == ['Albums'] and m.text_styles == ['label_chip_on'], f'only the selected chip is painted ({[t[0] for t in m.texts]})')

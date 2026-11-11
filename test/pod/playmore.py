@@ -447,7 +447,7 @@ def glass_checks(expect, built_ui, stock_ui, lum):
 
 def run(ctx):
     expect = ctx.expect
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     word = lambda a: struct.unpack_from('<I', d, pod.fileoff(image, a))[0]
 
     # -- 0. the hook and what it relies on -----------------------------------------------------------------------------------

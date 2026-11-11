@@ -33,12 +33,6 @@
 
 #define BMP_HEADER 54
 
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern int
-pod_confirm(const char *text); /* patch/m1plus.c: the stock confirm dialog, wrapped text, modal; nonzero for Yes */
-extern int
-pod_confirm_code(const char *text); /* the same dialog's raw result (CONFIRM_YES 0xa, btn_cancel 4, else 0 ..) */
-
 enum {
     SH_IDLE,
     SH_ASK,

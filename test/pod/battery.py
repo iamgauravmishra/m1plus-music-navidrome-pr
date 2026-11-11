@@ -45,8 +45,8 @@ def vis(m): return [(c[1], c[2]) for c in m.calls if c[0] == 'widget_set_visible
 
 def run(ctx):
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     P = pod_pages
 

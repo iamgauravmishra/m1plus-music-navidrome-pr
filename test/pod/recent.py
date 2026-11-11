@@ -36,8 +36,6 @@ SH_H = SH_H2        # most tests show three albums: two rows
 GREY = 0xff2b2b2b      # grid.h GRID_GREY (checked below)
 assert '0xff2b2b2bu' in open(os.path.join(ROOT, 'patch', 'grid.h')).read()
 ROW_H, MB_PAD = 52, O['MB_PAD']
-SHELF_NAMES = pod_ui.SH_NAMES
-OPEN_ALBUM = pod.FUNCTIONS['loadAlbumList'][2]
 
 
 def tile_x(i): return GRID_MARGIN + i % GRID_COLS * (GRID_COVER + GRID_GAP)       # cell i's x
@@ -116,10 +114,6 @@ class ST(pulldown.SM):
         calls = list(self.calls)
         if self.at_end and self.shelf_up(): self.setword(self.sv + 0x84, max(0, self.vh() - 430))
         return calls
-
-    def sync_props(self):
-        """A shelf the stock widget_set_visible changed is read back from the struct (flags @0x24)."""
-        return None
 
     def bar_on(self):
         """The mini player bar's spacer row shown (minibar.c mb_pad: visible, virtual_h + MB_PAD)."""
@@ -222,10 +216,7 @@ class ST(pulldown.SM):
             if not t or self.flags(t) & 9 != 9: return path
             w = t; path.append(names.get(t, hex(t)))
 
-    def sv_off(self): return self.yoff()
 
-
-def utf8(s): return s.encode('latin-1').decode('utf-8')   # the model keeps the file's bytes as latin-1 characters
 
 
 def cut(s, maxw=SH_COVER):

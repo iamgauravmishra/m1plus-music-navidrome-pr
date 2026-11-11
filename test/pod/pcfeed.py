@@ -10,7 +10,6 @@ DATA = os.path.join(ROOT, 'test', 'data', 'feeds')
 BIG = os.path.join(ROOT, 'work', 'feeds')   # optional, not committed: the three whole feeds (docs/modules/podcasts.md "Feeds" says how to fetch them)
 KEEP, TITLE, GUID, URL = 20, 96, 128, 640
 ITUNES = '{http://www.itunes.com/dtds/podcast-1.0.dtd}'
-KNOWN_EXT = {'mp3', 'm4a', 'm4b', 'aac', 'ogg', 'opus', 'flac', 'wav', 'wma'}
 
 
 def norm(s, cap):

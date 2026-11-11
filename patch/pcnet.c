@@ -635,14 +635,8 @@ int pn_refresh(const char *root, const pc_show_t *shows, const int *idx, int n) 
  * 32 MB free (checked before the download and before every chunk); the finished file is renamed into the show folder. The code is our own, over demo's libcurl.
  */
 static void pn_folder(const char *url, char *out, unsigned size, char *host, unsigned hsize);
-static unsigned pn_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 static int pn_cat(char *out, unsigned size, const char *s) {
-    unsigned o = pn_len(out), k;
+    unsigned o = strlen(out), k;
     for (k = 0; s[k]; ++k) {
         if (o + 1 >= size) return 0;
         out[o++] = s[k];
@@ -663,8 +657,8 @@ static void pn_fail_set(unsigned key, int code, const char *dir, const char *fil
         if (pn.fails[i].key == key) break;
     if (i == PN_FAILS) i = pn.nfail++ % PN_FAILS;
     pn.fails[i].key = 0; /* (not a half record while the page reads) */
-    memcpy(pn.fails[i].dir, dir, pn_len(dir) + 1);
-    memcpy(pn.fails[i].file, file, pn_len(file) + 1);
+    memcpy(pn.fails[i].dir, dir, strlen(dir) + 1);
+    memcpy(pn.fails[i].file, file, strlen(file) + 1);
     pn.fails[i].code = code;
     __sync_synchronize();
     pn.fails[i].key = key;
@@ -827,9 +821,9 @@ static int pn_dl_run(struct dx *d, const char *show, const char *name, unsigned 
     unsigned n = 0, length = 0, tries = 0, start, kb, i;
     int code, retry, again, restarted = 0;
     if (!pn_join(d->dir, sizeof d->dir, pn.droot, show, (const char *)0) ||
-        !pn_join(file, sizeof file, d->dir, name, (const char *)0) || pn_len(file) + sizeof(".part") > PN_DL_PATH_MAX)
+        !pn_join(file, sizeof file, d->dir, name, (const char *)0) || strlen(file) + sizeof(".part") > PN_DL_PATH_MAX)
         return PN_STORAGE;
-    memcpy(d->part, file, pn_len(file) + 1);
+    memcpy(d->part, file, strlen(file) + 1);
     pn_cat(d->part, sizeof d->part, ".part");
     d->key = key;
     if (!access(file, F_OK)) { /* it is on the card already: nothing to fetch, a leftover .part goes */
@@ -957,7 +951,7 @@ int pn_dl_add(const char *root, const char *dir, const char *file) {
     int free_slot = -1, g;
     char path[PN_PATH];
     if (!key || !file[0] || !pn_join(path, sizeof path, root, dir, file) ||
-        pn_len(path) + sizeof(".part") > PN_DL_PATH_MAX)
+        strlen(path) + sizeof(".part") > PN_DL_PATH_MAX)
         return PN_STORAGE;
     for (i = 0; i < PN_QMAX; ++i) {
         if (pn.q[i].state != PN_Q_FREE && pn.q[i].key == key) {
@@ -971,8 +965,8 @@ int pn_dl_add(const char *root, const char *dir, const char *file) {
     if (free_slot < 0) return PN_QFULL;
     pn_fail_clear(key);
     if (!pn_eq(pn.droot, root)) pn_join(pn.droot, sizeof pn.droot, root, (const char *)0, (const char *)0);
-    memcpy(pn.q[free_slot].dir, dir, pn_len(dir) + 1);
-    memcpy(pn.q[free_slot].file, file, pn_len(file) + 1);
+    memcpy(pn.q[free_slot].dir, dir, strlen(dir) + 1);
+    memcpy(pn.q[free_slot].file, file, strlen(file) + 1);
     pn.q[free_slot].key = key;
     pn.q[free_slot].seq = ++pn.dseq;
     __sync_synchronize();
@@ -1054,8 +1048,8 @@ unsigned pn_dl_listed(int n, char *dir, char *file, int *code) {
                 best = i;
         if (best < 0) break;
         if (k == n) {
-            memcpy(dir, pn.q[best].dir, pn_len(pn.q[best].dir) + 1);
-            memcpy(file, pn.q[best].file, pn_len(pn.q[best].file) + 1);
+            memcpy(dir, pn.q[best].dir, strlen(pn.q[best].dir) + 1);
+            memcpy(file, pn.q[best].file, strlen(pn.q[best].file) + 1);
             *code = 0;
             return pn.q[best].key;
         }
@@ -1064,8 +1058,8 @@ unsigned pn_dl_listed(int n, char *dir, char *file, int *code) {
     n -= k;
     for (i = 0; i < PN_FAILS; ++i) /* then the failed ones */
         if (pn.fails[i].key && n-- == 0) {
-            memcpy(dir, pn.fails[i].dir, pn_len(pn.fails[i].dir) + 1);
-            memcpy(file, pn.fails[i].file, pn_len(pn.fails[i].file) + 1);
+            memcpy(dir, pn.fails[i].dir, strlen(pn.fails[i].dir) + 1);
+            memcpy(file, pn.fails[i].file, strlen(pn.fails[i].file) + 1);
             *code = pn.fails[i].code;
             return pn.fails[i].key;
         }
@@ -1119,7 +1113,7 @@ int pn_classify(const char *text, char *id, unsigned size) {
 /* The URL-encoded UTF-8 text s appended to out: the unreserved characters (letters, digits, - _ . ~) as they are, every other byte as %XX. 0 when it does not fit. */
 static int pn_urlenc(char *out, unsigned size, const char *s) {
     static const char hex[] = "0123456789ABCDEF";
-    unsigned o = pn_len(out);
+    unsigned o = strlen(out);
     for (; *s; ++s) {
         unsigned char c = (unsigned char)*s;
         int plain = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-' ||
@@ -1593,14 +1587,14 @@ int pn_art_full_path(int i, char *path, unsigned size) {
 
 int pn_art_full(const char *thumb, char *out, unsigned size) {
     static const char *const from[2] = {"100x100bb", "250x250-"}, *const to[2] = {"600x600bb", "500x500-"};
-    unsigned n = pn_len(thumb), i;
+    unsigned n = strlen(thumb), i;
     int k;
     if (n + 1 > size) return 0;
     memcpy(out, thumb, n + 1);
     for (k = 0; k < 2; ++k)
         for (i = 0; i < n; ++i)
             if (pn_starts(thumb + i, from[k])) {
-                memcpy(out + i, to[k], pn_len(to[k])); /* the same length: the address is changed in place */
+                memcpy(out + i, to[k], strlen(to[k])); /* the same length: the address is changed in place */
                 return 1;
             }
     return 1;
@@ -1691,7 +1685,7 @@ _Static_assert(sizeof(((pn_lyr_t *)0)->title) == PJ_NAME && sizeof(((pn_lyr_t *)
 
 static int pn_lyr_add(void *ctx, const pj_lrc_t *r, const char *text) {
     char path[PN_PATH];
-    unsigned n = pn_len(text);
+    unsigned n = strlen(text);
     int i, slot = pn.ln;
     if (slot >= PN_LYR_MAX) return 0;
     for (i = 0; i < slot; ++i) {
@@ -2111,14 +2105,14 @@ static int pn_preview_start(const char *url, const char *id, const char *cc, con
     pn.pid[0] = 0;
     pn_cc_copy(pn.pcc, cc);
     pn.pfb[0] = 0;
-    if (pn_len(art) < sizeof pn.pfb) pn_cat(pn.pfb, sizeof pn.pfb, art);
+    if (strlen(art) < sizeof pn.pfb) pn_cat(pn.pfb, sizeof pn.pfb, art);
     pn.peid[0] = 0;
     pn.pmatch = -1;
-    if (pn_len(eid) < sizeof pn.peid) pn_cat(pn.peid, sizeof pn.peid, eid);
+    if (strlen(eid) < sizeof pn.peid) pn_cat(pn.peid, sizeof pn.peid, eid);
     if (id[0]) {
-        if (pn_len(id) >= sizeof pn.pid) return PN_NOTFEED;
+        if (strlen(id) >= sizeof pn.pid) return PN_NOTFEED;
         pn_cat(pn.pid, sizeof pn.pid, id);
-    } else if (pn_len(url) >= sizeof pn.purl || !pn_cat(pn.purl, sizeof pn.purl, url))
+    } else if (strlen(url) >= sizeof pn.purl || !pn_cat(pn.purl, sizeof pn.purl, url))
         return PN_NOTFEED;
     pn.pcode = PN_OK;
     pn.pstate = 1;
@@ -2148,7 +2142,7 @@ int pn_subscribe(const char *root, const pc_show_t *shows, int nshows, char *dir
         char name[PC_FILE];
         pf_folder_name(name, sizeof name, pf_title(p));
         if (name[0]) {
-            memcpy(folder, name, pn_len(name) + 1);
+            memcpy(folder, name, strlen(name) + 1);
             if (pn_join(path, sizeof path, root, folder, (const char *)0) &&
                 !access(path, F_OK)) /* a folder of that name is someone else's: the import's name */
                 pn_folder(pn.purl, folder, sizeof folder, host, sizeof host);
@@ -2291,7 +2285,7 @@ static int pn_opml_files(const char *root, char (*paths)[PN_PATH], int max) {
     d = opendir(PN_CARD);
     while (d && n < max && (ent = readdir(d)) != (char *)0) {
         const char *name = ent + PN_DNAME;
-        unsigned len = pn_len(name);
+        unsigned len = strlen(name);
         if (len > 5 && name[0] != '.' && !strcasecmp(name + len - 5, ".opml") &&
             pn_join(paths[n], PN_PATH, PN_CARD, name, (const char *)0))
             ++n;
@@ -2834,7 +2828,7 @@ static int pn_eq_path_ok(const char *p) {
 static int pn_eq_start(int mode, const char *path, const char *stamp) {
     int g;
     if (pn.busy) return PN_BUSY;
-    if (mode && (!path || !stamp || !pn_eq_path_ok(path) || pn_len(stamp) >= sizeof pn.estamp)) return PN_NOFEED;
+    if (mode && (!path || !stamp || !pn_eq_path_ok(path) || strlen(stamp) >= sizeof pn.estamp)) return PN_NOFEED;
     g = pn_guard();
     if (!g) {
         pn.emode = mode;

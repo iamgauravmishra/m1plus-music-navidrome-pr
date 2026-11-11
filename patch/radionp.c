@@ -30,9 +30,9 @@ static struct {
     int sheet;
     int logo_bad;
     char favicon[RD_FAV_MAX + 1];
-    unsigned timer, seen;
-    int fav_on, running, init;
-    char c_title[200], c_artist[200], c_station[160], c_info[40], c_elapsed[16];
+    unsigned timer;
+    int running, init;
+    char c_title[200], c_artist[200];
 } rn __attribute__((section(".scratch")));
 
 #define RN_CARD_LOGO 0xffffffffu /* the white card a logo lies on (pv_shrink's PNG ground is white) */
@@ -341,7 +341,6 @@ int rn_open(void) {
         navigator_back(); /* an asset that is not ours */
         return -1;
     }
-    rn.seen = rd_serial();
     widget_on(rn.art, EVT_AFTER_PAINT, rn_on_art_paint, (void *)0);
     rn_refresh();
     rn.timer = timer_add(rn_tick, (void *)0, 500);

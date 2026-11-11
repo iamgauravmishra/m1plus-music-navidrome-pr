@@ -42,7 +42,7 @@ import cdefs
 import statusbar
 import pod_i18n
 from awtk_text import MONTHS, WEEKDAYS, Ttf, awtk_width, fit_size, worst_case_text
-from modlib import clone_workdir, edit_ui
+from modlib import clone_workdir, edit_ui, png_bytes, sha256
 
 from awtk_ui import RAW
 UI = f'{RAW}/ui/screensaver_page.bin'
@@ -214,17 +214,12 @@ def slide_image(stock_png, w, h):
     from PIL import Image
     return Image.open(stock_png).convert('RGBA').convert('RGBa').resize((w, h), Image.LANCZOS).convert('RGBA')
 
-def png_bytes(im):
-    import io
-    buf = io.BytesIO(); im.save(buf, 'PNG', optimize=True); return buf.getvalue()     # PIL writes no timestamp
-
 def replace_stock_images(out, images):
     """{rel under assets: PIL image}: overwrite stock images (pinned by SHA-256), mode kept."""
-    import hashlib
     sizes = {}
     for rel, im in images.items():
         p = os.path.join(out, ASSETS, rel); old = open(p, 'rb').read()
-        if hashlib.sha256(old).hexdigest() != STOCK_IMAGE_SHA[rel]: raise SystemExit(f'{rel}: not the stock image (applied twice?)')
+        if sha256(old) != STOCK_IMAGE_SHA[rel]: raise SystemExit(f'{rel}: not the stock image (applied twice?)')
         data = im if isinstance(im, bytes) else png_bytes(im); mode = stat.S_IMODE(os.stat(p).st_mode)
         os.chmod(p, mode | 0o200); open(p, 'wb').write(data); os.chmod(p, mode)
         sizes[rel] = (len(old), len(data))

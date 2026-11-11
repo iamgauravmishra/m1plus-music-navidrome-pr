@@ -19,7 +19,6 @@ from pod_roles import CAPTION_H
 # Home item ids (must match patch/offsets.inc HOME_*). The entry icon and the destinations rows open.
 HOME_TIDAL = 1
 HOME_UPDATE = 2      # systemset/updatemusic_page: Update Library
-HOME_MYMUSIC = 3     # allmusic_page 0xf001: all songs
 HOME_FOLDER = 4
 HOME_GENRE = 7
 HOME_COMPOSER = 8
@@ -28,7 +27,6 @@ HOME_FAV = 10
 HOME_MOST = 11
 HOME_RECENT = 12
 HOME_RECENTADD = 13
-HOME_PLAYLIST = 14
 HOME_CDRIPPER = 15
 HOME_PLAYSET = 16
 HOME_SYSSET = 17

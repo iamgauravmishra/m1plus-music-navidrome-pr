@@ -41,11 +41,7 @@ def conf_is(blob, url, user, pw): return (blob or b'').decode().split('|')[:2] =
 URL = 'https://nd.example:4533'
 
 
-def fnv(s):
-    h = 2166136261
-    for b in s.encode():
-        h = ((h ^ b) * 16777619) & 0xffffffff
-    return h
+fnv = fnv_plain   # (sbsrc and ndflow read it as SA.fnv)
 
 
 def row(kind, **kw):

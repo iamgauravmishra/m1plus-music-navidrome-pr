@@ -29,7 +29,7 @@ NAV_BTNS = ('btn_return', 'btn_backtoplayer', 'btn_select', 'btn_selall', 'sg_ad
 BAR_BLACK = O['NP_BAR_STOCK']
 
 
-def utf(s): return s.encode('latin-1').decode('utf-8')
+utf = utf8   # (durations and ndflow read it as AP.utf)
 
 
 class AM(SG.SongsMachine):
@@ -149,7 +149,7 @@ def off_of(m): return m.s32(m.sv + SC_YOFF)
 
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts, styles, fills) of that frame, the canvas where the scroll_view leaves it."""
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SY0 - m.word(m.sv + SC_YOFF)) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['ab_on_paint'], a0=0, a1=ev, count=400000000)
@@ -170,12 +170,6 @@ def row_y(i): return HDR + i * ROW
 
 
 def ui(): return awtk_ui.parse(open(UI, 'rb').read())
-
-
-def tone_word(rgb):
-    import mod_nowplaying as mn
-    t = mn.tone(*rgb)
-    return 0xff000000 | t[0] | t[1] << 8 | t[2] << 16
 
 
 def pill(tw): return O['AH_PLAY_X'] + (O['AH_PLAY_W'] - (O['AH_PILL_GLYPH'] + O['AH_PILL_GAP'] + tw)) // 2   # x of the pill's glyph for a text tw px wide

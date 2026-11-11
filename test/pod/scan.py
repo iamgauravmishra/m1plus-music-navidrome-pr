@@ -2,8 +2,7 @@
 name is "." or ".." or a short list of system folders, and walks every other dot-folder. The build replaces its `jalr strcmp(name, ".")` (0x5ea6a8) by `jal m1_scan_dir`;
 the stock code from the name test (0x5ea69c) runs for real under Unicorn, stock and built, and must skip every hidden folder in the build only. Modelled on q2-pod's
 ringnav_scan_dir test (test/patch.py)."""
-import os, struct
-import paths
+import struct
 from unicorn.mips_const import UC_MIPS_REG_S0, UC_MIPS_REG_GP
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
@@ -46,7 +45,7 @@ def run(ctx):
 
 def scan_tests(ctx):
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    stock_demo = stock_demo_bytes()
     m = Walk()
     built = m.data
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
@@ -221,7 +220,7 @@ def first_track_tests(expect, stock_demo):
 
 def query_tests(ctx):
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    stock_demo = stock_demo_bytes()
     built = Machine().data
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     for at, pro, fn, name in ((pod.QUERY_DB, pod.QUERY_DB_PROLOGUE, 'pc_library_query', 'toolsQueryDbTable'), (pod.QUERY_SORT, pod.QUERY_SORT_PROLOGUE, 'pc_sorted_query', 'toolsQueryDbTableAndSort')):

@@ -118,7 +118,7 @@ class VM(Machine):
         self.call(PSYMS['vn_tick'], a0=0, count=400000000)
 
     def paint(self):
-        ev = self.alloc(0x40); self.u.mem_write(ev, bytes(0x40)); self.setword(ev + O['EVENT_PAINT_CANVAS'], self.canvas)
+        ev = self.paint_event()
         self.blits = []
         self.call(PSYMS['vn_on_paint'], a0=0, a1=ev, count=2000000)
         return list(self.blits)
@@ -430,7 +430,7 @@ def number_tests(ctx):
     for pt, want in (((10, 10), K_CLOSE), ((51, 43), K_CLOSE), ((52, 10), K_NONE), ((96, 196), K_RECORD), ((250, 196), K_RECORD), ((300, 300), K_NONE), ((200, 449), K_PREV),
                      ((246, 449), K_PLAY), ((292, 449), K_NEXT), ((171, 479), K_PREV), ((317, 421), K_NEXT), ((100, 449), K_NONE), ((96, 419), K_NONE)):
         expect(m.call(PSYMS['vn_hit'], a0=pt[0], a1=pt[1], count=10000) == want, f'a touch at {pt} is {want}')
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     expect(all(struct.unpack_from('<I', d, pod.fileoff(image, a))[0] == old for a, old, _ in pod.TAPE_PINS + pod.IPOD_PINS), 'the stock words the page relies on (the Tape page\'s invalidate, the Pod\'s quick clicks and timer) are as pinned')
 
 

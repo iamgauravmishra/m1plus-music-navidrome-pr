@@ -66,7 +66,6 @@
 #include "libsrc.h"
 #include "sbsrc.h"
 
-extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
 extern int search_open_src(const lib_src_t *src); /* patch/search.c: the same over a library source */
 
@@ -1638,8 +1637,6 @@ static int sg_stack(void) {
     return 0;
 }
 
-/* The page listing class cls (pl_id: a playlist's id; key: the title's key, or 0 for name). 0 once the page is up, -1 if the window could not open, -2 if the
- * asset is not ours (the page is left again). */
 static void *sg_row_copy(
     void *rec) { /* a one-record deque holding a copy of rec (as the stock queries push rows); NULL without memory */
     void *d = _create_deque("stSongInfo");
@@ -1649,6 +1646,8 @@ static void *sg_row_copy(
     return d;
 }
 
+/* The page listing class cls (pl_id: a playlist's id; key: the title's key, or 0 for name). 0 once the page is up, -1 if the window could not open, -2 if the
+ * asset is not ours (the page is left again). */
 static int sg_open_page(int cls, int pl_id, const char *key, const char *name, const lib_src_t *src, int which,
                         void *scope) {
     int i;
@@ -1791,11 +1790,7 @@ static int sg_open_page(int cls, int pl_id, const char *key, const char *name, c
     m1_centre_pill(sg.btn_add, SG_BAR_PILL_W);
     m1_centre_pill(sg.btn_del, SG_BAR_PILL_W);
     az_make_disc(&sg.al);
-    sg.mark[0] = m1_make_mark(sg.win, "unselect");
-    sg.mark[1] = m1_make_mark(sg.win, "selected");
-    if (!sg.mark[0] || !sg.mark[1])
-        sg.mark[0] = sg.mark[1] =
-            (void *)0; /* (one that did not decode is freed with the other at destroy: the pair is all or none) */
+    m1_make_marks(sg.win, sg.mark); /* all or none */
     sg.noscroll = !widget_on(sg.sv, EVT_SCROLL, sg_on_scroll, (void *)0) ||
                   !widget_on(sg.sv, EVT_SCROLL_END, sg_on_scroll, (void *)0);
     if (sg.noscroll)

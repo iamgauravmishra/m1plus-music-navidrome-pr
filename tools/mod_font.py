@@ -36,9 +36,9 @@ Usage: mod_font.py SRC_WORKDIR OUT_WORKDIR
        mod_font.py --fetch            download the pinned Source Han Sans TTC zip into fonts/
 Needs fontTools (uv sync). OUT_WORKDIR == SRC_WORKDIR edits in place.
 """
-import argparse, hashlib, io, os, struct, sys, zipfile
+import argparse, io, os, struct, sys, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from modlib import clone_workdir, write_keep_mode
+from modlib import clone_workdir, write_keep_mode, sha256
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FONT = 'rootfs/release/assets/default/raw/fonts/default.ttf'
@@ -103,7 +103,6 @@ NOTICE = (' Latin, Greek and Cyrillic: Inter, Copyright 2016 The Inter Project A
           ' Both under the SIL Open Font License 1.1.')
 
 def in_ranges(c, ranges): return any(a <= c <= b for a, b in ranges)
-def sha256(b): return hashlib.sha256(b).hexdigest()
 def check(ok, msg):
     if not ok: raise SystemExit(f'mod_font: {msg}')
 

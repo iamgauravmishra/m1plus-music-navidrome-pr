@@ -77,7 +77,7 @@ def home_tests(expect, page):
     clear_cb, open_cb, fg_cb = PSYMS['hm_clear'], PSYMS.get('hm_open'), PSYMS.get('hm_fg')
 
     # -- the hook itself: two words over home_page_init's PIC prologue, the third and the rest untouched
-    d = open(DEMO, 'rb').read()
+    d = built_demo_bytes()
     off = pod.fileoff(bytearray(d), pod.HOME_INIT)
     w0, w1, w2, w3 = struct.unpack_from('<IIII', d, off)
     expect(w0 == pod.j(PSYMS['m1plus_home_init']) and w1 == 0 and w2 == pod.HOME_INIT_PROLOGUE[2] and w3 == 0x108000f0,

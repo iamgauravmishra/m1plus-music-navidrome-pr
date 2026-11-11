@@ -237,7 +237,7 @@ def artists_tests(ctx):
 def ar_paint(m, off=0):
     """One EVT_AFTER_PAINT on the content view at scroll offset off: (blits, texts, styles, fills) of that frame."""
     m.setword(m.sv + SC_YOFF, off & 0xffffffff)
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SCREEN_Y0 - off) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['ar_on_paint'], a0=0, a1=ev, count=400000000)
@@ -288,13 +288,6 @@ def headers(m):
         for (t, (x, y, w, h)), st in zip(texts, styles):
             if x == O['SG_HDR_X'] and st == 'label_hdr' and y > 0: out[y + off] = t
     return out
-
-
-def scroll_to(m, v):
-    """The scroll_view's offset to v, and the page told as the stock setter's EVT_SCROLL tells it."""
-    m.setword(m.sv + SC_YOFF, v & 0xffffffff)
-    fn, ctx = m.bound[(m.sv, O['EVT_SCROLL'])]
-    m.call(fn, a0=ctx, a1=0, count=80000000)
 
 
 def card_texts(m):
@@ -1050,7 +1043,7 @@ def scoped_albums_tests(ctx):
     # the All Songs row: the last tile, the artist as its second line, our Songs page on every song of the artist
     m = opened(); m.strings = {'local_allsong': 'All Songs'}
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
     m.texts.clear(); m.blits.clear()
     m.setword(m.sv + SC_YOFF, 200)   # (the rows start under the photo header and the pills)
@@ -1273,7 +1266,7 @@ def scoped_pills_tests(ctx):
         m = pills_machine(view)
         m.strings = {'local_allsong': 'All Songs'}
         m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
-        ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+        ev = m.paint_event()
         m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
         m.texts.clear(); m.blits.clear()
         m.setword(m.sv + SC_YOFF, 200)   # (the rows start under the photo header and the pills: scrolled so the whole list is in the window)
@@ -1338,7 +1331,7 @@ def scoped_pills_tests(ctx):
            f'a composer\'s page has the pills and reads the composer\'s songs once ({[c[:2] for c in qs]})')
     m.strings = {'local_allsong': 'All Songs'}
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
     m.texts.clear(); m.blits.clear()
     m.setword(m.sv + SC_YOFF, 0)   # (the header without the circle is short: the three rows are in view)
@@ -1954,7 +1947,7 @@ def photo_rows_tests(ctx):
 def al_paint(m, off=0):
     """One EVT_AFTER_PAINT of the Albums page's content view at scroll offset off: the frame's blits."""
     m.canvas = m.alloc(0x80); m.oy_canvas = m.canvas
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], SCREEN_Y0 & 0xffffffff)
     m.setword(m.sv + SC_YOFF, off)
     m.blits.clear(); m.texts.clear()

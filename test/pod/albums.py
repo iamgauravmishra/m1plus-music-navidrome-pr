@@ -121,7 +121,7 @@ def scroll_of(m):
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts) of that frame. The canvas is where the stock scroll_view leaves it for its child: the
     origin (canvas_t @4) is the window's top (80) less the offset; m.oy_after is the origin after the paint, m.draw_oy the one every cover was drawn at."""
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SCREEN_Y0 - scroll_of(m)) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.measures.clear(); m.fills.clear(); m.text_styles.clear(); m.draw_oy.clear()
     m.call(PSYMS['al_on_paint'], a0=0, a1=ev, count=400000000)
@@ -2145,9 +2145,9 @@ def src_tests(ctx):
         expect(len(plays) == 1 and plays[0][1:] == want, f'{what}: src->play(at {want[0]}, how {want[1]}) ({plays})')
     m.fake_no_songs = 1   # the artist's songs are not derived yet: Play says why instead of doing nothing
     for st, want in ((1, 'Loading\u2026'.encode().decode('latin-1')), (0, "Can't play")):   # (the mocked translation reads UTF-8 as latin-1)
-        m.fake_state = st; m.calls = []
+        m.fake_state = st; m.calls = []; m.fake_log.clear()   # the plays of the loop above stay in the log until cleared
         m.click('btn_play', count=40000000)
-        expect([c[1] for c in m.calls if c[0] == 'toast'] == [want] and not [e for e in m.fake_log if e[0] == 'play' and False], f'no songs list and the source is {"loading" if st else "not loading"}: the toast "{want}" ({[c[1] for c in m.calls if c[0] == "toast"]})')
+        expect([c[1] for c in m.calls if c[0] == 'toast'] == [want] and not [e for e in m.fake_log if e[0] == 'play'], f'no songs list and the source is {"loading" if st else "not loading"}: the toast "{want}" ({[c[1] for c in m.calls if c[0] == "toast"]})')
     m.fake_no_songs = 0
     m.calls = []
     m.call(PSYMS['al_on_destroy'], count=4000000)

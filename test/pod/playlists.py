@@ -215,7 +215,7 @@ def chevs_of(m, blits):
 
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts, styles) of that frame, the canvas where the scroll_view leaves it."""
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SCREEN_Y0 - m.word(m.sv + SC_YOFF)) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['pl_on_paint'], a0=0, a1=ev, count=400000000)
@@ -238,11 +238,6 @@ def settle(m, limit=200, log=None):
             m.most_per_tick = most
             return paint(m)
     raise AssertionError('the page never finished loading')
-
-
-def pixel(m, bmp, x, y):
-    data, w, h = m.bitmaps[bmp]
-    return struct.unpack('<I', m.u.mem_read(data + (y * w + x) * 4, 4))[0]
 
 
 def quadrants(m, bmp, side=COVER):

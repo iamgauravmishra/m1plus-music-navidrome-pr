@@ -15,9 +15,10 @@ Steps, all with fontTools:
 
 Usage: font_inter.py INTER_ZIP [--weight Regular|Medium] [--em N] [--out assets/fonts/Inter-m1plus.ttf]
 """
-import argparse, hashlib, io, os, sys, zipfile
+import argparse, io, os, sys, zipfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import mod_font
+from modlib import sha256
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ZIP_URL = 'https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip'
@@ -29,7 +30,6 @@ MEMBERS = {'Regular': '40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7
 LICENSE_SHA = '262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a'   # LICENSE.txt in the zip
 TNUM = {c: n + '.tf' for c, n in zip(range(0x30, 0x3A), ('zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'))}
 
-def sha256(b): return hashlib.sha256(b).hexdigest()
 
 def member(z, name, want):
     b = z.read(name)

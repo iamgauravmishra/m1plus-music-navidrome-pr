@@ -17,8 +17,6 @@
 #include "upnext.h"
 #include "sbapi.h"
 
-extern unsigned pod_rand(unsigned n); /* patch/shuffle.c */
-
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 
 /* The play types that are not for the queue: streams (the Queue page's and the stock drawer's list) and folder playback (type 1: the queue is rebuilt from the folder at its end). */

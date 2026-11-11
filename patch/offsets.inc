@@ -732,7 +732,6 @@
 #define CLASS_PLAYLIST_SONGS 0xff13
 #define PL_MAX 100
 #define PL_SCAN 50             /* songs read per playlist for the mosaic: the first PL_SCAN, in order */
-#define PL_TILES GRID_TILES
 #define PL_MORE_MS 16
 /* The popup cards' shared geometry: the view-sort card (VS_* below) hangs its right edge at PL_CARD_RIGHT, PL_CARD_Y, at most PL_CARD_MAX wide (the widest of the 13 languages fits); PL_MENU_ROWS rows of PL_ROW_H
  * (Now Playing's More sheet's 50 px rows) are the pl_glass card of the two dialogs that borrow it (the Podcasts refresh, the Software Update download popup). The Playlists page's own "..." card is the view-sort card. */
@@ -1020,7 +1019,6 @@
  * the same numbers). A fullscreen window (320 x 480, the status bar is not drawn): the iPod screen on top (IP_BAR_H title bar, IP_ROWS rows of IP_ROW_H), the click wheel
  * below (a IP_WHEEL_D image at IP_WHEEL_X, IP_WHEEL_Y; the touch circle is IP_RING_R, the centre button IP_HUB_R). Colours are r | g << 8 | b << 16 words. */
 #define IP_W 320
-#define IP_H 480
 #define IP_SCREEN_H 240
 #define IP_BAR_H 24
 #define IP_ROW_H 30               /* a text row: 18 px bold text */
@@ -1052,10 +1050,6 @@
 #define IP_TEXT_X 8
 #define IP_SEL_TOP 0xf7b15fu      /* the classic blue selection: #5FB1F7 to #0C62D2, top to bottom (as r | g << 8 | b << 16) */
 #define IP_SEL_BOT 0xd2620cu
-#define IP_BAR_TOP 0xf7f5f4u      /* the title bar: #F4F5F7 to #B4B8C0 */
-#define IP_BAR_BOT 0xc0b8b4u
-#define IP_BODY 0xcec9c6u         /* the window's colour behind the wheel: #C6C9CE */
-#define IP_PANE 0xf5f3f2u         /* the cover pane: #F2F3F5 */
 #define IP_NP_ART_X 10
 #define IP_NP_ART_Y 30
 #define IP_NP_REFLECT 20          /* rows of the cover's reflection under it (30 % fading to 0): cover y 30 .. 180, reflection to 200, the bar from 208 */

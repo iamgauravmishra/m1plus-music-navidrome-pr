@@ -2,8 +2,7 @@
 
 ft_created runs in Unicorn against the built demo with the statx syscall and stock's function mocked. Stock's words are checked against the stock demo, and a changed
 pinned word must refuse the build."""
-import os, struct
-import paths
+import struct
 from unicorn import UC_HOOK_INTR
 from unicorn.mips_const import UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3, UC_MIPS_REG_V0, UC_MIPS_REG_PC, UC_MIPS_REG_RA, UC_MIPS_REG_SP
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
@@ -47,8 +46,8 @@ class FTM(Machine):
 
 def run(ctx):
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
 
     # 1. The build: the prologue is stock's in the stock demo and `j ft_created; nop` in the build; every pin is stock's and unchanged.

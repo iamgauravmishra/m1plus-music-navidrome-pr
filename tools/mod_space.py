@@ -17,9 +17,9 @@ The -tailends half of the saving lives in `fwtool.py repack --tailends`.
 
 Usage: mod_space.py WORKDIR   (modifies WORKDIR in place)
 """
-import hashlib, os, shutil, struct, sys
+import os, shutil, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from modlib import write_keep_mode
+from modlib import write_keep_mode, sha256
 
 ET_EXEC, ET_DYN, EM_MIPS = 2, 3, 8
 SHT_PROGBITS, SHT_REL, SHT_RELA, SHT_NOBITS, SHF_ALLOC = 1, 9, 4, 8, 0x2
@@ -51,7 +51,6 @@ def theme1_paths(rootfs):
         out += [os.path.relpath(os.path.join(d, n), rootfs) for n in sorted(dirs + files)]
     return out
 
-def sha256(b): return hashlib.sha256(b).hexdigest()
 
 def find_pdr(d):
     """(offset, size) of an ELF's .pdr if it is provably never loaded, None if there is no .pdr.

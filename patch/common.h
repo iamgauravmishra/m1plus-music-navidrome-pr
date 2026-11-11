@@ -111,6 +111,8 @@ void m1_pill_paint(const m1_pill_t *p, void *canvas, int y);
 void m1_sheet_rows(void *scrim, void *card, int w, void *const *rows, void *const *hrs, int n);
 /* A select mark: the stock image called name (the multi-select's unselect / selected, SG_MARK px) as an opaque bitmap, NULL when it cannot be made. win: any widget of the page. */
 void *m1_make_mark(void *win, const char *name);
+/* The pair of select marks (mark[0] unselect, mark[1] selected), all or none: 1 with both made, 0 with both NULL (no marks: no select mode). */
+int m1_make_marks(void *win, void *mark[2]);
 
 /* The grey chevron the list rows of the Artists and Search pages end with: a POD_CHEV_W x POD_CHEV_H RGBA bitmap (a two segment stroke, antialiased by 4 x 4 samples, POD_CHEV_RGB), NULL when it cannot be made. */
 #define POD_CHEV_W 10

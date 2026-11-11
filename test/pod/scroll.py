@@ -68,7 +68,7 @@ TAP = [('d', 100, 200, 0), ('u', 100, 200, 60)]
 def run(ctx):
     expect = ctx.expect
     # -- the data word and everything the payload relies on
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     expect(struct.unpack_from('<I', d, pod.fileoff(image, SLOT))[0] == PSYMS['m1plus_scroll_event'] and 0xb00000 <= PSYMS['m1plus_scroll_event'] < 0xb00000 + MANIFEST['payload_len'],
            'the built demo has m1plus_scroll_event in the on_event_before_children slot of g_scroll_view_vtable')
     expect(MANIFEST['scroll_edit'] == [hex(SLOT), '0x0', hex(PSYMS['m1plus_scroll_event'])], 'the manifest records the one data word')

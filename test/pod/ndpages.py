@@ -207,7 +207,6 @@ def kclick(m, name):
     rec(m, fn_, a0=c, a1=0)
 
 
-def ktap(m, name): kclick(m, name)
 
 
 def hit(m, i):

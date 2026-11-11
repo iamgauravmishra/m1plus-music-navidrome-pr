@@ -12,7 +12,6 @@ RET_REPEAT = O['RET_REPEAT']
 MID = O['IPCF_TOP'] + O['IPCF_ART'] // 2   # the frame row through the middle of the centre cover
 MODS = lambda calls: [c[2] for c in calls if c[0] == 'timer_modify']   # the page timer's intervals set in place (patch/ipod.c ip_retime)
 SWAPS = lambda calls: [c for c in calls if c[0] in ('timer_add', 'timer_remove')]   # never while the page lives: the one timer is modified, not replaced
-TRACKS_OF = {}
 
 
 def colour(i):
@@ -49,7 +48,7 @@ def paint(m):
     if m.call(PSYMS['ip_render_active']):
         m.clock += 301
         m.call(PSYMS['ip_tick'], count=80000000)
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.texts, m.fills, m.blits, m.text_styles = [], [], [], []
     m.call(PSYMS['ip_on_paint'], a0=0, a1=ev, count=80000000)
     return list(m.texts), list(m.fills), list(m.blits), m.names()

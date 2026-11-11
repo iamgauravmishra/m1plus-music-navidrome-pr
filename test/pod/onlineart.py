@@ -28,7 +28,6 @@ ITUNES = 'https://itunes.apple.com/search?media=music&entity=album&limit=8&term=
 DEEZER = 'https://api.deezer.com/search/album?limit=8&q='
 LRCLIB = 'https://lrclib.net/api/'
 JPG = open(os.path.join(SEARCH_DATA, 'art100.jpg'), 'rb').read()
-CACHE_SIZE = 192   # PV_SIZE: the cover cache file's longer side (pv_shrink; never upscaled)
 
 
 def data(name): return open(os.path.join(DATA, name), 'rb').read()

@@ -16,9 +16,9 @@ SHA-256, so a different firmware refuses to build rather than overwrite somethin
 
 Usage: mod_wallpaper.py SRC_WORKDIR OUT_WORKDIR     (OUT == SRC edits in place)
 """
-import argparse, hashlib, os, stat, sys
+import argparse, os, stat, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from modlib import clone_workdir
+from modlib import clone_workdir, sha256 as sha
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 IMAGE = 'rootfs/release/assets/default/raw/images/xx/screensaver_default.png'
@@ -28,7 +28,6 @@ ASSET_SHA = '8bf483509e85afd980c6476b3fb74e6ed7903b187a81138fa1b553c94845989d'
 SIZE = (320, 480)
 
 
-def sha(b): return hashlib.sha256(b).hexdigest()
 
 
 def check(ok, msg):

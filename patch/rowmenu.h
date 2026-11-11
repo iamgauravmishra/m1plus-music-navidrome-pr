@@ -2,7 +2,7 @@
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  * Shared by the album page (patch/albumpage.c) and the Songs page (patch/songs.c). A page paints the "..." in its own row painter (rowmenu_paint), hit-tests the zone itself
- * with its own press and drag rules (rowmenu_zone_x) and calls rowmenu_open for the row; the scrim, the bottom sheet and its five rows are widgets of the page's asset
+ * with its own press and drag rules (rowmenu_zone_x) and calls rowmenu_open_src for the row; the scrim, the bottom sheet and its five rows are widgets of the page's asset
  * (tools/pod_ui.py row_menu, last in z-order); nothing here adds a widget per row.
  */
 #pragma once
@@ -56,10 +56,8 @@ int rowmenu_zone_x(int right);
  * zone; `flush` 1: its bitmap's right edge on `right` (the Songs page beside the A-Z rail). */
 void rowmenu_paint(void *canvas, const rowmenu_t *rm, int right, int flush, int y, int row_h, int view_h);
 
-/* Opens the sheet for the row `row` whose record is `rec`; `add` is the page's Add to Playlist. 1 when the menu is open, 0 when it cannot be (no "...", no memory). */
-int rowmenu_open(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add);
-
-/* The same for a row of a library source (src NULL or &lib_stock: rowmenu_open). The five rows: Play Next, Play After (the source's queue record through upnext_add; an undownloaded DSD row asks
+/* Opens the sheet for the row `row` whose record is `rec`; `add` is the page's Add to Playlist; src is the row's library source (NULL or &lib_stock: the card's library).
+ * 1 when the menu is open, 0 when it cannot be (no "...", no memory). The five rows: Play Next, Play After (the source's queue record through upnext_add; an undownloaded DSD row asks
  * "Download to Play?" first), Download / Cancel Download / Remove Download by the row's state, Favorite / Undo Favorite (the source's star), Get Info (the page for the source's data). */
 int rowmenu_open_src(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add, const lib_src_t *src);
 

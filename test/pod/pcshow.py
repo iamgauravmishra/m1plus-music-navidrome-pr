@@ -532,12 +532,6 @@ def m1_shade(tone, y):
     return (tone & 255) * (255 - a) // 255 | ((tone >> 8) & 255) * (255 - a) // 255 << 8 | ((tone >> 16) & 255) * (255 - a) // 255 << 16
 
 
-def tone_word(rgb):
-    import mod_nowplaying as mn
-    t = mn.tone(*rgb)
-    return 0xff000000 | t[0] | t[1] << 8 | t[2] << 16
-
-
 def tone_word_of(m):
     """The page's tone as the payload set it on the window (the last bg_color of the window that is not black)."""
     s = [x for x in m.styled if x[0] == m.window and x[1] == 'normal:bg_color' and x[2] != 0xff000000]

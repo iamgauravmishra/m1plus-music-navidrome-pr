@@ -26,7 +26,6 @@ PN = dict(PCN.PN, CANCELLED=12, CARDFULL=13, NOFEED=17)
 E = dict(IDLE=0, RUNNING=1, DONE=2, FAILED=3)
 HD600 = 'oratory1990/over-ear/Sennheiser%20HD%20600'
 HD600_RTINGS = 'Rtings/Bruel%20&%20Kjaer%205128%20over-ear/Sennheiser%20HD%20600'
-HD650 = 'oratory1990/over-ear/AKG%20K371'
 PRESET_TXT = PEQ.AUTOEQ
 WALL = 1_800_000_000
 ENT = struct.Struct('<64s24s24sBB200s')   # ae_ent: name, src, tgt, form, tier, path
@@ -174,7 +173,7 @@ def typed(m, text):
 
 
 def paint(m):
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (LIST_Y0 - m.word(m.sv + S.SC_YOFF)) & 0xffffffff)
     m.texts.clear(); m.text_styles.clear(); m.fills.clear(); m.blits.clear()
     m.call(PSYMS['ae_on_paint'], a0=0, a1=ev, count=400000000)

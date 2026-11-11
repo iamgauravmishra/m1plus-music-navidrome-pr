@@ -74,7 +74,6 @@
 #include "artistphoto.h"
 
 extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row, opened over this page */
-extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 extern int coverflow_artist(void *artists, unsigned index,
                             unsigned scope); /* patch/coverflow.c: Cover Flow scoped to an artist */
 /* patch/songs.c: our Songs page on all the artist's (or composer's: scope CLASS_COMPOSERS) songs; -1 when it did not open */
@@ -110,7 +109,6 @@ coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **
 #error GRID_TILES cannot hold the visible rows, the next two and the history
 #endif
 
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 

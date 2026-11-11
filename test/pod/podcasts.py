@@ -18,16 +18,11 @@ SC_YOFF = O['SC_YOFF']
 
 def pc_hash(s):
     """FNV-1a over the ASCII-lower-cased bytes, never 0 (patch/pcmodel.c pc_hash)."""
-    h = 2166136261
-    for c in s.encode('utf-8'):
-        h = ((h ^ (c + 32 if 65 <= c <= 90 else c)) * 16777619) & 0xffffffff
-    return h or 1
+    return fnv_fold(s) or 1
 
 
 def guid_hash(s):
-    h = 2166136261
-    for c in s.encode('utf-8'): h = ((h ^ c) * 16777619) & 0xffffffff
-    return h or 1
+    return fnv_plain(s) or 1
 
 
 class PM(ListMachine):
@@ -725,7 +720,7 @@ def opened(card=page_card, cls=None):
 def paint(m, off=0):
     """One EVT_AFTER_PAINT of the content view at scroll offset off: (blits, texts, styles, fills)."""
     m.setword(m.sv + SC_YOFF, off & 0xffffffff)
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SCREEN_Y0 - off) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     fn, ctx = m.bound[(m.view, O['EVT_AFTER_PAINT'])]
@@ -1312,7 +1307,7 @@ def tag_tests(ctx):
     p = f'{ROOT}/WSJ Show/ep1.mp3'
     # the build: the one word is a jal into the payload, its neighbours and the pinned words are stock's
     site = pod.fileoff(ID3().data, ID3_SITE_VA)
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    stock_demo = stock_demo_bytes()
     built = ID3().data
     w = lambda b, off: struct.unpack_from('<I', b, off)[0]
     expect(w(stock_demo, site) == 0x0320f809 and w(built, site) >> 26 == 3 and (w(built, site) & 0x3ffffff) << 2 == PSYMS['pc_id3_path'], 'the build replaced stock\'s `jalr t9` at 0x4dff4c by `jal pc_id3_path`')

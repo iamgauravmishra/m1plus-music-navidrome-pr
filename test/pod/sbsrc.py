@@ -157,7 +157,6 @@ def big_songs(m, n, flags=0):
     m.put(f'{ND}/songs.idx', bytes(out))
 
 
-def signed_id(text): return S32(int(text))
 
 
 def deque_row(m, h, i): return m.deques[h][i]
@@ -1151,9 +1150,8 @@ def scrobble(ctx):
 def playrecord(ctx):
     """Stock's play history (add_playrecord: recentplay / oftenplay) never takes a stream address: the call-site hook sbs_play_record (tools/pod.py PLAYREC_SITE, payload hook 28)."""
     expect = ctx.expect
-    import paths
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     site = pod.PLAYREC_SITE
     expect(site == 0x4ce930 and w(stock_demo, site) == 0x0320f809 and w(built, site) >> 26 == 3 and (w(built, site) & 0x3ffffff) << 2 == PSYMS['sbs_play_record'],

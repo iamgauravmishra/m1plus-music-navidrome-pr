@@ -20,7 +20,6 @@ PD = pod_show.PD
 BOUNDARY_NOT_TD = PF.BOUNDARY - {'td'}
 
 
-def utf8(s): return s.encode('latin-1').decode('utf-8')
 
 
 # ---------------------------------------------------------------------------

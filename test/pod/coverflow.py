@@ -1017,7 +1017,7 @@ def volkeys_tests(ctx):
     STOP, OK = O['RET_STOP'], O['RET_OK']
     expect(O['EVT_KEY_DOWN'] == 0x10f and O['EVT_KEY_UP'] == 0x113 and O['EV_KEY'] == 0x18 and (UP, DOWN) == (0xdc, 0xdd)
            and cdefs.defines(os.path.join(ROOT, 'patch', 'home.h'), strings=True)['VOLKEYS_FILE'] == VFILE and pod.DATA['ROTATEMODE'][0] == 0xa05a9c, 'the key numbers of this firmware (not q2-pod\'s), the setting file and ROTATEMODE')
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    stock = stock_demo_bytes()
     expect(all(struct.unpack_from('<I', stock, pod.fileoff(stock, a))[0] == old for a, old, _ in pod.VOLKEYS_PINS), 'the stock words the volume keys rely on are as pinned (wm key bindings, the rotation swap, the volume dialog)')
 
     def shelf(albums=5, on=True, **kw):

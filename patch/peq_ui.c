@@ -37,15 +37,9 @@ static struct {
     peq_state st;
 } pq __attribute__((section(".scratch")));
 
-static unsigned pq_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 /* A preset file: a name ending in .txt (any case), not a dot file, short enough to keep. */
 static int pq_is_preset(const char *s) {
-    unsigned n = pq_len(s);
+    unsigned n = strlen(s);
     return s[0] != '.' && n > 4 && n < PEQ_NAME && !strcasecmp(s + n - 4, ".txt");
 }
 
@@ -67,7 +61,7 @@ int peq_list(char (*names)[PEQ_NAME], int max, int *total) {
         for (i = n; i > 0 && strcasecmp(names[i - 1], s) > 0; --i)
             if (i < max) memcpy(names[i], names[i - 1], PEQ_NAME);
         if (i < max) {
-            memcpy(names[i], s, pq_len(s) + 1);
+            memcpy(names[i], s, strlen(s) + 1);
             if (n < max) ++n;
         }
     }
@@ -115,7 +109,7 @@ static void pq_piece(int i, int piece) { peq_piece_set(pq.row[i], &pq.piece[i], 
 
 /* A preset's name as the page shows it: the file name without its .txt (into size bytes, cut if it must be). */
 void peq_shown(char *out, unsigned size, const char *file) {
-    unsigned n = pq_len(file);
+    unsigned n = strlen(file);
     n = n > 4 ? n - 4 : n;
     if (n >= size) n = size - 1;
     memcpy(out, file, n);
@@ -140,8 +134,8 @@ int peq_playing_name(char *buf, unsigned size) {
         return 1;
     }
     k = peq_curve_key(s.curve);
-    if (pq_len(k) >= size) return 0;
-    memcpy(buf, k, pq_len(k) + 1);
+    if (strlen(k) >= size) return 0;
+    memcpy(buf, k, strlen(k) + 1);
     return 1;
 }
 
@@ -235,11 +229,11 @@ int peq_record(const peq_state *s) {
 /* Rename Preset (patch/peqpage.c): the file is renamed; the record's file name follows when it is the preset that plays (nothing is sent to the player: it reads the preset, not the name). */
 void peq_renamed(const char *from, const char *to) {
     peq_state s;
-    if (pq_len(to) >= PEQ_NAME) return;
+    if (strlen(to) >= PEQ_NAME) return;
     if (!peqout_renamed(from, to)) pod_toast(TR("Not saved"));
     if (!peq_state_load(&s) || s.mode != PEQ_FILE || strcmp(s.name, from)) return;
     memset(s.name, 0, sizeof s.name);
-    memcpy(s.name, to, pq_len(to) + 1);
+    memcpy(s.name, to, strlen(to) + 1);
     if (peq_state_save(&s) == 0)
         pq.st = s;
     else
@@ -263,7 +257,7 @@ int peq_select(const char *file) {
     char path[PQ_PATH];
     peq_state s;
     peq_error err;
-    if (pq_len(file) >= PEQ_NAME) return 0;
+    if (strlen(file) >= PEQ_NAME) return 0;
     snprintf(path, sizeof path, "%s/%s", PEQ_DIR, file);
     peq_state_load(&s); /* the 10-Band EQ's curve, gains and preamp stay as they are while a file plays */
     memset(s.name, 0, sizeof s.name);
@@ -272,7 +266,7 @@ int peq_select(const char *file) {
         return 0;
     }
     s.mode = PEQ_FILE;
-    memcpy(s.name, file, pq_len(file) + 1);
+    memcpy(s.name, file, strlen(file) + 1);
     return pq_commit(&s);
 }
 
@@ -310,7 +304,7 @@ static int pq_on_presets(void *ctx, void *e) {
 int peq_delete(const char *file) {
     char path[PQ_PATH];
     peq_state s;
-    if (pq_len(file) >= PEQ_NAME) return 0;
+    if (strlen(file) >= PEQ_NAME) return 0;
     snprintf(path, sizeof path, "%s/%s", PEQ_DIR, file);
     if (unlink(path) != 0) return 0;
     if (!peqout_deleted(file)) pod_toast(TR("Not saved")); /* the other outputs' slots must not bring the file back */

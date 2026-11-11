@@ -248,7 +248,6 @@ TABLE = {
     'NOWIFI':    [(sE, 0, 7), (sE, STOP, 7), (sE, STOP, 7), (sE, 0, 7), (sE, 0, 7), (sE, STOP, 7)],
 }
 EV = {name: k for k, name in enumerate(TABLE)}   # (the order of the enum in radio.h)
-WHY = ['', 'Unsupported address', 'Could not start', 'Playback ended', 'Could not connect', 'Stream stalled', 'No response', 'No Wi-Fi', 'Player not ready']
 
 
 def table_tests(ctx):
@@ -918,7 +917,7 @@ def opened(**kw):
 
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts with their styles, fills)."""
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SCREEN_Y0 - m.word(m.sv + SC_YOFF)) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['rp_on_paint'], a0=0, a1=ev, count=400000000)
@@ -957,12 +956,7 @@ def destroy_np(m, win=None):
 
 
 def ui(name): return awtk_ui.parse(open(os.path.join(UI_DIR, name + '.bin'), 'rb').read())
-def u8(s):
-    """A mocked text as the user reads it: UTF-8 bytes read as latin-1 (the payload's own strings come back twice over from the mocked translation)."""
-    for _ in range(2):
-        try: s = s.encode('latin-1').decode('utf-8')
-        except (UnicodeDecodeError, UnicodeEncodeError, AttributeError): break
-    return s
+u8 = undo
 def text_of(m, name): return u8(m.wtext.get(m.widgets[name]))
 
 
@@ -1898,7 +1892,7 @@ def np_tests(ctx):
     st = [x for x in m.styled if x[1] == 'normal:bg_color']
     tone = [v for w, n, v in st if w == m.window][-1]
     expect(tone not in (0xff202020, 0xffffffff) and (m.widgets['rn_art'], 'normal:bg_color', 0xffffffff) in st, f'the window takes the logo\'s tone ({tone:#x}) and the card is white')
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.blits.clear()
     fn, ctx_ = m.bound[(m.widgets['rn_art'], O['EVT_AFTER_PAINT'])]
     m.call(fn, a0=ctx_, a1=ev, count=40000000)
@@ -1977,7 +1971,7 @@ def info_height(m):
 def info_paint(m, off=0):
     """One EVT_AFTER_PAINT of the content view at scroll offset off: [(style, text, absolute y)]."""
     m.setword(m.sv + SC_YOFF, off)
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.texts.clear(); m.text_styles.clear()
     fn, c = m.bound[(m.widgets['ri_view'], O['EVT_AFTER_PAINT'])]
     m.call(fn, a0=c, a1=ev, count=40000000)
@@ -2146,7 +2140,7 @@ def entry_tests(ctx):
     # the hook as built: pinned prologue, `j rn_backtoplayer; nop`, the word the trampoline resumes at is stock's, $gp restored
     A = pod.BACKTOPLAYER
     stock = open(os.path.join(paths.find_stock() or os.path.join(os.path.dirname(WORK), 'stock'), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     expect(A == 0x4cd58c and pod.BACKTOPLAYER_PROLOGUE == (0x3c1c0053, 0x279c6944, 0x0399e021) and tuple(w(stock, A + 4 * i) for i in range(3)) == pod.BACKTOPLAYER_PROLOGUE,
            'stock has the three PIC prologue words the hook pins (on_backtoplayer_onclick)')

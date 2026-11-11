@@ -11,6 +11,7 @@
 #include "podcasts.h"
 #include "pccover.h"
 #include "artistphoto.h"
+#include "common.h"
 
 #define AP_STR_(x) #x
 #define AP_STR(x) AP_STR_(x)
@@ -51,12 +52,6 @@ static struct {
 static volatile unsigned ap_ep __attribute__((section(
     ".scratch"))); /* counts the re-checks that changed a photo (the worker bumps it; pages compare it with the value they saw) */
 
-static unsigned ap_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 static int ap_fold(int c) { return c >= 'A' && c <= 'Z' ? c + 32 : c; }
 
 unsigned ap_key(const char *name) {
@@ -86,9 +81,9 @@ static char *ap_path(char *out, unsigned key, const char *suffix) {
 static const char *const ap_seps[] = {" feat. ", " ft. ", " featuring ", " & ", " x ", ", ", "; "};
 
 int ap_lead(const char *name, char *out, unsigned n) {
-    unsigned len = ap_len(name), best = len, i, k, s;
+    unsigned len = strlen(name), best = len, i, k, s;
     for (s = 0; s < sizeof ap_seps / sizeof *ap_seps; ++s) {
-        unsigned l = ap_len(ap_seps[s]);
+        unsigned l = strlen(ap_seps[s]);
         for (i = 0; i + l <= len && i < best; ++i) {
             for (k = 0; k < l && ap_fold((unsigned char)name[i + k]) == (unsigned char)ap_seps[s][k]; ++k);
             if (k == l) {
@@ -216,7 +211,7 @@ void ap_lib_free(void) {
 static void ap_pur_add(const char *dir, unsigned key);
 
 int ap_lib_add(const char *track, unsigned key) {
-    unsigned slash = ap_len(track);
+    unsigned slash = strlen(track);
     char *d;
     if (ap.bad) return 0; /* (key 0: an album with no artist, which makes every folder it is in impure) */
     while (slash && track[slash - 1] != '/') --slash;
@@ -286,9 +281,7 @@ void ap_lib_drop(void) { unlink(AP_PUR_FILE); }
 
 /* The Home pass has the whole snapshot: its purity map goes to AP_PUR_FILE (tmp, then rename) for the re-check of one artist, which has no database access on the worker. An unusable map removes the old file. */
 int ap_lib_save(void) {
-    char tmp[sizeof AP_PUR_FILE + 8];
     unsigned i, n = 0, hdr[3];
-    void *f;
     if (ap.bad || ap.purbad || !ap.pur || !ap.npur) {
         ap_lib_drop();
         return 0;
@@ -296,22 +289,9 @@ int ap_lib_save(void) {
     for (i = 0; i < AP_PUR_SLOTS;
          ++i) /* compacted in place: the order does not matter, the reader makes its own table */
         if (ap.pur[i].h) ap.pur[n++] = ap.pur[i];
-    mkdir(CARD_DIR, 0755);
-    mkdir(AP_DIR, 0755);
-    snprintf(tmp, sizeof tmp, "%s.tmp", AP_PUR_FILE);
-    f = fopen(tmp, "w");
-    if (!f) return 0;
     hdr[0] = AP_PUR_MAGIC, hdr[1] = n, hdr[2] = ap_pur_sum(ap.pur, n);
-    if (fwrite(hdr, sizeof hdr, 1, f) == 1 && fwrite(ap.pur, sizeof *ap.pur, n, f) == n) {
-        fclose(f);
-        if (rename(tmp, AP_PUR_FILE))
-            unlink(tmp);
-        else
-            return 1;
-    } else {
-        fclose(f);
-        unlink(tmp);
-    }
+    if (m1_card_write(AP_DIR, AP_PUR_FILE, AP_PUR_FILE ".tmp", hdr, sizeof hdr, ap.pur, n * sizeof *ap.pur) == 0)
+        return 1;
     ap_lib_drop();
     return 0;
 }
@@ -359,7 +339,7 @@ static int ap_starts(const char *s, const char *p) {
 
 /* Every album the snapshot has in dir (the folder itself or below it) is by key. */
 static int ap_pure(const char *dir, unsigned key) {
-    unsigned lo = 0, hi = ap.n, i, n = ap_len(dir);
+    unsigned lo = 0, hi = ap.n, i, n = strlen(dir);
     int seen = 0;
     while (lo < hi) { /* the first folder not before dir */
         unsigned mid = (lo + hi) / 2;
@@ -404,7 +384,7 @@ static int ap_disc(const char *name) {
 
 /* Cut dir back to its parent. 0 when there is none (a top-level name). */
 static int ap_up(char *dir) {
-    unsigned n = ap_len(dir);
+    unsigned n = strlen(dir);
     while (n && dir[n - 1] != '/') --n;
     if (n < 2) return 0;
     dir[n - 1] = 0;
@@ -422,14 +402,14 @@ static int ap_find(const char *dir, const char *stem, char *out, int *prank, cha
     if (!d) return 0;
     while ((ent = readdir(d)) != (char *)0) {
         const char *name = ent + 11; /* struct dirent: d_type at 10, d_name at 11 */
-        if (ent[10] != 8 || ap_len(name) >= sizeof best) continue;
+        if (ent[10] != 8 || strlen(name) >= sizeof best) continue;
         for (r = 0; r < 3; ++r) {
             snprintf(want, sizeof want, "%s%s", stem, ext[r]);
             if (cc_nocase(name, want)) continue;
             if (pname[0] && (r < *prank || (r == *prank && strcmp(name, pname) <= 0))) break; /* already tried */
             if (r < rank || (r == rank && strcmp(name, best) < 0)) {
                 rank = r;
-                memcpy(best, name, ap_len(name) + 1);
+                memcpy(best, name, strlen(name) + 1);
             }
             break;
         }
@@ -437,7 +417,7 @@ static int ap_find(const char *dir, const char *stem, char *out, int *prank, cha
     closedir(d);
     if (rank == 3) return 0;
     *prank = rank;
-    memcpy(pname, best, ap_len(best) + 1);
+    memcpy(pname, best, strlen(best) + 1);
     snprintf(out, AP_PATH, "%s/%s", dir, best);
     return 1;
 }
@@ -534,12 +514,12 @@ static int ap_walk(unsigned key, const char *const *dirs, unsigned n, const ap_o
         prev[0] = 0;
         for (i = 0; i < n; ++i) {
             const char *d = dirs[i];
-            if (ap_len(d) >= sizeof dir) continue;
-            memcpy(dir, d, ap_len(d) + 1);
+            if (strlen(d) >= sizeof dir) continue;
+            memcpy(dir, d, strlen(d) + 1);
             if (ap_disc(ap_base(dir)) && !ap_up(dir)) continue;
             if (tier != 1 && !ap_up(dir)) continue; /* the folder above (tier 1 stays in the album folder) */
             if (!strcmp(dir, prev)) continue;
-            memcpy(prev, dir, ap_len(dir) + 1);
+            memcpy(prev, dir, strlen(dir) + 1);
             if (!ap_judge(o, dir, key)) continue;
             if (tier == 2 && ap_key(ap_base(dir)) != key) continue;
             tried[0] = 0, rank = 0;
@@ -606,7 +586,7 @@ void ap_job(const char *track, unsigned key, int force, const volatile int *canc
 /* The line `name` of a text record, as a pointer to its value, or NULL. */
 static const char *ap_field(const char *b, const char *name) {
     while (*b) {
-        if (ap_starts(b, name)) return b + ap_len(name);
+        if (ap_starts(b, name)) return b + strlen(name);
         while (*b && *b != '\n') ++b;
         if (*b) ++b;
     }

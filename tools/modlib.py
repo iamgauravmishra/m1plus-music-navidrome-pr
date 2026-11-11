@@ -1,7 +1,46 @@
 """Helpers shared by the asset steps (tools/mod_*.py)."""
-import os, shutil, stat, subprocess, sys
+import hashlib, io, os, shutil, stat, struct, subprocess, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
+
+def sha256(b):
+    """Hex SHA-256 of bytes."""
+    return hashlib.sha256(b).hexdigest()
+
+def file_sha256(p):
+    """Hex SHA-256 of a file's bytes."""
+    with open(p, 'rb') as f: return sha256(f.read())
+
+def png_bytes(im):
+    """A PIL image as PNG bytes (optimised, no metadata chunks, no timestamp)."""
+    b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return b.getvalue()
+
+def check_pins(buf, pins, fileoff):
+    """Every (address, word, what) of `pins` must be the little-endian word at fileoff(buf, address); ValueError otherwise."""
+    for a, old, what in pins:
+        got = struct.unpack_from('<I', buf, fileoff(buf, a))[0]
+        if got != old: raise ValueError(f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
+
+def load_pins(path):
+    """{name: sha256} from a pins file ('<sha256>  <name>' lines, '#' comments)."""
+    pins = {}
+    for line in open(path):
+        if line.strip() and not line.startswith('#'):
+            h, n = line.split(); pins[n] = h
+    return pins
+
+def stock_img_dir(img):
+    """The unpacked stock tree's IMG directory (exits when no stock tree is unpacked)."""
+    import paths
+    stock = paths.find_stock(paths.ZIP)
+    if not stock: sys.exit('no unpacked stock tree found (run tools/build.py once)')
+    return os.path.join(stock, img)
+
+def write_pins(path, header, d, names):
+    """Write a pins file: the header line, then the SHA-256 of d/<name>.png for each name."""
+    with open(path, 'w') as o:
+        o.write(header)
+        for n in names: o.write(f'{file_sha256(os.path.join(d, n + ".png"))}  {n}\n')
 
 def write_keep_mode(p, data):
     """Overwrite p, preserving permissions and deterministic timestamps of added files."""

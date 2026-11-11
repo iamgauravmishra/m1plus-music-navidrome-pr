@@ -12,6 +12,7 @@ sys.path.insert(0, os.path.dirname(HERE))
 from PIL import Image, ImageDraw
 import build, paths, preview_icons as PI, vinyl_art as V
 from preview_vinyl import J
+from modlib import png_bytes as _png
 
 
 def green_cover(n=300):
@@ -93,11 +94,6 @@ def main():
         V.use(th); ims = V.images()
         print(th, 'PNG bytes', {k: len(_png(v)) for k, v in ims.items() if k in ('vinyl_base', 'vinyl_keys', 'vinyl_arm', 'vinyl_armsh', 'vinyl_cap')})
     V.use('graphite')
-
-
-def _png(im):
-    import io
-    b = io.BytesIO(); im.save(b, 'PNG', optimize=True); return b.getvalue()
 
 
 if __name__ == '__main__':

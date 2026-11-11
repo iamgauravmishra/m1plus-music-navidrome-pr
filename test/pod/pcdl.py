@@ -33,11 +33,6 @@ FAILS = Q0 + 32 * QSIZE
 def pn_at(off): return PSYMS['pn'] + off
 
 
-def body(n):
-    """n bytes that are different everywhere (a resume that is off by one shows)."""
-    return bytes((i * 7 + i // 251 + i // 65536) & 255 for i in range(n))
-
-
 def key_of(folder, f): return PCN.pc_hash(f'{folder}/{f}')
 
 
@@ -77,11 +72,6 @@ def add(m, f='a.mp3', folder='Show'):
     m.thread = None
     r = m.call(PSYMS['pn_dl_add'], a0=m.cstr(RP), a1=m.cstr(folder), a2=m.cstr(f), count=1 << 40)
     return r, m.thread
-
-
-def work(m, th):
-    m.call(th[0], a0=th[1], count=1 << 40)
-    return list(m.calls)
 
 
 def state(m, f='a.mp3', folder='Show'):

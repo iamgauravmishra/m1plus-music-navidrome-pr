@@ -16,7 +16,6 @@ KILL_SD, KILL_FLASH, BAD = '/mnt/mmc/m1plus-off', '/mnt/data/m1plus-off', '/mnt/
 WHITE, BLACK = 0xffffffff, 0xff000000
 PAPER, INK = L.PAPER * 0x010101 | 0xff000000, L.INK * 0x010101 | 0xff000000
 F_COLOR, F_GRAD, F_NEST = HEAP + 0x800000, HEAP + 0x800100, HEAP + 0x800200   # code addresses the mocks trap (fake style vtable slots), and the stub that asks again
-EVT = {'color': 0x14, 'grad': 0x18}
 
 
 def px(c):
@@ -186,8 +185,8 @@ def disc_image(w=16, h=16):
 def hooks_tests(ctx):
     """The three hooks: pinned words, the jumps into the payload, the trampolines, the manifest; nothing else of stock changed at those sites."""
     expect = ctx.expect
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     j = lambda a: 0x08000000 | a >> 2
     expect(pod.STYLE_COLOR == 0x659fcc and pod.IMAGE_ADD == 0x655638 and pod.STYLE_GRADIENT == 0x659f9c and pod.STYLE_COLOR_RET == O['STYLE_COLOR_GRADIENT_RET'] == 0x65a050,

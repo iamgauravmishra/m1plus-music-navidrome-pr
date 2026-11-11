@@ -73,7 +73,7 @@ def check_layout(m, shown):
 
 def hook_tests(ctx):
     expect, P = ctx.expect, pod_pages
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     word = lambda a: struct.unpack_from('<I', d, pod.fileoff(image, a))[0]
 
     # -- 0. the hook and what it relies on ---------------------------------------------------------------------------
@@ -491,10 +491,9 @@ def flags_tests(ctx):
         expect(m.names_() == [H, P, second] and m.word(FLAG[second]) == 1, f'{second}, still behind the player, comes forward too ({m.names_()})')
 
     # -- the build
-    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    d = built_demo_bytes(); image = bytearray(d)
     word = lambda a: struct.unpack_from('<I', d, pod.fileoff(image, a))[0]
-    import paths
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    stock = stock_demo_bytes()
     sw = lambda a: struct.unpack_from('<I', stock, pod.fileoff(stock, a))[0]
     jal = 0x0c000000 | (PSYMS['pd_open_settings'] >> 2)
     sites = pod.PULLDOWN_OPEN_SITES

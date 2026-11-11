@@ -51,7 +51,6 @@ extern int albums_open_artist(void *artists, unsigned index, unsigned scope); /*
 extern int albums_open_src(const lib_src_t *src,
                            void *artist); /* patch/albums.c: the source's albums of one artist (the record is copied) */
 extern int songs_open_genre(const char *name, int unknown); /* patch/songs.c */
-extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 
@@ -95,7 +94,6 @@ static struct {
     const lib_src_t *src; /* the library source the list comes from (artists_open_src); NULL = the stock library */
     unsigned gen, rows, gen_timer; /* the source's gen and gen_rows at the last read, and the timer that watches it */
     int home; /* its Home tile (HOME_GENRE, HOME_COMPOSER; 0 for Artists): where a window that will not open falls back */
-    const char *key; /* the title's key: Artists, Album Artists, Genres, Composers */
     void *chev; /* the chevron bitmap */
     int press; /* the row under the finger, + 1 */
     int down; /* the row a press began on, + 1 */
@@ -222,7 +220,6 @@ static int ar_content(void) { return az_rows_end(&ar.al) + AR_BOTTOM; }
 
 /* The title: the mode's (or the row's) text, cut to the large title's 250 px and to the navbar's room, as the Songs lists' titles. */
 static void ar_title_text(const char *key) {
-    ar.key = key;
     az_fit(ar.title, TR(key));
     az_fit(ar.big, TR(key));
 }

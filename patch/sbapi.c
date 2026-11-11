@@ -41,7 +41,6 @@ extern int pn_free_kb(const char *path, unsigned *kb);
 #define SBA_SEARCH_N 20
 #define SBA_CHUNK_BYTES 16384u /* bytes copied at a time when songs.part is cut back to whole rows */
 #define SBA_CHUNK 16 /* rows read at a time when a file is walked */
-#define SBA_COPY_BUF 32768
 #define SBA_STAR_EV 16 /* star events kept while phase 2 pages the songs */
 #define SBA_OV 32 /* stars the page side shows before the worker has written them (the star overlay) */
 
@@ -1409,7 +1408,7 @@ static int sba_bg_fail(const sba_wk_t *w, int code) {
 /* Phase 2 keeps the card's free space above the downloads' floor (SBA_RESERVE_KB). */
 static int sba_bg_room(void) {
     unsigned kb = 0;
-    return pn_free_kb(SBA_DIR, &kb) && kb < SBA_RESERVE_KB ? SBA_CARDFULL : SBA_OK;
+    return pn_free_kb(SBA_DIR, &kb) && kb <= SBA_RESERVE_KB ? SBA_CARDFULL : SBA_OK;
 }
 
 /* Leave for another stage (and write it down). */

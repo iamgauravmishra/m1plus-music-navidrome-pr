@@ -42,7 +42,6 @@
 
 #define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define I(w, off) (*(int *)((char *)(w) + (off)))
-#define P(w, off) (*(void **)((char *)(w) + (off)))
 
 static struct {
     void *win, *view, *sv, *status;

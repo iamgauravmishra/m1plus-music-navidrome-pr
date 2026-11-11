@@ -142,9 +142,8 @@ class BC(Machine):
 
 def hook_tests(ctx):
     expect = ctx.expect
-    import paths
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock = stock_demo_bytes()
+    built = built_demo_bytes()
     word = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
 
     # -- 0. the hook, its pins and the stock paths that reach the page
@@ -451,9 +450,8 @@ def sibling(name):
 def idle_tests(ctx):
     """payload hook 24: the timed open's navigator_to becomes bc_timed_open (tools/pod.py IDLE_SITE, patch/bigcover.c)."""
     expect = ctx.expect
-    import paths
-    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock = stock_demo_bytes()
+    built = built_demo_bytes()
     word = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     site = pod.IDLE_SITE
 

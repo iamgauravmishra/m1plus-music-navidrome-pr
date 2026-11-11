@@ -38,13 +38,6 @@
 #define NL_RETRY_MS 10000u
 #define NL_FULL_MS 1500u /* a request the full queue refused is made again after this */
 
-extern void pod_toast(const char *text);
-extern int
-pod_confirm_code(const char *text); /* patch/m1plus.c: the stock confirm dialog's raw result (CONFIRM_YES for Yes) */
-extern void pod_set_in_order_for_queue(void);
-extern void pod_set_mode_for_queue(int mode);
-extern unsigned pod_rand(unsigned n);
-
 static struct {
     unsigned songs_at, ring_n, awake_until; /* awake_until: the keep-awake timer's grace after a queue */
     unsigned awake; /* its timer handle (0 none) */

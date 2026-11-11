@@ -110,10 +110,7 @@ __attribute__((noinline)) void np_format_remaining(char *out, unsigned size, int
     np_format_clock(out, size, len - pos, 1);
 }
 
-/* The gradient's alpha on window row y (np_tint.png: black, NP_ALPHA_TOP at the first row to NP_ALPHA_BOTTOM at the last). */
-__attribute__((noinline)) unsigned np_alpha(unsigned y) { return m1_alpha(y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H); }
-
-/* color (0x..BBGGRR) as the window shows it on row y: under the black gradient. */
+/* color (0x..BBGGRR) as the window shows it on row y: under the black gradient (np_tint.png: black, NP_ALPHA_TOP at the first row to NP_ALPHA_BOTTOM at the last). */
 __attribute__((noinline)) unsigned np_shade(unsigned color, unsigned y) {
     return m1_shade(color, y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
 }

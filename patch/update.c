@@ -26,10 +26,6 @@
 #define UP_AWAKE_TICKS 4 /* the standby and auto power-off countdowns are set again once a second */
 #define UP_PD_BAR_H 6 /* the popup's bar (tools/pod_ui.py podcasts_dialog big=True) */
 
-extern int pod_confirm_code(
-    const char
-        *text); /* patch/m1plus.c: the stock confirm dialog, modal: CONFIRM_YES (btn_enter), 4 (btn_cancel), else 0 */
-
 extern int relnotes_open(void); /* patch/relnotes.c: the offered release's notes, a page of their own */
 
 enum { UA_NONE = 0, UA_CHECK, UA_ASK, UA_RETRY, UA_INSTALL, UA_NOTES };

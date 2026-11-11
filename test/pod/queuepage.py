@@ -5,10 +5,12 @@ asset), the header (the playing track, the cover from the cache), Up Next (the t
 follows), the loader, the taps (start_playqueue with the queue index as the stock drawer's row handler calls it; drags and the header play nothing), the mode buttons (Shuffle
 toggles, Repeat cycles off / all / one, the buttons' look), the refresh timer (the player moves on, the mode changes elsewhere, the queue is replaced, a dark screen) and the destroy.
 The compiled payload runs under Unicorn; the player is the machine's queue (the deque at PLAY_QUEUE) and position."""
-import os
+import functools, os
+import random
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+CMAP_MAX = cdefs.defines(os.path.join(ROOT, 'patch', 'covercache.h'), ['CC_CMAP_MAX'])['CC_CMAP_MAX']   # (not in offsets.inc, so not in O)
 
 
 SG = sibling('songs')
@@ -127,7 +129,7 @@ def scroll_to(m, v): m.setword(m.sv + SC_YOFF, v & 0xffffffff)
 
 def paint(m):
     """One EVT_AFTER_PAINT on the content view: (blits, texts, fills) of that frame, the canvas where the scroll_view leaves it."""
-    ev = m.alloc(0x40); m.u.mem_write(ev, bytes(0x40)); m.setword(ev + O['EVENT_PAINT_CANVAS'], m.canvas)
+    ev = m.paint_event()
     m.setword(m.canvas + O['CANVAS_OY'], (SY0 - m.word(m.sv + SC_YOFF)) & 0xffffffff)
     m.blits.clear(); m.texts.clear(); m.text_styles.clear(); m.fills.clear()
     m.call(PSYMS['qp_on_paint'], a0=0, a1=ev, count=400000000)
@@ -156,7 +158,7 @@ def destroy(*ms):
 def row_y(i): return TOP + i * ROW
 def ui(): return awtk_ui.parse(open(UI, 'rb').read())
 def text_of(m, name): return m.wtext.get(m.widgets[name])
-def utf(s): return s.encode('latin-1').decode('utf-8')
+utf = utf8
 def fills_of(fills, colour): return [f_ for f_ in fills if f_[0] == colour]
 def vh(m): return m.props.get((m.sv, 'virtual_h'))
 def shown(m, name): return m.props.get((m.widgets[name], 'visible'), 1) and m.props.get((m.widgets[name], 'sensitive'), 1)
@@ -429,12 +431,7 @@ def episode_tests(ctx):
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-def fnv_nocase(s):
-    """The payload's album name hash (cmap_hash): FNV-1a over the bytes of the UTF-8 name with ASCII A-Z folded to lower case."""
-    h = 2166136261
-    for c in s.encode():
-        h = ((h ^ (c + 32 if 65 <= c <= 90 else c)) * 16777619) & 0xffffffff
-    return h
+fnv_nocase = fnv_fold   # the payload's album name hash (cmap_hash)
 
 
 def finish_loading(m):
@@ -522,13 +519,7 @@ def collab_tests(ctx):
     destroy(m)
 
     # two names with one hash, and one folded name under two records
-    import random
-    seen, a, b, rr = {}, None, None, random.Random(3)
-    for i in range(2000000):
-        nm = 'c%x' % rr.getrandbits(40)
-        h = fnv_nocase(nm)
-        if h in seen and seen[h] != nm: a, b = seen[h], nm; break
-        seen[h] = nm
+    a, b = find_collision()
     expect(a is not None and fnv_nocase(a) == fnv_nocase(b) and a != b, f'a colliding pair of names was found ({a}, {b})')
     lib2 = [('P', a, True), ('Q', b, True), ('R', 'Fine', True), ('S', 'Dup', True), ('T', 'DUP', True)]
     tr2 = [('P; X', a), ('Q; X', b), ('R; X', 'Fine'), ('S; X', 'Dup'), ('T; X', 'dup')]
@@ -539,7 +530,7 @@ def collab_tests(ctx):
     destroy(m)
 
     # the cap: the first CC_CMAP_MAX albums of the query resolve, the rest show the placeholder; one query
-    cap = O['CC_CMAP_MAX'] if 'CC_CMAP_MAX' in O else 4096
+    cap = CMAP_MAX
     lib3 = [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap + 40)]
     tr3 = [(f'Artist {i}; G', f'Album {i:05d}') for i in (5, cap - 1, cap, cap + 39)]
     m = collab_open(tr3, lib3, pos=0)
@@ -548,9 +539,9 @@ def collab_tests(ctx):
     destroy(m)
 
 
+@functools.cache
 def find_collision():
-    """Two different names with one cover map hash (FNV-1a, ASCII folded)."""
-    import random
+    """Two different names with one cover map hash (FNV-1a, ASCII folded); found once for the process."""
     seen, rr = {}, random.Random(3)
     for i in range(2000000):
         nm = 'c%x' % rr.getrandbits(40)
@@ -626,7 +617,7 @@ def cmap_tests(ctx):
 
     # a collision across the cap: a kept album and one past the cap share a hash under two keys: both show the placeholder (either one inside)
     a, b = find_collision()
-    cap = O['CC_CMAP_MAX'] if 'CC_CMAP_MAX' in O else 4096
+    cap = CMAP_MAX
     expect(a is not None and fnv_nocase(a) == fnv_nocase(b), f'a colliding pair was found ({a}, {b})')
     for inside, beyond in ((a, b), (b, a)):
         lb = [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap - 1)] + [('P', inside, True)] + [(f'Artist {i}', f'Album {i:05d}', True) for i in range(cap, cap + 30)] + [('Q', beyond, True)]

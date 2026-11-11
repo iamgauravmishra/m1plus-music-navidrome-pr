@@ -517,6 +517,16 @@ void *m1_make_mark(void *win, const char *name) {
     return b;
 }
 
+int m1_make_marks(void *win, void *mark[2]) {
+    mark[0] = m1_make_mark(win, "unselect");
+    mark[1] = m1_make_mark(win, "selected");
+    if (mark[0] && mark[1]) return 1;
+    if (mark[0]) bitmap_destroy(mark[0]);
+    if (mark[1]) bitmap_destroy(mark[1]);
+    mark[0] = mark[1] = (void *)0;
+    return 0;
+}
+
 /* The chevron: a stroke of two segments (the stock right_arrow is 13 x 22 and our image loader only makes squares), antialiased by 4 x 4 samples per pixel, in the
  * alpha of a grey bitmap (the rail's disc is made the same way). Coordinates are eighths of a pixel. */
 static int pod_seg2(int px, int py, int ax, int ay, int bx,

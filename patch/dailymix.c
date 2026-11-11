@@ -35,11 +35,6 @@
 #include "podcasts.h"
 #include "songops.h"
 
-extern void pod_toast(const char *text); /* patch/shuffle.c */
-extern unsigned pod_rand(unsigned n); /* patch/shuffle.c */
-extern void pod_set_mode(int mode); /* patch/shuffle.c: the stock play mode (patch/songops.c uses it for Shuffle) */
-extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play (Play) */
-
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
 #define DM_GREY 0xff1e1c1cu /* #1C1C1E (red lowest) */
@@ -77,12 +72,6 @@ static const unsigned short dm_lin[256] = {
 /* ---------------------------------------------------------------------------
  * Small helpers (the payload links no libc string functions but those in stock.h)
  */
-static unsigned dm_len(const char *s) {
-    unsigned n = 0;
-    while (s[n]) ++n;
-    return n;
-}
-
 static int dm_bad(unsigned char c) { return c < 0x20 || c == 0x7f; }
 
 static unsigned dm_xs(unsigned x) {
@@ -122,7 +111,7 @@ static unsigned dm_lum(unsigned r, unsigned g, unsigned b) {
 
 /* s into out (size bytes with the NUL), control bytes as spaces, cut before a UTF-8 continuation byte that would be split. */
 static void dm_copy(char *out, unsigned size, const char *s) {
-    unsigned n = dm_len(s), j;
+    unsigned n = strlen(s), j;
     if (n >= size) {
         n = size - 1;
         while (n && ((unsigned char)s[n] & 0xc0) == 0x80) --n;
@@ -1403,7 +1392,7 @@ static void dm_artist_lines(void *canvas) {
     }
     nl = dm_wrap(canvas, wide, len, DM_SUB_W, DM_LINES, ls, le);
     if (!nl) { /* a unit wider than the line: the first name alone */
-        dm_wide(wide, DM_STEXT * 2, dm.name[0], dm_len(dm.name[0]));
+        dm_wide(wide, DM_STEXT * 2, dm.name[0], strlen(dm.name[0]));
         for (len = 0; wide[len]; ++len) {
         }
         ls[0] = 0, le[0] = len, nl = 1;
@@ -1427,10 +1416,10 @@ static void dm_title_lines(void) {
     while (*sp && *sp != ' ') ++sp;
     if (*sp == ' ') {
         dm_wide(dm.tl[0], DM_TEXT, t, (unsigned)(sp - t));
-        dm_wide(dm.tl[1], DM_TEXT, sp + 1, dm_len(sp + 1));
+        dm_wide(dm.tl[1], DM_TEXT, sp + 1, strlen(sp + 1));
         dm.tn = 2;
     } else {
-        dm_wide(dm.tl[1], DM_TEXT, t, dm_len(t));
+        dm_wide(dm.tl[1], DM_TEXT, t, strlen(t));
         dm.tn = 1;
     }
 }
@@ -1947,7 +1936,7 @@ static unsigned dp_updated(char *out, unsigned size) {
     int y, m, d;
     if (!today || !gone || gone == 1) {
         dm_copy(out, size, TR(gone == 1 ? "Updated yesterday" : "Updated today"));
-        return dm_len(out);
+        return strlen(out);
     }
     dp_civil(dp.day, &y, &m, &d);
     snprintf(date, sizeof date, "%04d-%02d-%02d", y, m, d);
@@ -1956,7 +1945,7 @@ static unsigned dp_updated(char *out, unsigned size) {
 
 static void dp_wide(unsigned *dst, unsigned cap, const char *s) {
     memset(dst, 0, cap * sizeof(unsigned));
-    dm_wide(dst, cap, s, dm_len(s));
+    dm_wide(dst, cap, s, strlen(s));
 }
 
 /* The description wrapped into at most DP_DESC_LINES lines of DP_TEXT_W; a longer text ends its last line with an ellipsis. */

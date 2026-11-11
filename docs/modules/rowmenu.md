@@ -38,9 +38,9 @@ Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unic
 
 | Row | What it does |
 |---|---|
-| Play Next / Play After | `rowmenu_open` copies the row's `stSongInfo` into a one-row deque (`_create_deque("stSongInfo")`, `_deque_push_back`, as `albums_open_artist` builds its carrier), so a list read again under the open menu cannot pull the row away. The row calls `upnext_add(rows, after)` (0 Play Next, 1 Play After), destroys the deque, closes the menu, then toasts with `pod_toast`. |
+| Play Next / Play After | `rowmenu_open_src` copies the row's `stSongInfo` into a one-row deque (`_create_deque("stSongInfo")`, `_deque_push_back`, as `albums_open_artist` builds its carrier), so a list read again under the open menu cannot pull the row away. The row calls `upnext_add(rows, after)` (0 Play Next, 1 Play After), destroys the deque, closes the menu, then toasts with `pod_toast`. |
 | Add to Playlist | closes the menu, then the page's `*_add_one(row)`: a bit for that row in the page's own select bitset (`sg.sel` / `ab.sel`), `so_add(cls, count, sel, 1, valid, ...)` (our picker, `patch/picker.c`, or where it cannot open the stock one with the stock selection vector filled with that row), the bitset cleared again. The picker's return is the page's existing `EVT_WINDOW_TO_FG` handling. |
-| Favorite | stock's own star calls on the row's copy (`manage_myfav` 0x4ef884: `checkFavExist`, then `deleteMusicFromFav` or `addMyFav`; the table Now Playing's star and the Playlists page's Favorites read). The state is read at every open (`rowmenu_open` sets the label and the glyph's image) and again after the call: a call that changed nothing toasts "Adding Failed", else "Added to Favorites" / "Removed from Favorites". An open Favourites list is not read again until its page returns to the front. |
+| Favorite | stock's own star calls on the row's copy (`manage_myfav` 0x4ef884: `checkFavExist`, then `deleteMusicFromFav` or `addMyFav`; the table Now Playing's star and the Playlists page's Favorites read). The state is read at every open (`rowmenu_open_src` sets the label and the glyph's image) and again after the call: a call that changed nothing toasts "Adding Failed", else "Added to Favorites" / "Removed from Favorites". An open Favourites list is not read again until its page returns to the front. |
 | Get Info | closes the menu, `songinfo_open(rec)` on the row's copy, frees the copy ([songinfo](songinfo.md)). |
 | scrim | closes the menu (and drops the copy). |
 
@@ -61,7 +61,7 @@ The menu also closes when the page reads its list again (`sg_load` / `ab_load`: 
 
 ## A library source's rows (ND-14)
 
-`rowmenu_open_src(rm, row, rec, add, src)` (the pages pass their `src`; `rowmenu_open` is it with NULL) shows the same five-row card for a Navidrome track (docs/modules/subsonic.md "Row sheet"): the third row is **Download**
+`rowmenu_open_src(rm, row, rec, add, src)` (the pages pass their `src`, NULL for the card's library) shows the same five-row card for a Navidrome track (docs/modules/subsonic.md "Row sheet"): the third row is **Download**
 (`rm_ic_dl`), **Cancel Download** (`rm_ic_cxdl`, waiting or running) or **Remove Download** (`pc_ic_trash`, on the card) from `src->row` (`ls_row_t.dl`), in place of Add to Playlist; Favorite / **Undo Favorite** follows `ls_row_t.fav`
 and goes through `src->act(LS_ACT_FAVORITE)` (no stock myfav call); the words and glyph of the third row are set at every open (Add to Playlist and `rm_ic_add` again for the stock library). Download, Cancel and Remove are
 `src->act` (`LS_ACT_DOWNLOAD`, `LS_ACT_CANCEL_DL`, `LS_ACT_DELETE_DL`); the row re-paints when `src->gen` moves. Play Next / Play After hand `src->queue_row(rec)` (a stock queue record: the stream address or the local file, its

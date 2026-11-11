@@ -20,18 +20,6 @@ SIZE = TRACK.size
 assert SIZE == 820
 
 
-def fnv(s):
-    h = 2166136261
-    for c in s.encode():
-        h = ((h ^ c) * 16777619) & 0xffffffff
-    return h
-
-
-def body(n):
-    """n bytes that are different everywhere (a resume that is off by one shows)."""
-    return bytes((i * 7 + i // 251 + i // 65536) & 255 for i in range(n))
-
-
 DATA = body(1300000)
 
 
@@ -167,11 +155,6 @@ def add(m, t):
     m.u.mem_write(buf, pack(t))
     r = m.call(PSYMS['sba_dl_add'], a0=buf, count=1 << 40)
     return r, m.thread
-
-
-def work(m, th):
-    m.call(th[0], a0=th[1], count=1 << 40)
-    return list(m.calls)
 
 
 def state(m, i='tr-1', inside=False):

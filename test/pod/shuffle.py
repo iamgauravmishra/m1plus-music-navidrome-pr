@@ -489,8 +489,8 @@ def apple_tests(ctx):
     expect(not flag_on(m) and m.mode == RA and next(c[2] for c in m.calls if c[0] == 'widget_use_style') == STYLES[RA], 'Shuffle plus Repeat all (set from the Queue page): the button shows Shuffle; its next step is Repeat all with Shuffle off')
 
     # 46. The hooks and display sites in the build: pinned words, the jal to sh_display_mode, the prologue jumps.
-    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
-    built = open(DEMO, 'rb').read()
+    stock_demo = stock_demo_bytes()
+    built = built_demo_bytes()
     w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
     sites = {a for a, _ in pod.MODE_SITES}
     expect(len(sites) == 19 and all(w(stock_demo, a) == 0x0320f809 and w(built, a) == pod.jal(PSYMS['sh_display_mode'], a) for a in sites), 'the 19 display sites: stock `jalr mclGetPlayMode` became `jal sh_display_mode`')
