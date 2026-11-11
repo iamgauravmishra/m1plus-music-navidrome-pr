@@ -703,7 +703,6 @@ def clear_tests(ctx):
     expect('Clear Track Durations' not in [r.label for r in P.DEVELOPER_PAGE.rows], 'Developer has no Clear Track Durations row')
     expect(P.ACT_CLEARCACHE == 42 and P.ACT_CCLIST == 43 and not [s for s in P.SETTING_FILES if 'durations' in s or 'lengths' in s], 'the earlier action ids are as they were; the Settings Files page lists no durations row (the table is on the card)')
     CONFIRM = 'Delete all measured track durations? They will be measured again on Home.'
-    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
     m = Machine(); m.fs[DUR] = table([('/a.flac', 1, 10)])
     m.confirm_yes = False
     m.call(PSYMS['durations_clear_ask'], count=3000000)

@@ -30,8 +30,7 @@
 #include "pcnet.h"
 #include "peq.h"
 #include "autoeq.h"
-
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
+#include "home.h"
 
 #define AE_MAX 20 /* results kept (the Podcasts' search shows 25; sonix 20) */
 #define AE_NAME 64

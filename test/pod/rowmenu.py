@@ -90,13 +90,13 @@ def lay_of(m, plain, n=len(LETTERS)):
 
 def dot_blits(blits): return [b for b in blits if b[2][2:] == (DOTS, DOTS) and b[1] == (0, b[1][1], DOTS, b[1][3])]
 def titles_of(texts, names=LETTERS): return {t: r for t, r in texts if t in names}
-def toasts(calls): return [c[1] for c in calls if c[0] == 'toast']
+def toasts_in(calls): return [c[1] for c in calls if c[0] == 'toast']
 
 
 def card_of(m):
     """The menu's widgets the payload moved or resized (none: the asset places the sheet), and whether the card is shown."""
     ours = {m.widgets[n] for n in m.widgets if n.startswith('rm_')}
-    return [c for c in m.calls if c[0] in ('widget_move', 'widget_resize') and c[1] in ours], SG.vis(m, 'rm_card')
+    return [c for c in m.calls if c[0] in ('widget_move', 'widget_resize') and c[1] in ours], vis(m, 'rm_card')
 
 
 def asset_tests(ctx):
@@ -219,7 +219,7 @@ def paint_tests(ctx):
         t = titles_of(texts)
         expect(not dot_blits(blits) and t and all(r[2] == SG.TEXT_END - tx for r in t.values()), f'{what}: no "...", the text ends at the hairline\'s end (284 with the rail)')
         calls = SG.tap(m, 252, lay.row_y(2) + 30)
-        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'vs_card') == (0, 0), f'{what}: a tap where the "..." would be plays the song')
+        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and vis(m, 'vs_card') == (0, 0), f'{what}: a tap where the "..." would be plays the song')
     # the album page
     for kw, what in ((dict(), 'the album page'),):
         m = AB.album_machine()
@@ -252,44 +252,44 @@ def touch_tests(ctx):
         y = lay.row_y(i) + 30
         calls = SG.tap(m, zx, y)
         mv, shown = card_of(m)
-        expect(shown == (1, 1) and SG.vis(m, 'rm_scrim') == (1, 1) and mv is not None and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls)
+        expect(shown == (1, 1) and vis(m, 'rm_scrim') == (1, 1) and mv is not None and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls)
                and not any(c[0] == 'loadSongList' for c in calls), f'{what}: a tap on the "..." opens the menu (scrim and card shown) and plays nothing ({mv})')
         SG.click(m, 'rm_scrim')
-        expect(SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0), f'{what}: the scrim closes the menu')
+        expect(vis(m, 'rm_card') == (0, 0) and vis(m, 'rm_scrim') == (0, 0), f'{what}: the scrim closes the menu')
         calls = SG.tap(m, other, y)
-        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'rm_card') == (0, 0), f'{what}: a tap elsewhere on the row still plays the song')
+        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and vis(m, 'rm_card') == (0, 0), f'{what}: a tap elsewhere on the row still plays the song')
         z0 = (RIGHT_RAIL if not plain else RIGHT) - MORE_W
         calls = SG.tap(m, z0 - 1, y)
-        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'rm_card') == (0, 0), f'{what}: one pixel left of the zone (x {z0 - 1}) plays')
+        expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and vis(m, 'rm_card') == (0, 0), f'{what}: one pixel left of the zone (x {z0 - 1}) plays')
         calls = SG.tap(m, z0, y)
-        expect(SG.vis(m, 'rm_card') == (1, 1), f'{what}: the zone\'s first pixel (x {z0}) opens the menu')
+        expect(vis(m, 'rm_card') == (1, 1), f'{what}: the zone\'s first pixel (x {z0}) opens the menu')
         SG.click(m, 'rm_scrim')
         # a drag: moved past the threshold, then released in the zone; an abort (the scroll_view took the drag) then a release
         SG.touch(m, 'down', zx, SG.SCREEN_Y0 + y, 'sg_on_down')
         SG.touch(m, 'up', zx, SG.SCREEN_Y0 + y + 14, 'sg_on_up', 1080)
-        expect(SG.vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a press that moves (14 px) opens nothing and plays nothing')
+        expect(vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a press that moves (14 px) opens nothing and plays nothing')
         SG.touch(m, 'down', zx, SG.SCREEN_Y0 + y, 'sg_on_down')
         SG.touch(m, 'abort', zx, SG.SCREEN_Y0 + y, 'sg_on_abort')
         SG.touch(m, 'up', zx, SG.SCREEN_Y0 + y, 'sg_on_up', 1080)
-        expect(SG.vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a drag the scroll_view took (abort) then a release opens nothing')
+        expect(vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a drag the scroll_view took (abort) then a release opens nothing')
         SG.touch(m, 'down', z0 + 3, SG.SCREEN_Y0 + y, 'sg_on_down')
         SG.touch(m, 'up', z0 - 2, SG.SCREEN_Y0 + y, 'sg_on_up', 1080)
-        expect(SG.vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a press that began on the "..." and ended off it (5 px) does nothing')
+        expect(vis(m, 'rm_card') == (0, 0) and not any(c[0] == 'navigator_to_with_context' for c in m.calls), f'{what}: a press that began on the "..." and ended off it (5 px) does nothing')
         SG.touch(m, 'down', z0 - 2, SG.SCREEN_Y0 + y, 'sg_on_down')
         SG.touch(m, 'up', z0 + 3, SG.SCREEN_Y0 + y, 'sg_on_up', 1080)
-        expect(SG.vis(m, 'rm_card') == (0, 0), f'{what}: one that began off the zone is a row tap (it plays; it never opens the menu)')
+        expect(vis(m, 'rm_card') == (0, 0), f'{what}: one that began off the zone is a row tap (it plays; it never opens the menu)')
         # the header and the air below the last row are not rows
         calls = SG.tap(m, zx, 60)
-        expect(SG.vis(m, 'rm_card') == (0, 0), f'{what}: the title block has no "..."')
+        expect(vis(m, 'rm_card') == (0, 0), f'{what}: the title block has no "..."')
         # select mode: the tap marks the row
         SG.pick(m, 'select')
         calls = SG.tap(m, zx, y)
-        expect(SG.vis(m, 'rm_card') == (0, 0) and ('widget_set_text_utf8', m.widgets['label_title'], '1 Selected') in calls, f'{what}: in select mode a tap in that place marks the row (1 Selected), no menu')
+        expect(vis(m, 'rm_card') == (0, 0) and ('widget_set_text_utf8', m.widgets['label_title'], '1 Selected') in calls, f'{what}: in select mode a tap in that place marks the row (1 Selected), no menu')
     # an A-Z section header or the pinned header never opens it
     m = songs()
     lay = lay_of(m, False)
     SG.tap(m, 252, lay.hdr_y(1) + 14)
-    expect(SG.vis(m, 'rm_card') == (0, 0), 'a section header opens nothing')
+    expect(vis(m, 'rm_card') == (0, 0), 'a section header opens nothing')
     # the album page
     m = AB.album_machine()
     with_menu(m, 0)
@@ -298,17 +298,17 @@ def touch_tests(ctx):
     AB.paint(m)
     y = AB.row_y(2) - 300 + 30
     calls = AB.tap(m, 288, y)
-    expect(SG.vis(m, 'rm_card') == (1, 1) and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls), 'album page: a tap on the "..." opens the menu and plays nothing')
+    expect(vis(m, 'rm_card') == (1, 1) and not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls), 'album page: a tap on the "..." opens the menu and plays nothing')
     SG.click(m, 'rm_scrim')
     calls = AB.tap(m, 150, y)
-    expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and SG.vis(m, 'rm_card') == (0, 0), 'album page: a tap elsewhere plays the track')
+    expect(any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and vis(m, 'rm_card') == (0, 0), 'album page: a tap elsewhere plays the track')
     AB.touch(m, 'down', 288, y, 'ab_on_down'); AB.touch(m, 'up', 288, y + 14, 'ab_on_up', 1080)
-    expect(SG.vis(m, 'rm_card') == (0, 0), 'album page: a drag opens nothing')
+    expect(vis(m, 'rm_card') == (0, 0), 'album page: a drag opens nothing')
     AB.touch(m, 'down', 288, y, 'ab_on_down'); AB.touch(m, 'abort', 288, y, 'ab_on_abort'); AB.touch(m, 'up', 288, y, 'ab_on_up', 1080)
-    expect(SG.vis(m, 'rm_card') == (0, 0), 'album page: an abort then a release opens nothing')
+    expect(vis(m, 'rm_card') == (0, 0), 'album page: an abort then a release opens nothing')
     AB.click(m, 'btn_select')
     AB.tap(m, 288, y)
-    expect(SG.vis(m, 'rm_card') == (0, 0), 'album page: select mode, no menu')
+    expect(vis(m, 'rm_card') == (0, 0), 'album page: select mode, no menu')
 
 
 def menu_tests(ctx):
@@ -320,7 +320,7 @@ def menu_tests(ctx):
     for i in range(6):
         SG.tap(m, 288, lay.row_y(i) + 30)
         moved, shown = card_of(m)
-        expect(not moved and shown == (1, 1) and SG.vis(m, 'rm_scrim') == (1, 1), f'Songs row {i}: the sheet and the scrim show, nothing moved or resized ({moved})')
+        expect(not moved and shown == (1, 1) and vis(m, 'rm_scrim') == (1, 1), f'Songs row {i}: the sheet and the scrim show, nothing moved or resized ({moved})')
         SG.click(m, 'rm_scrim')
         m.calls = []
     for off, row in ((300, 1), (0, 0), (384, 0)):
@@ -365,9 +365,9 @@ def menu_tests(ctx):
                 ti = [i for i, n in enumerate(names) if n == 'toast']
                 order = names.index('upnext_add') < names.index('deque_destroy') < max(i for i, c in enumerate(calls) if c[0] == 'widget_set_visible' and c[1] == m.widgets['rm_card'] and c[2] == 0)
                 want = ('Added to Queue' if after else 'Playing Next') if status == ADDED else None if status == STARTED else TOASTS[status]
-                expect(order and names.count('deque_destroy') == 1 and SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0)
+                expect(order and names.count('deque_destroy') == 1 and vis(m, 'rm_card') == (0, 0) and vis(m, 'rm_scrim') == (0, 0)
                        and bool(ti and ti[0] > names.index('deque_destroy')) == (want is not None), f'{what}: the deque is destroyed and the menu closed, then the toast')
-                expect(toasts(calls) == ([want] if want else []), f'{what}: the toast is {want!r} ({toasts(calls)})')
+                expect(toasts_in(calls) == ([want] if want else []), f'{what}: the toast is {want!r} ({toasts_in(calls)})')
                 expect(not any(c[0] == 'navigator_to_with_context' and c[1] == 'playing_page' for c in calls) and not any(c[0] in ('loadSongList', 'window_open') for c in calls),
                        f'{what}: nothing else opens (a started queue plays, the page stays)')
         # Add to Playlist: the page's one-row selection and picker
@@ -384,7 +384,7 @@ def menu_tests(ctx):
             calls = list(m.calls)
             marks = bytes(1 << (row & 7) if i == row >> 3 else 0 for i in range((count + 7) // 8))
             what = f'{page}, Add to Playlist (the picker {"opens" if pk > 0 else "cannot open"})'
-            expect(m.pk_calls and m.pk_calls[-1] == (cls, count, marks) and SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0) and not toasts(calls),
+            expect(m.pk_calls and m.pk_calls[-1] == (cls, count, marks) and vis(m, 'rm_card') == (0, 0) and vis(m, 'rm_scrim') == (0, 0) and not toasts_in(calls),
                    f'{what}: the picker gets the list\'s class {cls:#x}, {count} songs and the one mark ({m.pk_calls[-1] if m.pk_calls else None}); the menu is closed')
             expect(not m.up_calls and not any(c[0] == 'upnext_add' for c in calls), f'{what}: upnext_add is not called')
             if pk > 0:
@@ -396,7 +396,7 @@ def menu_tests(ctx):
                        f'{what}: the stock picker gets the stock selection vector with that row alone ({[c for c in calls if c[0] in ("set_selectindex", "select_recordinit")]})')
             # the next Add carries only its own row (the page keeps no mark behind)
             if page == 'songs':
-                m.pk_ret = 1; SG.click(m, 'rm_scrim') if SG.vis(m, 'rm_scrim')[0] else None
+                m.pk_ret = 1; SG.click(m, 'rm_scrim') if vis(m, 'rm_scrim')[0] else None
                 SG.tap(m, 288, SG.TOP + 5 * ROW + 30); m.click('rm_item2')
                 want_marks = bytes(1 << (5 & 7) if i == 5 >> 3 else 0 for i in range((count + 7) // 8))
                 expect(m.pk_calls[-1][2] == want_marks, f'{what}: a second Add carries only its own row ({m.pk_calls[-1][2].hex()})')
@@ -406,11 +406,11 @@ def menu_tests(ctx):
     m.calls = []
     m.call(PSYMS['sg_on_fg'], a0=0, a1=0, count=900000000)
     SG.click(m, 'rm_scrim')
-    expect(SG.vis(m, 'rm_card') == (0, 0) and names_count(m, 'deque_destroy') <= 1, 'the scrim closes the menu once')
+    expect(vis(m, 'rm_card') == (0, 0) and names_count(m, 'deque_destroy') <= 1, 'the scrim closes the menu once')
     SG.tap(m, 288, SG.TOP + 30)
     m.calls = []
     m.call(PSYMS['sg_on_bg'], a0=0, a1=0, count=900000000)
-    expect(SG.vis(m, 'rm_card') == (0, 0) and ('deque_destroy',) in m.calls, 'the window going behind another closes the menu and drops the row\'s copy')
+    expect(vis(m, 'rm_card') == (0, 0) and ('deque_destroy',) in m.calls, 'the window going behind another closes the menu and drops the row\'s copy')
     SG.tap(m, 288, SG.TOP + 30)
     m.calls = []
     m.call(PSYMS['sg_on_destroy'], count=4000000)
@@ -443,23 +443,23 @@ def fav_info_tests(ctx):
         okey = (m.read_cstr(m.word(other + O['REC_NAME'])), m.read_cstr(m.word(other + O['REC_PATH'])))
         expect(key != okey and key[1], f'{page}: the test rows differ ({key}, {okey})')
         T.tap(m, 288, y)
-        expect(m.wtext[lab] == 'Favorite' and m.props.get((ic, 'image')) == 'rm_ic_fav' and ('checkFavExist',) + key in m.calls and SG.vis(m, 'rm_card') == (1, 1),
+        expect(m.wtext[lab] == 'Favorite' and m.props.get((ic, 'image')) == 'rm_ic_fav' and ('checkFavExist',) + key in m.calls and vis(m, 'rm_card') == (1, 1),
                f'{page}: a track that is not a favourite: the row reads "Favorite" with the outline star (one checkFavExist on the row)')
         m.calls = []
         m.click('rm_item3')
         calls = list(m.calls)
         names = [c[0] for c in calls]
-        expect(m.fav_rows == [key + (m.read_cstr(m.word(rec + O['REC_TITLE'])),)] and names.count('addMyFav') == 1 and 'deleteMusicFromFav' not in names and toasts(calls) == ['Added to Favorites'],
-               f'{page}: Favorite adds the row to myfav (addMyFav) and toasts "Added to Favorites" ({m.fav_rows}, {toasts(calls)})')
-        expect(SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0) and names.count('deque_destroy') == 1 and not m.up_calls and not m.pk_calls and not m.si_calls
+        expect(m.fav_rows == [key + (m.read_cstr(m.word(rec + O['REC_TITLE'])),)] and names.count('addMyFav') == 1 and 'deleteMusicFromFav' not in names and toasts_in(calls) == ['Added to Favorites'],
+               f'{page}: Favorite adds the row to myfav (addMyFav) and toasts "Added to Favorites" ({m.fav_rows}, {toasts_in(calls)})')
+        expect(vis(m, 'rm_card') == (0, 0) and vis(m, 'rm_scrim') == (0, 0) and names.count('deque_destroy') == 1 and not m.up_calls and not m.pk_calls and not m.si_calls
                and not any(c[0] == 'window_open' or c[:2] == ('navigator_to_with_context', 'playing_page') for c in calls), f'{page}: the menu is closed and its copy freed; nothing else opens')
         T.tap(m, 288, y)
         expect(m.wtext[lab] == 'Undo Favorite' and m.props.get((ic, 'image')) == 'rm_ic_unfav', f'{page}: the same row now reads "Undo Favorite" with the filled star')
         m.calls = []
         m.click('rm_item3')
         calls = list(m.calls)
-        expect(m.fav_rows == [] and [c[0] for c in calls].count('deleteMusicFromFav') == 1 and 'addMyFav' not in [c[0] for c in calls] and toasts(calls) == ['Removed from Favorites'],
-               f'{page}: Undo Favorite removes it (deleteMusicFromFav) and toasts "Removed from Favorites" ({m.fav_rows}, {toasts(calls)})')
+        expect(m.fav_rows == [] and [c[0] for c in calls].count('deleteMusicFromFav') == 1 and 'addMyFav' not in [c[0] for c in calls] and toasts_in(calls) == ['Removed from Favorites'],
+               f'{page}: Undo Favorite removes it (deleteMusicFromFav) and toasts "Removed from Favorites" ({m.fav_rows}, {toasts_in(calls)})')
         m.fav_rows.append(okey + ('x',))
         T.tap(m, 288, y)
         expect(m.wtext[lab] == 'Favorite' and m.props.get((ic, 'image')) == 'rm_ic_fav', f'{page}: another track being a favourite does not change this row (the key is the row\'s own)')
@@ -476,7 +476,7 @@ def fav_info_tests(ctx):
         m2.__class__ = Stuck
         m2.calls = []
         m2.click('rm_item3')
-        expect(toasts(m2.calls) == ['Adding Failed'] and m2.fav_rows == [] and SG.vis(m2, 'rm_card') == (0, 0), f'{page}: an add that stores nothing toasts "Adding Failed" ({toasts(m2.calls)})')
+        expect(toasts_in(m2.calls) == ['Adding Failed'] and m2.fav_rows == [] and vis(m2, 'rm_card') == (0, 0), f'{page}: an add that stores nothing toasts "Adding Failed" ({toasts_in(m2.calls)})')
         # Get Info
         m, T, row, y = row_machine(page)
         rec = m.songs[row]
@@ -486,8 +486,8 @@ def fav_info_tests(ctx):
         calls = list(m.calls)
         names = [c[0] for c in calls]
         expect(m.si_calls == [rec], f'{page}: Get Info calls songinfo_open once, on the row\'s record ({m.si_calls})')
-        expect(names.index('songinfo_open') < names.index('deque_destroy') and names.count('deque_destroy') == 1 and SG.vis(m, 'rm_card') == (0, 0) and SG.vis(m, 'rm_scrim') == (0, 0)
-               and not toasts(calls) and not m.up_calls and not m.pk_calls and 'addMyFav' not in names, f'{page}: the menu closes, the page opens on the row\'s copy, then the copy is freed; no toast')
+        expect(names.index('songinfo_open') < names.index('deque_destroy') and names.count('deque_destroy') == 1 and vis(m, 'rm_card') == (0, 0) and vis(m, 'rm_scrim') == (0, 0)
+               and not toasts_in(calls) and not m.up_calls and not m.pk_calls and 'addMyFav' not in names, f'{page}: the menu closes, the page opens on the row\'s copy, then the copy is freed; no toast')
 
 
 LS_DL_NONE, LS_DL_WAIT, LS_DL_ACTIVE, LS_DL_DONE, LS_DL_FAILED = range(5)
@@ -534,7 +534,7 @@ class Src:
     def open(self, i):
         self.m.calls = []
         self.T.tap(self.m, 288, self.y(i))
-        return SG.vis(self.m, 'rm_card') == (1, 1)
+        return vis(self.m, 'rm_card') == (1, 1)
 
     def words(self):
         m = self.m
@@ -564,7 +564,7 @@ def source_tests(ctx):
             S = Src(page)
             S.state(2, **st); S.open(2); S.m.calls = []
             S.m.click(item)
-            expect(S.acts() == [(S.recs[2], what)] and SG.vis(S.m, 'rm_card') == (0, 0) and not S.m.up_calls and not S.m.pk_calls and not toasts(S.m.calls) and not S.queued(),
+            expect(S.acts() == [(S.recs[2], what)] and vis(S.m, 'rm_card') == (0, 0) and not S.m.up_calls and not S.m.pk_calls and not toasts_in(S.m.calls) and not S.queued(),
                    f'{page}, {name}: src->act({what}) on the row, the menu closes, no queue and no picker ({S.acts()})')
         # Favorite
         for fav, act_ret, toast in ((0, 0, 'Added to Favorites'), (1, 0, 'Removed from Favorites'), (0, -1, None)):
@@ -572,8 +572,8 @@ def source_tests(ctx):
             S.set(act_ret=act_ret); S.state(3, fav=fav); S.open(3); S.m.calls = []
             S.m.click('rm_item3')
             names = [c[0] for c in S.m.calls]
-            expect(S.acts() == [(S.recs[3], ACT_UNFAVORITE if fav else ACT_FAVORITE)] and toasts(S.m.calls) == ([toast] if toast else []) and not {'addMyFav', 'deleteMusicFromFav'} & set(names) and SG.vis(S.m, 'rm_card') == (0, 0),
-                   f'{page}, Favorite (star {fav}, act {act_ret}): src->act(LS_ACT_FAVORITE, or LS_ACT_UNFAVORITE when the sheet showed Undo Favorite), toast {toast!r}, no stock myfav call ({S.acts()}, {toasts(S.m.calls)})')
+            expect(S.acts() == [(S.recs[3], ACT_UNFAVORITE if fav else ACT_FAVORITE)] and toasts_in(S.m.calls) == ([toast] if toast else []) and not {'addMyFav', 'deleteMusicFromFav'} & set(names) and vis(S.m, 'rm_card') == (0, 0),
+                   f'{page}, Favorite (star {fav}, act {act_ret}): src->act(LS_ACT_FAVORITE, or LS_ACT_UNFAVORITE when the sheet showed Undo Favorite), toast {toast!r}, no stock myfav call ({S.acts()}, {toasts_in(S.m.calls)})')
             expect(S.acts_dd() == [0] and [c[0] for c in S.m.calls].count('deque_destroy') == 1,
                    f'{page}, Favorite: the record is freed after src->act has read it, not before ({S.acts_dd()}, {[c[0] for c in S.m.calls].count("deque_destroy")} destroyed)')
         # Play Next / Play After: the source's queue record through upnext_add
@@ -586,16 +586,16 @@ def source_tests(ctx):
             paths = [m.read_cstr(m.word(r + O['REC_PATH'])) for r in rows]
             names = [c[0] for c in m.calls]
             expect(S.queued() == [S.recs[1]] and len(m.up_calls) == 1 and m.up_calls[0][1] == after and len(paths) == 1 and paths[0].startswith('http://') and 'nd://' not in paths[0]
-                   and toasts(m.calls) == [ok_toast] and SG.vis(m, 'rm_card') == (0, 0) and names.count('deque_destroy') == 2 and not [c for c in m.calls if c[0] == 'confirm'],
+                   and toasts_in(m.calls) == [ok_toast] and vis(m, 'rm_card') == (0, 0) and names.count('deque_destroy') == 2 and not [c for c in m.calls if c[0] == 'confirm'],
                    f'{page}, {"Play After" if after else "Play Next"}: the source\'s queue record ({paths}) goes to upnext_add({after}), toast {ok_toast!r}, both deques freed')
             S = Src(page)
             S.set(queue_none=True); S.open(1); S.m.calls = []
             S.m.click(item)
-            expect(S.queued() == [S.recs[1]] and not S.m.up_calls and not toasts(S.m.calls) and SG.vis(S.m, 'rm_card') == (0, 0), f'{page}, {after}: a source that cannot queue the row (it says why itself): nothing added, no second toast')
+            expect(S.queued() == [S.recs[1]] and not S.m.up_calls and not toasts_in(S.m.calls) and vis(S.m, 'rm_card') == (0, 0), f'{page}, {after}: a source that cannot queue the row (it says why itself): nothing added, no second toast')
         S = Src(page)
         S.m.up_ret = STREAM
         S.open(1); S.m.calls = []; S.m.click('rm_item0')
-        expect(toasts(S.m.calls) == ['Not available while streaming'], f'{page}: upnext_add\'s refusal is toasted as for a local row ({toasts(S.m.calls)})')
+        expect(toasts_in(S.m.calls) == ['Not available while streaming'], f'{page}: upnext_add\'s refusal is toasted as for a local row ({toasts_in(S.m.calls)})')
         # DSD: not downloaded asks to download (no queue record); downloaded queues
         for item in ('rm_item0', 'rm_item1'):
             S = Src(page)
@@ -604,7 +604,7 @@ def source_tests(ctx):
             S.m.click(item)
             ask = [c for c in S.m.calls if c[0] == 'confirm']
             title = 'Charlie' if page == 'songs' else 'Remote 2'
-            expect(len(ask) == 1 and ask[0][1] == f'Download to Play?\nDSD tracks play from the card. {title}, ? MB.' and not S.queued() and not S.m.up_calls and not S.acts() and SG.vis(S.m, 'rm_card') == (0, 0),
+            expect(len(ask) == 1 and ask[0][1] == f'Download to Play?\nDSD tracks play from the card. {title}, ? MB.' and not S.queued() and not S.m.up_calls and not S.acts() and vis(S.m, 'rm_card') == (0, 0),
                    f'{page}, {item}: an undownloaded DSD row asks "Download to Play?" (Cancel: nothing), no queue record ({[a[1:] for a in ask]})')
             S = Src(page)
             S.state(2, dsd=1); S.set(act_ret=0); S.m.confirm_yes = True
@@ -620,7 +620,7 @@ def source_tests(ctx):
         S = Src(page)
         S.open(4); S.m.calls = []
         S.m.click('rm_item4')
-        expect(S.m.si_calls == [S.recs[4]] and SG.vis(S.m, 'rm_card') == (0, 0) and not S.acts() and not toasts(S.m.calls), f'{page}: Get Info opens the page on the row ({S.m.si_calls})')
+        expect(S.m.si_calls == [S.recs[4]] and vis(S.m, 'rm_card') == (0, 0) and not S.acts() and not toasts_in(S.m.calls), f'{page}: Get Info opens the page on the row ({S.m.si_calls})')
         # a row that is not a track has no sheet on the Songs page
     # a download's progress moves the source gen: the sheet stays open, the rows redraw, the list is read once the sheet has closed
     for page in ('album', 'songs'):
@@ -635,12 +635,12 @@ def source_tests(ctx):
         else: S.m.fake['gen'] += 1
         S.m.calls = []
         S.m.call(on_gen, count=900000000)
-        expect(SG.vis(S.m, 'rm_card') == (1, 1) and reads() == (n0 if page == 'songs' else 0) and 'timer_add' in S.m.names(),
-               f'{page}: gen moved while the sheet is open: the sheet stays and the list is not read ({SG.vis(S.m, "rm_card")}, {reads()})')
+        expect(vis(S.m, 'rm_card') == (1, 1) and reads() == (n0 if page == 'songs' else 0) and 'timer_add' in S.m.names(),
+               f'{page}: gen moved while the sheet is open: the sheet stays and the list is not read ({vis(S.m, "rm_card")}, {reads()})')
         S.m.click('rm_scrim')
         S.m.calls = []
         S.m.call(on_gen, count=900000000)
-        expect(SG.vis(S.m, 'rm_card') == (0, 0) and reads() == (n0 + 1 if page == 'songs' else 1), f'{page}: once the sheet has closed the list is read again ({reads()})')
+        expect(vis(S.m, 'rm_card') == (0, 0) and reads() == (n0 + 1 if page == 'songs' else 1), f'{page}: once the sheet has closed the list is read again ({reads()})')
     # the stock sheet reads Add to Playlist again (a source's words are set at every open)
     m, T, row, y = row_machine('album')
     T.tap(m, 288, y)

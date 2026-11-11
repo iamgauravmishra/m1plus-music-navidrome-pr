@@ -35,6 +35,7 @@
 #include "i18n.h"
 #include "podcasts.h"
 #include "sbapi.h"
+#include "entries.h"
 
 #define ROW LIST_ROW_H
 #define QP_AHEAD 2 /* rows kept beyond the view in the scroll direction */

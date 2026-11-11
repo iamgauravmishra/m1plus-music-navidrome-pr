@@ -6,6 +6,7 @@
  * the refresh, so they are not called. */
 #include "offsets.inc"
 #include "stock.h"
+#include "entries.h"
 
 #define KP_SHUTDOWN_MAX 4 /* stock's last duration (10 minutes) */
 

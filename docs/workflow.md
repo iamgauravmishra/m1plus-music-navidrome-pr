@@ -83,20 +83,6 @@ and `timings.package` in wall seconds; setup includes input checks, tree constru
 Quick and full cost/stress runs keep separate scheduling timings in `work/cache/`, so a quick
 test run cannot move a long stress task to the end of the next dev build.
 
-## CI
-
-Start `.github/workflows/ci.yml` manually through Actions > ci > Run workflow or
-`gh workflow run ci --repo imfing/m1plus-music` (macOS runners cost 10x). Its `macos-latest`
-job installs Homebrew `llvm lld squashfs librsvg`, firmware and Source Han Sans, then runs
-`make setup`, `make doctor`, `make format-check` and `make dev` (lint, all tests and a verified
-package). The run number seeds a fresh `V2.1z...` tag; `update.bin` is retained for 14 days.
-CI neither checks goldens nor publishes. Releases stay local (`make check`, `make publish`):
-Linux Pillow uses zlib rather than zlib-ng, changing PNG and merged CJK-font bytes.
-PNG tests compare pixels.
-
-The firmware zip is the asset of a prerelease (tag `m1plus-firmware-v2.1`) in this
-repository, downloaded by CI with `GITHUB_TOKEN`.
-
 Start UI fixes with a failing emulation test or device capture. Previews use the shared AWTK
 layout/text model and the built font. Keep feature details and device checks in `docs/modules/`.
 

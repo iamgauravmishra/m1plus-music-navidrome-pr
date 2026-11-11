@@ -50,7 +50,7 @@ def opened(conf=True, **kw):
 
 
 def text(m, n): return undo(m.wtext.get(m.widgets[n], ''))
-def toasts(m): return [undo(c[1]) for c in m.calls if c[0] == 'toast']
+def toasts_undo(m): return [undo(c[1]) for c in m.calls if c[0] == 'toast']
 def confirms(m): return [undo(c[1]) for c in m.calls if c[0] == 'confirm']
 def keyboards(m): return [c for c in m.calls if c == ('window_open', 'm1plus_keyboard')]
 
@@ -660,7 +660,7 @@ def server_sync(ctx):
            and m.props.get((m.widgets['pod_label3'], 'style:normal:text_color')) == '#FFFFFF', 'when it is done the timer writes the grey "Synced just now" and the row is active again, the spinner gone')
     m = opened(); m.wifi = 0
     click(m, 3)
-    expect(toasts(m) == ['Connect to Wi-Fi first'] and text(m, 'pod_value3') == 'Not synced yet', 'a refusal is the toast and the row shows no run')
+    expect(toasts_undo(m) == ['Connect to Wi-Fi first'] and text(m, 'pod_value3') == 'Not synced yet', 'a refusal is the toast and the row shows no run')
     m = opened()
     m.put(SB.ND + '/sync.txt', b'1799999700 2431 0')
     m.call(PSYMS['ns_tick'], a0=0, count=20000000)
@@ -678,17 +678,17 @@ def server_actions(ctx):
     m = opened()
     site = SB.Site(); m.curl_site = site
     click(m, 3)
-    expect(not confirms(m) and m.thread is not None and not toasts(m), 'Sync Now queues the sync without asking (a sync loses nothing)')
+    expect(not confirms(m) and m.thread is not None and not toasts_undo(m), 'Sync Now queues the sync without asking (a sync loses nothing)')
     SB.drain(m, m.thread)
     expect(site.views()[0] == 'getAlbumList2' and 'ping' not in site.views()[:1], 'the request is the sync (getAlbumList2 ...)')
     st, code = SB.state(m, SB.K['SYNC'])
     expect(st in (SB.ST['OK'], SB.ST['FAIL']), 'the sync ran to a result')
     m = opened(conf=False)
     click(m, 3)
-    expect(toasts(m) == ['Add a server first'] and not confirms(m) and m.thread is None, 'no server: a toast, no question, no request')
+    expect(toasts_undo(m) == ['Add a server first'] and not confirms(m) and m.thread is None, 'no server: a toast, no question, no request')
     m = opened(); m.wifi = 0
     click(m, 3)
-    expect(not confirms(m) and toasts(m) == ['Connect to Wi-Fi first'] and m.thread is None, 'no Wi-Fi: the Wi-Fi toast at once, no question, nothing queued')
+    expect(not confirms(m) and toasts_undo(m) == ['Connect to Wi-Fi first'] and m.thread is None, 'no Wi-Fi: the Wi-Fi toast at once, no question, nothing queued')
     # Sign Out
     m = opened()
     SB.seed(m, SB.ND + '/albums.idx', 'album', [dict(id='a1', name='One')])
@@ -707,7 +707,7 @@ def server_actions(ctx):
     click(m, 4)
     expect(SDL.state(m, 'd1')[0] == 0, 'Sign Out: the waiting download leaves the queue')
     click(m, 4)
-    expect(toasts(m) == ['Add a server first'] and not confirms(m), 'Sign Out with nothing saved: a toast, no question')
+    expect(toasts_undo(m) == ['Add a server first'] and not confirms(m), 'Sign Out with nothing saved: a toast, no question')
     m = opened(); m.confirm_yes = False
     click(m, 4)
     expect(m.fs.get(SB.CONF) and text(m, 'pod_value1') == 'alice', 'No: nothing is signed out')
@@ -812,7 +812,7 @@ def tick(m):
     m.call(m.nd_timer, a0=0, count=20000000)
 
 
-def vis(m, n):
+def vis_last(m, n):
     """The last visibility set on widget n (None: never set)."""
     v = [c[2] for c in m.calls if c[0] == 'widget_set_visible' and c[1] == m.widgets[n]]
     return v[-1] if v else None
@@ -962,7 +962,7 @@ def root_status(ctx):
     expect(m.thread is None, 'a fresh cache (5 minutes old): opening asks for nothing')
     # no sync yet: opening asks, the line is Syncing... with the spinner, then the check circle and the age
     m = root_opened()
-    expect(m.thread is not None and vis(m, 'nd_list') == 1 and text(m, 'nd_status') == 'Syncing…' and lit(m, 'nd_st_spin') and not lit(m, 'nd_st_icon'),
+    expect(m.thread is not None and vis_last(m, 'nd_list') == 1 and text(m, 'nd_status') == 'Syncing…' and lit(m, 'nd_st_spin') and not lit(m, 'nd_st_icon'),
            'no sync yet: opening asks for one; the line says Syncing… with the spinner in the glyph\'s place')
     expect(('timer_add', PSYMS['ls_spin_tick'], 250) in m.calls, 'the spinner turns on the shared timer (ls_spin)')
     site = ok_site(); m.curl_site = site
@@ -1171,7 +1171,7 @@ def root_more(ctx):
     expect(item_ok(m, 6)[0] == 1, 'Sync Now is active when no sync runs')
     m.thread = None
     root_click_item(m, 6)
-    expect(not confirms(m) and m.thread is not None and not card_on(m) and not toasts(m) and text(m, 'nd_status') == 'Syncing…' and lit(m, 'nd_st_spin'),
+    expect(not confirms(m) and m.thread is not None and not card_on(m) and not toasts_undo(m) and text(m, 'nd_status') == 'Syncing…' and lit(m, 'nd_st_spin'),
            'Sync Now: no question, the card closes and the sync is asked; the status line says Syncing… at once')
     m.call(m.bound[(m.widgets['btn_more'], EVT_CLICK)][0], a0=0, a1=0, count=20000000)
     expect(item_ok(m, 6) == (0, '#6C6C70'), f'while the sync runs Sync Now is inactive: not sensitive, grey ({item_ok(m, 6)})')
@@ -1181,7 +1181,7 @@ def root_more(ctx):
     # no Wi-Fi: the toast, nothing queued
     m = root_opened(fresh=True, wifi=-1); m.confirm_yes = True
     root_click_item(m, 6)
-    expect(toasts(m) == ['Connect to Wi-Fi first'] and m.thread is None and not card_on(m), 'no Wi-Fi: Sync Now says so in a toast and queues nothing')
+    expect(toasts_undo(m) == ['Connect to Wi-Fi first'] and m.thread is None and not card_on(m), 'no Wi-Fi: Sync Now says so in a toast and queues nothing')
     # Server Settings
     m = root_opened(fresh=True)
     m.call(m.bound[(m.widgets['btn_more'], EVT_CLICK)][0], a0=0, a1=0, count=20000000)
@@ -1212,7 +1212,7 @@ def root_click_item(m, i):
 def root_empty(ctx):
     expect = ctx.expect
     m = root_opened(conf=False)
-    expect(vis(m, 'nd_list') == 0 and all(vis(m, n) == 1 for n in ('nd_es_big', 'nd_es_icon', 'nd_es_title', 'nd_es_text', 'nd_es_pill', 'nd_es_dl')), 'no server saved: the list is hidden and the empty state shown')
+    expect(vis_last(m, 'nd_list') == 0 and all(vis_last(m, n) == 1 for n in ('nd_es_big', 'nd_es_icon', 'nd_es_title', 'nd_es_text', 'nd_es_pill', 'nd_es_dl')), 'no server saved: the list is hidden and the empty state shown')
     expect(m.thread is None and not [c for c in m.calls if c[0] in OPENERS], 'nothing is asked and nothing opened')
     m.calls = []
     fn_, ctx_ = m.bound[(m.widgets['nd_es_pill'], EVT_CLICK)]
@@ -1230,12 +1230,12 @@ def root_empty(ctx):
     fn_, ctx_ = m.bound[(m.window, EVT_FG)]
     m.calls = []
     m.call(fn_, a0=ctx_, a1=0, count=20000000)
-    expect(vis(m, 'nd_list') == 1 and vis(m, 'nd_es_pill') == 0 and vis(m, 'nd_es_dl') == 0 and text(m, 'nd_status') != '', 'coming back with a server saved: the list is back, the empty state hidden, the status line set')
+    expect(vis_last(m, 'nd_list') == 1 and vis_last(m, 'nd_es_pill') == 0 and vis_last(m, 'nd_es_dl') == 0 and text(m, 'nd_status') != '', 'coming back with a server saved: the list is back, the empty state hidden, the status line set')
     # Sign Out (the conf goes while the page is under the Server page): back to the empty state
     m.call(PSYMS['sba_conf_clear'], count=20000000)
     m.calls = []
     m.call(fn_, a0=ctx_, a1=0, count=20000000)
-    expect(vis(m, 'nd_list') == 0 and vis(m, 'nd_es_pill') == 1 and vis(m, 'nd_es_dl') == 1, 'signed out: the empty state again')
+    expect(vis_last(m, 'nd_list') == 0 and vis_last(m, 'nd_es_pill') == 1 and vis_last(m, 'nd_es_dl') == 1, 'signed out: the empty state again')
 
 
 def root_offline(ctx):

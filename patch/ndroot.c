@@ -29,11 +29,7 @@
 #include "sbsrc.h"
 #include "viewsort.h"
 #include "search.h"
-
-extern int songs_open_src(const lib_src_t *src, int which, const char *title); /* patch/songs.c */
-extern int nd_server_open(void); /* patch/ndserver.c */
-extern void nd_sync_now(void); /* patch/ndserver.c: asks first, then syncs */
-extern int nd_signin_open(void); /* patch/ndserver.c: the Sign In page on the Server URL row */
+#include "entries.h"
 
 #define NR_TICK_MS 500
 #define NR_FORCE_TICKS 8 /* the Wi-Fi state is read again every 4 s */

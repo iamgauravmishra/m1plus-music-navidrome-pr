@@ -22,15 +22,13 @@
 #include "i18n.h"
 #include "ipod_theme.h"
 #include "ipod_render.h"
+#include "entries.h"
 #undef widget_prepare_text_style
 #undef canvas_draw_text_in_rect
 #undef canvas_draw_image
 #define widget_prepare_text_style ip_render_prepare
 #define canvas_draw_text_in_rect ip_render_text
 #define canvas_draw_image ip_render_image
-
-extern unsigned ip_fit(void *canvas, unsigned *s,
-                       int maxw); /* patch/ipod.c: the wide string cut with an ellipsis to maxw px */
 
 #define IPCF_SLOTS (CF_RING + 1)
 #define TEXELS (ART_SIZE * ART_SIZE)

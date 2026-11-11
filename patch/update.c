@@ -21,12 +21,11 @@
 #include "pcnet.h"
 #include "shot.h"
 #include "upver.h"
+#include "entries.h"
 
 #define UP_TICK_MS 250
 #define UP_AWAKE_TICKS 4 /* the standby and auto power-off countdowns are set again once a second */
 #define UP_PD_BAR_H 6 /* the popup's bar (tools/pod_ui.py podcasts_dialog big=True) */
-
-extern int relnotes_open(void); /* patch/relnotes.c: the offered release's notes, a page of their own */
 
 enum { UA_NONE = 0, UA_CHECK, UA_ASK, UA_RETRY, UA_INSTALL, UA_NOTES };
 

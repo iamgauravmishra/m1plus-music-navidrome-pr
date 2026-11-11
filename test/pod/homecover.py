@@ -757,7 +757,6 @@ def files_tests(ctx):
     # a setting row deletes its file after a confirm; a missing one takes no tap; the guard files and the folder never go
     CONFIRM = 'Delete this settings file?'
     ix = {r.label: i for i, r in enumerate(FP.rows)}
-    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
     sens = lambda m, label: m.props.get((m.widgets[f'pod_row{ix[label]}'], 'sensitive'))
     shown = lambda m, label: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{ix[label]}']][-1]
 
@@ -1167,7 +1166,6 @@ def unsupported_tests(ctx):
     D, S = '/mnt/data/', '/mnt/data/m1plus/'
     d_i = next(i for i, r in enumerate(P.DEVELOPER_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.FILES_PAGE_INDEX)
     ix = {r.label: i for i, r in enumerate(FP.rows)}
-    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
     confirms = lambda m: [c[1] for c in m.calls if c[0] == 'confirm']
     unlinks = lambda m: [c[1] for c in m.calls if c[0] == 'unlink']
     shown = lambda m, label: [c[2] for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] == m.widgets[f'pod_value{ix[label]}']][-1]
@@ -1330,7 +1328,6 @@ def reset_tests(ctx):
     GUARDS = [D + 'm1plus-start', D + 'm1plus-run', D + 'm1plus-bad', D + 'm1plus-off']
     ENTRIES = [('home-menu', 8), ('playback-eq', 8), ('album-order.tmp', 8), ('.', 4), ('..', 4)]
     RETIRED = [D + 'm1plus-albums']
-    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
     confirms = lambda m: [c[1] for c in m.calls if c[0] == 'confirm']
     unlinks = lambda m: [c[1] for c in m.calls if c[0] == 'unlink']
 

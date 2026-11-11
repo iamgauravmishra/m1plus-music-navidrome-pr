@@ -173,7 +173,7 @@ equal the emulation's, the UTF-8 log is right. Still open:
 ## Pinyin engine
 
 Question that was asked: can stock's built-in Google Pinyin engine give our keyboard Chinese input? **Yes, from the payload, with the dictionary stock already ships.** No hook, no new import, no thread.
-Pins: `PINYIN_PINS` and `FUNCTIONS` in `tools/pod.py`; test `test/pod/pinyin.py` (demo's own engine code under Unicorn); addresses `addresses.md` "Pinyin engine".
+Pins: `PINYIN_PINS` in `tools/pod_pins.py` and `FUNCTIONS` in `tools/pod.py`; test `test/pod/pinyin.py` (demo's own engine code under Unicorn); addresses `addresses.md` "Pinyin engine".
 
 ### What is in demo
 

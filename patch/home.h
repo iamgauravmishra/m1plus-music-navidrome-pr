@@ -230,6 +230,11 @@ extern void pod_set_mode(
     int mode); /* patch/shuffle.c: the stock play mode, set as the Play settings page does (the queue is reordered now) */
 extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
 extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination through the dispatcher */
+extern void pod_page_refresh(int index); /* patch/m1plus.c: the page's values are read again */
+extern int pod_open_lock(void); /* patch/m1plus.c */
+extern int pod_open_peq(void); /* patch/m1plus.c: open_page(POD_PEQ_PAGE) */
+extern int pod_open_peqlib(void); /* patch/m1plus.c: open_page(POD_PEQLIB_PAGE) */
+extern int pod_open_peqpage(void); /* patch/m1plus.c: open_page(POD_PEQP_PAGE) */
 extern int pod_confirm_code(
     const char
         *text); /* patch/m1plus.c: the stock confirm dialog's raw result (CONFIRM_YES 0xa, btn_cancel 4, else 0) */

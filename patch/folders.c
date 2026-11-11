@@ -36,9 +36,7 @@
 #include "i18n.h"
 #include "songops.h"
 #include "viewsort.h"
-
-extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask,
-                    void *buf); /* patch/filetime.c: the statx syscall (demo imports none) */
+#include "entries.h"
 
 #define ROW POD_ROW_H /* the menu rows' pitch (52): one line a row */
 #define FO_ASSET "m1plus_folders"

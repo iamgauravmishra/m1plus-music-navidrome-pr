@@ -1127,7 +1127,6 @@ def scoped_sort_tests(ctx):
     expect = ctx.expect
     ROWH = O['LIST_ROW_H']
     TOP_ROWS = O['AL_HEAD_END'] + O['GRID_ROW_GAP']   # the list's first row (the photo header and the pills above it)
-    vis = lambda m, n: (m.props.get((m.widgets[n], 'visible'), 1), m.props.get((m.widgets[n], 'sensitive'), 1))
     def tap(m, y):
         m.calls = []
         m.touch('down', 100, 80 + TOP_ROWS + y, 1000, fn='al_on_down')

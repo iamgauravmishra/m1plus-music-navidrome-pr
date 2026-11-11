@@ -45,3 +45,5 @@
 #define FBV_BLUE 14
 #define FBF_SMEM_LEN 5
 #define FBF_LINE_LENGTH 11
+
+void shot_start(void); /* the Screenshot row: confirm, 5 s countdown, capture; or cancel */

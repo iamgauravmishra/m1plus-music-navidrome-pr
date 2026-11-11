@@ -31,6 +31,7 @@
 #include "wifictl.h"
 #include "keyboard.h"
 #include "fnv.h"
+#include "entries.h"
 
 #define WP_CUR \
     1 /* the asset's row pools (tools/pod_ui.py WF_CUR, WF_MY, WF_OTH): the connected network, My Networks, Networks */

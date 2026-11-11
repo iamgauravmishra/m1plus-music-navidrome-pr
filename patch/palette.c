@@ -25,6 +25,8 @@
 #include "stock.h"
 #include "home.h"
 #include "palette.h"
+#include "entries.h"
+#include "podcasts.h"
 
 static struct {
     int read; /* the setting has been read */
@@ -218,11 +220,6 @@ static int pal_refresh(void) {
     return changed;
 }
 
-extern void ab_relight(
-    void); /* the open cover-tinted pages tint again (patch/albumpage.c, nowplaying.c, podcasts.c; the Daily Mix page, whose art is made once, keeps what it was opened with) */
-extern void np_relight(void);
-extern void pg_relight(void);
-
 /* The effective mode changed: the cached images were flipped (or not) when they were decoded, so drop them, then repaint everything. */
 static void pal_apply(void) {
     void *wm;
@@ -355,10 +352,6 @@ static int pal_exempt(void) {
     pal_look();
     return pal.exempt;
 }
-
-extern int ab_has_tone(
-    void); /* patch/albumpage.c, patch/podcasts.c: the page shows a cover's tone now (the album page when tinted; the Show page, not the shows list or an episode) */
-extern int pg_has_tone(void);
 
 /* The top main window is a cover-tinted page showing a cover's tone: the Tinted wash leaves the background alone (the accent roles still apply). Windows opened over it follow their own name. */
 static int pal_cover_page(void) {

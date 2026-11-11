@@ -3,10 +3,11 @@
 
   make test TEST=consts        (or: uv run python -I test/consts.py)
 
-Each ROWS entry is (module, python name or expression, C define or integer expression over offsets.inc names, kind):
+Each ROWS entry is (module, python name or expression, C define or integer expression over the C names, kind):
   kind 'int' (default) compares integers; 'rgb' compares colours, the Python side a '#RRGGBB' string or an (r, g, b) tuple,
   the C side a colour word 0xAABBGGRR (red in the low byte, as offsets.inc writes them).
-The Python value is read from the module (importable tools/ module), the C value with tools/cdefs.py over offsets.inc.
+The Python value is read from the module (importable tools/ module), the C value with tools/cdefs.py over offsets.inc
+and the headers of MORE (patch/keyboard.h, patch/grid.h), whose defines may use offsets.inc names.
 A row that disagrees fails, naming both sides with file:line. XFAIL marks a known MISMATCH (kept, not fixed): it is printed
 as MISMATCH and does not fail; once the two agree the XFAIL entry itself fails so it gets removed.
 SKIPPED lists literals that copy nothing in C or whose meaning differs; each has its reason.
@@ -19,6 +20,9 @@ import cdefs   # noqa: E402
 
 HEADER = os.path.join(ROOT, 'patch', 'offsets.inc')
 O = cdefs.defines(HEADER)
+MORE = [os.path.join(ROOT, 'patch', h) for h in ('keyboard.h', 'grid.h')]
+C_ALL = dict(O)
+for _h in MORE: C_ALL.update(cdefs.defines(_h, known=O))
 
 PA = ('PA_SIZE', 'PA_RING_N', 'PA_RING_PX', 'PA_RING_COLS', 'PA_G_Y', 'PA_G_PX', 'PA_DOTS_Y', 'PA_DOTS_PX', 'PA_BADGE_X',
       'PA_BADGE_PX', 'PA_PILL_Y', 'PA_PILLF_X', 'PA_PILLO_X', 'PA_PILLW_X', 'PA_PILLR_X', 'PA_PILL_PX', 'PA_PILLW_PX',
@@ -111,6 +115,26 @@ ROWS = (
     ('pod', 'STYLE_COLOR_RET', 'STYLE_COLOR_GRADIENT_RET'),
     ('pod', 'DEFAULT_LAYOUT_VTABLE', 'DEFAULT_LAYOUT_VTABLE'),
     ('pod', 'DEFAULT_LAYOUT_FN', 'DEFAULT_LAYOUT_FN'),
+    # tools/pod_dailymix.py: the Home card and the detail page (the names the two sides share)
+    *[('pod_dailymix', n, n) for n in (
+        'DM_BUSY_X', 'DM_BUSY_Y', 'DM_TOP', 'DM_BOTTOM', 'DM_SEC_H', 'DM_PAD', 'DM_SUB_Y', 'DM_TITLE_Y2', 'DM_TITLE_Y1',
+        'DM_SUB_W', 'DM_TITLE_W', 'DM_MAX_NAMES', 'DP_VIEW_H', 'DP_SHUF_W', 'DP_ROWS_Y', 'DP_PILL_INK', 'DP_BOTTOM',
+        'DP_V_MIN', 'DP_LUM_MAX'
+    )],
+    # tools/pod_keyboard.py: the keyboard's geometry and limits (patch/keyboard.h)
+    *[('pod_keyboard', n, n) for n in (
+        'SCREEN_W', 'KB_H', 'KB_EDGE', 'KB_LANG_W', 'KB_KEYS', 'KB_MAX', 'KB_STEM_UP', 'WIN_H'
+    )],
+    # tools/pod_pages.py: stock's Home ids the payload also names
+    *[('pod_pages', n, n) for n in (
+        'HOME_GENRE', 'HOME_COMPOSER', 'HOME_HIRES', 'HOME_FAV', 'HOME_MOST', 'HOME_RECENT', 'HOME_RECENTADD'
+    )],
+    # tools/pod_mix.py: the hash seed
+    ('pod_mix', 'FNV_SEED', 'FNV_SEED'),
+    # tools/pod_ui.py: more of the navbar, mini bar, grid (patch/grid.h) and shelf
+    *[('pod_ui', n, n) for n in (
+        'NAV_TITLE_X', 'MB_PAD', 'GRID_CELL_H', 'GRID_PITCH', 'SH_TILES', 'SH_TOP', 'SH_BOTTOM'
+    )],
 )
 
 # Known MISMATCHes (none at the time of writing): key (module, python, C) -> reason. Left unfixed on purpose.
@@ -130,6 +154,8 @@ SKIPPED = (
     ('mod_ipodrows', 'TITLE_PX, ARTIST_PX, META_PX = 22, 18, 15', 'font sizes; the offsets.inc AH_TITLE_H (22) is a height'),
     ('pod_ui', 'CHEV_TEXT_END = 278', 'no C define'),
     ('pod_ui', 'LIST_TITLE_PX, LIST_SUB_PX, MB_TITLE_PX, MB_ARTIST_PX', 'font sizes, no C define'),
+    ('mod_battery', 'ICON_W = 22', 'the battery glyph\'s canvas; offsets.inc ICON_W (154) is a Home grid icon\'s cell'),
+    ('mod_ipodrows', 'NAV_H = 44', 'the navbar builder\'s button height; offsets.inc NAV_H (50) is our navbar'),
     ('tape_art', 'SCREW_AT, PLAY_AT, REPEAT_AT', 'centres of the mark or screw; TP_SCREW_X/Y, TP_PLAY_X/Y, TP_REPEAT_X/Y are top-left corners'),
 )
 
@@ -146,19 +172,20 @@ def py_line(path, expr):
     return 0
 
 
-def c_line(text, expr):
-    """The line of the first define in the expression (0 if none)."""
+def c_where(texts, expr):
+    """'patch/<file>:<line>' of the first define in the expression (the header alone if none)."""
     for name in re.findall(r'[A-Za-z_]\w*', expr):
-        m = re.search(rf'^[ \t]*#[ \t]*define[ \t]+{name}\b', text, re.M)
-        if m: return text[:m.start()].count('\n') + 1
-    return 0
+        for path, text in texts:
+            m = re.search(rf'^[ \t]*#[ \t]*define[ \t]+{name}\b', text, re.M)
+            if m: return f'{os.path.relpath(path, ROOT)}:{text[:m.start()].count(chr(10)) + 1}'
+    return os.path.relpath(HEADER, ROOT)
 
 
 def c_value(expr):
     try:
-        return cdefs.parse(f'#define ROW {expr}\n', names=['ROW'], known=O)['ROW']
+        return cdefs.parse(f'#define ROW {expr}\n', names=['ROW'], known=C_ALL)['ROW']
     except cdefs.CDefError as e:
-        raise ValueError(f'C side {expr!r} is not an integer over offsets.inc defines ({e})') from None
+        raise ValueError(f'C side {expr!r} is not an integer over the C defines ({e})') from None
 
 
 def rgb(v):
@@ -213,7 +240,7 @@ def main():
     e_ok, e_bad = enum_rows()
     for line in e_bad: print(f'FAIL MISMATCH {line}')
     ok += e_ok; fail += len(e_bad)
-    header_text = open(HEADER, encoding='utf-8').read()
+    texts = [(p, open(p, encoding='utf-8').read()) for p in [HEADER] + MORE]
     modules = {}
     for row in ROWS:
         mod, py, c = row[:3]
@@ -226,9 +253,8 @@ def main():
             pv = eval(py, vars(m))   # the table's own expressions (names and indexes of a module), not extracted code
             cv = c_value(c)
             path = os.path.relpath(m.__file__, ROOT)
-            where = (f'{path}:{py_line(m.__file__, py)} {py} = {pv!r} vs patch/offsets.inc:{c_line(header_text, c)} '
-                     f'{c} = {cv:#x}' if kind == 'rgb' else
-                     f'{path}:{py_line(m.__file__, py)} {py} = {pv!r} vs patch/offsets.inc:{c_line(header_text, c)} {c} = {cv}')
+            where = (f'{path}:{py_line(m.__file__, py)} {py} = {pv!r} vs {c_where(texts, c)} {c} = '
+                     + (f'{cv:#x}' if kind == 'rgb' else f'{cv}'))
             agree = (rgb(pv) == rgb(cv)) if kind == 'rgb' else (int(pv) == cv)
         except Exception as e:   # a missing name or a bad expression is a failure of the row, reported with the row
             print(f'FAIL {mod}.{py} vs {c}: {type(e).__name__}: {e}')

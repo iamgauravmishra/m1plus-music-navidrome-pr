@@ -1069,7 +1069,6 @@ def refresh_and_fallback_tests(ctx):
     regen_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_REGEN)
     daily_i = next(i for i, r in enumerate(homeset.rows) if r.action == pod_pages.ACT_DAILY)
     regen_state = lambda sm: tuple(sm.props.get((sm.widgets[n], k)) for n, k in ((f'pod_row{regen_i}', 'visible'), (f'pod_row{regen_i}', 'sensitive'), ('pod_note3', 'visible'), ('pod_note3', 'sensitive')))
-    toasts = lambda sm: [c[1] for c in sm.calls if c[0] == 'toast']
     sm = settings_machine()
     sm.click(f'pod_row{regen_i}')
     expect(toasts(sm) == ['New mix when Home opens'], 'a tap on Regenerate Daily Mix (accepted) shows the toast')

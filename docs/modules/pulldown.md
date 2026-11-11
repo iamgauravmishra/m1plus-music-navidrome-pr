@@ -46,7 +46,7 @@ order: an unknown character, an id twice (also across the parts), a second `-`, 
 `dialog_dropdown_dialog_init` `0x475f04`, pinned prologue `(0x3c1c0059, 0x279cdfcc, 0x0399e021)` (`$gp` checked), overwritten with `j m1plus_pulldown_init; nop`;
 the trampoline resumes at `0x475f10` (`beqz $a0`). Its only caller is the navigator's dialog-init dispatcher (`0x4d1c7c` / `0x4d1c84`, behind the `strcmp` with
 `"dialog/dropdown_dialog"`; the other reference to the name, `on_wm_tsmove_fun` `0x4cd868`, opens the dialog by name), so it runs only when the pull-down is built;
-`tools/reach.py` finds it only behind the navigator cut, never from `main` / `platform_init`. `tools/pod.py` `PULLDOWN_PINS` pins the resume word, the dispatcher, the
+`tools/reach.py` finds it only behind the navigator cut, never from `main` / `platform_init`. `tools/pod_pins.py` `PULLDOWN_PINS` pins the resume word, the dispatcher, the
 four pointer binds of the init and the tile visitor's `EVT_CLICK` bind. The stock init runs first and its result is returned; then the eight tile images (`img_wifiswitch`, `img_btswitch`, `img_keylockswitch`, `img_gainswitch`, `img_usbmode`, `img_outputswitch`, `img_playset`,
 `img_sysset`) and captions (`label_wifi`, `label_bt`, `label_lock`, `label_gain`, `label_usbmode`, `label_outputway`, `label_playset`, `label_sysset`) are looked up and
 their places read; **if any lookup fails nothing changes**. The file is read; shown tile k takes the place of stock tile k (images x 24 / 98 / 172 / 246, y 14 and 114,

@@ -37,6 +37,7 @@
 #include "home.h"
 #include "common.h"
 #include "grid.h"
+#include "entries.h"
 
 #define N POD_MENU_ITEMS
 #define CUSTOMIZE POD_SETTINGS_ID

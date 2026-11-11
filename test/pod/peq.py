@@ -1425,7 +1425,7 @@ def lib_vh(na, nc):
 
 def stamped(path, body=AUTOEQ): return b'# AutoEq: ' + path.encode() + b'\n' + body
 def tall(m, i, state='normal'): return (piece(m, i, state) or '').removeprefix('pod_cdl_')
-def vis(m, name): return m.props.get((m.widgets[name], 'visible'))
+def vis_prop(m, name): return m.props.get((m.widgets[name], 'visible'))
 def tap_row(m, i):
     fn, c = m.bound[(m.widgets[f'pod_row{i}'], O['EVT_CLICK'])]
     return m.call(fn, a0=c, count=1 << 40)
@@ -1449,13 +1449,13 @@ def presets_page_tests(ctx):
     m = libpage(files)
     expect(m.opened == 1 and ('window_open', 'm1plus_peqlib') in m.calls, 'peqlib_open opens the page')
     ae, oc = [1, 2, 3, 4], [O['PQ_ROWS'] + 1, O['PQ_ROWS'] + 2]
-    expect([vis(m, f'pod_row{i}') for i in range(1, LIB_SLOTS + 1)] == [1 if i in ae + oc else 0 for i in range(1, LIB_SLOTS + 1)], 'four AutoEq rows and two On Card rows shown, the other slots hidden')
+    expect([vis_prop(m, f'pod_row{i}') for i in range(1, LIB_SLOTS + 1)] == [1 if i in ae + oc else 0 for i in range(1, LIB_SLOTS + 1)], 'four AutoEq rows and two On Card rows shown, the other slots hidden')
     expect([m.props.get((m.widgets[f'pod_row{i}'], 'sensitive')) for i in range(1, LIB_SLOTS + 1)] == [1 if i in ae + oc else 0 for i in range(1, LIB_SLOTS + 1)], 'shown rows are sensitive, hidden rows insensitive')
     expect([ptexts(m, 'pod_label', i) for i in ae] == [['Beta Phones'], ['Cee'], ['earb'], ['Zed IEM']] and [ptexts(m, 'pod_label', i) for i in oc] == [['alpha'], ['broken']],
            f'names without .txt, sorted: AutoEq {[ptexts(m, "pod_label", i) for i in ae]}, On Card {[ptexts(m, "pod_label", i) for i in oc]}')
     expect([ptexts(m, 'pod_sub', i) for i in ae] == [['oratory1990 · Over-ear'], ['crinacle'], ['oratory1990 · Earbud'], ['Rtings · In-ear']] and [ptexts(m, 'pod_sub', i) for i in oc] == [['On card']] * 2,
            f'grey lines: "Source · Kind" from the stamp (the source alone when the directory names no kind), "On card" for the rest ({[ptexts(m, "pod_sub", i) for i in ae]})')
-    expect(vis(m, 'pod_sec0') == 1 and vis(m, 'pod_sec1') == 1, 'both headers show')
+    expect(vis_prop(m, 'pod_sec0') == 1 and vis_prop(m, 'pod_sec1') == 1, 'both headers show')
     expect([tall(m, i) for i in ae] == ['top', 'mid', 'mid', 'bot'] and [tall(m, i) for i in oc] == ['top', 'bot'], f'pieces per section: {[tall(m, i) for i in ae]} / {[tall(m, i) for i in oc]}')
     expect(all(piece(m, i, 'pressed') == piece(m, i) + '_down' and all(piece(m, i, s) == piece(m, i) for s in ('over', 'focused', 'disable')) and piece(m, i).startswith('pod_cdl_') for i in ae + oc),
            'every state has the row\'s tall piece, the pressed one its lit twin')
@@ -1466,18 +1466,18 @@ def presets_page_tests(ctx):
 
     # a section with one file is a single piece with no hairline; an empty section has no header
     m = libpage([('only.txt', AUTOEQ)])
-    expect(vis(m, 'pod_sec0') == 0 and vis(m, 'pod_sec1') == 1 and vis(m, f'pod_row{O["PQ_ROWS"] + 1}') == 1 and vis(m, 'pod_row1') == 0, 'only an On Card file: the AutoEq header and slots hidden')
+    expect(vis_prop(m, 'pod_sec0') == 0 and vis_prop(m, 'pod_sec1') == 1 and vis_prop(m, f'pod_row{O["PQ_ROWS"] + 1}') == 1 and vis_prop(m, 'pod_row1') == 0, 'only an On Card file: the AutoEq header and slots hidden')
     expect(tall(m, O['PQ_ROWS'] + 1) == 'single' and hair(m, O['PQ_ROWS'] + 1) == 0 and m.props[(m.widgets['pod_scrollview'], 'virtual_h')] == lib_vh(0, 1), 'one file: a single piece, no hairline, the column of base + header + row')
     m = libpage([('ae.txt', stamped('oratory1990/over-ear/Ae'))])
-    expect(vis(m, 'pod_sec0') == 1 and vis(m, 'pod_sec1') == 0 and vis(m, 'pod_row1') == 1 and tall(m, 1) == 'single' and ptexts(m, 'pod_sub', 1) == ['oratory1990 · Over-ear']
+    expect(vis_prop(m, 'pod_sec0') == 1 and vis_prop(m, 'pod_sec1') == 0 and vis_prop(m, 'pod_row1') == 1 and tall(m, 1) == 'single' and ptexts(m, 'pod_sub', 1) == ['oratory1990 · Over-ear']
            and m.props[(m.widgets['pod_scrollview'], 'virtual_h')] == lib_vh(1, 0), 'only an AutoEq file: the On Card header hidden')
     for what, kw in (('an empty folder', {'files': []}), ('the card out', {'files': files, 'card': False})):
         m = libpage(**kw)
-        expect(vis(m, 'pod_sec0') == 0 and vis(m, 'pod_sec1') == 0 and not [i for i in range(1, LIB_SLOTS + 1) if vis(m, f'pod_row{i}')] and m.props[(m.widgets['pod_scrollview'], 'virtual_h')] == lib_vh(0, 0),
+        expect(vis_prop(m, 'pod_sec0') == 0 and vis_prop(m, 'pod_sec1') == 0 and not [i for i in range(1, LIB_SLOTS + 1) if vis_prop(m, f'pod_row{i}')] and m.props[(m.widgets['pod_scrollview'], 'virtual_h')] == lib_vh(0, 0),
                f'{what}: no header, no file row, just the download row')
     # an edited AutoEq file (a Save marked it) is still listed under AutoEq with the same grey line
     m = libpage([('ed.txt', b'# AutoEq edited: oratory1990/over-ear/Ed\n' + AUTOEQ)])
-    expect(vis(m, 'pod_sec0') == 1 and vis(m, 'pod_sec1') == 0 and ptexts(m, 'pod_sub', 1) == ['oratory1990 · Over-ear'], 'an edited AutoEq file: listed under AutoEq, Source · Kind')
+    expect(vis_prop(m, 'pod_sec0') == 1 and vis_prop(m, 'pod_sec1') == 0 and ptexts(m, 'pod_sub', 1) == ['oratory1990 · Over-ear'], 'an edited AutoEq file: listed under AutoEq, Source · Kind')
     # the source is shown decoded (the stamp itself stays percent-encoded); a malformed '%' stays, a cut never ends mid character
     m = libpage([('a.txt', stamped('Super%20Review/over-ear/X')), ('b.txt', stamped('a%2fb%E6%AD%8C%2/in-ear/Y')), ('c.txt', stamped('50%/earbud/Z')), ('d.txt', stamped('x%zz%/Dir/W')),
                  ('e.txt', stamped('歌' * 30 + '%E6%AD%8C' * 3 + '/Dir/V'))])
@@ -1495,11 +1495,11 @@ def presets_page_tests(ctx):
 
     # a stamp-looking first line that is not a stamp is a file of the user's
     m = libpage([('a.txt', b'# AutoEq: nosource\n' + AUTOEQ), ('b.txt', b'# AutoEq: /x/y\n' + AUTOEQ), ('c.txt', b'# AutoEq: s//n\n' + AUTOEQ), ('d.txt', b'# autoeq: s/over-ear/n\n' + AUTOEQ)])
-    expect(vis(m, 'pod_sec0') == 0 and vis(m, 'pod_sec1') == 1 and [ptexts(m, 'pod_sub', O['PQ_ROWS'] + i) for i in range(1, 5)] == [['On card']] * 4, 'a malformed stamp (no Kind, no Source, an empty Kind, wrong case) is a file of the user\'s')
+    expect(vis_prop(m, 'pod_sec0') == 0 and vis_prop(m, 'pod_sec1') == 1 and [ptexts(m, 'pod_sub', O['PQ_ROWS'] + i) for i in range(1, 5)] == [['On card']] * 4, 'a malformed stamp (no Kind, no Source, an empty Kind, wrong case) is a file of the user\'s')
     # more than PQ_ROWS (64) files: the first 64 by name, split; the Equalizer's count is the total
     many = [(f'p{i:02d}.txt', AUTOEQ if i % 2 else stamped('oratory1990/over-ear/P')) for i in range(70)]
     m = libpage(many)
-    expect(len([i for i in range(1, LIB_SLOTS + 1) if vis(m, f'pod_row{i}')]) == O['PQ_ROWS'], f'70 files: the first {O["PQ_ROWS"]} by name show')
+    expect(len([i for i in range(1, LIB_SLOTS + 1) if vis_prop(m, f'pod_row{i}')]) == O['PQ_ROWS'], f'70 files: the first {O["PQ_ROWS"]} by name show')
     m = page(many)
     expect(ptext(m, f'pod_value{ROWS + 1}') == ['70'] and len(shown(m)) == O['PQ_ROWS'], 'the Equalizer\'s Presets count is every .txt file (70) while its picker lists 64')
     m = page([])
@@ -1521,13 +1521,13 @@ def presets_page_tests(ctx):
 
     # back in front: the card is read again (a download, a delete)
     m = libpage(files[:2])
-    expect([vis(m, f'pod_row{i}') for i in (1, 2)] == [1, 0] and vis(m, 'pod_sec1') == 1, 'one AutoEq file and one other')
+    expect([vis_prop(m, f'pod_row{i}') for i in (1, 2)] == [1, 0] and vis_prop(m, 'pod_sec1') == 1, 'one AutoEq file and one other')
     m.put(f'{EQ_DIR}/Alpha2.txt', stamped('oratory1990/over-ear/Alpha2'))
     del m.fs[f'{EQ_DIR}/alpha.txt']
     m.calls = []
     fn, c = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]
     m.call(fn, a0=c, count=1 << 30)
-    expect([ptexts(m, 'pod_label', i) for i in (1, 2)] == [['Alpha2'], ['Beta Phones']] and vis(m, 'pod_row2') == 1 and vis(m, 'pod_sec1') == 0 and vis(m, f'pod_row{O["PQ_ROWS"] + 1}') == 0
+    expect([ptexts(m, 'pod_label', i) for i in (1, 2)] == [['Alpha2'], ['Beta Phones']] and vis_prop(m, 'pod_row2') == 1 and vis_prop(m, 'pod_sec1') == 0 and vis_prop(m, f'pod_row{O["PQ_ROWS"] + 1}') == 0
            and tall(m, 1) == 'top' and tall(m, 2) == 'bot' and m.props[(m.widgets['pod_scrollview'], 'virtual_h')] == lib_vh(2, 0), 'back in front: the new file shows, the removed one and the empty On Card header are gone, pieces and height follow')
     fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
     m.call(fn, a0=c, count=1 << 30); m.calls = []
@@ -1646,7 +1646,7 @@ def hptext(m, name): return [u8(c[2]) for c in m.hist if c[0] == 'widget_set_tex
 def rec_preset(m): return unpack_preset(m.fs[STATE][16:16 + 992])
 def rec_mode(m): return struct.unpack_from('<i', m.fs[STATE], 8)[0]
 def btext(m, name): return [u8(c[2]) for c in m.hist if c[0] == 'widget_set_text_utf8' and c[1] == m.bw[name]]
-def toasts(m): return [c[1] for c in m.hist if c[0] == 'toast']
+def toasts_hist(m): return [c[1] for c in m.hist if c[0] == 'toast']
 def band_win_open(m): return ('window_open', 'm1plus_peqband') in m.hist
 
 
@@ -1978,7 +1978,7 @@ def edit_dialog_tests(ctx):
     expect(text == 'Preamp: -6.2 dB\nFilter 1: ON LSC Fc 105 Hz Gain 5.5 dB Q 0.7\nFilter 2: ON PK Fc 2000 Hz Gain 4 dB Q 1.41\nFilter 3: ON HSC Fc 10000 Hz Gain 2 dB Q 0.7\nFilter 4: ON PK Fc 140 Hz Gain -1.5 dB Q 0.5\n', f'the file: the preamp, then the bands in their order as PK / LSC / HSC with Fc, Gain and Q ({text!r})')
     ok, back, _ = parse(m0, m.fs[HD_PATH])
     expect(ok == 1 and back['bands'] == [(1, 1, 105.0, 5.5, 0.7), (1, 0, 2000.0, 4.0, 1.41), (1, 2, 10000.0, 2.0, 0.7), (1, 0, 140.0, -1.5, 0.5)] and back['preamp'] == -6.2 and back['automatic'] == 2 and m0.skipped == 0, 'the payload\'s parser reads the saved file back as the same bands and preamp, nothing skipped')
-    expect(rec_preset(m)['bands'][:4] == [tuple(b) for b in back['bands']] and NAME_OF(m.fs[STATE]) == HD.encode() and not toasts(m), 'the record plays the file\'s own preset, no message')
+    expect(rec_preset(m)['bands'][:4] == [tuple(b) for b in back['bands']] and NAME_OF(m.fs[STATE]) == HD.encode() and not toasts_hist(m), 'the record plays the file\'s own preset, no message')
     # the page is not edited when opened again
     m2 = epage([(HD, m.fs[HD_PATH])], state=m.fs[STATE])
     ask(m2)
@@ -1992,12 +1992,12 @@ def edit_dialog_tests(ctx):
     expect(m.fs[f'{EQ_DIR}/a.txt'].decode() == '# AutoEq edited: x/y/z\nFilter 1: ON PK Fc 1000 Hz Gain 5 dB Q 1\nFilter 2: ON LSC Fc 100 Hz Gain 3 dB Q 0.7\n', f'the AutoEq stamp becomes the edited marker; a preset with no Preamp line gets none ({m.fs[f"{EQ_DIR}/a.txt"]!r})')
     m = epage([(HD, AUTOEQ)], state=state)
     m.fail.add(('rename', HD_PATH)); ask(m); m.hist.clear(); fire(m, m.bw['pq_item0'], 'EVT_CLICK')
-    expect(toasts(m) == ['Not saved'] and m.fs[HD_PATH] == AUTOEQ and f'{EQ_DIR}/.save.tmp' not in m.fs and ('unlink', f'{EQ_DIR}/.save.tmp') in m.hist and not went_back(m) and not dialog_up(m), f'a rename that fails: "Not saved", the file as it was, no temp file, the page stays ({toasts(m)}, {m.fs.get(HD_PATH)!r:.30}, {sorted(m.fs)}, {[c for c in m.hist if c[0] in ("unlink", "rename")]})')
+    expect(toasts_hist(m) == ['Not saved'] and m.fs[HD_PATH] == AUTOEQ and f'{EQ_DIR}/.save.tmp' not in m.fs and ('unlink', f'{EQ_DIR}/.save.tmp') in m.hist and not went_back(m) and not dialog_up(m), f'a rename that fails: "Not saved", the file as it was, no temp file, the page stays ({toasts_hist(m)}, {m.fs.get(HD_PATH)!r:.30}, {sorted(m.fs)}, {[c for c in m.hist if c[0] in ("unlink", "rename")]})')
     ask(m)
     expect(dialog_up(m), 'and it is still edited: Back asks again')
     m = epage([(HD, AUTOEQ)], state=state)
     m.fail.add(('fsync', f'{EQ_DIR}/.save.tmp')); ask(m); m.hist.clear(); fire(m, m.bw['pq_item0'], 'EVT_CLICK')
-    expect(toasts(m) == ['Not saved'] and m.fs[HD_PATH] == AUTOEQ and f'{EQ_DIR}/.save.tmp' not in m.fs, 'an fsync that fails: nothing replaced')
+    expect(toasts_hist(m) == ['Not saved'] and m.fs[HD_PATH] == AUTOEQ and f'{EQ_DIR}/.save.tmp' not in m.fs, 'an fsync that fails: nothing replaced')
     # Save with the Equalizer off does not switch it on
     m = epage([(HD, AUTOEQ)], state=state, flag=0)
     ask(m); m.hist.clear(); fire(m, m.bw['pq_item0'], 'EVT_CLICK')
@@ -2017,13 +2017,13 @@ def edit_revert_tests(ctx):
     m = epage([(HD, AUTOEQ)], state=state)
     ask(m); m.fs[HD_PATH] = b'garbage'; m.hist.clear()
     fire(m, m.bw['pq_item2'], 'EVT_CLICK')
-    expect(toasts(m) == ['Cannot read this preset'] and not went_back(m) and not dialog_up(m), 'a file that no longer parses: the message, the page stays')
+    expect(toasts_hist(m) == ['Cannot read this preset'] and not went_back(m) and not dialog_up(m), 'a file that no longer parses: the message, the page stays')
 
     # Revert whose record write fails: "Not saved", the page stays with the edit unsaved (the dialog asks again), nothing is reported as discarded
     m = epage([(HD, AUTOEQ)], state=state)
     ask(m); m.fail.add(('rename', STATE)); m.hist.clear()
     fire(m, m.bw['pq_item2'], 'EVT_CLICK')
-    expect(toasts(m) == ['Not saved'] and not went_back(m) and not dialog_up(m) and m.fs[STATE] == state, f"Don't Save with a failing record write: the message, the page stays, the record is as it was ({toasts(m)})")
+    expect(toasts_hist(m) == ['Not saved'] and not went_back(m) and not dialog_up(m) and m.fs[STATE] == state, f"Don't Save with a failing record write: the message, the page stays, the record is as it was ({toasts_hist(m)})")
     m.hist.clear(); ask(m)
     expect(dialog_up(m) and not went_back(m), "after a failed Don't Save the edit is still unsaved: Back asks again")
 
@@ -2045,16 +2045,16 @@ def edit_saveas_tests(ctx):
     m.call(PSYMS['peqpage_named'], m.cstr('  My: Copy?.txt. '), count=1 << 40)
     new = f'{EQ_DIR}/My- Copy-.txt'
     ok, back, _ = parse(m0, m.fs.get(new, b''))
-    expect(ok == 1 and back['bands'][1] == (1, 0, 2000.0, 4.0, 1.41) and m.fs[HD_PATH] == AUTOEQ and not toasts(m), f'Save As: a new file named as typed with the characters a card cannot hold made "-", the ".txt" typed dropped, the ends trimmed; the original is as it was ({[k for k in m.fs if k.startswith(EQ_DIR)]})')
+    expect(ok == 1 and back['bands'][1] == (1, 0, 2000.0, 4.0, 1.41) and m.fs[HD_PATH] == AUTOEQ and not toasts_hist(m), f'Save As: a new file named as typed with the characters a card cannot hold made "-", the ".txt" typed dropped, the ends trimmed; the original is as it was ({[k for k in m.fs if k.startswith(EQ_DIR)]})')
     expect(NAME_OF(m.fs[STATE]) == b'My- Copy-.txt' and hptext(m, 'label_title')[-1] == 'My- Copy-' and f'{EQ_DIR}/.save.tmp' not in m.fs, 'the edited preset plays as the new file, the title is its name')
     m.hist.clear(); fire(m, m.band_win, 'EVT_WINDOW_TO_FG')
     expect(went_back(m), 'back from the name entry with the new file written: the page goes back (nothing is left unsaved)')
     # the new name is the file now: a Save writes it, not the original
     m.hist.clear(); m.call(PSYMS['peqpage_named'], m.cstr('Other'), count=1 << 40)
-    expect(toasts(m) == ['Name already in use'] and m.fs[f'{EQ_DIR}/Other.txt'] == AUTOEQ, 'a name that exists is refused: "Name already in use", nothing written')
+    expect(toasts_hist(m) == ['Name already in use'] and m.fs[f'{EQ_DIR}/Other.txt'] == AUTOEQ, 'a name that exists is refused: "Name already in use", nothing written')
     m = epage([(HD, AUTOEQ), ('Other.txt', AUTOEQ)], state=state)
     m.hist.clear(); m.call(PSYMS['peqpage_named'], m.cstr('   '), count=1 << 40); m.call(PSYMS['peqpage_named'], m.cstr('.txt'), count=1 << 40); m.call(PSYMS['peqpage_named'], m.cstr(''), count=1 << 40)
-    expect(not toasts(m) and sorted(k for k in m.fs if k.startswith(EQ_DIR)) == sorted([HD_PATH, f'{EQ_DIR}/Other.txt']), f'an empty name (or only spaces, or ".txt") does nothing ({toasts(m)}, {sorted(k for k in m.fs if k.startswith(EQ_DIR))})')
+    expect(not toasts_hist(m) and sorted(k for k in m.fs if k.startswith(EQ_DIR)) == sorted([HD_PATH, f'{EQ_DIR}/Other.txt']), f'an empty name (or only spaces, or ".txt") does nothing ({toasts_hist(m)}, {sorted(k for k in m.fs if k.startswith(EQ_DIR))})')
     m.call(PSYMS['peqpage_named'], m.cstr('.hidden'), count=1 << 40)
     expect(f'{EQ_DIR}/_hidden.txt' in m.fs, 'a leading dot becomes "_" (a dot file is not listed)')
     long_ = 'é' * 40
@@ -2065,13 +2065,13 @@ def edit_saveas_tests(ctx):
     files64 = [(f'p{i:02d}.txt', AUTOEQ) for i in range(63)] + [(HD, AUTOEQ)]
     m = epage(files64, state=state)
     m.hist.clear(); m.call(PSYMS['peqpage_named'], m.cstr('one more'), count=1 << 40)
-    expect(toasts(m) == ['Preset limit reached'] and f'{EQ_DIR}/one more.txt' not in m.fs, 'with 64 files on the card Save As is refused: "Preset limit reached"')
+    expect(toasts_hist(m) == ['Preset limit reached'] and f'{EQ_DIR}/one more.txt' not in m.fs, 'with 64 files on the card Save As is refused: "Preset limit reached"')
     m = epage(files64[1:], state=state)
     m.hist.clear(); m.call(PSYMS['peqpage_named'], m.cstr('one more'), count=1 << 40)
-    expect(not toasts(m) and f'{EQ_DIR}/one more.txt' in m.fs, 'with 63 files the 64th is made')
+    expect(not toasts_hist(m) and f'{EQ_DIR}/one more.txt' in m.fs, 'with 63 files the 64th is made')
     m = epage([(HD, AUTOEQ)], state=state)
     m.fail.add(('rename', f'{EQ_DIR}/Fail.txt')); m.hist.clear(); m.call(PSYMS['peqpage_named'], m.cstr('Fail'), count=1 << 40)
-    expect(toasts(m) == ['Not saved'] and f'{EQ_DIR}/Fail.txt' not in m.fs and f'{EQ_DIR}/.save.tmp' not in m.fs and not hptext(m, 'label_title'), 'a failed Save As: "Not saved", no file, the page keeps its name')
+    expect(toasts_hist(m) == ['Not saved'] and f'{EQ_DIR}/Fail.txt' not in m.fs and f'{EQ_DIR}/.save.tmp' not in m.fs and not hptext(m, 'label_title'), 'a failed Save As: "Not saved", no file, the page keeps its name')
 
 
 def edit_rename_tests(ctx):
@@ -2087,9 +2087,9 @@ def edit_rename_tests(ctx):
     expect(('rename', HD_PATH, f'{EQ_DIR}/HD 600 mine.txt') in m.hist and HD_PATH not in m.fs and m.fs[f'{EQ_DIR}/HD 600 mine.txt'] == AUTOEQ and NAME_OF(m.fs[STATE]) == b'HD 600 mine.txt'
            and hptext(m, 'label_title')[-1] == 'HD 600 mine' and not [c for c in m.hist if c[0] in ('set_equalizer_value', 'write_int_config')], 'Rename: the file takes the new name, the record\'s name follows (the preset plays), the title; the player is not told')
     m.hist.clear(); m.call(PSYMS['peqpage_renamed'], m.cstr('Other'), count=1 << 40)
-    expect(toasts(m) == ['Name already in use'] and not [c for c in m.hist if c[0] == 'rename'], 'a name that exists is refused')
+    expect(toasts_hist(m) == ['Name already in use'] and not [c for c in m.hist if c[0] == 'rename'], 'a name that exists is refused')
     m.hist.clear(); m.call(PSYMS['peqpage_renamed'], m.cstr('HD 600 mine'), count=1 << 40); m.call(PSYMS['peqpage_renamed'], m.cstr(' '), count=1 << 40)
-    expect(not [c for c in m.hist if c[0] == 'rename'] and not toasts(m), 'the same name, or none: nothing happens')
+    expect(not [c for c in m.hist if c[0] == 'rename'] and not toasts_hist(m), 'the same name, or none: nothing happens')
     m.hist.clear(); m.call(PSYMS['peqpage_renamed'], m.cstr('HD 600 MINE'), count=1 << 40)
     expect(('rename', f'{EQ_DIR}/HD 600 mine.txt', f'{EQ_DIR}/HD 600 MINE.txt') in m.hist, 'the same name in another case is allowed (the card ignores case)')
     m = epage([(HD, AUTOEQ)], state=pack_state(1, pack_preset([(1, 0, 500, 3.0, 1.0)]), b'other.txt'))
@@ -2097,7 +2097,7 @@ def edit_rename_tests(ctx):
     expect(f'{EQ_DIR}/New.txt' in m.fs and NAME_OF(m.fs[STATE]) == b'other.txt' and not [c for c in m.hist if c[0] == 'set_equalizer_value'], 'another preset plays: the record is left alone')
     m = epage([(HD, AUTOEQ)], state=None)
     m.fail.add(('rename', f'{EQ_DIR}/New.txt')); m.hist.clear(); m.call(PSYMS['peqpage_renamed'], m.cstr('New'), count=1 << 40)
-    expect(toasts(m) == ['Not saved'] and HD_PATH in m.fs and not hptext(m, 'label_title'), f'a rename that fails: "Not saved", the page keeps its name ({toasts(m)}, {hptext(m, "label_title")})')
+    expect(toasts_hist(m) == ['Not saved'] and HD_PATH in m.fs and not hptext(m, 'label_title'), f'a rename that fails: "Not saved", the page keeps its name ({toasts_hist(m)}, {hptext(m, "label_title")})')
     # the output slots that name the preset follow the rename (a rename must not leave Line Out or USB pointing at a gone file)
     m = epage([(HD, AUTOEQ)], state=state)
     other = pack_state(1, pack_preset([(1, 0, 500, 3.0, 1.0)]), b'other.txt')
@@ -2433,7 +2433,6 @@ def tenband_replace_tests(ctx):
     expect = ctx.expect
     rock = [float(g) for g in CURVES[2]]
     # the replace message: once, at the release of the drag whose move switched from a preset file; never mid-drag (the message box would take the touch)
-    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
     m = tpage(pack_state(1, pack_preset(AUTOEQ_BANDS), b'Sennheiser HD 600.txt', 2, -1, rock)); m.calls = []
     x1 = TBM.center_x(1)
     sl_event(m, 'EVT_POINTER_DOWN', x1, TBM.y_of_step(8), 100)
@@ -2989,7 +2988,7 @@ def output_edit_tests(ctx):
     m, edited = session()
     expect(edited['bands'][1][3] != orig['bands'][1][3] and m.fs[STATE] == pop and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3], 'setup: the edit is filed under Headphones, USB plays Pop')
     ask(m); m.hist.clear(); fire(m, m.bw['pq_item2'], 'EVT_CLICK')
-    expect(m.fs[STATE] == pop and hsent(m) == 0 and went_back(m) and not toasts(m), f"Don't Save after switching to USB: USB's Pop and its playback are untouched ({toasts(m)})")
+    expect(m.fs[STATE] == pop and hsent(m) == 0 and went_back(m) and not toasts_hist(m), f"Don't Save after switching to USB: USB's Pop and its playback are untouched ({toasts_hist(m)})")
     expect(slot_preset(m, 0)['bands'][:4] == orig['bands'][:4] and NAME_OF(m.fs[SLOT[0]]) == HD.encode() and m.fs[HD_PATH] == AUTOEQ, "the Headphones slot has the file's own preset again, the file is untouched")
     out_set(m, 0, 0); out_sync(m)
     expect(rec_preset(m)['bands'][:4] == orig['bands'][:4] and NAME_OF(m.fs[STATE]) == HD.encode(), 'back on Headphones: the discarded edit is gone, the original preset plays')
@@ -2997,7 +2996,7 @@ def output_edit_tests(ctx):
     # the slot cannot be rewritten: "Not saved", the page stays unsaved, nothing else changed
     m, edited = session()
     ask(m); m.fail.add(('rename', SLOT[0])); m.hist.clear(); fire(m, m.bw['pq_item2'], 'EVT_CLICK')
-    expect(toasts(m) == ['Not saved'] and not went_back(m) and m.fs[STATE] == pop and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3], f"Don't Save with a failing slot write: the message, the page stays, USB and the slot untouched ({toasts(m)})")
+    expect(toasts_hist(m) == ['Not saved'] and not went_back(m) and m.fs[STATE] == pop and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3], f"Don't Save with a failing slot write: the message, the page stays, USB and the slot untouched ({toasts_hist(m)})")
     m.hist.clear(); ask(m)
     expect(dialog_up(m), 'and the edit is still unsaved: Back asks again')
     m.fail.discard(('rename', SLOT[0])); m.hist.clear(); fire(m, m.bw['pq_item2'], 'EVT_CLICK')
@@ -3034,40 +3033,40 @@ def output_edit_tests(ctx):
     out_sync(m)
     m.fs[SLOT[2]] = pop; out_set(m, 2, 0); out_sync(m)
     ask(m); m.hist.clear(); fire(m, m.bw['pq_item2'], 'EVT_CLICK')
-    expect(went_back(m) and m.fs[STATE] == pop and slot_preset(m, 0)['bands'][:4] == orig['bands'][:4], f"reopened edits, then USB: Don't Save restores the Headphones slot and leaves USB's Pop ({toasts(m)})")
+    expect(went_back(m) and m.fs[STATE] == pop and slot_preset(m, 0)['bands'][:4] == orig['bands'][:4], f"reopened edits, then USB: Don't Save restores the Headphones slot and leaves USB's Pop ({toasts_hist(m)})")
 
     # a Don't Save whose record write fails keeps the session's output: after a switch the next Don't Save still targets Headphones
     m = epage([(HD, AUTOEQ)], state=None, flag=1)
     out_sync(m); open_band(m, 2); drag_to(m, 1, 0.9)
     ask(m); m.fail.add(('rename', STATE)); m.hist.clear(); fire(m, m.bw['pq_item2'], 'EVT_CLICK')
-    expect(toasts(m) == ['Not saved'] and not went_back(m), "setup: the first Don't Save fails")
+    expect(toasts_hist(m) == ['Not saved'] and not went_back(m), "setup: the first Don't Save fails")
     m.fail.discard(('rename', STATE))
     m.fs[SLOT[2]] = pop; out_set(m, 2, 0); out_sync(m)
     ask(m); m.hist.clear(); fire(m, m.bw['pq_item2'], 'EVT_CLICK')
-    expect(went_back(m) and m.fs[STATE] == pop and slot_preset(m, 0)['bands'][:4] == orig['bands'][:4], f"after the failure and a switch to USB: Don't Save restores Headphones, USB keeps Pop ({toasts(m)})")
+    expect(went_back(m) and m.fs[STATE] == pop and slot_preset(m, 0)['bands'][:4] == orig['bands'][:4], f"after the failure and a switch to USB: Don't Save restores Headphones, USB keeps Pop ({toasts_hist(m)})")
 
     # Save As whose slot write fails: "Not saved", no new file, the page stays on the old one with the edit unsaved
     m, edited = session()
     ask(m); fire(m, m.bw['pq_item1'], 'EVT_CLICK'); m.fail.add(('rename', SLOT[0])); m.hist.clear(); m.call(PSYMS['peqpage_named'], m.cstr('Copy'), count=1 << 40)
     fire(m, m.band_win, 'EVT_WINDOW_TO_FG')
-    expect(toasts(m) == ['Not saved'] and f'{EQ_DIR}/Copy.txt' not in m.fs and not went_back(m) and m.fs[HD_PATH] == AUTOEQ, f'a failed Save As: the message, no file, the page stays ({toasts(m)})')
+    expect(toasts_hist(m) == ['Not saved'] and f'{EQ_DIR}/Copy.txt' not in m.fs and not went_back(m) and m.fs[HD_PATH] == AUTOEQ, f'a failed Save As: the message, no file, the page stays ({toasts_hist(m)})')
     expect(not any(c[0] == 'widget_set_text_utf8' and u8(c[2]).startswith('Copy') for c in m.hist), 'and the page never showed the new name')
     ask(m)
     expect(dialog_up(m), 'and the edit is still unsaved: Back asks again')
     expect(NAME_OF(m.fs[SLOT[0]]) == HD.encode() and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3], "and Headphones, the session's owner, keep the edit in their slot")
     m.fail.discard(('rename', SLOT[0])); fire(m, m.bw['pq_item1'], 'EVT_CLICK'); m.hist.clear(); m.call(PSYMS['peqpage_named'], m.cstr('Copy'), count=1 << 40)
     fire(m, m.band_win, 'EVT_WINDOW_TO_FG')
-    expect(not toasts(m) and f'{EQ_DIR}/Copy.txt' in m.fs and m.fs[HD_PATH] == AUTOEQ and NAME_OF(m.fs[SLOT[0]]) == b'Copy.txt' and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3] and m.fs[STATE] == pop, f'a second Save As, the fault cleared: the new file, the slot names it, USB keeps Pop ({toasts(m)})')
+    expect(not toasts_hist(m) and f'{EQ_DIR}/Copy.txt' in m.fs and m.fs[HD_PATH] == AUTOEQ and NAME_OF(m.fs[SLOT[0]]) == b'Copy.txt' and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3] and m.fs[STATE] == pop, f'a second Save As, the fault cleared: the new file, the slot names it, USB keeps Pop ({toasts_hist(m)})')
     m.hist.clear(); ask(m)
     expect(went_back(m) and not dialog_up(m), 'the new file is saved: Back leaves without asking')
     # Save whose slot write fails: the page does not close, the file is written, the edit counts as unsaved
     m, edited = session()
     ask(m); m.fail.add(('rename', SLOT[0])); m.hist.clear(); fire(m, m.bw['pq_item0'], 'EVT_CLICK')
-    expect(toasts(m) == ['Not saved'] and not went_back(m) and m.fs[HD_PATH] != AUTOEQ, f'a failed Save record write: the message, the page stays ({toasts(m)})')
+    expect(toasts_hist(m) == ['Not saved'] and not went_back(m) and m.fs[HD_PATH] != AUTOEQ, f'a failed Save record write: the message, the page stays ({toasts_hist(m)})')
     m.hist.clear(); ask(m)
     expect(dialog_up(m), 'and the slot was not written: Back asks again')
     m.fail.discard(('rename', SLOT[0])); m.hist.clear(); fire(m, m.bw['pq_item0'], 'EVT_CLICK')
-    expect(went_back(m) and not toasts(m) and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3] and NAME_OF(m.fs[SLOT[0]]) == HD.encode() and m.fs[STATE] == pop, f'a second Save, the fault cleared: the slot has the saved preset, USB keeps Pop ({toasts(m)})')
+    expect(went_back(m) and not toasts_hist(m) and slot_preset(m, 0)['bands'][1][3] == edited['bands'][1][3] and NAME_OF(m.fs[SLOT[0]]) == HD.encode() and m.fs[STATE] == pop, f'a second Save, the fault cleared: the slot has the saved preset, USB keeps Pop ({toasts_hist(m)})')
 
     # Delete Preset reaches every output's slot: the slots that name the file point at the 10-Band EQ with that output's switch off, others stay
     m = ppage([(HD, AUTOEQ), ('keep.txt', AUTOEQ)], HD)

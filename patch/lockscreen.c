@@ -21,6 +21,7 @@
 #include "palette.h"
 #include "battery.h"
 #include "i18n.h"
+#include "entries.h"
 
 #define LK_N 6
 
@@ -324,7 +325,6 @@ int lk_time_toggle(void) {
 
 /* Stock's Display page Lock Screen row (the pod_lock_site stub, tools/pod.py LOCKROW) opens our Lock Screen page instead of systemset/screensaver_page. 1 once ours is opening; 0 on the kill switch or when the page
  * will not open: the stub then does stock's own navigator_to. A row tap only, not on the boot path. */
-extern int pod_open_lock(void);
 int lk_redirect(void) { return access(KILL_SD, F_OK) != 0 && pod_open_lock() == 0; }
 
 /* The saved layout: 1 Mini Player ('1', an optional newline), anything else or no file 0 Large Cover; reading never writes. */

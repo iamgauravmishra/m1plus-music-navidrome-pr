@@ -20,3 +20,8 @@ int peqlib_open(void);
 
 /* patch/m1plus.c open_page: the page's window is up. Fills it from the card; a page that is not our asset is left as it is. */
 void peqlib_opened(void *win);
+
+/* patch/peq_ui.c: the Equalizer page's switch, 10-Band EQ and presets. */
+void peq_opened(void *win);
+/* The preset the record plays, as the page names it, or the 10-Band EQ's curve key. */
+int peq_playing_name(char *buf, unsigned size);

@@ -35,12 +35,8 @@
 #include "sbsrc.h"
 #include "songops.h"
 #include "albums.h"
-
-extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
-extern int albums_open_artist(void *artists, unsigned index,
-                              unsigned scope); /* patch/albums.c: -1 when the window will not open */
-extern int songs_open_playlist(int id, const char *name); /* patch/songs.c: -1 when it did not open */
-extern int album_open_src(const lib_src_t *src, unsigned cls, void *row); /* patch/albumpage.c */
+#include "coverflow.h"
+#include "entries.h"
 
 #define SE_TERMS 8 /* terms taken from the query (the rest are ignored) */
 #define SE_QMAX 64 /* the keyboard's 63 bytes and the NUL */

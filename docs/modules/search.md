@@ -103,7 +103,7 @@ prefix of initials is quality 1: a Latin title that is the query ranks above 周
 * **Where the initials come from:** the keyboard's engine (`keyboard.md` "Hanzi to pinyin"). `se_load` (first tick) calls `pinyin_hold` (patch/keyboard.c): the engine is opened (1 MB, about 76 ms)
   or taken over from the Chinese layer, and stays open for the page's life, whatever the layer does; `se_on_destroy` calls `pinyin_release` after `keyboard_detach`. Per character
   `se_read_hanzi`: `get_lemma_id` first (0 means not in the dictionary: no reading, never `get_splids_for_hanzi`, which crashes), then `get_splids_for_hanzi`, then the first letter of each
-  `get_spelling_str` (Zh, Ch, Sh are z, c, s). The three members are pinned prologues in `tools/pod.py` (`PINYIN_PINS`, `py_lemma_id` / `py_splids` / `py_spelling` in stock.h); no new hook.
+  `get_spelling_str` (Zh, Ch, Sh are z, c, s). The three members are pinned prologues in `tools/pod_pins.py` (`PINYIN_PINS`, `py_lemma_id` / `py_splids` / `py_spelling` in stock.h); no new hook.
 * **Polyphones: every reading counts.** 行 (hang heng xing) is h and x, so `yh` and `yx` both find 银行 and `xz` and `hz` find 行走. More matches than the right reading alone (`yz` is not one),
   never fewer; the engine gives no frequency to pick one by. A term is initials only: `zhou` does not find 周 (the initial of 周 is `z`); a mixed Latin and initials query (`jay zjl`) does not match on the device (accepted; the scripted test's mix passes, the real dictionary's does not), and any term of 1 letter matches any character with that initial.
 * **Memory:** one 20,992 byte table (a byte per character: not asked, no reading, or an index) allocated with the library and freed with the page, and a palette of at most 254 distinct sets

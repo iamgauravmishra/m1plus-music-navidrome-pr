@@ -108,43 +108,6 @@ enum {
     ACT_SUBSONIC = 93 /* the Navidrome root page (tools/pod_pages.py); ids 93 .. 95 are the Navidrome rows */
 };
 
-extern void shot_start(void); /* patch/shot.c: the Screenshot row: confirm, 5 s countdown, capture; or cancel */
-extern int artists_open(
-    int home); /* patch/artists.c: the Artists list, its own page; arg HOME_GENRE / HOME_COMPOSER: Genres / Composers on it */
-extern int albums_open(void); /* patch/albums.c: Albums, our page in the mode used last (grid or list) */
-extern int playlists_open(void); /* patch/playlists.c: Playlists, a grid of mosaics of each playlist's covers */
-extern int ipod_open(void); /* patch/ipod.c: the virtual iPod Classic, a fullscreen page with a touch click wheel */
-extern int podcasts_open(void); /* patch/podcasts.c: the shows on the card and their episodes */
-extern int lockinfo_open(
-    void); /* patch/relnotes.c: the Lock Screen's Custom Wallpaper instructions, a Release Notes page; -1 when it did not open */
-extern int update_open(void); /* patch/update.c: Software Update, our page; -1 when it did not open */
-extern int
-lkwp_open(void); /* patch/lockscreen.c: the Lock Screen's Wallpaper picker, our page; -1 when it did not open */
-extern int wifipage_open(
-    void); /* patch/wifipage.c: Settings > Wi-Fi, our page; -1 when it did not open (the stock page then opens) */
-extern int radio_open(void); /* patch/radiopage.c: Radio's stations page */
-extern int nd_root_open(void); /* patch/ndroot.c: the Navidrome root page; -1 when it did not open */
-extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
-extern int songs_open(void); /* patch/songs.c: Songs, the library as one list with sections and a jump rail */
-extern int folders_open(
-    int home); /* patch/folders.c: Folders, the card's folders and audio files; a window that will not open leaves the stock folder_page through the Home tile home */
-extern int songs_open_list(
-    int home); /* patch/songs.c: another stock song list (Favourites ...) on the same page; arg = its Home tile */
-extern void menu_custom_opened(void *win); /* patch/menu.c: the Main Menu page's switches and arrows */
-extern void pulldown_page_opened(void *win); /* patch/pulldown.c: the Pull-down page's switches and arrows */
-extern void menu_extras_opened(void *win); /* patch/menu.c: the Settings > Extras page's switches */
-extern void peq_opened(void *win); /* patch/peq_ui.c: the Equalizer page's switch, 10-Band EQ and presets */
-extern void peqpage_opened(void *win); /* patch/peqpage.c: the preset page's graph, preamp and bands */
-extern void tenband_opened(void *win); /* patch/tenband.c: the 10-Band editor and its two picker pages */
-extern void peqband_opened(void *win); /* patch/peqband.c: the band page of a preset */
-extern void tencurve_opened(void *win);
-extern void tenpreamp_opened(void *win);
-extern void peqlib_opened(void *win); /* patch/peqlib.c: the Presets page's download row and the card's files */
-extern int peq_playing_name(
-    char *buf,
-    unsigned
-        size); /* patch/peq_ui.c: the preset the record plays, as the page names it, or the 10-Band EQ's curve key */
-
 struct pod_row {
     const char *name; /* row widget name in the asset (pod_row0, pod_row1, ...) */
     int action; /* ACT_* */
@@ -231,24 +194,18 @@ static const char HOME_NAMES[18][3] = {"0", "1",  "2",  "3",  "4",  "5",  "6",  
 #include "i18n.h"
 #include "pcregion.h"
 #include "charging.h"
-extern int disp_light(void); /* patch/display.c: stock's backlight time index, 0 never .. 4 five minutes */
-extern int
-disp_light_set(int index); /* ... chosen the way stock's own page does; -1 for an index stock does not have */
-extern int disp_led(void); /* stock's lamp mode: 0 off, 1 orange, 2 blue */
-extern int disp_led_set(int mode);
-extern int disp_follow(void); /* stock's Follow Screen switch */
-extern int disp_follow_toggle(void);
-extern void disp_opened(void *win); /* the Display page's brightness card */
-extern void disp_refresh(void *win);
-extern int kp_lock(void); /* patch/keyspower.c: Button Lock, 0 off, else stock's mode 1 .. 3 */
-extern int kp_lock_set(int v);
-extern int kp_tap(void); /* Tap to Wake, stock's byte */
-extern int kp_tap_toggle(void);
-extern int kp_standby(void); /* Auto-Standby, stock's byte */
-extern int kp_standby_toggle(void);
-extern int kp_shutdown(void); /* Auto-Shutdown, stock's word 0 .. 4 */
-extern int kp_shutdown_set(int v);
 #include "nextalbum.h"
+#include "albums.h"
+#include "artists.h"
+#include "entries.h"
+#include "peqlib.h"
+#include "peqpage.h"
+#include "playlists.h"
+#include "podcasts.h"
+#include "radio.h"
+#include "search.h"
+#include "shot.h"
+#include "tenband.h"
 static int pod_off(void) { return home_off(); } /* the SD file and the flash one */
 
 static int home_open(int id) {
@@ -417,21 +374,6 @@ __attribute__((noinline)) static void reset_all_ask(void) {
 
 static void pick_choose(const struct pod_row *row);
 
-extern int tape_theme(
-    void); /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal, 3 Auto (by the track's quality) */
-extern int tape_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
-extern int vinyl_record(void); /* patch/vinyl.c: the saved record colour, 0 Black (the default) .. VN_RECS - 1 */
-extern int vinyl_record_set(int rec); /* choose it, saved atomically; the colour or -1 */
-extern int
-lk_layout(void); /* patch/lockscreen.c: the saved lock screen layout, 0 Large Cover (the default), 1 Mini Player */
-extern int lk_layout_set(int layout); /* choose it, saved atomically; the layout or -1 */
-extern int idle_choice(
-    void); /* patch/bigcover.c: Idle Display: 0 Off (stock's Cover mode byte off), 1 Album Cover, 2 Cassette, 3 Vinyl; read live */
-extern int idle_set(
-    int choice); /* choose it, saved (the byte through stock's save, the destination atomically); the choice or -1 */
-extern int vinyl_theme(void); /* patch/vinyl.c: the saved plinth theme, 0 Graphite (the default), 1 White */
-extern int vinyl_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
-
 /* The value rows (act: a row showing the value of vk and opening its picker page) and the pickers' check rows (set_act: a row that sets and checks
  * a choice with set, and shows it with get). An action in neither does nothing here. */
 static const struct pick_def {
@@ -586,14 +528,6 @@ static void regen_show(void) {
         widget_set_visible(regen_note, on, 0),
             widget_set_sensitive(regen_note, 0); /* the note is never a touch target */
 }
-
-extern int lk_enabled(void); /* patch/lockscreen.c: stock's lock screen switch (the byte screensaver_mode): 1 on */
-extern int
-lk_enabled_toggle(void); /* flip it as stock's switch does (byte, then [SYSSET] SCREENSAVER); the new state */
-extern int
-lk_time(void); /* patch/lockscreen.c: stock's lock screen clock switch (the byte screensaver_timeshow): 1 on */
-extern int
-lk_time_toggle(void); /* flip it as stock's switch does (byte, then [SYSSET] SSAVERTIMESHOW); the new state */
 
 /* The switch rows, the one list of them (tools/pod_pages.py SWITCH_ACTIONS but the Equalizer's, which its own page binds): the action, its state (1 on) and its toggle (the new
  * state, -1: not saved, unchanged). A new switch is one line here. */

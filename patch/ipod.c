@@ -26,6 +26,7 @@
 #include "libsrc.h"
 #include "ipod_theme.h"
 #include "ipod_render.h"
+#include "entries.h"
 #undef widget_prepare_text_style
 #undef canvas_draw_text_in_rect
 #undef canvas_draw_image
@@ -36,15 +37,7 @@
 #include "i18n.h"
 #include "podcasts.h"
 
-extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
-extern const char *
-np_cover_file(int *busy); /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
-extern void *pg_episode_queue(
-    const char *root, const pc_show_t *s, const pc_ep_t *eps, int neps, int at,
-    int *idx); /* patch/podcasts.c: the queue of a show's local episodes, set up as an episode start does */
 /* patch/ipod_cf.c: the Cover Flow screen (level K_CF: the albums list drawn as covers; docs/modules/ipod-coverflow.md) */
-extern int ipcf_open(void *win), ipcf_up(void), ipcf_busy(void), ipcf_tick(void *list, unsigned count);
-extern void ipcf_close(void), ipcf_goto(int sel), ipcf_paint(void *canvas, void *list, unsigned count, void *style);
 
 #define ART_GREY 0xff2b2b2bu
 

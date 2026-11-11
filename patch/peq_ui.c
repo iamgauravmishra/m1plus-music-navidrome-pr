@@ -20,8 +20,7 @@
 #include "peqlib.h"
 #include "tenband.h"
 #include "peqout.h"
-
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
+#include "home.h"
 
 #define PQ_N (PQ_FIRST + PQ_ROWS) /* the 10-Band EQ link row; the Presets link row is PQ_N + 1 */
 #define PQ_DNAME 11 /* struct dirent (32-bit, MIPS o32): d_name at 11 (patch/pcmodel.c PM_DNAME) */
@@ -346,8 +345,6 @@ static int pq_on_destroy(void *ctx, void *e) {
     if (ctx == pq.win) memset(&pq, 0, sizeof pq);
     return RET_OK;
 }
-
-extern int pod_open_peq(void); /* patch/m1plus.c: open_page(POD_PEQ_PAGE) */
 
 /* The Equalizer page, for stock's All Playback Settings Equalizer row (the pod_eq_site stub): 1 once it is opening. */
 int peq_open(void) { return pod_open_peq() == 0; }

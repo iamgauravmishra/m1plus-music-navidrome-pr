@@ -15,7 +15,7 @@ auto-advance to a local track); the state machine is not yet: see [Validation li
 | Stations page | `patch/radiopage.c`, `tools/pod_ui.py` `build_radio_page` (`ui/m1plus_radio.bin`) |
 | Now Playing | `patch/radionp.c`, `tools/pod_ui.py` `build_radionp_page` (`ui/m1plus_radionp.bin`) |
 | Station Info | `patch/radioinfo.c`, `tools/pod_ui.py` `build_radioinfo_page` (`ui/m1plus_radioinfo.bin`), `tools/pod_pages.py` `RADIOINFO` |
-| Hooks, pins, imports | `tools/pod.py` `START_PLAYER`, `SAVE_STOP`, `SAVE_START`, `BACKTOPLAYER`, `RADIO_PINS`, `LIBC`, `DATA` (`RESUME_POS`, `HCI_RUNNING`, `HCI_SOCK_FD`) |
+| Hooks, pins, imports | `tools/pod.py` `START_PLAYER`, `SAVE_STOP`, `SAVE_START`, `BACKTOPLAYER`, `LIBC`, `tools/pod_pins.py` `RADIO_PINS`, `DATA` (`RESUME_POS`, `HCI_RUNNING`, `HCI_SOCK_FD`) |
 | Entries | `tools/pod_pages.py` item 22 `Radio` (`ACT_RADIO`) |
 | Tests | `test/pod/radio.py` (`check.py --list`: `radio/*`) |
 

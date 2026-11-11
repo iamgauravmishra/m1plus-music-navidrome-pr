@@ -22,6 +22,7 @@
 #include "libsrc.h"
 #include "sbapi.h"
 #include "sbsrc.h"
+#include "entries.h"
 
 #define NS_ROWS 5
 /* The value box's right edge in its row (tools/pod_ndserver.py VALUE_RIGHT: the chevron's left edge less the gap). */
@@ -32,9 +33,6 @@
 #define NS_FORCE_TICKS 8 /* and, anyway, every 4 s (the age text moves on) */
 #define NS_SPIN_PX 14 /* the Sync Now row's spinner (tools/pod_ndserver.py SYNC_SPIN_PX) and the gap after it */
 #define NS_SPIN_GAP 6
-
-extern void nd_synced_line(char *out,
-                           unsigned size); /* patch/ndroot.c: "Synced 5m ago" / "Synced just now" / "Not synced yet" */
 
 enum { NS_URL, NS_USER, NS_PASS, NS_SYNC, NS_OUT };
 

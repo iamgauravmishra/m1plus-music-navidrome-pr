@@ -36,7 +36,7 @@ def page(extra=None):
 
 
 def flags(m, n): return PCS.flags(m, n)
-def toasts(m): return [PCS.fixed(c[1]) for c in m.calls if c[0] == 'toast']
+def toasts_fixed(m): return [PCS.fixed(c[1]) for c in m.calls if c[0] == 'toast']
 def title(m): return PCP.title_text(m)
 def unlinks(m): return [c[1].replace(RP + '/', '') for c in m.calls if c[0] == 'unlink']
 
@@ -222,7 +222,7 @@ def unsub_tests(ctx):
     expect(title(m) == 'Subscriptions' and flags(m, 'pg_bar') == (0, 0) and lines(m) == [] and 'No subscriptions' in PCP.hint(m),
            'select mode ends and the page is read again: no subscription left, the empty state says so')
     expect(flags(m, 'btn_more') == (0, 0) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_np', 'with nothing to select or export the "..." is gone, Now Playing is the disc')
-    expect(not toasts(m), 'no toast')
+    expect(not toasts_fixed(m), 'no toast')
     PCP.click(m, 'btn_return')
     expect(title(m) == 'Podcasts' and shows_on_card(m) == ['Alpha Show', 'bravo'] and flags(m, 'btn_more') == (0, 0), f'the Shows level: the local shows (a folder with only the user\'s note is no show), no "..." (nothing to import, no subscription) ({shows_on_card(m)})')
     # one marked: the others stay subscribed; the queued downloads of the show go
@@ -243,7 +243,7 @@ def unsub_tests(ctx):
     to_subs(m)
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_select'); PCP.click(m, 'btn_selall'); m.calls = []
     PCP.click(m, 'pg_unsubp')
-    expect(toasts(m) == ['Storage unavailable'] and b'feed=http' in m.fs[f'{RP}/Sub One/.show'] and f'{RP}/Sub One/a.mp3.part' in m.fs and 'Sub One' in [t for t, _ in lines(m)],
+    expect(toasts_fixed(m) == ['Storage unavailable'] and b'feed=http' in m.fs[f'{RP}/Sub One/.show'] and f'{RP}/Sub One/a.mp3.part' in m.fs and 'Sub One' in [t for t, _ in lines(m)],
            'a .show that cannot be written: said once, that show is untouched (its .part stays, it stays subscribed); the others went')
     expect([t for t, _ in lines(m)] == ['Sub One'] and b'feed=' not in m.fs[f'{RP}/Alpha Show/.show'].replace(b'feed=\n', b''), f'the others were unsubscribed ({lines(m)})')
     # a refresh running: nothing
@@ -265,19 +265,19 @@ def export_tests(ctx):
     raw = m.fs.get(EXPORT)
     outs = [(o.get('text'), o.get('xmlUrl')) for o in ET.fromstring(raw).iter('outline')] if raw else None
     expect(outs == [('Alpha Show', F['alpha']), ('Sub One', F['one']), ('Sub Two', F['two'])], f'subscriptions-export.opml in the Podcasts folder: the three subscriptions by title ({outs})')
-    expect(toasts(m) == ['Exported 3 shows'] and flags(m, 'pg_sh_card') == (0, 0), f'the toast: "Exported 3 shows" ({toasts(m)})')
+    expect(toasts_fixed(m) == ['Exported 3 shows'] and flags(m, 'pg_sh_card') == (0, 0), f'the toast: "Exported 3 shows" ({toasts_fixed(m)})')
     expect(not [p for p in m.fs if p.endswith('.tmp')], 'no temp file left')
     # one show: the singular
     m = page(lambda mm: [mm.fs.pop(f'{RP}/{d}/.show') for d in ('Sub One', 'Sub Two')])
     to_subs(m); m.calls = []
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_export')
-    expect(toasts(m)[0].startswith('Exported 1 show') and not toasts(m)[0].startswith('Exported 1 shows'), f'one show: "Exported 1 show" ({toasts(m)})')
+    expect(toasts_fixed(m)[0].startswith('Exported 1 show') and not toasts_fixed(m)[0].startswith('Exported 1 shows'), f'one show: "Exported 1 show" ({toasts_fixed(m)})')
     # a failed write: said, no file
     m = page()
     m.fail.add(('open', f'{RP}/.subscriptions-export.opml.tmp'))
     to_subs(m); m.calls = []
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_export')
-    expect(toasts(m) == ['Storage unavailable'] and EXPORT not in m.fs, 'a card that cannot be written: "Storage unavailable", no file')
+    expect(toasts_fixed(m) == ['Storage unavailable'] and EXPORT not in m.fs, 'a card that cannot be written: "Storage unavailable", no file')
     # exported again: replaced
     m = page()
     to_subs(m)
@@ -306,7 +306,7 @@ def import_tests(ctx):
     m.curl_site = lambda url, o: {'body': WSJ}
     m.thread = None; m.calls = []
     PCP.click(m, 'pg_sh_import')
-    expect(toasts(m) == ['2 added'] and m.thread is not None and flags(m, 'pod_pd_card') == (1, 1), 'both sources: 2 added (one of the outlines was subscribed already), the dialog opens')
+    expect(toasts_fixed(m) == ['2 added'] and m.thread is not None and flags(m, 'pod_pd_card') == (1, 1), 'both sources: 2 added (one of the outlines was subscribed already), the dialog opens')
     expect('/mnt/mmc/more.opml' not in m.fs and '/mnt/mmc/more.opml.imported' in m.fs and f'{RP}/subscriptions.txt' in m.fs, 'the OPML file is renamed .imported, subscriptions.txt stays')
     m.call(m.thread[0], a0=m.thread[1], count=1 << 40)
     m.call(PSYMS['pg_dlg_tick'], a0=0, count=40000000)
@@ -314,7 +314,7 @@ def import_tests(ctx):
     expect(sheet_rows(m) == ['import'], 'subscriptions.txt is still there: Import from Card stays (it has nothing new)')
     m.thread = None; m.calls = []
     PCP.click(m, 'pg_sh_import')
-    expect(toasts(m) == ['Nothing new to import'] and m.thread is None, 'importing again: nothing new')
+    expect(toasts_fixed(m) == ['Nothing new to import'] and m.thread is None, 'importing again: nothing new')
     PCP.click(m, 'pg_sh_scrim'); to_subs(m)
     expect(len(lines(m)) == 5 and [t for t, _ in lines(m)].count('WSJ Minute Briefing') == 3, f'the Subscriptions page lists the imported shows too (named by the refresh: {lines(m)})')
 

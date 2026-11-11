@@ -213,7 +213,7 @@ def tap_row(m, r):
 
 
 def said(m, name='label_status'): return S.said(m, name)
-def vis(m, name): return m.props.get((m.widgets[name], 'visible'))
+def vis_prop(m, name): return m.props.get((m.widgets[name], 'visible'))
 
 
 def oracle(lines, query, cap=20):
@@ -243,7 +243,7 @@ def search_tests(ctx):
     expect = ctx.expect
     lines = [l for l in INDEX.decode().split('\n') if l.startswith('- [')]
     m = opened(site())
-    expect(vis(m, 'se_listview') == 0 and vis(m, 'label_status') == 0 and not paint(m)[0], 'open with the list on the card: no rows, no state line')
+    expect(vis_prop(m, 'se_listview') == 0 and vis_prop(m, 'label_status') == 0 and not paint(m)[0], 'open with the list on the card: no rows, no state line')
     bad = []
     queries = ('hd 600', 'HD 6', 'sennheiser hd 650', 'airpods pro', 'k371', 'zeppelin', '2020', '  hd   600 ', 'hd', 'aero', 'sennheiser', 'hd 600 (2020)', 'SENNHEISER HD 600', 'sennheiser hd 600')
     for q in queries:
@@ -284,11 +284,11 @@ def search2_tests(ctx):
     typed(m, 'bar foo')
     expect(titles(m) == ['Bar Foo', 'Foo Bar', 'FOO BAR 2'], f'the words the other way round: "Bar Foo" is the whole query now, the rest start with the second word, so tier 2 in the file\'s order ({titles(m)})')
     typed(m, '')
-    expect(titles(m, 1) == [] and vis(m, 'se_listview') == 0 and vis(m, 'label_status') == 0, 'an emptied field: nothing is listed, no state line')
+    expect(titles(m, 1) == [] and vis_prop(m, 'se_listview') == 0 and vis_prop(m, 'label_status') == 0, 'an emptied field: nothing is listed, no state line')
     typed(m, 'nothing')
-    expect(titles(m, 1) == [] and said(m) == 'No Results' and vis(m, 'label_status') == 1, 'a query nothing matches: "No Results"')
+    expect(titles(m, 1) == [] and said(m) == 'No Results' and vis_prop(m, 'label_status') == 1, 'a query nothing matches: "No Results"')
     typed(m, 'foo')
-    expect(vis(m, 'label_status') == 0, 'and the state line goes when something matches')
+    expect(vis_prop(m, 'label_status') == 0, 'and the state line goes when something matches')
     # the cap of 20, and a better tier replacing the worst once the rows are full
     m = with_index(synth([line(f'Foo {i:02d}') for i in range(100)]))
     typed(m, 'foo')
@@ -441,10 +441,10 @@ def list_tests(ctx):
     m = opened(site(log=log), index=False)
     m = machine(site(log=log), index=False)
     m.call(PSYMS['autoeq_open'], count=400000000)
-    expect(said(m) == 'Downloading List…' and vis(m, 'label_status') == 1 and not kb_up(m) and [c for c in m.calls if c[0] == 'timer_add'], 'no list on the card: "Downloading List…", no keyboard (nothing to type into yet), the timer')
+    expect(said(m) == 'Downloading List…' and vis_prop(m, 'label_status') == 1 and not kb_up(m) and [c for c in m.calls if c[0] == 'timer_add'], 'no list on the card: "Downloading List…", no keyboard (nothing to type into yet), the timer')
     expect(not log, 'nothing is asked for before the first tick (the page is shown first)')
     settle(m)
-    expect([u for u, _ in log] == [BASE + 'INDEX.md'] and m.fs.get(IDX) == INDEX and vis(m, 'label_status') == 0 and kb_up(m), 'the list comes: one request, the state line goes, the keyboard comes up')
+    expect([u for u, _ in log] == [BASE + 'INDEX.md'] and m.fs.get(IDX) == INDEX and vis_prop(m, 'label_status') == 0 and kb_up(m), 'the list comes: one request, the state line goes, the keyboard comes up')
     typed(m, 'hd 600')
     expect(len(all_rows(m)) == 13 and m.call(PSYMS['ae_tick'], a0=0, count=900000000) != RET_REPEAT, 'and the page searches it (13 results); the timer ended')
     # a failure: the word, the list shown for "Try Again", a tap asks again (and so does the action key)
@@ -453,7 +453,7 @@ def list_tests(ctx):
         m = machine(site(index_over=resp or {}), index=False, wifi=-1 if resp is None else 4)
         m.call(PSYMS['autoeq_open'], count=400000000)
         n = settle(m)
-        expect(said(m) == word and vis(m, 'label_status') == 1 and vis(m, 'se_listview') == 1 and not kb_up(m) and n < 10, f'{what}: "{word}", the page is not left on its progress state (the timer ended after {n} ticks)')
+        expect(said(m) == word and vis_prop(m, 'label_status') == 1 and vis_prop(m, 'se_listview') == 1 and not kb_up(m) and n < 10, f'{what}: "{word}", the page is not left on its progress state (the timer ended after {n} ticks)')
         texts, _, _ = paint(m)
         expect([t for t, _ in texts] == ['Try Again'] and 0 < texts[0][1][0] < 200, 'under it a grey "Try Again", centred')
         m.wifi, m.curl_site = 4, site()
@@ -461,7 +461,7 @@ def list_tests(ctx):
         m.touch('down', 100, LIST_Y0 + 100, 1000, fn='ae_on_down', count=30000000); m.touch('up', 100, LIST_Y0 + 100, 1080, fn='ae_on_up', count=30000000)
         expect(said(m) == 'Downloading List…' and [c for c in m.calls if c[0] == 'timer_add'], 'a tap on the page asks again')
         settle(m)
-        expect(m.fs.get(IDX) == INDEX and vis(m, 'label_status') == 0 and kb_up(m) and vis(m, 'se_listview') == 0, 'and the list comes this time')
+        expect(m.fs.get(IDX) == INDEX and vis_prop(m, 'label_status') == 0 and kb_up(m) and vis_prop(m, 'se_listview') == 0, 'and the list comes this time')
     m = machine(site(index_over={'rc': 6}), index=False)
     m.call(PSYMS['autoeq_open'], count=400000000); settle(m)
     m.curl_site = site()
@@ -482,7 +482,7 @@ def list_tests(ctx):
     # a list on the card: no request, no timer
     m = machine(site(log=(log := [])))
     m.call(PSYMS['autoeq_open'], count=400000000)
-    expect(not log and not [c for c in m.calls if c[0] == 'timer_add'] and kb_up(m) and vis(m, 'label_status') == 0, 'a recent list: offline works, no request, no timer, the keyboard up')
+    expect(not log and not [c for c in m.calls if c[0] == 'timer_add'] and kb_up(m) and vis_prop(m, 'label_status') == 0, 'a recent list: offline works, no request, no timer, the keyboard up')
     # a list that is old: asked for again in the background; the old one serves meanwhile
     new = INDEX + line('Zzz Brand New').encode() + b'\n'
     for what, stamp, wall, again in (('30 days and a second', WALL - 30 * 86400 - 1, WALL, True), ('30 days', WALL - 30 * 86400, WALL, False), ('a day', WALL - 86400, WALL, False), ('no date', None, WALL, True),
@@ -490,7 +490,7 @@ def list_tests(ctx):
         log = []
         m = machine(site(index=new, log=log), stamp=stamp, wall=wall)
         m.call(PSYMS['autoeq_open'], count=400000000)
-        expect(vis(m, 'label_status') == 0 and kb_up(m), f'{what}: the page opens as it is, with the old list, the keyboard up')
+        expect(vis_prop(m, 'label_status') == 0 and kb_up(m), f'{what}: the page opens as it is, with the old list, the keyboard up')
         typed(m, 'hd 600')
         n = len(all_rows(m))
         typed(m, 'zzz')
@@ -500,11 +500,11 @@ def list_tests(ctx):
         m = machine(site(index_over=resp), stamp=None)
         m.call(PSYMS['autoeq_open'], count=400000000); settle(m)
         typed(m, 'hd 600')
-        expect(said(m) != 'Can\'t connect' and vis(m, 'label_status') == 0 and kb_up(m) and m.fs[IDX] == INDEX and len(all_rows(m)) == 13, 'a refresh that fails is silent: the page, the old list and the keyboard are as they were')
+        expect(said(m) != 'Can\'t connect' and vis_prop(m, 'label_status') == 0 and kb_up(m) and m.fs[IDX] == INDEX and len(all_rows(m)) == 13, 'a refresh that fails is silent: the page, the old list and the keyboard are as they were')
     m = machine(site(), wifi=-1, stamp=None)
     m.call(PSYMS['autoeq_open'], count=400000000); settle(m)
     typed(m, 'hd 600')
-    expect(vis(m, 'label_status') == 0 and len(all_rows(m)) == 13, 'a refresh with the Wi-Fi off is silent too: offline works')
+    expect(vis_prop(m, 'label_status') == 0 and len(all_rows(m)) == 13, 'a refresh with the Wi-Fi off is silent too: offline works')
     # the list is gone from the card while the page is open: it is asked for again
     m = machine(site())
     m.call(PSYMS['autoeq_open'], count=400000000)

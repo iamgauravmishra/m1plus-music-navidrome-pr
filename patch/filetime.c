@@ -12,9 +12,9 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "home.h"
+#include "entries.h"
 
 extern int stock_file_created_trampoline(const char *path);
-extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask, void *buf);
 
 __asm__(".text\n.globl ft_statx\nft_statx:\nli $v0, 4366\nsyscall\njr $ra\nnop\n");
 

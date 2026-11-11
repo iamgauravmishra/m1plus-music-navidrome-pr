@@ -164,3 +164,5 @@ extern int rd_start_player(void);
  * the first stops the stream and the second restarts it on the new output instead of stock's mclStartPlayer of the old local track. */
 extern void rd_save_stop(void);
 extern void rd_save_start(int paused);
+
+extern int radio_open(void); /* patch/radiopage.c: Radio's stations page */

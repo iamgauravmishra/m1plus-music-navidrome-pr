@@ -22,9 +22,7 @@
 #include "peqlib.h"
 #include "keyboard.h"
 #include "tenband.h"
-
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern int pod_open_peqpage(void); /* patch/m1plus.c: open_page(POD_PEQP_PAGE) */
+#include "home.h"
 
 #define PP_N PEQ_BANDS
 #define PP_RATE 48000

@@ -855,7 +855,6 @@ int homecover_clear(void) {
 #define CP_N 64
 #define CP_MS 20
 #define CP_POLL_MS 500
-extern void pod_page_refresh(int index); /* patch/m1plus.c: the page's values are read again */
 enum {
     CP_DIR = 1,
     CP_ADIR,

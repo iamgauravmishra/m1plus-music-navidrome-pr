@@ -66,9 +66,9 @@
 #include "libsrc.h"
 #include "sbsrc.h"
 #include "fnv.h"
-
-extern int search_open(void); /* patch/search.c: our keyboard, then the results page; -1 when it did not open */
-extern int search_open_src(const lib_src_t *src); /* patch/search.c: the same over a library source */
+#include "coverflow.h"
+#include "entries.h"
+#include "search.h"
 
 #define ROW LIST_ROW_H
 #define SG_MARK_UP \
@@ -1293,7 +1293,6 @@ static int sg_on_add(void *ctx, void *e) {
 /* An artist's songs and Cover Flow's artist page are two views of the artist (a toggle: the Cover Flow button here, the list button there), so Back from this one
  * leaves the artist, not just the list: this page closes and, when the artist's covers page is what is under it, that closes too (two navigator_backs, no loop;
  * these pages have no close animation, so each takes effect at once). The Cover Flow button closes only this page. */
-extern void *coverflow_artist_page(void); /* patch/coverflow.c: the artist's covers window, NULL when there is none */
 
 static int sg_on_back(void *ctx, void *e) {
     void *cfw;

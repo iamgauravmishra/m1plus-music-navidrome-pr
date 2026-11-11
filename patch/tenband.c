@@ -28,8 +28,7 @@
 #include "peqpage.h"
 #include "keyboard.h"
 #include "tenband.h"
-
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
+#include "home.h"
 
 #define MINUS "\xe2\x88\x92" /* U+2212: the sign of a cut */
 #define DOT " \xc2\xb7 "

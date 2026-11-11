@@ -26,10 +26,7 @@
 #include "home.h"
 #include "common.h"
 #include "sbapi.h"
-
-extern const char *np_cover_file(
-    int *
-        busy); /* patch/nowplaying.c: demo's cover file of the playing track, NULL for none; busy while demo makes it */
+#include "entries.h"
 
 #define BC_SIZE 320 /* the widget's size and the picture's */
 #define BC_TICK_MS 250
@@ -272,9 +269,6 @@ int m1plus_bigcover_init(void *win, void *ctx) {
 #define IDLE_COVER 0 /* the saved destinations, the file's "0", "1", "2" */
 #define IDLE_TAPE 1
 #define IDLE_VINYL 2
-extern int tape_open_idle(
-    void); /* patch/tape.c: 0 once the page is up (or already open), -1 when it could not open; a tap on a page it opened closes it */
-extern int vinyl_open_idle(void); /* patch/vinyl.c: the same for Vinyl Mode (a tap on the record closes) */
 
 /* The saved destination: IDLE_COVER (default, also for a missing or invalid file), IDLE_TAPE, IDLE_VINYL. Reading never writes. */
 int idle_view(void) {

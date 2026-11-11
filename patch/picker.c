@@ -16,9 +16,8 @@
 #include "i18n.h"
 #include "songops.h"
 #include "picker.h"
-
-extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
-extern int playlists_pick(void); /* patch/playlists.c: the page in pick mode; 0 open, < 0 not */
+#include "home.h"
+#include "playlists.h"
 
 static struct {
     int on, done;

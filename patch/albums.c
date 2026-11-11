@@ -72,27 +72,10 @@
 #include "albums.h"
 #include "nextalbum.h"
 #include "artistphoto.h"
+#include "coverflow.h"
+#include "entries.h"
 
-extern int coverflow_open(void); /* patch/coverflow.c: the menu's Cover Flow row, opened over this page */
-extern int coverflow_artist(void *artists, unsigned index,
-                            unsigned scope); /* patch/coverflow.c: Cover Flow scoped to an artist */
 /* patch/songs.c: our Songs page on all the artist's (or composer's: scope CLASS_COMPOSERS) songs; -1 when it did not open */
-extern int songs_open_artist(void *artist, unsigned scope);
-extern void *songs_artist_list(
-    void *artist,
-    unsigned
-        scope); /* patch/songs.c: the artist's (or composer's) songs through the stock queries (no page); NULL when there is no All songs row */
-extern int songs_play_artist(
-    void *artist, unsigned scope,
-    int how); /* patch/songs.c: Play (SO_IN_ORDER) / Shuffle (SO_SHUFFLE) on the artist's (or composer's) songs; -1 when nothing plays */
-extern int album_open_src(const lib_src_t *src, unsigned cls,
-                          void *row); /* patch/albumpage.c: the album page of a source's album */
-extern int
-songs_open_src_in(const lib_src_t *src, int which, void *scope,
-                  const char *title); /* patch/songs.c: the source's songs scoped to a row (the artist's All Songs) */
-extern int
-coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **albums,
-                        unsigned **keys); /* patch/coverflow.c: one artist's album rows and their cache keys */
 
 #define CELL_H GRID_CELL_H /* the cell geometry is the grid's (patch/grid.h), shared with the Recently Played shelf */
 #define PITCH GRID_PITCH

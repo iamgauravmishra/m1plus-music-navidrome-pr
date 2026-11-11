@@ -2281,10 +2281,6 @@ def az_tests(ctx):
         open_grid(m)
         return m
 
-    def vis(m, name):
-        w = m.widgets[name]
-        return m.props.get((w, 'visible'), 1), m.props.get((w, 'sensitive'), 1)
-
     def frame(m, off):
         scroll_to(m, off); paint(m)
         return [(t, r) for (t, r), s in zip(m.texts, m.text_styles) if s == 'label_hdr']

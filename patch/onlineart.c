@@ -31,6 +31,7 @@
 #include "pcdetail.h"
 #include "search.h"
 #include "sbapi.h"
+#include "entries.h"
 
 #define OA_TILE 88
 #define OA_GAP 12

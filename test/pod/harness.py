@@ -2152,7 +2152,7 @@ def host_frame(frac, ring=None, land=False):
         return bytes(frame)
 
 
-# Small helpers many page modules share (a module that needs another shape defines its own under the same name).
+# Small helpers many page modules share (a module that needs another shape gives its own another name: vis_prop, toasts_fixed, ...).
 def vis(m, name):
     """(visible, sensitive) of the widget called name, as the payload last set them (1 when never set)."""
     w = m.widgets[name]

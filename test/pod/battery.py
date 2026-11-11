@@ -40,7 +40,7 @@ def power(m): return m.s32(pod.DATA['POWER_CAPACITY'][0])
 def texts(m): return [(c[1], c[2]) for c in m.calls if c[0] == 'widget_set_text_utf8']
 
 
-def vis(m): return [(c[1], c[2]) for c in m.calls if c[0] == 'widget_set_visible']
+def vis_calls(m): return [(c[1], c[2]) for c in m.calls if c[0] == 'widget_set_visible']
 
 
 def run(ctx):
@@ -66,7 +66,7 @@ def run(ctx):
     for setting in (None, b'0\n', b'x', b''):
         m = machine(setting=setting)
         v = tick(m)
-        expect(v == STOCK_CAP and power(m) == STOCK_CAP and texts(m) == [] and vis(m) == []
+        expect(v == STOCK_CAP and power(m) == STOCK_CAP and texts(m) == [] and vis_calls(m) == []
                and ('open', GAUGE, 0) not in m.calls and not any(c[0] == 'widget_lookup' for c in m.calls),
                f'setting {setting!r}: stock\'s capacity ({STOCK_CAP}) returned and left in power_capacity, no label touched, no lookup, the gauge not read')
     m = machine(setting=None); tick(m); m.calls = []; tick(m)
@@ -78,7 +78,7 @@ def run(ctx):
         v = tick(m)
         want = f'{pct}%'
         stored = 0 if pct <= DEFS['BP_LOW'] else pct   # on battery, at most BP_LOW: 0, stock's red bar_lowpower
-        expect(v == stored and power(m) == stored and [t for _, t in texts(m)] == [want, want] and all(a for _, a in vis(m)) and len(vis(m)) == 2,
+        expect(v == stored and power(m) == stored and [t for _, t in texts(m)] == [want, want] and all(a for _, a in vis_calls(m)) and len(vis_calls(m)) == 2,
                f'on, gauge {text!r}: {stored} returned and stored, "{want}" shown in the bar\'s label and the pull-down\'s ({texts(m)})')
     m = machine(gauge=b'87\n'); tick(m)
     expect(('open', GAUGE, 0) in m.calls and ('access', KILL) in m.calls and m.calls.index(('access', KILL)) > m.calls.index(('get_battery_capacity',)),
@@ -118,11 +118,11 @@ def run(ctx):
     for text in (None, b'', b'\n', b'abc', b'101\n', b'-5\n', b'+5\n', b'12x\n', b'1234\n', b' 50\n', b'5 0\n', b'50\n50\n', b'1.5\n', b'0x10\n'):
         m = machine(gauge=text)
         v = tick(m)
-        expect(v == STOCK_CAP and power(m) == STOCK_CAP and texts(m) == [] and vis(m) == [], f'on, gauge {text!r}: stock\'s capacity, no label shown')
+        expect(v == STOCK_CAP and power(m) == STOCK_CAP and texts(m) == [] and vis_calls(m) == [], f'on, gauge {text!r}: stock\'s capacity, no label shown')
     m = machine(gauge=b'87\n'); tick(m)
     m.fs[GAUGE] = b'garbage'; m.calls = []
     v = tick(m)
-    expect(v == STOCK_CAP and power(m) == STOCK_CAP and sorted(vis(m)) == sorted([(m.widgets[LABEL], 0), (m.widgets[LABEL_DD], 0)])
+    expect(v == STOCK_CAP and power(m) == STOCK_CAP and sorted(vis_calls(m)) == sorted([(m.widgets[LABEL], 0), (m.widgets[LABEL_DD], 0)])
            and sorted((c[1], c[2]) for c in m.calls if c[0] == 'widget_set_sensitive') == sorted([(m.widgets[LABEL], 0), (m.widgets[LABEL_DD], 0)]),
            'the gauge goes bad after a good reading: stock\'s value again and both labels hidden (visible and sensitive off)')
     m.calls = []; tick(m)
@@ -131,10 +131,10 @@ def run(ctx):
     m = machine(gauge=b'87\n'); tick(m)
     m.present.add(KILL); m.calls = []
     v = tick(m)
-    expect(v == STOCK_CAP and power(m) == STOCK_CAP and len(vis(m)) == 2 and not any(a for _, a in vis(m)) and ('open', GAUGE, 0) not in m.calls,
+    expect(v == STOCK_CAP and power(m) == STOCK_CAP and len(vis_calls(m)) == 2 and not any(a for _, a in vis_calls(m)) and ('open', GAUGE, 0) not in m.calls,
            '/mnt/mmc/m1plus-off: stock\'s value, the labels hidden, the gauge not read')
     m = machine(gauge=b'87\n'); m.present.add(KILL)
-    expect(tick(m) == STOCK_CAP and vis(m) == [] and ('open', FILE, 0) not in m.calls, 'the kill switch from the start: stock, nothing touched, the setting not even read')
+    expect(tick(m) == STOCK_CAP and vis_calls(m) == [] and ('open', FILE, 0) not in m.calls, 'the kill switch from the start: stock, nothing touched, the setting not even read')
     # no label widgets (an asset from another build): the value is still the real one, nothing else happens
     m = machine(gauge=b'87\n', labels=False)
     expect(tick(m) == 87 and power(m) == 87 and texts(m) == [], 'no label in the window tree: the percentage still fills the battery, nothing is shown')
@@ -153,23 +153,23 @@ def run(ctx):
         return m, h
     for text in (b'5\n', b'87\n', b'100\n'):
         m, lk = lock_machine(gauge=text); tick(m)
-        expect((lk, text.decode().strip() + '%') in texts(m) and (lk, 1) in vis(m) and not any(c[0] == 'widget_resize' and c[1] == lk for c in m.calls)
+        expect((lk, text.decode().strip() + '%') in texts(m) and (lk, 1) in vis_calls(m) and not any(c[0] == 'widget_resize' and c[1] == lk for c in m.calls)
                and ('widget_set_need_relayout_children', 0x32000000) not in m.calls and m.word(lk + 8) == 32,
                f'gauge {text!r}: the tick shows the number in the lock screen\'s label too, its box untouched')
     m, lk = lock_machine(gauge=b'87\n'); tick(m)
     m.fs[GAUGE] = b'garbage'; m.calls = []; tick(m)
-    expect((lk, 0) in vis(m) and ('widget_set_sensitive', lk, 0) in [c[:3] for c in m.calls], 'the gauge goes bad: the lock screen\'s label is hidden with the others')
+    expect((lk, 0) in vis_calls(m) and ('widget_set_sensitive', lk, 0) in [c[:3] for c in m.calls], 'the gauge goes bad: the lock screen\'s label is hidden with the others')
     win = 0x33000000
     m, lk = lock_machine(gauge=b'42\n'); m.call(PSYMS['bp_lock'], a0=win, count=200000)
-    expect(texts(m) == [(lk, '42%')] and vis(m) == [(lk, 1)] and ('widget_lookup', LABEL_LK) in m.calls and not any(c[0] == 'widget_resize' for c in m.calls)
+    expect(texts(m) == [(lk, '42%')] and vis_calls(m) == [(lk, 1)] and ('widget_lookup', LABEL_LK) in m.calls and not any(c[0] == 'widget_resize' for c in m.calls)
            and power(m) != 42, 'bp_lock (the lock screen\'s init): the gauge\'s number in the page\'s label at once; power_capacity is the tick\'s business')
     m.fs[GAUGE] = b'garbage'; m.calls = []; tick(m)
-    expect((lk, 0) in vis(m), 'a label bp_lock showed is hidden by the next tick when the gauge is bad')
+    expect((lk, 0) in vis_calls(m), 'a label bp_lock showed is hidden by the next tick when the gauge is bad')
     for kw, why in ((dict(setting=b'0\n'), 'the setting off'), (dict(setting=None), 'no setting file'), (dict(gauge=b'x'), 'a bad gauge'), (dict(gauge=None), 'no gauge')):
         m, lk = lock_machine(**kw); m.call(PSYMS['bp_lock'], a0=win, count=200000)
-        expect(texts(m) == [] and vis(m) == [] and not any(c[0] == 'widget_lookup' for c in m.calls), f'bp_lock with {why}: nothing looked up, the label stays hidden as the asset has it')
+        expect(texts(m) == [] and vis_calls(m) == [] and not any(c[0] == 'widget_lookup' for c in m.calls), f'bp_lock with {why}: nothing looked up, the label stays hidden as the asset has it')
     m = machine(gauge=b'42\n'); m.call(PSYMS['bp_lock'], a0=win, count=200000)
-    expect(texts(m) == [] and vis(m) == [], 'bp_lock without the label in the page: nothing shown')
+    expect(texts(m) == [] and vis_calls(m) == [], 'bp_lock without the label in the page: nothing shown')
     m = keep
 
     # 5. The Settings switch
@@ -183,7 +183,7 @@ def run(ctx):
     expect(tick(m) == 87 and [t for _, t in texts(m)] == ['87%', '87%'], 'the next tick shows the percentage at once (the cache follows the switch)')
     expect(m.call(PSYMS['battpct_toggle'], count=4000000) == 0 and m.fs[FILE] == b'0\n', 'and off again')
     m.calls = []
-    expect(tick(m) == STOCK_CAP and len(vis(m)) == 2 and not any(a for _, a in vis(m)), 'the next tick is stock\'s again and hides the labels')
+    expect(tick(m) == STOCK_CAP and len(vis_calls(m)) == 2 and not any(a for _, a in vis_calls(m)), 'the next tick is stock\'s again and hides the labels')
     m = machine(setting=b'1\n', gauge=b'87\n'); m.fail.add(('write', FILE + '.tmp'))
     expect(m.call(PSYMS['battpct_toggle'], count=4000000) == 0xffffffff and m.fs[FILE] == b'1\n' and FILE + '.tmp' not in m.fs and tick(m) == 87,
            'a failed save: -1, the file and the behaviour are unchanged')

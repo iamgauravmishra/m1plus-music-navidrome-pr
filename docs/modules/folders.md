@@ -1,7 +1,7 @@
 # The Folders page
 
 **Sources:** `patch/folders.c` (the page), `patch/viewsort.c` (the card), `patch/songops.c` (`so_play_with`, `so_selection`, `so_add`), `tools/pod_ui.py` `build_folders_page`, `tools/pod_pages.py` (`FOLDERS`,
-`ACT_FOLDERS`), `tools/pod.py` (the pinned stock functions, `FOLDER_PINS`), tests `test/pod/folders.py`, preview `tools/preview/preview_folders.py` (`out/preview/folders.png`; `--covers` draws the rows with stock's Folder cover switch on).
+`ACT_FOLDERS`), `tools/pod.py` (the pinned stock functions), `tools/pod_pins.py` (`FOLDER_PINS`), tests `test/pod/folders.py`, preview `tools/preview/preview_folders.py` (`out/preview/folders.png`; `--covers` draws the rows with stock's Folder cover switch on).
 
 The Extras menu's Folders row (`ACT_FOLDERS`, arg `HOME_FOLDER`) opens `ui/m1plus_folders.bin` in place of the stock `folder_page`. The stock page, with its restyled navbar
 (`navbar.md`, `rows.md`), is only the fallback: a window or asset that will not open (`folders_open` returns through `pod_home_open(HOME_FOLDER)`).
@@ -71,7 +71,7 @@ audio file, the Play / Shuffle pills, and paints the rows itself. Mock: `out/pre
   - *Add*: `batch_add_file(1, ...)` (`0x4da7dc`) on a type 4 record (`0x4db00c`) reads the folder with `toolsLoadDirectory(url)` (`0x4db0cc`) and adds each type 8 file of it (the tags read by `get_songid3_info`, as for a marked file):
     the folder's **direct** audio files, not those of its sub-folders. Types 1 (playlist file), 2 and 3 add nothing. For Favourites (`0xf00a`) the stock code does the same through `checkFavExist` / `addMyFav`; we only open the playlist picker.
   So both work on folder records and our page passes them through `so_selection` unchanged. The test (`test/pod/folders.py`; `order_tests` for the card: each order and direction, the saved file, the play queue and the row taps in each order, Select by shown row, the 2001-entry level, the storages and a playlist file) checks that the records reach the vector; the stock loops themselves are pinned, not executed.
-- **Pinned stock** (`FOLDER_PINS` in `tools/pod.py`): `folder_enter`, `folder_back`, `folder_reload`, `is_folderplaying` (prologues and the words that give their results), the layer,
+- **Pinned stock** (`FOLDER_PINS` in `tools/pod_pins.py`): `folder_enter`, `folder_back`, `folder_reload`, `is_folderplaying` (prologues and the words that give their results), the layer,
   title and m3u globals, the type test and the `is_playing` call of the stock row, and the type-4 tests of the stock Delete and Add. The same functions the stock page calls, in the same order.
 - Neutral white / grey; no accent. Translated: "Date Modified" and "Type" (the card; `Name`, `Select`, A–Z, Z–A, Newest First and Oldest First are the existing keys), "Empty folder", "No music in this folder" and "Delete folder and everything in it?" (new), the stock `msg_delfile`, `msg_delfilefailed`, `msg_delfilesuccess`, `msg_notsupportdel`, `msg_nottf`, `msg_nototg`,
   `msg_notfile`.

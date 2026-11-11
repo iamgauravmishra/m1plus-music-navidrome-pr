@@ -30,11 +30,10 @@
 #include "stock.h"
 #include "home.h"
 #include "common.h"
+#include "entries.h"
 
 #define PD_N 8
 #define PD_FILE_MAX 12 /* tools/pod_pages.py PULLDOWN_FILE_MAX */
-
-extern void menu_plain_paint(void *sv); /* patch/menu.c */
 
 static const char *const PD_IMG[PD_N] = {"img_wifiswitch", "img_btswitch",     "img_keylockswitch", "img_gainswitch",
                                          "img_usbmode",    "img_outputswitch", "img_playset",       "img_sysset"};

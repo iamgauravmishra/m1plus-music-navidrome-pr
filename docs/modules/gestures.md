@@ -59,7 +59,7 @@ before the children:
 - MOVE, key and wheel events: two compares and out. Only slidable axes count, as in stock: a horizontal drag in a vertical list
   (a slider in a settings row) is not aborted; a list that cannot scroll and a page-snapping scroll_view are stock.
 
-**Why it is safe.** No stock text is overwritten; the pinned words (`SCROLL_PINS` in `tools/pod.py`: the vtable words, the
+**Why it is safe.** No stock text is overwritten; the pinned words (`SCROLL_PINS` in `tools/pod_pins.py`: the vtable words, the
 dispatcher's `lw t9, 0x98(vt)`, the three call sites, the field accesses of `on_event` / `is_dragged` / the end handler / the
 animator) must all match or the build refuses; the slot must be zero. The hook runs on the UI thread in the input path only,
 never at boot, in paint or in a timer. No allocation, no log, a small stack frame (the 48 byte event copy); the stock calls it makes are the ones

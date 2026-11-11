@@ -686,7 +686,6 @@ def add_tests(ctx):
     expect = ctx.expect
     uniq = uniq_songs()
     iso_day = lambda d: (datetime.date(1970, 1, 1) + datetime.timedelta(days=d)).isoformat()
-    toasts = lambda t: [c[1] for c in t.calls if c[0] == 'toast']
     G, CI, NT = pod.DATA['G_CLASS_TYPE'][0], pod.DATA['CLASSINFO'][0], pod.DATA['NAV_TITLE'][0]
 
     def saver(n=12, **kw):

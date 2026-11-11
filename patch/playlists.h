@@ -6,3 +6,6 @@
  * (songs_open_src_in, the Songs page of its tracks) or, if that does not open, plays it in order through so_play_src. Read-only for a non-stock source: no list-plus button (New Playlist, Import, Export, Delete Playlists,
  * Clean Up). A change of src->gen() reads again. src NULL or &lib_stock is playlists_open (today's page). 0 once up, < 0 where the window did not open. */
 int playlists_open_src(const lib_src_t *src);
+
+int playlists_open(void); /* Playlists, a grid of mosaics of each playlist's covers */
+int playlists_pick(void); /* the page in pick mode; 0 open, < 0 not */

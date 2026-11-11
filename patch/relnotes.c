@@ -15,6 +15,7 @@
 #include "pcnet.h"
 #include "pcdetail.h"
 #include "upver.h"
+#include "entries.h"
 
 #define RN_X 16 /* the text's left edge and width */
 #define RN_W 288

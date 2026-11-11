@@ -45,12 +45,9 @@
 #include "artistphoto.h"
 #include "libsrc.h"
 #include "artists.h"
-
-extern int coverflow_artist(void *artists, unsigned index, unsigned scope); /* patch/coverflow.c */
-extern int albums_open_artist(void *artists, unsigned index, unsigned scope); /* patch/albums.c */
-extern int albums_open_src(const lib_src_t *src,
-                           void *artist); /* patch/albums.c: the source's albums of one artist (the record is copied) */
-extern int songs_open_genre(const char *name, int unknown); /* patch/songs.c */
+#include "albums.h"
+#include "coverflow.h"
+#include "entries.h"
 
 #define AR_ROW \
     52 /* tools/pod_ui.py ROW_H: the menu's rows (the Artists rows were 52 px before the page took the Songs page's structure) */

@@ -1147,7 +1147,7 @@ def name_tests(ctx):
         for k, v in kw.items(): setattr(m, k, v)
         return m
     def made(m): return [c for c in m.calls if c[0] == 'createPlayListItem']
-    def toasts(m): return [c for c in m.calls if c[0] == 'toast']
+    def toast_calls(m): return [c for c in m.calls if c[0] == 'toast']
     m = create()
     expect(said(m, 'label_title') == 'New playlist' and said(m, 'kb_hint') == 'Enter a playlist name' and said(m, 'kb_go') == 'Done' and field(m) == '',
            f'New playlist: the keyboard has the stock title and hint and the action key reads Done ({said(m, "label_title")}, {said(m, "kb_hint")}, {said(m, "kb_go")})')
@@ -1162,16 +1162,16 @@ def name_tests(ctx):
     typ(m, 'Mix'); press(m, 'kb_space'); m.calls = []
     press(m, 'kb_go')
     order = [c[0] for c in m.calls if c[0] in ('navigator_back', 'loadLocalClassList', 'createPlayListItem')]
-    expect(order == ['navigator_back', 'loadLocalClassList', 'createPlayListItem'] and made(m) == [('createPlayListItem', 'Mix', 0)] and not toasts(m),
+    expect(order == ['navigator_back', 'loadLocalClassList', 'createPlayListItem'] and made(m) == [('createPlayListItem', 'Mix', 0)] and not toast_calls(m),
            f'Done: the page is told to close, the stock list is read, createPlayListItem gets the trimmed name ({order}, {made(m)})')
     for ret, key in ((-1, 'msg_playlistfull'), (-2, 'msg_playlistexist')):
         m = create(create_ret=ret); typ(m, 'Mix'); m.calls = []
         press(m, 'kb_go')
-        expect(toasts(m) == [('toast', key, 1, 2000)] and [c[0] for c in m.calls if c[0] in ('navigator_back', 'toast')] == ['navigator_back', 'toast'],
-               f'{key} is shown in the stock message box after the keyboard closed ({toasts(m)})')
+        expect(toast_calls(m) == [('toast', key, 1, 2000)] and [c[0] for c in m.calls if c[0] in ('navigator_back', 'toast')] == ['navigator_back', 'toast'],
+               f'{key} is shown in the stock message box after the keyboard closed ({toast_calls(m)})')
     m = create(); typ(m, 'Mix'); m.calls = []
     run_evt(m, 'btn_return', O['EVT_CLICK'])
-    expect(not made(m) and ('navigator_back',) in m.calls and not toasts(m), 'Back creates nothing')
+    expect(not made(m) and ('navigator_back',) in m.calls and not toast_calls(m), 'Back creates nothing')
     m = create(); typ(m, 'A' + 'a' * 69); m.calls = []
     press(m, 'kb_go')
     expect(len(made(m)) == 1 and made(m)[0][1] == 'A' + 'a' * 62, 'the keyboard\'s own 63 bytes are the name\'s limit (stock\'s edit took 127)')

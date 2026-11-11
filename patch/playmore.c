@@ -38,6 +38,9 @@
 #include "sbapi.h"
 #include "libsrc.h"
 #include "sbsrc.h"
+#include "albums.h"
+#include "coverflow.h"
+#include "entries.h"
 
 #define PM_ROWS 14 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl, pod_goep, pod_art, pod_sleep */
 #define PM_MORE 7
@@ -55,14 +58,7 @@
 #define PM_DEL_FILE \
     0x14 /* the Delete confirm's second answer (stock 0x4792a8: delete_playqueue_file(1), the file too; 0xa, CONFIRM_YES, is delete_playqueue_file(0)) */
 #define GO_ARTIST 5 /* listitem5, Look up artist */
-extern int album_open_src(const lib_src_t *src, unsigned cls, void *row); /* patch/albumpage.c */
-extern int albums_open_src(const lib_src_t *src, void *artist); /* patch/albums.c */
-extern int album_page_up(void); /* patch/albumpage.c: its window is not destroyed yet */
 #define PM_ALBUMS_WINDOW "m1plus_albums_page" /* our Albums page's window (tools/pod_pages.py ALBUMS) */
-extern int coverflow_artist(void *artists, unsigned index,
-                            unsigned scope); /* patch/coverflow.c: 0 once the page is up */
-extern int albums_open_artist(void *artists, unsigned index,
-                              unsigned scope); /* patch/albums.c: 0 once up, -1 when the window will not open */
 
 /* what each page shows, top to bottom, as indices into pm.row[]; the sheet is as high as its page's rows (PM_PAGE_N, PM_PAGE2_N) */
 static const unsigned char pm_page[3][PM_PAGE_N] = {
@@ -169,7 +165,6 @@ static int pm_on_back(void *ctx, void *e) {
 
 /* Cassette Mode (the row is pod_tape): the landscape cassette page (patch/tape.c) over Now Playing. The page opens first and the sheet closes once it is up (a window below the top one, as Settings >
  * Shanling Home closes the menu under the Settings page): a page that cannot open leaves the sheet as it was. */
-extern int tape_open(void);
 
 static int pm_on_tape(void *ctx, void *e) {
     (void)e;
@@ -179,7 +174,6 @@ static int pm_on_tape(void *ctx, void *e) {
 }
 
 /* Vinyl Mode (the row is pod_vinyl): the turntable page (patch/vinyl.c), opened the same way: the page first, the sheet closed once it is up. */
-extern int vinyl_open(void);
 
 static int pm_on_vinyl(void *ctx, void *e) {
     (void)e;
@@ -189,7 +183,6 @@ static int pm_on_vinyl(void *ctx, void *e) {
 }
 
 /* Go to Podcasts (the row is pod_goep): the Podcasts page (patch/podcasts.c podcasts_go: uncovered when it is below, else opened), the same order: the page first, the sheet closed once it is up. */
-extern int podcasts_go(void);
 
 static int pm_on_goep(void *ctx, void *e) {
     (void)e;
@@ -200,7 +193,6 @@ static int pm_on_goep(void *ctx, void *e) {
 
 /* Find Cover & Lyrics (the row is pod_art, page 2): our page (patch/onlineart.c) over Now Playing, opened the same way: the page first, the sheet closed once it is up. Not with the Wi-Fi off (the row is dimmed
  * and insensitive then; this is the second look). */
-extern int onlineart_open(void);
 
 static int pm_on_art(void *ctx, void *e) {
     (void)e;

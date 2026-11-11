@@ -22,6 +22,7 @@
  * CF_HOST the renderer alone is built for the host (test/coverflow.py). docs/architecture.md.
  */
 #include "offsets.inc"
+#include "entries.h"
 
 #include "coverflow.h" /* CF_ONE, CF_REACH, CF_RING, cfg_t, coverflow_render */
 #define CF_WANTED (CF_RING + 1) /* the covers the loader keeps decoded: the ring and the next one ahead */
@@ -43,7 +44,6 @@
 #include "fnv.h"
 
 /* patch/songs.c: our Songs page on all the artist's (or composer's: scope CLASS_COMPOSERS) songs; -1 when it did not open */
-extern int songs_open_artist(void *artist, unsigned scope);
 
 /* ===========================================================================
  * The depth renderer (q2-pod, after Rockbox PictureFlow). All integer: 16.16 turns and

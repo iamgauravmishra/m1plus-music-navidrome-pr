@@ -36,12 +36,10 @@
 #include "common.h"
 #include "lyrics.h"
 #include "sbsrc.h" /* sba_now_cover, sba_rec_track, sba_rec_size, sba_url, sba_gen; lib_nd and ls_favorite for the star */
+#include "entries.h"
 #define NP_ONCE_MS 30 /* the one-shot decode after a track change seen by the cover's paint */
 #define NP_SB_WAIT \
     10 /* ticks (5 s) a server track with no cover file yet keeps the previous track's cover on the art before stock's picture shows */
-
-extern int
-queue_open(void); /* patch/queuepage.c: our Queue page; 0 once it is open, else the stock drawer should open */
 
 /* The queue button (btn_queue, stock handler 0x53b14c: navigator_to("dialog/playqueue_dialog")) opens our Queue page instead. Bound after the stock init, so it runs before the stock
  * handler: RET_STOP keeps the drawer from opening once our page is up, RET_OK lets it open (a stream, a window that will not open). docs/modules/queue.md. */

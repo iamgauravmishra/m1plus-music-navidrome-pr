@@ -24,3 +24,10 @@ typedef struct {
 } cfg_t;
 
 void coverflow_render(const cfg_t *g, unsigned *d, int pitch, int frac, const unsigned *const ring[CF_RING]);
+
+int coverflow_open(void); /* the menu's Cover Flow row, opened over this page */
+int coverflow_artist(void *artists, unsigned index,
+                     unsigned scope); /* Cover Flow scoped to an artist; 0 once the page is up */
+int coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **albums,
+                            unsigned **keys); /* one artist's album rows and their cache keys */
+void *coverflow_artist_page(void); /* the artist's covers window, NULL when there is none */

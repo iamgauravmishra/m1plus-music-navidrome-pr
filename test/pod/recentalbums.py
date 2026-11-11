@@ -60,7 +60,6 @@ def open_recent(m):
 
 
 def shown_titles(texts, titles): return [t for t, r in texts if t in titles]
-def vis(m, n): return SG.vis(m, n)
 def to_albums(m): return SG.pick(m, 'grid')   # the card's Albums row (the old navbar toggle from the songs)
 def to_songs(m): return SG.pick(m, 'list')   # its Songs row
 def card_state(m):

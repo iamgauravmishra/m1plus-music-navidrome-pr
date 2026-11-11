@@ -39,6 +39,7 @@
 #include "nextalbum.h"
 #include "libsrc.h"
 #include "viewsort.h"
+#include "entries.h"
 
 #define ROW LIST_ROW_H
 

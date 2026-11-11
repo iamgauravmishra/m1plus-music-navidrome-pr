@@ -24,10 +24,7 @@
 #include "common.h"
 #include "covercache.h"
 #include "libsrc.h"
-
-extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
-extern const char *
-np_cover_file(int *busy); /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
+#include "entries.h"
 
 enum { K_NONE, K_CLOSE, K_PREV, K_PLAY, K_NEXT, K_RECORD };
 

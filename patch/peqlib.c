@@ -17,8 +17,7 @@
 #include "autoeq.h"
 #include "peqpage.h"
 #include "peqlib.h"
-
-extern int pod_open_peqlib(void); /* patch/m1plus.c: open_page(POD_PEQLIB_PAGE) */
+#include "home.h"
 
 #define LB_SLOTS \
     (2 * \

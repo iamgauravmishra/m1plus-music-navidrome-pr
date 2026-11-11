@@ -6,6 +6,7 @@
  * The page's other controls are stock's state too: the brightness card (stock's own slider handlers), LED Light and Follow Screen (below). */
 #include "offsets.inc"
 #include "stock.h"
+#include "entries.h"
 
 #define DISP_LIGHT_MAX 4 /* stock's last index (five minutes) */
 #define brightness_refresh \

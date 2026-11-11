@@ -28,6 +28,6 @@ Apple clang has no MIPS target), unicorn 2.1.4 for the tests, mksquashfs 4.7.5. 
 on anything touching extracted firmware.
 
 Feature source maps are in [architecture](../architecture.md); test boundaries are in
-[validation](validation.md). `tools/pod.py` is the authoritative source/order/pin list;
+[validation](validation.md). `tools/pod.py` is the authoritative source/order list and `tools/pod_pins.py` the pin list;
 `pod_pages.py` defines page actions, `pod_ui.py` emits assets and `pod_i18n.py` supplies texts.
 Dev builds use the same stages with an allocated tag and final manifest; see [workflow](../workflow.md).

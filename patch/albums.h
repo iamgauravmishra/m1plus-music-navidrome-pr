@@ -7,3 +7,6 @@
 
 /* The page on src's albums: artist NULL every album, else src's artist record (the caller keeps it) and that artist's. NULL or &lib_stock is the stock page. 0 once up, -1 window did not open, -2 asset not ours. */
 int albums_open_src(const lib_src_t *src, void *artist);
+
+int albums_open(void); /* Albums, our page in the mode used last (grid or list) */
+int albums_open_artist(void *artists, unsigned index, unsigned scope); /* 0 once up, -1 when the window will not open */

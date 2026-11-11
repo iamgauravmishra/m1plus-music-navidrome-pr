@@ -1030,7 +1030,6 @@ def dlalbum(ctx):
     """Download Album (LS_ACT_DOWNLOAD_ALL, rec = the page's list): the tracks not on the card and not queued are queued in list order with one toast; the four outcomes."""
     expect = ctx.expect
     R = SA.R
-    toasts = lambda m: [c[1] for c in m.calls if c[0] == 'toast']
     def setup(items, on_card=()):
         m = machine(); guard_ok(m)
         if on_card: dl_two_tracks(m, [SD.track(i, i, 'flac') for i in on_card])

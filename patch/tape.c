@@ -24,6 +24,7 @@
 #include "home.h"
 #include "common.h"
 #include "covercache.h"
+#include "entries.h"
 
 #define FRAME_W 320 /* the frame is TP_H wide (columns) and TP_W tall (rows) */
 

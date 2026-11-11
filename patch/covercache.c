@@ -9,6 +9,7 @@
  * average for the grid's small tiles. UI thread only. docs/architecture.md section 4.
  */
 #include "offsets.inc"
+#include "entries.h"
 
 #ifdef CF_HOST
 #include <stdlib.h>
@@ -392,11 +393,6 @@ void *cc_albums(void) { return cc_class_copy(CLASS_ALBUMS); }
 void *cc_songs(void) { return cc_class_copy(CLASS_ALL_SONGS); }
 
 int cc_list_failed(void) { return cc_lfail; }
-
-extern int album_open(
-    unsigned cls,
-    void *
-        row); /* patch/albumpage.c: our album page on an album row; 0 opened, -1 not tried, -2 tried and left (the tracks' query replaced the list) */
 
 /* The stock album list the album page is opened from (the Albums rows, or an artist's / composer's): into *pdeq_showlist, the browsing record set. */
 static void cc_album_list(void *artist_row, unsigned scope) {

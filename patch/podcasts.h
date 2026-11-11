@@ -123,3 +123,10 @@ void pc_restart(unsigned hash);
 /* A queue (stSongInfo deque) with the podcast files taken out, for Shuffle: the queue itself when it has none; else a new queue (copies), *idx now the song that followed or was
  * at *idx, the old queue destroyed. NULL when nothing but podcasts was in it (the old queue destroyed too). */
 void *pc_strip(void *queue, int *idx);
+
+/* patch/podcasts.c: the queue of a show's local episodes, set up as an episode start does. */
+void *pg_episode_queue(const char *root, const pc_show_t *s, const pc_ep_t *eps, int neps, int at, int *idx);
+int podcasts_open(void); /* the shows on the card and their episodes */
+int podcasts_go(void);
+void pg_relight(void); /* the open cover-tinted pages tint again (see ab_relight, patch/entries.h) */
+int pg_has_tone(void); /* the Show page shows a cover's tone now (not the shows list or an episode) */

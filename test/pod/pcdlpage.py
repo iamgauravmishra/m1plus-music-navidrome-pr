@@ -45,7 +45,7 @@ def page(extra=None, cardf=card):
 
 
 def flags(m, n): return PCS.flags(m, n)
-def toasts(m): return [PCS.fixed(c[1]) for c in m.calls if c[0] == 'toast']
+def toasts_fixed(m): return [PCS.fixed(c[1]) for c in m.calls if c[0] == 'toast']
 def confirms(m): return [c[1] for c in m.calls if c[0] == 'confirm']
 def unlinks(m): return [c[1].replace(RP + '/', '') for c in m.calls if c[0] == 'unlink']
 def title(m): return PCP.title_text(m)
@@ -210,7 +210,7 @@ def inprogress_tests(ctx):
     # taps: the running one is paused, the waiting one leaves, the failed one is tried again, the paused one resumes
     m.calls = []; m.thread = None
     tap_row(m, 0, 4, 7)
-    expect(m.word(DL.pn_at(DL.DCANCEL)) == DL.key_of('Sub One', 'e.mp3') and toasts(m) == [], 'a tap on the running one pauses it (the worker is told to cancel it; the .part stays)')
+    expect(m.word(DL.pn_at(DL.DCANCEL)) == DL.key_of('Sub One', 'e.mp3') and toasts_fixed(m) == [], 'a tap on the running one pauses it (the worker is told to cancel it; the .part stays)')
     m.setword(DL.pn_at(DL.DCANCEL), 0)
     tap_row(m, 1, 4, 7)
     expect(DL.fn(m, 'pn_dl_count') == 1 and DL.state(m, 'c.mp3', 'Sub One')[0] == 0, 'a tap on a waiting one takes it out of the queue')
@@ -399,7 +399,7 @@ def select_tests(ctx):
     expect(sorted(unlinks(m)) == sorted(['Sub One/a.mp3', 'Sub One/a.mp3.part', 'Sub One/b.mp3', 'Sub One/b.mp3.part', 'Sub One/d.mp3.part']), f'each Downloaded file and its .part, and the paused .part ({unlinks(m)})')
     expect(m.state(h)[0] == 0 and b'f=a.mp3' in m.fs[f'{RP}/Sub One/.episodes'] and b'f=b.mp3' in m.fs[f'{RP}/Sub One/.episodes'], 'the played mark is forgotten, the .episodes lines stay (the episodes are remote again)')
     got = rows(m)
-    expect([t for t, _ in got] == ['Ep E', 'Ep C', 'Ep F'] + ['Bravo 3', 'ep1', 'Bravo 1', 'ep2', 'Bravo 2'] and not toasts(m), f'the rows are gone from both sections ({[t for t, _ in got]})')
+    expect([t for t, _ in got] == ['Ep E', 'Ep C', 'Ep F'] + ['Bravo 3', 'ep1', 'Bravo 1', 'ep2', 'Bravo 2'] and not toasts_fixed(m), f'the rows are gone from both sections ({[t for t, _ in got]})')
     line = texts_at(m, 'label_ps_meta')[0][0]
     expect(line == '5 episodes · 168 MB · 18 GB free', f'the storage line is the new totals ({line})')
     # the playing episode is never deleted
@@ -412,7 +412,7 @@ def select_tests(ctx):
     PCP.click(m, 'pg_del')
     files = [('Alpha Show', 'ep1.mp3'), ('Alpha Show', 'ep2.mp3'), ('bravo', 'b1.mp3'), ('bravo', 'b2.mp3'), ('bravo', 'b3.mp3'), ('Sub One', 'b.mp3')]
     expect(sorted(unlinks(m)) == sorted([f'{d}/{f}' for d, f in files] + [f'{d}/{f}.part' for d, f in files] + ['Sub One/d.mp3.part']), f'everything marked but the playing a.mp3 ({unlinks(m)})')
-    said = toasts(m)
+    said = toasts_fixed(m)
     expect(said == ['The playing episode was kept'], f'the toast says the playing episode was kept ({said})')
     left = [t for t, _ in rows(m)]
     expect(SA in m.fs and left == ['Ep A'], f'it stays, alone in the list ({left})')
@@ -449,13 +449,13 @@ def played_tests(ctx):
     # No: nothing; Yes with the playing episode among the played ones
     m.confirm_yes = False; m.calls = []
     PCP.click(m, 'pg_sh_delplayed')
-    expect(confirms(m) == ['Delete all played episodes?'] and not unlinks(m) and not toasts(m) and flags(m, 'pg_sh_card') == (0, 0), f'the confirm; No: nothing happens ({confirms(m)})')
+    expect(confirms(m) == ['Delete all played episodes?'] and not unlinks(m) and not toasts_fixed(m) and flags(m, 'pg_sh_card') == (0, 0), f'the confirm; No: nothing happens ({confirms(m)})')
     m.confirm_yes = True
     m.track(B2)   # the playing one is a played episode too
     PCP.click(m, 'btn_more'); m.calls = []
     PCP.click(m, 'pg_sh_delplayed')
     expect(sorted(unlinks(m)) == sorted(['Alpha Show/ep1.mp3', 'bravo/b1.mp3']), f'every played episode but the playing one is deleted ({unlinks(m)})')
-    expect(toasts(m) == ['2 deleted, 105 MB freed'], f'the toast says how many and how much space ({toasts(m)})')
+    expect(toasts_fixed(m) == ['2 deleted, 105 MB freed'], f'the toast says how many and how much space ({toasts_fixed(m)})')
     expect(A1 not in m.fs and B1 not in m.fs and B2 in m.fs and b'f=b1.mp3' in m.fs[f'{RP}/bravo/.episodes'], 'the files are gone, the playing one stays, the .episodes line stays')
     expect(m.state(PCP.pc_hash(A1))[0] == 0 and m.state(PCP.pc_hash(B1))[0] == 0 and m.state(PCP.pc_hash(B2))[0] == 2, 'the played marks of the deleted ones are forgotten; the one that stayed is still played')
     got = rows(m)
@@ -467,7 +467,7 @@ def played_tests(ctx):
     expect(shown == ['select', 'delplayed'], 'the playing episode is played still: the row stays')
     m.calls = []
     PCP.click(m, 'pg_sh_delplayed')
-    expect(not unlinks(m) and toasts(m) == ['The playing episode was kept'], f'only the playing one is left to delete: it is kept, with the toast ({toasts(m)})')
+    expect(not unlinks(m) and toasts_fixed(m) == ['The playing episode was kept'], f'only the playing one is left to delete: it is kept, with the toast ({toasts_fixed(m)})')
     # nothing played: no row
     m = page()
     to_page(m)

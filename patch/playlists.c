@@ -43,10 +43,7 @@
 #include "songops.h"
 #include "playlists.h"
 #include "fnv.h"
-
-extern int
-songs_open_playlist(int id,
-                    const char *name); /* patch/songs.c: our Songs page on a playlist; -1 when it did not open */
+#include "entries.h"
 
 #define CELL_H GRID_CELL_H
 #define PITCH GRID_PITCH
@@ -814,10 +811,6 @@ static int pl_item_of(void *e) {
 static void pl_create(void);
 static void pl_pick_add(int id);
 static void pl_pick_later(int id);
-
-extern int songs_open_src_in(
-    const lib_src_t *src, int which, void *scope,
-    const char *title); /* patch/songs.c: the source's tracks of a row (here a playlist's) on our Songs page */
 
 /* A tap on a source's playlist: its Songs page; if that page does not open, the playlist plays in order (the tap of a row). */
 static void pl_open_src(void *rec) {
