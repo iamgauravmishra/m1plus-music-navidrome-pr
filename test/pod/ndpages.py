@@ -911,7 +911,8 @@ def root_asset(ctx):
         expect(l.get('tr_text') == lab and l.x == 56 and ic.get('image') == icons[i] and (ic.x, ic.w, ic.h) == (16, 24, 24) and ch.get('image') == 'right_arrow' and ch.x == 285 and row.get('style') == 'list_item_style',
                f'row {i}: {lab}, the glyph at x 16, the label at 56, the shared chevron, the stock row style')
         hair = f(f'pod_hair{i}')
-        expect((hair is not None) == (i < 5) and (hair is None or (hair.x, hair.w, hair.h) == (56, 254, 1)), f'row {i}: the hairline runs from the label to 310, none under the last of a group')
+        expect(hair is not None and (hair.x, hair.w, hair.h) == (56, 254, 1) and all(row.get(f'style:{st}:border_width') == '0' for st in ('normal', 'over', 'pressed', 'focused', 'disable')),
+               f'row {i}: the hairline runs from the label to 310 and the theme\'s full-width border is off (the Radio page\'s rows)')
     for n in ('nd_es_big', 'nd_es_icon', 'nd_es_title', 'nd_es_text', 'nd_es_pill', 'nd_es_dl'):
         expect(f(n).get('visible') == 'false' and f(n).get('sensitive') == 'false', f'{n} starts hidden')
     expect(f('nd_es_icon').get('image') == 'pod_es_plug' and f('nd_es_title').get('tr_text') == 'Not Connected' and f('nd_es_text').get('tr_text') == 'Navidrome, Gonic, Airsonic and other Subsonic servers' and f('nd_es_pill').get('tr_text') == 'Add Server',

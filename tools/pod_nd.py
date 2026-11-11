@@ -37,18 +37,19 @@ def column():
 
 
 def _row(i, label, icon, h):
-    """A menu row: a stock list_item (the stock press look), the glyph, the stock label, the chevron and, under all but the last of a group, the hairline."""
+    """A menu row: a stock list_item (the stock press look), the glyph, the stock label, the chevron and the hairline from the label to x 310 (the Radio page's rows: the theme's full-width border is off)."""
     from pod_ui import Widget, styled, STATES, CHEV_BTN_X
+    from mod_icons import ROW_STATES
     import pod_i18n
     item = Widget('list_item', 0, 0, 310, h, [('name', f'pod_row{i}'), ('style', 'list_item_style')])
     item.children.append(Widget('image', ICON_X, (ROW_H - ICON_PX) // 2, ICON_PX, ICON_PX, [('name', f'pod_icon{i}'), ('image', icon), ('draw_type', 'icon'), ('sensitive', 'false')]))
     item.children.append(Widget('hscroll_label', TEXT_X, 0, TEXT_END - TEXT_X, h, [('name', f'pod_label{i}'), ('style', 'srlabel_leftwhite21_style'), pod_i18n.text_prop(label),
                                                                                    ('only_parent_focus', 'true'), ('ellipses', 'true'), ('yoyo', 'true'), ('loop', 'true')]))
     item.children.append(Widget('image', CHEV_BTN_X, 0, 13, ROW_H - 1, [('name', f'pod_chev{i}'), ('image', 'right_arrow'), ('draw_type', 'icon'), ('sensitive', 'false')]))
-    if i < len(ROWS) - 1:
-        hair = Widget('view', TEXT_X, h - 1, 310 - TEXT_X, 1, [('name', f'pod_hair{i}'), ('sensitive', 'false')])
-        for st in STATES: styled(hair, (st,), 'bg_color', HAIR_RGB)
-        item.children.append(hair)
+    for st in ROW_STATES: item.set(f'style:{st}:border_width', '0')   # the theme's full-width bottom border off (tools/mod_icons.py apply_pod_rows does the same): the inset hairline is the row's only line, as on the Radio page
+    hair = Widget('view', TEXT_X, h - 1, 310 - TEXT_X, 1, [('name', f'pod_hair{i}'), ('sensitive', 'false')])   # under every row, the last too (patch/radiopage.c rp_paint_rows)
+    for st in STATES: styled(hair, (st,), 'bg_color', HAIR_RGB)
+    item.children.append(hair)
     return item
 
 
