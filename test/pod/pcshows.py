@@ -214,9 +214,9 @@ def layout_tests(ctx):
     a = Image.open(os.path.join(mod_icons.PNG, 'pc_atlas.png')).convert('RGBA')
     tl = {n: Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA') for n in ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile', 'pod_ic_discovertile')}
     expect((mod_icons.PA_TILE_PX, mod_icons.PA_CHEV) == (o['PA_TILE_PX'], o['PA_CHEV']) and 'PA_TILE_X' not in o and all(t.size == (44, 44) for t in tl.values())
-           and all(t.getpixel((22, 4)) == (0x1e, 0x1e, 0x1e, 255) and t.getpixel((0, 0))[3] == 0 and any(p[:3] != (0x1e, 0x1e, 0x1e) and p[3] == 255 for p in t.crop((8, 8, 36, 36)).getdata()) for t in tl.values())
+           and all(t.getpixel((22, 4)) == (0x1c, 0x1c, 0x1e, 255) and t.getpixel((0, 0))[3] == 0 and any(p[:3] != (0x1c, 0x1c, 0x1e) and p[3] == 255 for p in t.crop((8, 8, 36, 36)).getdata()) for t in tl.values())
            and len({t.tobytes() for t in tl.values()}) == 4 and a.getpixel((22, 112 + 22))[3] == 0
-           and a.crop((o['PA_CHEV'] * 16, o['PA_G_Y'], o['PA_CHEV'] * 16 + 16, o['PA_G_Y'] + 16)).getbbox() is not None, 'pod_ic_dltile, pod_ic_subtile, pod_ic_savetile and pod_ic_discovertile are the #1E1E1E rounded square (clear corners) with a glyph each; the atlas no longer holds a tile and has the grey chevron at the number of offsets.inc')
+           and a.crop((o['PA_CHEV'] * 16, o['PA_G_Y'], o['PA_CHEV'] * 16 + 16, o['PA_G_Y'] + 16)).getbbox() is not None, 'pod_ic_dltile, pod_ic_subtile, pod_ic_savetile and pod_ic_discovertile are the #1C1C1E rounded square (clear corners) with a glyph each; the atlas no longer holds a tile and has the grey chevron at the number of offsets.inc')
     expect(not os.path.exists(os.path.join(mod_icons.PNG, 'pod_nav_feeds.png')) and os.path.isfile(os.path.join(mod_icons.PNG, 'pc_ic_import.png')) and not os.path.exists(os.path.join(mod_icons.PNG, 'pod_ic_subs.png')), 'the sheet\'s Import glyph is committed; the Feeds button\'s and the old Subscriptions row\'s are gone')
     # n shows
     for n in (1, 2, 3, 5, 9):

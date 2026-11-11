@@ -228,7 +228,7 @@ static void wp_fill(int s, const wf_net *w, int joining) {
     wp_vis(wp.r[s].lock, w->sec != WF_OPEN && w->sec != WF_OWE);
     wp_vis(wp.r[s].chk, s < WP_CUR);
     if (s < WP_CUR) {
-        image_base_set_image(wp.r[s].chk, joining ? "wf_spin0" : "wf_check");
+        image_base_set_image(wp.r[s].chk, joining ? "wf_spin0" : "pod_check");
         wp.crow = joining ? s : -1;
     }
 }
@@ -1342,7 +1342,7 @@ static int wp_on_destroy(void *ctx, void *e) {
 static void wp_spin_place(void) {
     void *lab = widget_lookup(wp.win, "wf_hdr_net_t", 1);
     const unsigned *t = lab ? widget_get_text(lab) : (const unsigned *)0;
-    int tw = t && *t ? (int)(widget_measure_text(lab, t) + 0.999f) : 0;
+    int tw = t && *t ? m1_text_w(lab, t) : 0;
     if (tw <= 0) tw = WP_HDR_TW;
     widget_move(wp.spin_img, WP_HDR_X + 2 + tw + 8, widget_get_prop_int(wp.spin_img, "y", 0));
 }

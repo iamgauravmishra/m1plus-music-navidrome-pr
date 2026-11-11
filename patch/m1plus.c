@@ -647,7 +647,7 @@ static void value_fit(void *win, unsigned i, void *val, int right, int max, int 
     char name[24];
     const unsigned *text = widget_get_text(val);
     void *lab;
-    int vw = text && *text ? (int)(widget_measure_text(val, text) + 0.999f) + 6 : 8;
+    int vw = text && *text ? m1_text_w(val, text) + 6 : 8;
     if (vw > max) vw = max;
     snprintf(name, sizeof name, "pod_label%u", i);
     lab = widget_lookup(win, name, 1);

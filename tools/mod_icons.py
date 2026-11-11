@@ -155,7 +155,7 @@ def card_name(g):
 # A card is drawn by its rows (the stock list_view layouter stacks the scroll_view's children and ignores their y, so a card cannot be a view of its own: tools/pod_settings.py): the background of
 # each row is one of four pieces, ROW_W x ROW_H with the card (x CARD_X .. CARD_X + CARD_W, fill CARD_RGB, corners CARD_R where the piece has them) drawn in and transparent outside, and the pressed
 # twin (the lit grey). Names pod_cd_<piece>[_down]; the geometry is tools/pod_settings.py's (CARD_PIECE).
-CARD_PIECE = {'ROW_W': 320, 'ROW_H': 52, 'CARD_X': 10, 'CARD_W': 300, 'CARD_R': 12, 'FILL': (0x1C,) * 3, 'LIT': (0x2C, 0x2C, 0x2E)}
+CARD_PIECE = {'ROW_W': 320, 'ROW_H': 52, 'CARD_X': 10, 'CARD_W': 300, 'CARD_R': 12, 'FILL': (0x1C, 0x1C, 0x1E), 'LIT': (0x2C, 0x2C, 0x2E)}
 CARD_PIECES = ('single', 'top', 'mid', 'bot')
 CARD_PIECE_IMAGES = [f'pod_cd_{p}{d}' for p in CARD_PIECES for d in ('', '_down')]
 CARD_TALL = 60   # the Presets page's rows (tools/pod_settings.py LIB_ROW_H): the same pieces, CARD_TALL high, pod_cdl_<piece>[_down]
@@ -169,11 +169,10 @@ ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'i
             'pod_es_info': 'info', 'pod_es_card': 'memory-stick', 'pod_es_drive': 'hard-drive', 'pod_es_download': 'download', 'pod_es_check': 'badge-check'}
 ES_PX, ES_RGB = 40, (0x8E, 0x8E, 0x93)
 # The Wi-Fi page's network rows (patch/wifipage.c, docs/modules/wifi.md): a Wi-Fi fan signal glyph (wf_sig0..3: Lucide's wifi drawn whole in the dim grey, the level's arcs white over it: 3 wifi, 2 wifi-high, 1 wifi-low, 0 all dim; 20 x 16), the lock (16 px) and info (22 px)
-# glyphs in the secondary grey, a white check (20 px; not the accent-tinted picker check) and eight frames of a small grey spinner (wf_spin0..7, 14 px: the header's while scanning, the check's place while joining).
+# glyphs in the secondary grey (the connected network's check is the picker's pod_check, 20 px) and eight frames of a small grey spinner (wf_spin0..7, 14 px: the header's while scanning, the check's place while joining).
 WIFI_SIG_W, WIFI_SIG_H, WIFI_SIG_DIM, WIFI_GREY, WIFI_SPIN_PX = 20, 16, (0x55, 0x55, 0x59), (0xAA,) * 3, 14
 WIFI_SIG_GLYPHS = {1: 'wifi-low', 2: 'wifi-high', 3: 'wifi'}     # the lit arcs of wf_sig1..3
-WIFI_GLYPHS = {'wf_lock': ('lock', 16, WIFI_GREY), 'wf_info': ('info', 22, WIFI_GREY), 'wf_check': ('check', 20, WHITE),
-               'wf_eye': ('eye', 22, WIFI_GREY), 'wf_eyeoff': ('eye-off', 22, WIFI_GREY)}   # the password page's show / hide button (eye: the password is hidden, a tap shows it)
+WIFI_GLYPHS = {'wf_lock': ('lock', 16, WIFI_GREY), 'wf_info': ('info', 22, WIFI_GREY), 'wf_eye': ('eye', 22, WIFI_GREY), 'wf_eyeoff': ('eye-off', 22, WIFI_GREY)}   # the password page's show / hide button (eye: the password is hidden, a tap shows it)
 WIFI_SPIN_L_PX = 28   # wf_spinL0..7: the same art at 28 px, the cover spinner of the Album page's header (patch/albumpage.c)
 WIFI_IMAGES = sorted(WIFI_GLYPHS) + [f'wf_sig{n}' for n in range(4)] + [f'wf_spin{i}' for i in range(8)] + [f'wf_spinL{i}' for i in range(8)]
 
@@ -354,9 +353,9 @@ NP = {'np_play': ('pil:play', 44, 0, 'fg', 'np_play_down'), 'np_pause': ('pil:pa
       'mb_glass': ('pil:glass', (304, 56), 0, 'fg', 'mb_glass_down'),
       'lk_card': ('pil:glass_card', (288, 334), 0, 'fg', None),
       'pl_glass': ('pil:glass_menu', (72, 200), 0, 'fg', None),
-      'vs_glass7': ('pil:glass_viewsort', (72, 336), 0, 'fg', None), 'vs_glass6': ('pil:glass_viewsort6', (72, 288), 0, 'fg', None),
-      'vs_glass5': ('pil:glass_viewsort5', (72, 240), 0, 'fg', None), 'vs_glass4': ('pil:glass_viewsort4', (72, 192), 0, 'fg', None), 'vs_glass1': ('pil:glass_viewsort1', (72, 48), 0, 'fg', None),
-      'vs_glass3': ('pil:glass_viewsort3', (72, 144), 0, 'fg', None), 'vs_glass2': ('pil:glass_viewsort2', (72, 96), 0, 'fg', None),
+      'vs_glass7': ('pil:glass_viewsort', (72, 350), 0, 'fg', None), 'vs_glass6': ('pil:glass_viewsort6', (72, 300), 0, 'fg', None),
+      'vs_glass5': ('pil:glass_viewsort5', (72, 250), 0, 'fg', None), 'vs_glass4': ('pil:glass_viewsort4', (72, 200), 0, 'fg', None), 'vs_glass1': ('pil:glass_viewsort1', (72, 50), 0, 'fg', None),
+      'vs_glass3': ('pil:glass_viewsort3', (72, 150), 0, 'fg', None), 'vs_glass2': ('pil:glass_viewsort2', (72, 100), 0, 'fg', None),
       'pq_glass': ('pil:glass_peqdialog', (72, 276), 0, 'fg', None),   # the band page's unsaved-changes dialog (patch/peqband.c): the Playlists menu's glass (patch3_x), 76 px of head and four 50 px buttons high
       'bk_glass': ('pil:glass_bandkeypad', (320, 320), 0, 'fg', None),   # the band page's number keypad sheet (patch/peqband.c): the sheet's glass, 320 px high, top corners only
       'np_grabber': ('pil:grabber', (120, 44), 0, 'ghost', 'np_grabber_down'),
@@ -902,7 +901,7 @@ PA_DL_TRACK, PA_DL_STROKE, PA_DL_STOP_PX = (0x5A,) * 3, 1.5, 5   # the ring's tr
 PA_GREY, PA_BADGE_GREY, PA_DARK, PA_RED = (0xAA,) * 3, (0xD0,) * 3, (0x14,) * 3, (0xFF, 0x6B, 0x6B)
 PA_DOTS_GREY = (0x8C,) * 3                               # the rows' "...": the track rows' dots' grey (patch/offsets.inc RM_DOTS_RGB); the chevron is every list's (CHEVRON)
 PA_CHEV = 6                                              # glyph 6 of the strip: the chevron-right (grey) of the Shows page's Downloads row
-PA_TILE_PX, PA_TILE_R, PA_TILE_RGB, PA_TILE_GLYPH = 44, 8, (0x1E,) * 3, 22   # the Library rows' tile: a 44 px rounded square, the Lucide glyph (22 px, white) on it
+PA_TILE_PX, PA_TILE_R, PA_TILE_RGB, PA_TILE_GLYPH = 44, 8, (0x1C, 0x1C, 0x1E), 22   # the Library rows' tile: a 44 px rounded square, the Lucide glyph (22 px, white) on it
 PC_DL_TILE = 'pod_ic_dltile'                           # the Downloads row's tile: the same square with the Lucide download glyph (an image of its own, like the other two, so the accent can tint its glyph by name)
 PC_SAVE_TILE = 'pod_ic_savetile'                         # the Saved row's tile: the same square with the Lucide bookmark glyph
 PC_SRCH_TILE = 'pod_ic_discovertile'                       # the Search row's tile: the same square with the Lucide compass glyph
@@ -989,7 +988,7 @@ def _pc_badge():
     return out
 
 def _pc_tile(name='download'):
-    """A Library row's 44 px tile: an opaque #1E1E1E rounded square (8 px corners, anti-aliased) with a Lucide glyph (download for Downloads, podcast for Subscriptions) centred on it."""
+    """A Library row's 44 px tile: an opaque #1C1C1E rounded square (8 px corners, anti-aliased) with a Lucide glyph (download for Downloads, podcast for Subscriptions) centred on it."""
     from PIL import Image, ImageDraw
     px, s = PA_TILE_PX, 8
     m = Image.new('L', (px * s, px * s), 0)
@@ -1434,13 +1433,13 @@ GLASS_CARD = (288, 334, 18)                                   # the lock screen'
 GLASS_SHEET6 = (320, 300, 18)                               # the same sheet with the Cassette and Vinyl rows (page 1, six rows): its own image, not a crop of a taller one (docs/modules/playmore.md)
 GLASS_SHEET = (320, 250, 18)                                  # Now Playing's More sheet, page 2 (five rows: the back header, Speed, A-B repeat, Find Cover & Lyrics, Delete; patch/playmore.c, docs/modules/playmore.md): top corners only
 GLASS_SHEET_FILL = ((0x2A, 0x2A, 0x2C), (0x1E, 0x1E, 0x20), 0.88)   # denser than the card (0.76): rows, labels and grey badges sit straight on it (docs/modules/playmore.md)
-GLASS_VIEWSORT = (72, 336, 14)    # the Albums "..." card (patch/viewsort.c, docs/modules/albums.md): Search, Grid, List and four sort rows of 48 px; one picture per height
-GLASS_VIEWSORT6 = (72, 288, 14)   # the same card one row short (one artist's albums: no Artist row): six rows
-GLASS_VIEWSORT5 = (72, 240, 14)   # the Songs library's card: Select and the four sorts (five rows)
-GLASS_VIEWSORT4 = (72, 192, 14)   # the Artists "..." card: Search, the two Show rows and Name (four rows)
-GLASS_VIEWSORT1 = (72, 48, 14)    # the Genres and Composers "..." card: Name alone (one row); the Songs page's genre and artist lists: Select alone
-GLASS_VIEWSORT2 = (72, 96, 14)    # the Songs page's lists with Search Songs and Select (two rows)
-GLASS_VIEWSORT3 = (72, 144, 14)   # Recently Added's albums view: Search Songs, Grid, List (three rows)
+GLASS_VIEWSORT = (72, 350, 14)    # the Albums "..." card (patch/viewsort.c, docs/modules/albums.md): Search, Grid, List and four sort rows of 50 px; one picture per height
+GLASS_VIEWSORT6 = (72, 300, 14)   # the same card one row short (one artist's albums: no Artist row): six rows
+GLASS_VIEWSORT5 = (72, 250, 14)   # the Songs library's card: Select and the four sorts (five rows)
+GLASS_VIEWSORT4 = (72, 200, 14)   # the Artists "..." card: Search, the two Show rows and Name (four rows)
+GLASS_VIEWSORT1 = (72, 50, 14)    # the Genres and Composers "..." card: Name alone (one row); the Songs page's genre and artist lists: Select alone
+GLASS_VIEWSORT2 = (72, 100, 14)   # the Songs page's lists with Search Songs and Select (two rows)
+GLASS_VIEWSORT3 = (72, 150, 14)   # Recently Added's albums view: Search Songs, Grid, List (three rows)
 GLASS_ROWMENU = (320, 250, 18)   # the track rows' menu (patch/rowmenu.c, docs/modules/rowmenu.md): Now Playing's More sheet's pane, five rows high, top corners only
 GLASS_PEQDIALOG = (72, 276, 14)  # the band page's unsaved-changes dialog (docs/modules/peq.md "Preset editing"): the Playlists menu's pane, 76 px of head and four 50 px buttons high; drawn patch3_x
 GLASS_BANDKEYPAD = (320, 320, 18)   # the band page's number keypad sheet (docs/modules/peq.md "Preset editing"): the track rows' menu's pane, 320 px high

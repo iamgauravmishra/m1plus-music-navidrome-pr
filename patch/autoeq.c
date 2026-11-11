@@ -92,7 +92,8 @@ static struct {
         bg; /* a job is to start when the slot is free: 1 the list, 2 a preset; the list's job is a refresh (the page stays as it is) */
     int running; /* our job runs (1 the list, 2 a preset) */
     char jobpath[AE_PATH], jobfile[PEQ_NAME], jobstamp[AE_PATH + 16]; /* the preset being fetched */
-    int nres, press, down, down_x, down_y, pressing, wait, frame, spin, content;
+    int nres, press, down, pressing, wait, frame, spin, content;
+    m1_tap_t tap;
     unsigned timer;
     ae_row *rows;
     grid_tile_t *tiles;
@@ -744,7 +745,7 @@ static int ae_on_down(void *ctx, void *e) {
     ae.pressing = 1;
     if (!e || !ae.view) return RET_OK;
     a = ae_item_of(e);
-    ae.down = a + 1, ae.down_x = I(e, PE_X), ae.down_y = I(e, PE_Y);
+    ae.down = a + 1, m1_tap_at(&ae.tap, e);
     ae_set_press(a + 1);
     return RET_OK;
 }
@@ -752,7 +753,7 @@ static int ae_on_down(void *ctx, void *e) {
 static int ae_on_up(void *ctx, void *e) {
     int a = ae.down - 1, drag, was = ae.pressing;
     (void)ctx;
-    drag = e && (m1_abs(I(e, PE_X) - ae.down_x) >= SC_DRAG_PX || m1_abs(I(e, PE_Y) - ae.down_y) >= SC_DRAG_PX);
+    drag = e && !m1_tap_near(&ae.tap, e);
     ae.pressing = 0;
     ae_set_press(0);
     if (!e || !ae.view || drag) {

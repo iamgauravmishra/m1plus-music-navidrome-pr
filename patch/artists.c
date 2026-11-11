@@ -98,7 +98,8 @@ static struct {
     const char *key; /* the title's key: Artists, Album Artists, Genres, Composers */
     void *chev; /* the chevron bitmap */
     int press; /* the row under the finger, + 1 */
-    int down, down_x, down_y; /* the row a press began on, + 1, and where */
+    int down; /* the row a press began on, + 1 */
+    m1_tap_t tap; /* and where */
     int title_on, noscroll;
     int photo; /* Artists and Album Artists: rows with a circle (the ring decodes it, ar_on_photo) */
     unsigned char *
@@ -474,7 +475,7 @@ static int ar_on_down(void *ctx, void *e) {
     ar.down = 0;
     if (!e || !ar.view || !ar.count) return RET_OK;
     a = ar_item_of(e);
-    ar.down = a + 1, ar.down_x = I(e, PE_X), ar.down_y = I(e, PE_Y);
+    ar.down = a + 1, m1_tap_at(&ar.tap, e);
     ar_set_press(a + 1);
     return RET_OK;
 }
@@ -485,9 +486,7 @@ static int ar_on_up(void *ctx, void *e) {
     ar.down = 0;
     ar_set_press(0);
     if (a < 0 || !e || !ar.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - ar.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - ar.down_y) < SC_DRAG_PX &&
-        ar_item_of(e) == a)
-        ar_open((unsigned)a);
+    if (m1_tap_near(&ar.tap, e) && ar_item_of(e) == a) ar_open((unsigned)a);
     return RET_OK;
 }
 

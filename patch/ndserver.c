@@ -58,7 +58,7 @@ static void *ns_find(const char *base, int i) {
 /* A label's width: its text measured (0 for none) and 6 px of slack. */
 static int ns_width(void *w) {
     const unsigned *t = widget_get_text(w);
-    return t && *t ? (int)(widget_measure_text(w, t) + 0.999f) + 6 : 0;
+    return t && *t ? m1_text_w(w, t) + 6 : 0;
 }
 
 /* The value takes the room its text needs and the label keeps the rest, right aligned at the same edge (patch/m1plus.c value_fit). */

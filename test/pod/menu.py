@@ -1,6 +1,7 @@
 """The entry hook and the M1+ Music menu: the Home icon dispatcher, the kill switch, the row actions, hit tests on the menu."""
 import os
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
+import pod_settings as ST
 
 
 def entry_tests(ctx):
@@ -824,11 +825,11 @@ def header_asset_tests(ctx, tree, what):
     expect(all(h.get('visible') == 'false' and h.get('sensitive') == 'false' for h in hdrs), f'{what}: the headers start hidden and insensitive')
     expect([pod_i18n.shown_english(h.children[0]) for h in hdrs] == EXTRAS_TITLES and [pod_i18n.key_for(t) for t in EXTRAS_TITLES] == EXTRAS_TITLES,
            f'{what}: they show Play, Library, Collections and Tools (translated by their keys)')
-    expect(all(len(h.children) == 1 and h.children[0].type == 'hscroll_label' and h.children[0].get('sensitive') == 'false' and h.children[0].x == pod_ui.HDR_X == pod_ui.SH_HEAD_X == 10
-               and h.children[0].get('style:normal:font_size') == str(pod_ui.HDR_PX) == str(pod_ui.SH_HEAD_PX) == '20'
-               and h.children[0].get('style:normal:text_color') == pod_ui.HDR_RGB == pod_ui.SH_SUB_RGB
+    expect(all(len(h.children) == 1 and h.children[0].type == 'hscroll_label' and h.children[0].get('sensitive') == 'false' and h.children[0].x == pod_ui.HDR_X == 18
+               and h.children[0].get('style:normal:font_size') == str(pod_ui.HDR_PX) == str(ST.HDR_PX) == '18'
+               and h.children[0].get('style:normal:text_color') == pod_ui.HDR_RGB == ST.GREY
                and 0 < h.children[0].y and h.children[0].y + h.children[0].h <= h.h for h in hdrs),
-           f'{what}: the caption is in the style of the Home menu\'s "Made for You" heading (x 10, 20 px) in the secondary grey, inside the strip, insensitive')
+           f'{what}: the caption is the Settings pages\' group caption (x 18, the left of the rows\' glyph ink, 18 px) in the secondary grey, inside the strip, insensitive')
     expect(not [w for h in hdrs for w in h.walk() if w.type in ('list_item', 'image', 'button')], f'{what}: no list_item, chevron, icon or button in a header (no press visual)')
     expect(sv.children[-5:] == hdrs and len([c for c in sv.children if c.name.startswith('pod_row')]) == len(sv.children) - 5, f'{what}: the headers follow the rows')
 

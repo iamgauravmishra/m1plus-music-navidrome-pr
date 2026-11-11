@@ -836,10 +836,10 @@ def genre_composer_tests(ctx):
         m.click('btn_more')
         expect([vis(m, f'vs_item{i}') for i in range(7)] == [(1, 1)] + [(0, 0)] * 6 and vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_hair')[0] == 0,
                f'{label}: the card has the Name row alone (no Search: no search scope; no Show group), the hairline under Search hidden')
-        expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 48
+        expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 50
                and all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass1' for st in ('normal', 'pressed', 'over'))
                and all(m.props.get((m.widgets['vs_item0'], f'style:{st}:border_width')) == 0 for st in ('normal', 'pressed', 'over')),
-               f'{label}: a 48 px card in its one-row glass, no stray hairline above the row')
+               f'{label}: a 50 px card in its one-row glass, no stray hairline above the row')
         said = [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']]
         expect(vis(m, 'vs_tick0')[0] == 1 and vis(m, 'vs_sub0')[0] == 1 and said and said[-1] == 'A–Z', f'{label}: Name is ticked, A–Z under it')
         root = asset_tree(asset)
@@ -874,9 +874,9 @@ def genre_composer_tests(ctx):
     expect([vis(m, f'vs_item{i}') for i in (0, 4, 5, 6)] == [(1, 1)] * 4 and [vis(m, f'vs_item{i}') for i in (1, 2, 3)] == [(0, 0)] * 3 and vis(m, 'vs_hair') == (1, 1),
            'the Artists card has Search Artists, Artists, Album Artists and Name, with the hairline under Search')
     moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']][-1] for i in (6, 4, 5, 0)}
-    expect(moves == {6: (0, 0), 4: (0, 48), 5: (0, 96), 0: (0, 144)} and [c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 192
+    expect(moves == {6: (0, 0), 4: (0, 50), 5: (0, 100), 0: (0, 150)} and [c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 200
            and all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass4' for st in ('normal', 'pressed', 'over'))
-           and (m.widgets['vs_item0'], 'style:normal:border_width') not in m.props, f'the rows are packed Search, Artists, Album Artists, Name; a 192 px card in the four-row glass; the hairline above Name stays ({moves})')
+           and (m.widgets['vs_item0'], 'style:normal:border_width') not in m.props, f'the rows are packed Search, Artists, Album Artists, Name; a 200 px card in the four-row glass; the hairline above Name stays ({moves})')
     m.calls = []
     m.click('vs_item6', count=40000000)
     expect(('window_open', 'm1plus_search') in m.calls and vis(m, 'vs_card') == (0, 0), 'Search Artists closes the card and opens the Search page')
@@ -1140,21 +1140,21 @@ def scoped_sort_tests(ctx):
         m.touch('down', 100, 80 + TOP_ROWS + y, 1000, fn='al_on_down')
         m.touch('up', 100, 80 + TOP_ROWS + y, 1080, fn='al_on_up', count=40000000)
         return [c[3] for c in m.calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]
-    # the card: Grid, List and three sort rows, packed, 240 px, the five-row glass; no Search row (it searched every album, not the artist's); hidden rows are insensitive; the names are all there
+    # the card: Grid, List and three sort rows, packed, 250 px, the five-row glass; no Search row (it searched every album, not the artist's); hidden rows are insensitive; the names are all there
     m = scoped_machine(); m.call(PSYMS['ar_open'], a0=0, count=40000000)
     m.click('btn_more')
     expect(vis(m, 'vs_item1') == (0, 0) and vis(m, 'vs_item6') == (0, 0), 'the scoped card has no Artist row and no Search row: hidden and insensitive')
     expect(all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 2, 3, 4, 5)) and vis(m, 'vs_card') == (1, 1), 'Grid, List, Title, Recently Added and Year are shown')
     moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']] for i in (0, 2, 3, 4, 5)}
-    expect(moves == {4: [(0, 0)], 5: [(0, 48)], 0: [(0, 96)], 2: [(0, 144)], 3: [(0, 192)]}, f'the rows are packed from the top, Grid and List first ({moves})')
+    expect(moves == {4: [(0, 0)], 5: [(0, 50)], 0: [(0, 100)], 2: [(0, 150)], 3: [(0, 200)]}, f'the rows are packed from the top, Grid and List first ({moves})')
     expect(vis(m, 'vs_hair')[0] == 0, 'no hairline over Grid (nothing above it)')
-    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass5' for st in ('normal', 'pressed', 'over')), 'the card is drawn in the 240 px, five-row glass')
-    expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 240, 'the card is 240 px high')
+    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass5' for st in ('normal', 'pressed', 'over')), 'the card is drawn in the 250 px, five-row glass')
+    expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 250, 'the card is 250 px high')
     expect([vis(m, f'vs_tick{i}')[0] for i in range(4)] == [1, 0, 0, 0], 'the saved Artist (the default) shows as Title: Title is ticked')
-    # the library page keeps four sorts, the 336 px card and the asset's own seven-row glass
+    # the library page keeps four sorts, the 350 px card and the asset's own seven-row glass
     ml = scoped_machine(); ml.call(PSYMS['albums_open'], count=20000000); ml.calls = []; ml.click('btn_more')
-    expect(all(vis(ml, f'vs_item{i}') == (1, 1) for i in range(7)) and [c[2:] for c in ml.calls if c[0] == 'widget_resize' and c[1] == ml.widgets['vs_card']][-1][1] == 336
-           and ml.props.get((ml.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass7', 'the library page keeps its seven rows on the 336 px card, in the seven-row glass')
+    expect(all(vis(ml, f'vs_item{i}') == (1, 1) for i in range(7)) and [c[2:] for c in ml.calls if c[0] == 'widget_resize' and c[1] == ml.widgets['vs_card']][-1][1] == 350
+           and ml.props.get((ml.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass7', 'the library page keeps its seven rows on the 350 px card, in the seven-row glass')
     # each saved order on the scoped page: the list, the tick, the stock row a tap opens
     for k, order in SCOPED_ORDERS.items():
         m = scoped_machine(f'{k}\n'.encode()); m.call(PSYMS['ar_open'], a0=0, count=40000000)
@@ -1249,7 +1249,7 @@ def scoped_pills_tests(ctx):
     for nm, x, w, icon in (('btn_play', 10, 145, 'sg_play'), ('btn_shuffle', 165, 145, 'sg_shuffle')):
         b = kids[nm]
         expect((b.x, b.y, b.w, b.h) == (x, O['SG_PILL_Y'], w, O['SG_PILL_H']) and b.type == 'button' and b.get('visible') == 'false' and b.get('sensitive') == 'false'
-               and b.get('style:normal:bg_color') == '#1E1E1E' and b.get('style:pressed:bg_color') == '#333335' and b.get('style:normal:round_radius') == '20'
+               and b.get('style:normal:bg_color') == '#1C1C1E' and b.get('style:pressed:bg_color') == '#333335' and b.get('style:normal:round_radius') == '20'
                and b.get('style:normal:icon') == icon and b.get('style:normal:font_size') == '18', f'{nm}: the Songs page\'s flat pill ({w} x 40 at x {x}), hidden and insensitive until the payload shows it')
 
     # the library Albums page has none

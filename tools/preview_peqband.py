@@ -14,6 +14,7 @@ RAW, W, NAV, SCREEN = PI.RAW, PS.W, PS.NAV, PS.SCREEN
 BD = pod_ui.BD
 O_BK = {k: pod_ui.OFFSETS[k] for k in ('BK_FIELD_X', 'BK_FIELD_W', 'BK_PAD', 'BK_CARET_GAP', 'BK_CARET_W', 'BK_CARET_H')}
 SS = 4
+ACC = None   # an accent's (r, g, b): the graph's curve and the sliders' fill take it (tools/preview_accent.py sets it)
 HD600 = PP.HD600
 
 
@@ -22,7 +23,7 @@ def tree(s, page): return awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', pag
 
 def rounded(w, h, r, grey, alpha=255):
     big = Image.new('RGBA', (w * SS, h * SS), (0, 0, 0, 0))
-    ImageDraw.Draw(big).rounded_rectangle((0, 0, w * SS - 1, h * SS - 1), radius=r * SS, fill=(grey, grey, grey, alpha))
+    ImageDraw.Draw(big).rounded_rectangle((0, 0, w * SS - 1, h * SS - 1), radius=r * SS, fill=(grey if isinstance(grey, tuple) else (grey,) * 3) + (alpha,))
     return big.resize((w, h), Image.LANCZOS)
 
 
@@ -42,7 +43,9 @@ def band_page(s, bands, k):
     for c in sv.children:
         if c.name == 'pod_graph':
             db, rng = G.curve(bands)
-            px = Image.new('RGBA', (G.W, G.H)); px.putdata([(v, v, v, a) for row in G.render(db, rng) for a, v in row]); im.alpha_composite(px, (G.CARD_X, y))
+            px = Image.new('RGBA', (G.W, G.H))
+            px.putdata([(p[1], p[2], p[3], p[0]) for row in G.render_accent(db, rng, ACC) for p in row] if ACC else [(v, v, b, a) for row in G.render(db, rng) for a, v, b in row])
+            im.alpha_composite(px, (G.CARD_X, y))
             for t in c.children:
                 al = t.get('style:normal:text_align_h')
                 text = f'+{rng}' if t.name == 'pod_gr_top' else f'{G.MINUS}{rng}' if t.name == 'pod_gr_bot' else s.shown(t)
@@ -54,20 +57,20 @@ def band_page(s, bands, k):
             ring = big.resize((16, 16), Image.LANCZOS)
             im.alpha_composite(ring, (G.CARD_X + G.PX0 + col - 8, int(y + ry) - 8))
         elif c.name == 'pod_seg':
-            im.alpha_composite(rounded(BD['BD_SEG_W'], BD['BD_SEG_H'], 10, 28), (ST.CM, y + BD['BD_SEG_Y']))
+            im.alpha_composite(rounded(BD['BD_SEG_W'], BD['BD_SEG_H'], 10, (28, 28, 30)), (ST.CM, y + BD['BD_SEG_Y']))
             seg = BD['BD_SEG_W'] // 3
             im.alpha_composite(rounded(94, 34, 8, 229), (ST.CM + b[1] * seg + 3, y + BD['BD_SEG_Y'] + 3))
             for t in c.children:
                 kk = int(t.name[-1])
                 s.text(im, t.x + t.w / 2, y + t.y + t.h / 2, s.shown(t), pod_ui.BD_SEG_PX, (0, 0, 0) if kk == b[1] else (255, 255, 255), 'm')
         elif c.name == 'pod_hsl':
-            im.alpha_composite(rounded(BD['BD_HSL_W'], BD['BD_HSL_H'], 12, 28), (ST.CM, y))
+            im.alpha_composite(rounded(BD['BD_HSL_W'], BD['BD_HSL_H'], 12, (28, 28, 30)), (ST.CM, y))
             for r in range(3):
                 cy = y + r * 50 + 38
                 if r < 2: d.rectangle((ST.CM + 14, y + r * 50 + 49, ST.CM + 299, y + r * 50 + 49), fill=(51, 51, 51))
                 d.rounded_rectangle((ST.CM + 14, cy - 2, ST.CM + 14 + 271, cy + 1), radius=2, fill=(62, 62, 62))
                 n = round(t_of(r, b) * 272)
-                if n > 0: d.rounded_rectangle((ST.CM + 14, cy - 2, ST.CM + 14 + n, cy + 1), radius=2, fill=(242, 242, 242))
+                if n > 0: d.rounded_rectangle((ST.CM + 14, cy - 2, ST.CM + 14 + n, cy + 1), radius=2, fill=ACC or (242, 242, 242))
                 big = Image.new('RGBA', (22 * SS, 22 * SS), (0, 0, 0, 0)); ImageDraw.Draw(big).ellipse((0, 0, 22 * SS - 1, 22 * SS - 1), fill=(250, 250, 250, 255))
                 im.alpha_composite(big.resize((22, 22), Image.LANCZOS), (ST.CM + 14 + n - 11, cy - 11))
             vals = (G.freq_text(b[2]), G.gain_text(b[3]), G.dec(round(b[4] * 100)))

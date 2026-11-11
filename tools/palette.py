@@ -22,10 +22,13 @@ ROOT = os.path.dirname(HERE)
 C = cdefs.defines(os.path.join(ROOT, 'patch', 'offsets.inc'))
 PAPER, INK, SPREAD, CHROMA, GLYPH, SURFACE = (C[k] for k in ('LIGHT_PAPER', 'LIGHT_INK', 'LIGHT_SPREAD', 'LIGHT_CHROMA', 'LIGHT_GLYPH', 'LIGHT_SURFACE'))
 DAY_FROM, DAY_UNTIL = C["LIGHT_FROM"], C["LIGHT_UNTIL"]
-TINT, TRACK_R, FILL_R, KNOB_R, TILE_R = (C[k] for k in ('ACC_TINT', 'ACC_TRACK_R', 'ACC_FILL_R', 'ACC_KNOB_R', 'ACC_TILE_R'))
+TINT, TRACK_R, FILL_R, KNOB_R = (C[k] for k in ('ACC_TINT', 'ACC_TRACK_R', 'ACC_FILL_R', 'ACC_KNOB_R'))
+TILE = tuple(C['ACC_TILE'].to_bytes(3, 'big'))   # the Library tiles' square (the surface); its red is the lightness scale's low end
+TILE_R = TILE[0]
 WASH, DARK = C['ACC_WASH'], C['ACC_DARK']   # the Tinted background: percent of the accent in a dark neutral colour, and the brightest channel that still counts as dark
 CARD = tuple(C['ACC_CARD'].to_bytes(3, 'big'))   # the settings card colour
-ROLE_PRESS_ROW, ROLE_PROGRESS, ROLE_PRESS_PILL, ROLE_PRESS_QPILL = (C[k] for k in ('ROLE_PRESS_ROW', 'ROLE_PROGRESS', 'ROLE_PRESS_PILL', 'ROLE_PRESS_QPILL'))
+ROLE_PRESS_ROW, ROLE_PROGRESS, ROLE_PRESS_PILL, ROLE_PRESS_QPILL, ROLE_FILL, ROLE_SHEET_PRESS = (C[k] for k in ('ROLE_PRESS_ROW', 'ROLE_PROGRESS', 'ROLE_PRESS_PILL', 'ROLE_PRESS_QPILL', 'ROLE_FILL', 'ROLE_SHEET_PRESS'))
+SHEET_A = C['ACC_SHEET_A']
 PILL, QPILL, SHUF = (tuple(C[k].to_bytes(3, 'big')) for k in ('ACC_PILL', 'ACC_QPILL', 'ACC_SHUF'))   # rest colours of the surfaces a pressed role tints: the flat pill, the Queue's off buttons, the Shuffle disc
 SHUF_DOWN_R = C['ACC_SHUF_DOWN_R']
 # The pressed-surface roles (colour -> the rest surface it is tinted from); patch/palette.c pal_role. Row: the page black.
@@ -93,7 +96,7 @@ ACCENT_GLYPH_STOCK = ('player_albuminfo', 'player_songerinfo', 'p_add', 'p_multi
                       'pc_ic_import', 'pc_ic_speed', 'pc_ic_refresh', 'pc_ic_select', 'pc_ic_check', 'pc_ic_down', 'pc_ic_undo', 'pc_ic_trash',
                       'pl_ic_new', 'pl_ic_import', 'pl_ic_export', 'pl_ic_delete', 'batchadd_fav', 'batchadd_playlist', 'sg_tick', 'mulselected',
                       'ah_pill_down', 'dp_pill_down')
-# TILE: the Podcasts Library rows' tiles (patch/podcasts.c; a #1E1E1E rounded square, ACC_TILE_R, with a white glyph on it): white goes to the accent, the square stays exactly #1E1E1E, the antialiased glyph edge
+# TILE: the Podcasts Library rows' tiles (patch/podcasts.c; a #1C1C1E rounded square, ACC_TILE, with a white glyph on it): white goes to the accent, the square stays exactly #1C1C1E, the antialiased glyph edge
 # between blends by lightness (the disc rule with the tile's grey as the fixed end). Their pod_ic_ prefix is why they are in GLYPH_NOT (the glyph rule would paint the whole square).
 ACCENT_TILE = ('pod_ic_dltile', 'pod_ic_subtile', 'pod_ic_savetile', 'pod_ic_discovertile')
 # SHUFDOWN: the album page's (and the Daily Mix page's) pressed Shuffle disc ah_shuffle_down (a #444444 disc, a white glyph): the disc becomes the pressed tint of the rest disc #2A2A2A,
@@ -146,7 +149,8 @@ def role(c, ac, bg='black'):
     if ac == 'neutral': return None
     rgb = (c[0] << 16) | (c[1] << 8) | c[2]
     if rgb in PRESS_SURFACES: new = press_of(PRESS_SURFACES[rgb], ac, bg)
-    elif rgb == ROLE_PROGRESS: new = ACCENT_RGB[ac]
+    elif rgb in (ROLE_PROGRESS, ROLE_FILL): new = ACCENT_RGB[ac]
+    elif rgb == ROLE_SHEET_PRESS: return ACCENT_RGB[ac] + (SHEET_A,)   # translucent on glass: the alpha is the role's
     else: return None
     return new + tuple(c[3:])
 
@@ -155,7 +159,7 @@ def not_role(c):
     """patch/palette.c pal_not_role: a colour derived from a cover (3 or 4 channels) that equals a role colour moves one LSB of blue off it (#333334 to #333333, #FFFFFE to #FFFFFF)."""
     rgb = (c[0] << 16) | (c[1] << 8) | c[2]
     if rgb == ROLE_PRESS_ROW: return (c[0], c[1], c[2] - 1) + tuple(c[3:])
-    if rgb in (ROLE_PROGRESS, ROLE_PRESS_PILL, ROLE_PRESS_QPILL): return (c[0], c[1], c[2] + 1) + tuple(c[3:])
+    if rgb in (ROLE_PROGRESS, ROLE_FILL, ROLE_SHEET_PRESS, ROLE_PRESS_PILL, ROLE_PRESS_QPILL): return (c[0], c[1], c[2] + 1) + tuple(c[3:])
     return tuple(c)
 
 
@@ -221,9 +225,9 @@ def accent_pixel(kind, p, ac, bg='black'):
         base = press_of(SHUF, ac, bg)
         u = _clamp255((p[0] - SHUF_DOWN_R) * 255 // (255 - SHUF_DOWN_R))
         return tuple(b + (255 - b) * u // 255 for b in base) + (p[3],)
-    if kind == 'tile':   # the square (#1E1E1E) stays, white goes to the accent, the glyph's antialiased edge blends by lightness
+    if kind == 'tile':   # the square (#1C1C1E) stays, white goes to the accent, the glyph's antialiased edge blends by lightness (of the red channel)
         u = _clamp255((p[0] - TILE_R) * 255 // (255 - TILE_R))
-        return tuple(TILE_R + _trunc((a - TILE_R) * u, 255) for a in acc) + (p[3],)
+        return tuple(t + _trunc((a - t) * u, 255) for t, a in zip(TILE, acc)) + (p[3],)
     if kind == 'fill':   # the fill (or lighter: white) becomes the accent, the track (or darker) stays, a pixel between them (an antialiased edge over a track) moves by its share t of the way fill -> accent
         if p[0] >= FILL_R: return acc + (p[3],)
         if p[0] <= TRACK_R: return p
@@ -248,6 +252,23 @@ def accent_kind(name):
 def tint_surface(name):
     """A theme image the Tinted background tints: a plain name with one of the TINT_SURFACE prefixes."""
     return plain(name) and name.startswith(TINT_SURFACE)
+
+
+PA_TRACK_A, DL_TRACK_R, DL_ARC_R = C['PA_TRACK_A'], C['PA_DL_TRACK_R'], C['PA_DL_ARC_R']   # pc_atlas' rings: the Podcasts ring's track alpha, the download ring's track and arc greys
+
+
+def ring_pixel(p, ac):
+    """patch/podcasts.c pg_ring_tint: a pixel (r, g, b, a) of a Podcasts progress ring cell under an accent: above the track's alpha the share that is arc goes from white to the accent."""
+    if ac == 'neutral' or p[3] <= PA_TRACK_A: return tuple(p)
+    f = (p[3] - PA_TRACK_A) * 255 // (255 - PA_TRACK_A)
+    return tuple((255 * (255 - f) + c * f + 127) // 255 for c in ACCENT_RGB[ac]) + (p[3],)
+
+
+def dl_ring_pixel(p, ac):
+    """patch/libsrc.c ls_ring_tint: a pixel of a source row's download ring step: its grey above the track's says how much is arc, which goes from the track grey to the accent."""
+    if ac == 'neutral' or not p[3] or p[0] <= DL_TRACK_R: return tuple(p)
+    f = min(255, (p[0] - DL_TRACK_R) * 255 // (DL_ARC_R - DL_TRACK_R))
+    return tuple((DL_TRACK_R * (255 - f) + c * f + 127) // 255 for c in ACCENT_RGB[ac]) + (p[3],)
 
 
 def render_image(name, im, bg='black', ac='neutral'):

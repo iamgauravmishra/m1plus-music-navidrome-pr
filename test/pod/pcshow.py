@@ -1061,4 +1061,27 @@ def screen_off_tests(ctx):
     expect(m.thread and m.thread[0] == PSYMS['pn_dmain'] and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0, 'the dark: the waiting refresh is dropped, the downloads go on, no dialog')
 
 
-SECTIONS = [asset_tests, layout_tests, cell_tests, tap_tests, latest_tests, order_tests, nav_tests, tint_tests, sheet_tests, mark_all_tests, refresh_tests, unsub_tests, wrap_tests, width_tests, screen_off_tests]
+def ring_accent_tests(ctx):
+    """The progress ring's arc under an accent (Teal): the ring cells of the atlas the page decodes are the model's, everything else in the atlas (the glyphs, the badge, the pills' ends) is the PNG's; Neutral is the PNG."""
+    expect = ctx.expect
+    from PIL import Image
+    import palette
+    im = Image.open(os.path.join(mod_icons.PNG, 'pc_atlas.png')).convert('RGBA')
+    n = O['PA_SIZE']
+    ring_h, ring_w = O['PA_RING_PX'] * (O['PA_RING_N'] // O['PA_RING_COLS']), O['PA_RING_PX'] * O['PA_RING_COLS']
+    for name, acc, ac in (('Teal', b'4\n', 'teal'), ('Neutral', None, 'neutral')):
+        m = shown(card=(lambda mm, acc=acc: (deep_card(mm), acc and mm.fs.__setitem__('/mnt/data/m1plus/appearance-accent', acc))))
+        h = PCP.hdr(m)
+        handle = frame(m, h + 5 * CELL - 20)[0][0][0]   # (any blit of the page's atlas: the cells' sprites come from it; cell 5 is the downloading ring)
+        data, w, hh = m.bitmaps[handle]
+        got = struct.unpack(f'<{w * hh}I', m.u.mem_read(data, w * hh * 4))
+        want = [[palette.ring_pixel(im.getpixel((x, y)), ac) if y < ring_h and x < ring_w else im.getpixel((x, y)) for x in range(n)] for y in range(n)]
+        bad = [(x, y) for y in range(n) for x in range(n) if tuple(got[y * n + x] >> s & 255 for s in (0, 8, 16, 24)) != want[y][x] and (want[y][x][3] or got[y * n + x] >> 24)]
+        expect((w, hh) == (n, n) and not bad, f'{name}: the atlas the page paints from is the PNG with the ring arcs {"in the accent" if acc else "as drawn"} ({len(bad)} pixels differ: {bad[:3]})')
+        if acc:
+            arc = [got[y * n + x] for y in range(ring_h) for x in range(ring_w) if got[y * n + x] >> 24 == 255]
+            track = [got[y * n + x] for y in range(ring_h) for x in range(ring_w) if 0 < got[y * n + x] >> 24 <= O['PA_TRACK_A']]
+            expect(arc and all(p_ & 0xffffff == 0xe0c840 for p_ in arc) and track and all(p_ & 0xffffff == 0xffffff for p_ in track), 'a full-alpha arc pixel is #40C8E0 and the track stays white')
+
+
+SECTIONS = [asset_tests, layout_tests, cell_tests, ring_accent_tests, tap_tests, latest_tests, order_tests, nav_tests, tint_tests, sheet_tests, mark_all_tests, refresh_tests, unsub_tests, wrap_tests, width_tests, screen_off_tests]

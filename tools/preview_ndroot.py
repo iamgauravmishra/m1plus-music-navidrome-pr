@@ -36,7 +36,7 @@ def page(s, state='connected', scroll=0, search=True, card=False, syncing_card=F
             if w.type == 'image': g = s.img(w.get('image')); im.alpha_composite(g, (w.x + (w.w - g.width) // 2, w.y + (w.h - g.height) // 2))
             elif n.endswith('pill') or n.endswith('dl'):
                 from PIL import ImageDraw
-                ImageDraw.Draw(im).rounded_rectangle((w.x, w.y, w.x + w.w - 1, w.y + w.h - 1), radius=w.h // 2, fill=(0x1E, 0x1E, 0x1E))
+                ImageDraw.Draw(im).rounded_rectangle((w.x, w.y, w.x + w.w - 1, w.y + w.h - 1), radius=w.h // 2, fill=(0x1C, 0x1C, 0x1E))
                 s.text(im, w.x + w.w // 2, w.y + w.h / 2, PS.tr(s, s.shown(w)), 18, anchor='m')
             elif n == 'nd_es_title': s.text(im, w.x + w.w // 2, w.y + w.h / 2, PS.fit(s, PS.tr(s, s.shown(w)), 18, w.w), 18, (255, 255, 255), anchor='m')
             else:   # the sentence: the label's own size, wrapped at words and centred, from the label's top (patch/ndroot.c turns the wrap on)

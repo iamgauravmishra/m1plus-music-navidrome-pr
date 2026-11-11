@@ -9,6 +9,7 @@
 #include "radio.h"
 #include "shot.h"
 #include "covercache.h"
+#include "palette.h"
 
 /* The library scan's folder walk (tools/pod.py SCAN_SITE, docs/modules/payload.md hook 5): stock skips a directory entry when strcmp(name, ".") is 0 (and then ".." and a list of
  * system folders); the call is replaced by `jal m1_scan_dir`, whose delay slot still loads a1 = ".". A hidden folder (a name starting with '.') counts as a match, so
@@ -380,14 +381,43 @@ __attribute__((noinline)) void m1_corners(void *canvas, const unsigned char *tab
         }
 }
 
+int m1_text_w(void *w, const unsigned *t) { return (int)(widget_measure_text(w, t) + 0.999f); }
+
+void m1_tap_at(m1_tap_t *t, void *e) { t->x = *(int *)((char *)e + PE_X), t->y = *(int *)((char *)e + PE_Y); }
+
+int m1_tap_near(const m1_tap_t *t, void *e) {
+    return m1_abs(*(int *)((char *)e + PE_X) - t->x) < SC_DRAG_PX &&
+           m1_abs(*(int *)((char *)e + PE_Y) - t->y) < SC_DRAG_PX;
+}
+
+int m1_pill_pair(int x0, int w0, int glyph, int gap, int tw, int *tx, int *twide) {
+    int gx = x0 + (w0 - (glyph + gap + tw)) / 2;
+    *tx = gx + glyph + gap, *twide = tw + AB_TEXT_SLACK;
+    return gx;
+}
+
 void m1_pill_place(m1_pill_t *p, int y) {
     const unsigned *text = widget_get_text(p->ptext);
-    float w = text && *text ? widget_measure_text(p->ptext, text) : 0.0f;
-    int tw = (int)(w + 0.999f), x;
+    int tw = text && *text ? m1_text_w(p->ptext, text) : 0, x;
     if (tw <= 0 || AH_PILL_GLYPH + AH_PILL_GAP + tw > AH_PLAY_W) tw = AB_PLAY_TEXT_W;
-    x = AH_PLAY_X + (AH_PLAY_W - (AH_PILL_GLYPH + AH_PILL_GAP + tw)) / 2;
+    x = m1_pill_pair(AH_PLAY_X, AH_PLAY_W, AH_PILL_GLYPH, AH_PILL_GAP, tw, &p->tx, &p->tw);
     widget_move(p->glyph, x, y + (AH_BTN_H - AH_PILL_GLYPH) / 2);
-    p->tx = x + AH_PILL_GLYPH + AH_PILL_GAP, p->tw = tw + AB_TEXT_SLACK;
+}
+
+void m1_sheet_rows(void *scrim, void *card, int w, void *const *rows, void *const *hrs, int n) {
+    static const char *const glass[] = {"",          "pc_sheet1", "pc_sheet2", "pc_sheet3",
+                                        "pc_sheet4", "pc_sheet5", "pc_sheet6"};
+    int i, h = n * PM_ROW_H;
+    for (i = 0; i < n; ++i) {
+        widget_move(rows[i], 0, i * PM_ROW_H);
+        m1_show(rows[i], 1);
+        widget_set_visible(hrs[i], i > 0, 0);
+    }
+    widget_move(card, 0, AH_WIN_H - h);
+    widget_resize(card, w, h);
+    widget_set_prop_str(card, "style:normal:bg_image", glass[n]);
+    m1_show(scrim, 1);
+    m1_show(card, 1);
 }
 
 void m1_pill_paint(const m1_pill_t *p, void *canvas, int y) {
@@ -406,8 +436,7 @@ void m1_centre_pill(void *btn, int pw) {
     static const char *const key[5] = {"normal:", "pressed:", "over:", "focused:", "disable:"};
     static const char *const prop[5] = {"margin_left", "icon_at", "margin_right", "spacer", "text_align_h"};
     const unsigned *text = widget_get_text(btn);
-    float w = text && *text ? widget_measure_text(btn, text) : 0.0f;
-    int tw = (int)(w + 0.999f), margin, i, j;
+    int tw = text && *text ? m1_text_w(btn, text) : 0, margin, i, j;
     unsigned v[4], val[5]; /* value_t: type at 0, the uint32 at 8 */
     char name[32];
     if (!text || !*text)
@@ -425,8 +454,7 @@ void m1_centre_pill(void *btn, int pw) {
             value_set_uint32(v, SG_PILL_PX_SMALL);
             widget_set_style(btn, name, v);
         }
-        w = widget_measure_text(btn, text);
-        tw = (int)(w + 0.999f);
+        tw = m1_text_w(btn, text);
     }
     margin = (pw - (SG_PILL_GLYPH + SG_PILL_GAP + tw)) / 2 - (SG_PILL_H - SG_PILL_GLYPH) / 2;
     if (margin < 0) margin = 0;
@@ -449,10 +477,13 @@ void m1_centre_pill(void *btn, int pw) {
 /* A select mark: the stock image (26 px) as a bitmap, cut to its circle. cc_decode flattens the image over black, so the square
  * around the ring would be black on a cover (the Playlists grid): every pixel's alpha becomes its coverage by the ink's circle
  * (the stock unselect / selected images: ink 2 .. 23, a circle of radius SG_MARK_INK centred in the square; 8 x 8 samples a pixel),
- * so only the ring and what it holds are drawn. Over the Songs page's black it looks as before. */
+ * so only the ring and what it holds are drawn. Over the Songs page's black it looks as before.
+ * The selected mark ("selected": a white disc, the tick cut out, so black once flattened) takes the accent under one, like Select All (mulselected): white goes to the accent, the black tick
+ * stays black (dark ink on an accent fill, as the Play pill's); Neutral keeps it white. The unselected ring stays white. */
 #define SG_MARK_INK 11
 void *m1_make_mark(void *win, const char *name) {
     unsigned *px, x, y, i, j, n, c = 8 * SG_MARK, rr = 2 * 8 * SG_MARK_INK;
+    unsigned acc = name[0] == 's' && pal_accent() ? pal_fill() : 0; /* "selected" (not "unselect") under an accent */
     void *b = bitmap_create_ex(SG_MARK, SG_MARK, SG_MARK * 4, BITMAP_RGBA8888);
     int ok;
     if (!b) return b;
@@ -471,6 +502,11 @@ void *m1_make_mark(void *win, const char *name) {
                     int dx = (int)(2 * (x * 8 + i) + 1) - (int)c, dy = (int)(2 * (y * 8 + j) + 1) - (int)c;
                     n += (unsigned)(dx * dx + dy * dy) <= rr * rr;
                 }
+            if (acc) { /* the pixel's lightness (its red: white to black) scales the accent, per channel, rounded */
+                unsigned v = px[y * SG_MARK + x] & 255, s;
+                px[y * SG_MARK + x] = 0;
+                for (s = 0; s < 24; s += 8) px[y * SG_MARK + x] |= ((acc >> s & 255) * v + 127) / 255 << s;
+            }
             px[y * SG_MARK + x] = (px[y * SG_MARK + x] & 0xffffff) | ((n * 255 + 32) / 64) << 24;
         }
     bitmap_unlock_buffer(b);
@@ -620,7 +656,7 @@ void m1_segmented(void *canvas, int view_h, int x, int y, int w, int h, int n, i
         void *st = k == sel ? st_on : st_off;
         int tw;
         widget_prepare_text_style(st, canvas);
-        tw = (int)(widget_measure_text(st, label[k]) + 0.999f);
+        tw = m1_text_w(st, label[k]);
         rect[0] = x + SEG_PAD + k * seg + (seg - tw) / 2, rect[1] = y + (h - SEG_LABEL_H) / 2, rect[2] = tw + 2,
         rect[3] = SEG_LABEL_H;
         if (len[k] > 0 && rect[1] >= 0 && rect[1] + SEG_LABEL_H <= view_h)

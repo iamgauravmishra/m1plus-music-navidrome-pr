@@ -65,7 +65,8 @@ static struct {
     unsigned nsel;
     int select;
     int press; /* the row under the finger, + 1 */
-    int down, down_x, down_y; /* the row a press began on, + 1, and where */
+    int down; /* the row a press began on, + 1 */
+    m1_tap_t tap; /* and where */
     int picker; /* the stock playlist picker is open over this page */
     char title_save[0x200]; /* nagvation_title across the picker */
     int cls; /* the class listed: 0xff10, 0xff11 or 0xff14 */
@@ -241,7 +242,7 @@ static void *ab_make_wave(void *win) {
 
 static void ab_paint_wave(void *canvas, int i, int y) {
     int src[4], dst[4];
-    dst[0] = AB_NUM_X + ab_shift() + ab_numw(i) - AB_WAVE, dst[1] = y + AB_TEXT_Y + (AB_TEXT_H - AB_WAVE) / 2;
+    dst[0] = AB_NUM_X + ab_shift() + ab_numw(i) - AB_WAVE, dst[1] = y + AB_WAVE_Y;
     dst[2] = dst[3] = AB_WAVE;
     src[0] = src[1] = 0, src[2] = src[3] = AB_WAVE;
     if (dst[1] >= 0 && dst[1] + AB_WAVE <= AH_WIN_H) canvas_draw_image(canvas, ab.wave, src, dst);
@@ -961,7 +962,7 @@ static int ab_on_down(void *ctx, void *e) {
     ab.down = ab.down_more = 0;
     if (!e || !ab.view || !ab.count || !ab_valid()) return RET_OK;
     a = ab_item_of(e);
-    ab.down = a + 1, ab.down_x = I(e, PE_X), ab.down_y = I(e, PE_Y);
+    ab.down = a + 1, m1_tap_at(&ab.tap, e);
     ab.down_more = a >= 0 && ab_in_zone(e);
     if (!ab.select && !ab.down_more) ab_set_press(a + 1);
     return RET_OK;
@@ -973,8 +974,7 @@ static int ab_on_up(void *ctx, void *e) {
     ab.down = ab.down_more = 0;
     ab_set_press(0);
     if (a < 0 || !e || !ab.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - ab.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - ab.down_y) < SC_DRAG_PX &&
-        ab_item_of(e) == a) {
+    if (m1_tap_near(&ab.tap, e) && ab_item_of(e) == a) {
         if (ab.select)
             ab_toggle(a);
         else if (more) {

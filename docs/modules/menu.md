@@ -55,7 +55,7 @@ restore the prior state. There is no legacy-format parser.
 
 `EXTRAS_GROUPS` defines Play, Library, Collections, Streaming (Subsonic, Tidal) and Tools. Extras shows items absent from
 the main menu unless they are off; empty groups have no header. Each `pod_hdr0..4` is a 40 px
-insensitive view with 20 px secondary-grey (#AAAAAA) text, not a clickable row. Shown headers/rows are restacked
+insensitive view with the group caption (18 px secondary-grey #AAAAAA text at x 18, the left of the rows' glyph ink; `pod_roles.CAPTION_*`), not a clickable row. Shown headers/rows are restacked
 in display order; hidden children follow. A missing header only removes that heading.
 
 The navbar's `btn_settings` replaces the menu's Settings row on this page. It opens the

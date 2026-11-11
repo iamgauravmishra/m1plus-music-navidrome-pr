@@ -57,7 +57,7 @@ def controls(s, work, bg=(0x14, 0x14, 0x14, 255), ink=lambda c: c):
         im.alpha_composite(s.img(n), (x, y)); x += 74
     y += 40
     # Now Playing's progress line for comparison, the volume bar, the waveform volume, brightness and balance
-    d.rectangle((12, y + 6, 12 + 295, y + 9), fill=ink((0x1C, 0x1C, 0x1C))); d.rectangle((12, y + 6, 12 + 170, y + 9), fill=ink((0xEE, 0xEE, 0xEC)))
+    d.rectangle((12, y + 6, 12 + 295, y + 9), fill=ink((0x1C, 0x1C, 0x1E))); d.rectangle((12, y + 6, 12 + 170, y + 9), fill=ink((0xEE, 0xEE, 0xEC)))
     y += 22
     im.alpha_composite(s.img('volume_bg'), (40, y)); im.alpha_composite(s.img('volume_fg').crop((0, 0, 150, 8)), (40, y)); y += 20
     wb, wf = s.img('vol_progressbak'), s.img('vol_progress')

@@ -82,7 +82,8 @@ static struct {
     void *chev, *ic[RI_N];
     az_t al; /* the countries' sections, rail and pinned header */
     grid_t g; /* the text ring of the rows and the stations' tiles */
-    int level, from, nrows, note, loading, genre, fg, press, down, down_x, down_y, title_on, noscroll, favs, sheet;
+    int level, from, nrows, note, loading, genre, fg, press, down, title_on, noscroll, favs, sheet;
+    m1_tap_t tap;
     int vlist, seen,
         dir; /* the station lists' mode (1 list, 0 grid), the offset the logo tick last saw, the way it went */
     int want, want_from,
@@ -795,20 +796,18 @@ static int rp_on_down(void *ctx, void *e) {
     rp.down = 0;
     if (!e || !rp.view || !rp.nrows || rp.note) return RET_OK;
     a = rp_item_of(e);
-    rp.down = a + 1, rp.down_x = I(e, PE_X), rp.down_y = I(e, PE_Y);
+    rp.down = a + 1, m1_tap_at(&rp.tap, e);
     rp_set_press(a + 1);
     return RET_OK;
 }
 
 static int rp_on_up(void *ctx, void *e) {
-    int a = rp.down - 1, x, near;
+    int a = rp.down - 1;
     (void)ctx;
     rp.down = 0;
     rp_set_press(0);
     if (a < 0 || !e || !rp.view || rp.note) return RET_OK;
-    x = I(e, PE_X);
-    near = m1_abs(x - rp.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - rp.down_y) < SC_DRAG_PX;
-    if (!near || rp_item_of(e) != a || a >= rp.nrows) return RET_OK;
+    if (!m1_tap_near(&rp.tap, e) || rp_item_of(e) != a || a >= rp.nrows) return RET_OK;
     if (rp_rows_lvl())
         rp_root_action(rp.rows[a]);
     else if (rp.level == L_PICK)
@@ -844,15 +843,8 @@ static int rp_on_more(void *ctx, void *e) {
     (void)e;
     if (!rp.view || !rp_more_on() || rp.sheet) return RET_OK;
     rp.sheet = 1;
-    widget_set_visible(rp.sh_hr, 0, 0);
-    widget_set_visible(rp.sh_clear_hr, 0, 0);
-    widget_move(row, 0, 0);
-    widget_move(rp.sh_card, 0, AH_WIN_H - PM_ROW_H);
-    widget_resize(rp.sh_card, RP_W, PM_ROW_H);
-    widget_set_prop_str(rp.sh_card, "style:normal:bg_image", "pc_sheet1");
-    m1_show(row, 1);
-    m1_show(rp.sh_scrim, 1);
-    m1_show(rp.sh_card, 1);
+    widget_set_visible(rp.favs ? rp.sh_clear_hr : rp.sh_hr, 0, 0); /* (the other level's row stays hidden) */
+    m1_sheet_rows(rp.sh_scrim, rp.sh_card, RP_W, &row, (void *const[]){rp.favs ? rp.sh_hr : rp.sh_clear_hr}, 1);
     return RET_OK;
 }
 

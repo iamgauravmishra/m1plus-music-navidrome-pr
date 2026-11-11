@@ -20,11 +20,12 @@ KB_KEYS = 26                                 # char key widgets (the letter page
 KB_MAX = 63                                  # bytes of text
 
 # Colours: white and grey only, no accent anywhere.
-KB_BG, KB_KEY, KB_KEY_DOWN = '#1C1C1E', '#4A4A4E', '#6E6E73'
+from pod_roles import INK_RGB, PLACEHOLDER_RGB, SURFACE_RGB
+KB_BG, KB_KEY, KB_KEY_DOWN = SURFACE_RGB, '#4A4A4E', '#6E6E73'
 KB_FN, KB_FN_DOWN = '#2E2E32', '#4A4A4E'
 KB_ON, KB_ON_DOWN = '#E5E5EA', '#C7C7CC'     # shift while it is on: a light key with a dark arrow
 KB_POP = '#6E6E73'
-KB_INK, KB_DARK_INK, KB_GREY = '#FFFFFF', '#1C1C1E', '#8E8E93'
+KB_INK, KB_DARK_INK, KB_GREY = INK_RGB, SURFACE_RGB, PLACEHOLDER_RGB
 KB_DIM = '#6E6E73'   # the action key's text while it is dimmed (the "disable" style: the Wi-Fi password page's Join before the password is valid)
 KB_RADIUS = 5
 KB_POP_W, KB_POP_H, KB_POP_R, KB_POP_PX, KB_POP_GAP = 46, 50, 10, 34, 10   # the balloon: 46 x 50, radius 10, its letter 34 px, 10 px above the key

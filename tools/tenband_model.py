@@ -50,6 +50,15 @@ def cover(x, y, w, h, r):
 def px(grey, alpha): return (int(alpha * 255 + 0.5), int(grey + 0.5))   # (alpha, grey)
 
 
+def card_blue(grey):
+    """patch/peqpage.h tb_cpx: the card's blue, 2 above the card grey, on that exact grey only (tracks, hairlines and lines stay neutral)."""
+    g = int(grey + 0.5)
+    return g + 2 * (g == GREY_CARD)
+
+
+def cpx(grey, alpha): return px(grey, alpha) + (card_blue(grey),)   # (alpha, grey, blue): a pixel of a card (the surface #1C1C1E)
+
+
 def card_px(x, y):
     v = float(GREY_CARD)
     for c in range(COLS):
@@ -59,12 +68,30 @@ def card_px(x, y):
         py = clamp(y + 0.5, Y0, Y0 + SPAN)
         d = math.sqrt(dx * dx + (y + 0.5 - py) ** 2)
         v += (GREY_TRACK - v) * clamp(r + 0.5 - d, 0, 1)
-    return px(v, cover(x, y, W, H, R))
+    return cpx(v, cover(x, y, W, H, R))
 
 
 def thumb_px(x, y):
     v = GREY_LINE if y == THUMB_H // 2 and 6 <= x < THUMB_W - 6 else GREY_THUMB
     return px(v, cover(x, y, THUMB_W, THUMB_H, 5.5))
+
+
+def apx(acc, grey, ref, alpha):
+    """patch/peqpage.h tb_apx: (alpha, r, g, b) of the accent acc scaled by grey / ref."""
+    return (int(alpha * 255 + 0.5),) + tuple(int(c * grey / ref + 0.5) for c in acc)
+
+
+def thumb_px_acc(x, y, acc):
+    """The thumb under an accent (tb_thumb_px with tb_accent): the accent, its line a darker one; (alpha, r, g, b)."""
+    v = GREY_LINE if y == THUMB_H // 2 and 6 <= x < THUMB_W - 6 else GREY_THUMB
+    return apx(acc, v, GREY_THUMB, cover(x, y, THUMB_W, THUMB_H, 5.5))
+
+
+def cmix(grey, a8, acc, k):
+    """patch/peqpage.h tb_cmix: the card pixel of grey `grey` a fraction k of the way to the accent; (alpha, r, g, b)."""
+    g = int(grey + 0.5)
+    base = (g, g, g + 2 * (g == GREY_CARD))
+    return (a8,) + tuple(int(b + (c - b) * k + 0.5) for b, c in zip(base, acc))
 
 
 def pill_px(x, y): return px(GREY_THUMB, cover(x, y, PILL_W, PILL_H, PILL_H / 2.0))

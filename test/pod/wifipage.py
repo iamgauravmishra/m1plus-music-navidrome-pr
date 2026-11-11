@@ -585,11 +585,11 @@ def asset_tests(ctx):
     expect(all(by[n].get(f'style:{s}:bg_image') == 'pod_cd_single' for n in ('wf_row_sw',) for s in ('normal', 'over', 'focused', 'disable')) and by['wf_row_sw'].get('style:pressed:bg_image') == 'pod_cd_single_down'
            and by['wf_row0'].get('style:normal:bg_image') == 'pod_cd_mid' and by['wf_row_other'].get('style:normal:bg_image') == 'pod_cd_bot' and by['wf_row_other'].get('style:pressed:bg_image') == 'pod_cd_bot_down', 'card pieces and their pressed twins')
     img = lambda n: by[n].get('image')
-    expect(img('wf_sw_img') == 'sset_off' and img('wf_chk0') == 'wf_check' and img('wf_lock0') == 'wf_lock' and img('wf_sig0') == 'wf_sig3' and img('wf_info0') == 'wf_info' and img('wf_hdr_net_spin') == 'wf_spin0', 'the images')
+    expect(img('wf_sw_img') == 'sset_off' and img('wf_chk0') == 'pod_check' and img('wf_lock0') == 'wf_lock' and img('wf_sig0') == 'wf_sig3' and img('wf_info0') == 'wf_info' and img('wf_hdr_net_spin') == 'wf_spin0', 'the images')
     import mod_icons, pod_i18n
     from PIL import Image
     png = lambda n: Image.open(os.path.join(ROOT, 'assets', 'icons', 'png', n + '.png')).convert('RGBA')
-    expect(png('wf_sig0').size == png('wf_sig1').size == png('wf_sig2').size == png('wf_sig3').size == (20, 16) and png('wf_lock').size == (16, 16) and png('wf_info').size == (22, 22) and png('wf_check').size == (20, 20)
+    expect(png('wf_sig0').size == png('wf_sig1').size == png('wf_sig2').size == png('wf_sig3').size == (20, 16) and png('wf_lock').size == (16, 16) and png('wf_info').size == (22, 22) and png('pod_check').size == (20, 20)
            and all(png(f'wf_spin{i}').size == (14, 14) for i in range(8)) and all(n in mod_icons.DAILY for n in mod_icons.WIFI_IMAGES), 'the added images have their sizes and are installed')
     opaque = lambda n: [p for p in png(n).getdata() if p[3] > 200]
     lit = lambda p: p[3] > 200 and p[0] > 240
@@ -791,7 +791,7 @@ def layout_tests(ctx):
     supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'COMPLETED', 0, '192.168.1.20'
     m = page(supp); opened(m)
     got = m.rows()
-    expect([g[0] for g in got] == L(ORDER) and got[0][1] == 'wf_check' and got[0][4] == 'pod_cd_bot' and got[0][5] == 62 and got[0][6] == 0 and not any(g[1] for g in got[1:]) and m.piece('wf_row_sw') == 'pod_cd_top' and m.visible('wf_hair_sw')
+    expect([g[0] for g in got] == L(ORDER) and got[0][1] == 'pod_check' and got[0][4] == 'pod_cd_bot' and got[0][5] == 62 and got[0][6] == 0 and not any(g[1] for g in got[1:]) and m.piece('wf_row_sw') == 'pod_cd_top' and m.visible('wf_hair_sw')
            and not m.visible('wf_hair0'), f'connected: Home under the switch in the same card with a check: {[(g[0], g[1], g[4], g[5]) for g in got[:2]]}')
     expect(not m.visible('wf_hdr_my') and m.y('wf_hdr_net') == 114 and [g[5] for g in got[1:]] == [154 + 52 * i for i in range(7)] and m.y('wf_row_other') == 154 + 52 * 7, 'no saved network left: no My Networks, the others follow the connected row')
     # joining: the spinner takes the check's place
@@ -803,7 +803,7 @@ def layout_tests(ctx):
     expect(f0 is not None and f0.startswith('wf_spin') and f1.startswith('wf_spin') and f0 != f1 and m.rows()[0][0] == 'Home', f'Connecting: the row is the connected one and a spinner turns where the check goes: {f0} {f1}')
     supp.state, supp.ip = 'COMPLETED', '192.168.1.20'
     m.tick(4)
-    expect(m.rows()[0][1] == 'wf_check', 'with an address: the check')
+    expect(m.rows()[0][1] == 'pod_check', 'with an address: the check')
     # two saved networks (one of them out of range) are one card, the out-of-range one last with no bar lit
     supp = Supp(scan=SCAN, known=KNOWN + [(b'Far', [('key_mgmt', 'NONE')]), (b'Cafe Open', [('key_mgmt', 'NONE')])])
     m = page(supp); opened(m)
@@ -850,7 +850,7 @@ def action_tests(ctx):
     expect(m.rows()[0][0] == 'Cafe Open' and m.rows()[0][1].startswith('wf_spin'), 'associated, no address yet (DHCP): still joining')
     m.supp.ip = '10.0.0.7'
     m.tick(4)
-    expect(m.rows()[0][0] == 'Cafe Open' and m.rows()[0][1] == 'wf_check', 'connected with an address: the check')
+    expect(m.rows()[0][0] == 'Cafe Open' and m.rows()[0][1] == 'pod_check', 'connected with an address: the check')
     n_log = len(m.supp.log)
     m.confirm_yes = False
     m.tap('wf_row0')
@@ -990,8 +990,8 @@ def pass_tests(ctx):
     need = ('btn_return', 'btn_backtoplayer', 'wk_line', 'wk_card', 'wk_label', 'wk_eye', 'wk_err', 'kb_field', 'kb_hint', 'kb_text', 'kb_caret', 'kb_clear', 'kb_pad', 'kb_strip', 'kb_stem', 'kb_pop', 'kb_pop_l', 'kb_cands', 'kb_chl', 'kb_go', 'kb_lang')
     expect(all(n in by for n in need) and all(f'kb_k{i}' in by for i in range(26)) and all(f'kb_c{i}' in by for i in range(12)), f'every widget the page and the keyboard look up is there: {[n for n in need if n not in by]}')
     box = lambda n: (by[n].x, by[n].y, by[n].w, by[n].h)
-    expect(box('wk_card') == (10, 100, 300, 52) and by['wk_card'].get('style:normal:bg_color') == '#1C1C1C' and box('wk_label')[0] == 24 and box('kb_field')[:2] == (144, 100) and box('wk_eye')[0] == 264 and by['wk_card'].get('sensitive') == 'false',
-           'one Settings card (10, 100, 300 x 52, #1C1C1C): the label at x 24, the field at x 144, the eye at the right')
+    expect(box('wk_card') == (10, 100, 300, 52) and by['wk_card'].get('style:normal:bg_color') == '#1C1C1E' and box('wk_label')[0] == 24 and box('kb_field')[:2] == (144, 100) and box('wk_eye')[0] == 264 and by['wk_card'].get('sensitive') == 'false',
+           'one Settings card (10, 100, 300 x 52, #1C1C1E): the label at x 24, the field at x 144, the eye at the right')
     ends = {n: by[n].y + by[n].h for n in ('wk_line', 'wk_card', 'kb_field', 'wk_eye', 'wk_err')}
     expect(all(v <= PK.STRIP_Y for v in ends.values()) and by['kb_strip'].y == PK.STRIP_Y, f'nothing but the pad reaches the candidate strip (y {PK.STRIP_Y}): {ends}')
     f = by['kb_field']
@@ -1059,7 +1059,7 @@ def pass_tests(ctx):
     m.supp.state, m.supp.ip = 'COMPLETED', '192.168.1.9'
     m.hist = []
     m.tick(4)
-    expect(m.rows()[0][1] == 'wf_check' and ('window_open', 'm1plus_wifipass') not in m.hist and not m.toasts(), 'connected: the check, no page, no word')
+    expect(m.rows()[0][1] == 'pod_check' and ('window_open', 'm1plus_wifipass') not in m.hist and not m.toasts(), 'connected: the check, no page, no word')
     # the password is only in the supplicant's configuration
     others = {k: v for k, v in m.fs.items() if k not in (WF_COPY, WF_CONF, WF_OURS)}
     expect(not any(PW.encode() in v for v in others.values()) and PW in m.fs[WF_CONF].decode() and not any(PW in repr(c) for c in m.hist), 'the password is written to the supplicant\'s configuration and nowhere else (no other file, no widget, no call)')
@@ -1088,7 +1088,7 @@ def pass_tests(ctx):
     m.supp.state, m.supp.ip = 'COMPLETED', '10.0.0.2'
     m.hist = []
     m.tick(4)
-    expect(('window_open', 'm1plus_wifipass') not in m.hist and 'REMOVE_NETWORK 2' not in m.cmds() and m.rows()[0][1] == 'wf_check', 'and when it connects the page is not asked for again')
+    expect(('window_open', 'm1plus_wifipass') not in m.hist and 'REMOVE_NETWORK 2' not in m.cmds() and m.rows()[0][1] == 'pod_check', 'and when it connects the page is not asked for again')
     # a network that never answers: after 20 s the same
     m = page(); opened(m)
     join_pass(m, 'Sam’s iPhone', PW)
@@ -1329,7 +1329,7 @@ def other_tests(ctx):
     m.supp.state, m.supp.ip = 'COMPLETED', '192.168.1.9'
     m.hist = []
     m.tick(4)
-    expect(backs(m) == 0 and m.rows()[0][0] == 'Hidden net' and m.rows()[0][1] == 'wf_check' and not m.toasts() and ('window_open', 'm1plus_wifiother') not in m.hist, 'connected: the check, nothing else is asked and no page is left to go back')
+    expect(backs(m) == 0 and m.rows()[0][0] == 'Hidden net' and m.rows()[0][1] == 'pod_check' and not m.toasts() and ('window_open', 'm1plus_wifiother') not in m.hist, 'connected: the check, nothing else is asked and no page is left to go back')
     # the Join key on the Password field needs a valid name too
     m = start()
     kclick(m, 'kb_go'); ktype(m, 'hunter22')
@@ -1374,7 +1374,7 @@ def other_tests(ctx):
     expect(m.rows()[0][0] == 'Hidden net' and m.rows()[0][1].startswith('wf_spin'), 'the list shows it joining')
     m.supp.state, m.supp.ip = 'COMPLETED', '10.0.0.5'
     m.tick(4)
-    expect(m.rows()[0][1] == 'wf_check' and not m.toasts() and 1 in m.supp.nets, 'connected: the check; the network stays saved')
+    expect(m.rows()[0][1] == 'pod_check' and not m.toasts() and 1 in m.supp.nets, 'connected: the check; the network stays saved')
     # a hidden open network that never shows: after 20 s the word, and it is removed
     m = start()
     to_picker(m, 0)
@@ -1769,7 +1769,7 @@ def timer_tests(ctx):
     expect(len(set(fr)) >= 7 and all(d != 0 for d in steps(fr)), f'associated, no address: still turning (the state change may lay the rows out once more): {fr}')
     m.supp.ip = '192.168.1.20'
     m.tick(4)
-    expect(m.rows()[0][1] == 'wf_check', 'DHCP gave an address: the check')
+    expect(m.rows()[0][1] == 'pod_check', 'DHCP gave an address: the check')
     supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'ASSOCIATING', 0, None
     m = page(supp); opened(m); m.tick(20)
     expect(not m.visible('wf_hdr_net_spin'), 'the initial scan has ended')
@@ -1786,7 +1786,7 @@ def timer_tests(ctx):
     m.tick(4)
     supp.log = []
     m.tick(16)
-    expect(m.rows()[0][1] == 'wf_check' and 'SCAN_RESULTS' not in m.cmds(), f'connected: the table is read only with the scans again: {m.cmds()}')
+    expect(m.rows()[0][1] == 'pod_check' and 'SCAN_RESULTS' not in m.cmds(), f'connected: the table is read only with the scans again: {m.cmds()}')
     supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'ASSOCIATING', 0, None
     m = page(supp); opened(m)
     fr = spin_run(m, 8)

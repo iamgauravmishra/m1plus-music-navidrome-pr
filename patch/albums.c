@@ -41,7 +41,7 @@
  *   touch      the scroll_view's: a drag scrolls, a release flings, a touch on a coasting list stops it and presses nothing. The content view
  *              only sees the pointer events the scroll_view passes on, as the shelf does: DOWN remembers the cell or row under the finger (the
  *              list mode fills the row LIST_PRESS), ABORT (the scroll_view took the gesture as a drag) forgets it, and a release closer than
- *              AL_TAP_PX (the scroll_view's own drag threshold) to the press on both axes, on the same cell or row, opens the stock album
+ *              SC_DRAG_PX (the scroll_view's own drag threshold) to the press on both axes, on the same cell or row, opens the stock album
  *              page as Cover Flow does (cc_open_album). Coordinates go through widget_to_local, which includes the scroll offset.
  *
  * An artist's or composer's page opens with the header instead of the large title: the artist's circle (an artist's only; a composer's header never has one) (AL_PHOTO_D px, made by the loader's first tick, patch/artistphoto.c), the
@@ -100,8 +100,6 @@ coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **
 #define AL_W \
     320 /* the content's width: the list_view's (its layouter gives a child a mobile scroll bar's list the full width; the scroll_view clips at 310, the covers end at 308) */
 #define AL_MORE_MS 16 /* the loader's tick */
-#define AL_TAP_PX \
-    SC_DRAG_PX /* a release closer than this to the press on both axes is a tap (from there the scroll_view drags) */
 #define AL_AHEAD (al.list ? 2 : 1) /* rows loaded beyond the view in the scroll direction */
 /* the most cells a frame can touch: (view + cell) / pitch + 1 rows of GRID_COLS; the ring must hold them, the next
  * row in the scroll direction and leave two tiles of history */
@@ -135,7 +133,8 @@ static struct {
     int seen; /* the scroll offset the loader last looked at (the direction is read from its change) */
     int dir; /* the way the content last went: 1 down the list, -1 back up */
     int noscroll; /* the scroll events could not be registered: the loader keeps polling for as long as the page is up */
-    int down, down_x, down_y; /* the cell or row a press began on, + 1 (0 none), and where (screen coordinates) */
+    int down; /* the cell or row a press began on, + 1 (0 none) */
+    m1_tap_t tap; /* and where (screen coordinates) */
     unsigned more_timer; /* the loader's */
     /* the background cache build (the shared worker, patch/covercache.c): build_timer is the one-shot start, then the poll;
      * own = this page holds the worker's job set; done = the worker's done counter at the last poll */
@@ -688,20 +687,18 @@ static int al_on_down(void *ctx, void *e) {
     al.down = 0;
     if (!e || !al.view) return RET_OK;
     a = al_item_of(e);
-    al.down = a + 1, al.down_x = I(e, PE_X), al.down_y = I(e, PE_Y);
+    al.down = a + 1, m1_tap_at(&al.tap, e);
     if (al.list) al_set_press(a + 1);
     return RET_OK;
 }
 
 static int al_on_up(void *ctx, void *e) {
-    int a = al.down - 1, dx, dy;
+    int a = al.down - 1;
     (void)ctx;
     al.down = 0;
     if (al.list) al_set_press(0);
     if (a < 0 || !e || !al.view) return RET_OK;
-    dx = m1_abs(I(e, PE_X) - al.down_x);
-    dy = m1_abs(I(e, PE_Y) - al.down_y);
-    if (dx < AL_TAP_PX && dy < AL_TAP_PX && al_item_of(e) == a) {
+    if (m1_tap_near(&al.tap, e) && al_item_of(e) == a) {
         int row = (int)(al.order ? al.order[a] : (unsigned)a); /* the stock row */
         if (al.src) { /* a source's album: its album page; an artist's All Songs tile: the source's songs of that artist */
             void *rec = deque_at(al.albums, (unsigned)row);

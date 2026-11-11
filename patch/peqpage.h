@@ -5,6 +5,7 @@
 #pragma once
 
 #include "peq.h"
+#include "palette.h"
 
 /* A row of the Presets page (patch/peqlib.c): parses the preset file of the card's EQ folder and opens the page. 1 once it is opening; 0 when the file cannot be read (the message box says so, nothing opens). */
 int peqpage_show(const char *file);
@@ -28,6 +29,29 @@ void peq_graph_curve(peq_graph *g, const peq_preset *p); /* g->db and g->range f
 int peq_graph_draw(peq_graph *g); /* g->bmp made or drawn again from the curve; 0 with no memory */
 void peq_graph_free(peq_graph *g);
 void peq_graph_paint(const peq_graph *g, void *e); /* the view's EVT_BEFORE_PAINT event: one blit */
+/* A card pixel (grey, alpha) with the card's blue, the one near-black surface #1C1C1E (blue 2 above the card grey 28, only on that exact grey: tracks, hairlines and lines stay neutral greys). Inline: the EQ cards bake 51 000 pixels each. */
+static inline unsigned tb_cpx(double grey, double alpha) {
+    unsigned g = (unsigned)(grey + 0.5);
+    return (unsigned)(alpha * 255 + 0.5) << 24 | (g + 2 * (g == TB_CARD_GREY)) << 16 | g * 0x0101u;
+}
+/* The accent on the EQ pages' "value" parts (the 10-Band thumb, the band page's fill, the graph's curve), baked into the bitmaps when a page opens (it does not follow a change under an open page):
+ * tb_acc() is pal_fill() under an accent, 0 under Neutral (the greys as they were). tb_apx: a pixel of grey `grey` out of `ref` (the white it goes from) on the accent, alpha. tb_cmix: the card pixel
+ * of grey `grey` (tb_cpx) a fraction k of the way to the accent, per channel. */
+static inline unsigned tb_acc(void) { return pal_accent() ? pal_fill() : 0; }
+static inline unsigned tb_apx(unsigned acc, double grey, double ref, double alpha) {
+    unsigned s, o = (unsigned)(alpha * 255 + 0.5) << 24;
+    for (s = 0; s < 24; s += 8) o |= (unsigned)((acc >> s & 255) * grey / ref + 0.5) << s;
+    return o;
+}
+static inline unsigned tb_cmix(double grey, double alpha, unsigned acc, double k) {
+    unsigned g = (unsigned)(grey + 0.5), base[3] = {g, g, g + 2 * (g == TB_CARD_GREY)}, s,
+             o = (unsigned)(alpha * 255 + 0.5) << 24, i;
+    for (i = 0; i < 3; ++i) { /* (red, green, blue from bit 0, 8, 16) */
+        s = i * 8;
+        o |= (unsigned)(base[i] + ((double)(acc >> s & 255) - base[i]) * k + 0.5) << s;
+    }
+    return o;
+}
 void peq_blit(void *canvas, void *bmp, int w, int h, int x, int y); /* one 1:1 canvas_draw_image */
 void peq_label_colors(void *w, const char *rgb); /* a label's text colour in its normal, disabled and focused states */
 void peq_graph_scale(const peq_graph *g, void *top, void *bot); /* the scale labels: +R, -R */

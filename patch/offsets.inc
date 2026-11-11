@@ -246,8 +246,8 @@
 #define ROW_ART_INSET 4         /* the cover's left inset on x=0 rows */
 #define ROW_SEPARATOR 4         /* list_item_style draws a 4 px separator under each list_item row */
 #define ROW_MARKER_IMAGE "np_row_playing"   /* the playing row's marker: 40 x 20, a 20 px wave at its right end (tools/mod_icons.py NP) */
-#define ROW_NUM_W 22           /* the album page's number column (patch/albumpage.c): every digit is 10 px at 19 px by AWTK's metrics, "99" = 20 */
-#define ROW_NUM_W3 32          /* the column of a 3-digit number (a 100+ track album): "999" = 30 */
+#define ROW_NUM_W 24           /* the album page's number column (patch/albumpage.c): every digit is 11 px at the list title size (LIST_TITLE_PX 21) by AWTK's metrics, "99" = 22 */
+#define ROW_NUM_W3 34          /* the column of a 3-digit number (a 100+ track album): "999" = 33 */
 #define ROW_MAX_CHILDREN 16   /* the row fit leaves anything with more children to the stock layout */
 
 
@@ -329,7 +329,8 @@
 #define AB_TEXT_END 298
 #define AB_TEXT_Y 20
 #define AB_TEXT_H 22
-#define AB_WAVE 12             /* the playing track's marker (ah_wave): a square bitmap right-aligned in the number column, centred on the title's line */
+#define AB_WAVE 12             /* the playing track's marker (ah_wave): a square bitmap right-aligned in the number column */
+#define AB_WAVE_Y 24           /* its top in the row: 1 px above the centre of the title's line (AB_TEXT_Y + (AB_TEXT_H - AB_WAVE) / 2 = 25), on the centre of the capitals and digits */
 #define AB_WAVE_COLOR 0x00ECEEEEu /* its colour #EEEEEC as a RGBA8888 word (red in the low byte), the rows' wave */
 #define AB_PRESS 0x33ffffffu
 #define AB_HAIR 0x22ffffffu
@@ -769,7 +770,7 @@
  * outside the scroll_view so a touch on it never starts a drag; letters and dots are aligned from the font's metrics, SG_RAIL_INK2 and SG_RAIL_DX of stock.h): a compact index like the stock Songs page's (its A * . . F . . K image, search_icon.png): items SG_RAIL_PITCH px apart centred on x SG_RAIL_CX and
  * vertically on the list, at most SG_RAIL_ITEMS of them (SG_RAIL_PITCH x SG_RAIL_ITEMS px); the sections' letters, all of them when they fit, else every k-th (the first and
  * last always) with a SG_RAIL_DOT px dot between two letters; a finger's position along the drawn span is mapped to ALL the sections; the touched letter (when it is a drawn
- * one) on a SG_RAIL_DISC px disc (SG_ACCENT) with a black letter; a SG_BUBBLE px bubble (a widget) shows the real letter. In select mode a SG_BAR_H high bar at the window's
+ * one) on a SG_RAIL_DISC px disc (pal_fill(): the accent, Neutral #EEEEEC) with a black letter; a SG_BUBBLE px bubble (a widget) shows the real letter. In select mode a SG_BAR_H high bar at the window's
  * bottom holds the Add to playlist and Delete pills. The navbar's title shows from scroll offset SG_COLLAPSE on (the large title has gone). HOME_MYMUSIC: the stock
  * Songs page's Home id, where a window that will not open falls back. SG_MAX_SEC: room for the sections (one per rank: "#" and A..Z, patch/songs.c SG_RANKS). SG_BUILD_N: the songs either side
  * of the first one in view the background cover build looks at; SG_BUILD_MOVE the distance the page has to scroll before it looks again.
@@ -837,7 +838,6 @@
 #define SG_RAIL_DOT 4
 #define SG_RAIL_DOT_RGB 0xff8a8a8au
 #define SG_RAIL_DISC 16
-#define SG_ACCENT 0xffeceeeeu
 #define SG_BUBBLE 110
 #define SG_BAR_H 64
 #define SG_MAX_SEC 28
@@ -1226,6 +1226,9 @@
 #define PA_PILLW_PX 40
 #define PA_FILL_A 56
 #define PA_RING_A 110
+#define PA_TRACK_A 80 /* the progress ring's track alpha (white; the arc is white at more): under an accent a pixel above it is arc, in the accent (patch/podcasts.c pg_ring_tint) */
+#define PA_DL_TRACK_R 90 /* the download ring's track grey (0x5A) and its arc's (0xD0, the downloaded disc's): a ring pixel's grey says how much of it is arc, which goes to the accent (patch/libsrc.c ls_ring_tint) */
+#define PA_DL_ARC_R 208
 #define PA_CHEV 6
 #define PA_TILE_PX 44
 #define PA_DL_X 76 /* the source rows' download ring (patch/libsrc.c): 12 steps of PA_DL_PX, step k at column k % PA_DL_COLS, row k / PA_DL_COLS from here */
@@ -1285,7 +1288,7 @@
 /* The segmented control (patch/common.c m1_segmented, docs/modules/ui-rules.md "Segmented control"; the Discover level's Shows | Episodes is the first): a fully rounded track (SEG_TRACK, #1C1C1E, as the cards) holding equal segments, the selected one a
  * fully rounded thumb (SEG_THUMB, #D1D1D6, black label) SEG_PAD inside the track on every side, the other labels white; a SEG_SEP (#3A3A3C) hairline half the track high between two unselected segments. Colours are color_t words (r, g, b, a bytes). */
 #define SEG_PAD 3
-#define SEG_TRACK 0xff1e1c1cu
+#define SEG_TRACK 0xff1e1c1cu /* the surface #1C1C1E */
 #define SEG_THUMB 0xffd6d1d1u
 #define SEG_SEP 0xff3c3a3au
 #define SEG_LABEL_H 20 /* the label's rect: 18 px text */
@@ -1475,16 +1478,20 @@
 #define ACC_TINT 22
 #define ACC_WASH 12  /* the Tinted background: a dark neutral colour (channels within LIGHT_SPREAD, none above ACC_DARK) takes this percent of the accent */
 #define ACC_DARK 0x40
-#define ACC_CARD 0x1c1c1c
+#define ACC_CARD 0x1c1c1e /* the one near-black surface (tools/pod_roles.py SURFACE_RGB): the Settings cards, fields, flat pills, tiles */
 #define ACC_TRACK_R 51
 #define ACC_FILL_R 238
 #define ACC_KNOB_R 20
-#define ACC_TILE_R 30 /* the Podcasts Library tiles' square, #1E1E1E: stays exactly, the white glyph on it goes to the accent */
+#define ACC_TILE 0x1c1c1e /* the Podcasts Library tiles' square (the surface, #1C1C1E): stays exactly, the white glyph on it goes to the accent; its red is the lightness scale's low end */
+#define TB_CARD_GREY 28 /* the EQ cards' baked grey (patch/tenband.c tb_cpx adds the surface's blue 30 on that exact grey) */
 #define ROLE_PRESS_ROW 0x333334
 #define ROLE_PROGRESS 0xfffffe
+#define ROLE_FILL 0xebebec /* the own progress fills (Home cache pill, Podcasts refresh and Software Update dialogs; tools/pod_ui.py PD_FILL_RGB): #EBEBEB one blue level up, the accent maps it */
+#define ROLE_SHEET_PRESS 0xfffffd /* a pressed row of a bottom sheet / floating card (tools/pod_ui.py PL_PRESSED, #FFFFFD10): white at 6 % alpha over glass; an accent makes it the accent at ACC_SHEET_A */
+#define ACC_SHEET_A 56 /* alpha of that pressed row under an accent: ACC_TINT (22) percent of 255 */
 #define ROLE_PRESS_PILL 0x333335 /* the pressed Play / Shuffle pill (tools/pod_ui.py SG_PILL_PRESS_RGB; one blue level off #333333): mix(ACC_PILL, accent, ACC_TINT %) */
 #define ROLE_PRESS_QPILL 0x3a3a3d /* the Queue's Shuffle / Repeat buttons pressed while off (QP_PILL_OFF_DOWN): mix(ACC_QPILL, accent, ACC_TINT %) */
-#define ACC_PILL 0x1e1e1e /* the flat pills' rest colour (SG_PILL_RGB) */
+#define ACC_PILL 0x1c1c1e /* the flat pills' rest colour (SG_PILL_RGB, the surface) */
 #define ACC_QPILL 0x2c2c2e /* the Queue's off buttons' rest colour (QP_PILL_OFF) */
 #define ACC_SHUF 0x2a2a2a /* the album page's Shuffle disc at rest (ah_shuffle); pressed ah_shuffle_down is ACC_SHUF_DOWN_R grey with the white glyph */
 #define ACC_SHUF_DOWN_R 68
@@ -1509,7 +1516,7 @@
 #define VS_WITH_SELECT (1u << VS_SELECT) /* the vs_bind mask bit that offers the Select row */
 #define VS_WITH_VIEWS (((1u << VS_VIEWS) - 1) << VS_SORTS) /* the vs_bind mask bits that offer the two view rows (Grid, List; the Artists page's Show group Artists, Album Artists) */
 #define VS_GLASS_FMT "vs_glass%d" /* the glass of the card, one picture per row count (tools/mod_icons.py GLASS_VIEWSORT*: 1, 2, 3, 4, 6 and 7 rows); the asset's own is the seven-row vs_glass7 */
-#define VS_ROW_H 48
+#define VS_ROW_H 50 /* = the bottom sheets' row (docs/modules/ui-rules.md) */
 #define VS_TICK_X 14 /* the tick column's left inset */
 #define VS_TICK_W 14 /* the tick (sg_tick), centred in the row */
 #define VS_GLYPH 20 /* the view rows' and the Search row's glyph */
@@ -1518,9 +1525,9 @@
 #define VS_LABEL_X_GLYPH 66 /* a label after a glyph: VS_GLYPH_X + VS_GLYPH + 8 */
 #define VS_LABEL_R 16
 #define VS_CARD_MIN 206 /* 220 less the 14 px the glyph labels gained (VS_LABEL_X_GLYPH 80 -> 66) */
-#define VS_LABEL2_Y 4
+#define VS_LABEL2_Y 5
 #define VS_LABEL2_H 22
-#define VS_SUB_Y 24
+#define VS_SUB_Y 25
 #define VS_SUB_H 22
 
 /* The Equalizer page (patch/peq_ui.c, tools/pod_ui.py build_peq_page, docs/modules/peq.md): rows pod_row0 (the switch, pod_switch0), pod_row1 (Graphic EQ)
@@ -1528,7 +1535,7 @@
 #define PQ_FIRST 2                /* the first preset row */
 #define PQ_ROWS 64                /* preset rows: the files of /mnt/mmc/EQ the page lists, sorted by name (the Equalizer page; the Presets page has PQ_ROWS per section) */
 /* The preset page (patch/peqpage.c, tools/pod_ui.py build_peqpage_page / cards_graph, tools/pod_settings.py, docs/modules/peq.md "Preset page"): a cards page; pod_graph is the graph card, a transparent
- * view GRAPH_H = GR_H high whose EVT_BEFORE_PAINT blits a GR_W x GR_H bitmap (the card baked in: #1C1C1C, GR_CARD_R corners in the alpha, the grid and the curve) at x GR_CARD_X; pod_row0 the preamp row
+ * view GRAPH_H = GR_H high whose EVT_BEFORE_PAINT blits a GR_W x GR_H bitmap (the card baked in: #1C1C1E, GR_CARD_R corners in the alpha, the grid and the curve) at x GR_CARD_X; pod_row0 the preamp row
  * (pod_value0), pod_row1 .. GR_BANDS the band rows (pod_label<i> the frequency, pod_value<i> the gain, pod_sub<i> the grey line). The plot is GR_PW columns from card x GR_PX0, GR_DECADE per decade
  * from 20 Hz to 20 kHz (a column per pixel), GR_PH rows from card y GR_PY0, +R dB at the top and -R at the bottom, R 12, 18 or 24. */
 #define GR_W 300
@@ -1541,7 +1548,7 @@
 #define GR_PH 138
 #define GR_DECADE 83
 #define GR_BANDS 30
-/* The 10-Band editor's slider card (patch/tenband.c, tools/pod_ui.py cards_sliders, docs/modules/peq.md "10-Band EQ"): pod_sliders is a view TB_H high; its EVT_BEFORE_PAINT blits a TB_W x TB_H bitmap (the card #1C1C1C
+/* The 10-Band editor's slider card (patch/tenband.c, tools/pod_ui.py cards_sliders, docs/modules/peq.md "10-Band EQ"): pod_sliders is a view TB_H high; its EVT_BEFORE_PAINT blits a TB_W x TB_H bitmap (the card #1C1C1E
  * baked in with TB_R corners and the TB_COLS tracks, TB_TRACK_W wide) at x TB_CARD_X, then a thumb TB_THUMB_W x TB_THUMB_H per column, and the white pill behind the value being dragged. Column c is TB_COL_W wide from card x TB_X0 + c * TB_COL_W;
  * the track runs from card y TB_Y0 (+12 dB) down TB_SPAN px (-12 dB: TB_PX_DB px a decibel, so two a half-decibel step); pod_sl_v<c> (value) and pod_sl_f<c> (frequency) are labels over / under the column. */
 #define TB_W 300
@@ -1566,7 +1573,7 @@
 #define TB_LABEL_W 36 /* a value or frequency label: wider than its column (a value like -11.5 at TB_LABEL_PX), centred on it; the labels never take a touch */
 #define TB_LABEL_PX 11
 /* The band page (patch/peqband.c, tools/pod_ui.py cards_segment / cards_hsliders, docs/modules/peq.md "Preset editing"). pod_seg is a view BD_SEG_ITEM_H high holding the Peak / Low shelf / High shelf control: its EVT_BEFORE_PAINT blits a BD_SEG_W x BD_SEG_H
- * bitmap (the container #1C1C1C, BD_SEG_R corners) at x BD_CARD_X, y BD_SEG_Y, then the selected segment's pill (BD_SEG_PILL_W x BD_SEG_PILL_H, BD_SEG_PAD in); pod_seg_l<k> are the three labels. pod_hsl is a view BD_HSL_H high: a BD_HSL_W x BD_HSL_H card bitmap with the
+ * bitmap (the container #1C1C1E, BD_SEG_R corners) at x BD_CARD_X, y BD_SEG_Y, then the selected segment's pill (BD_SEG_PILL_W x BD_SEG_PILL_H, BD_SEG_PAD in); pod_seg_l<k> are the three labels. pod_hsl is a view BD_HSL_H high: a BD_HSL_W x BD_HSL_H card bitmap with the
  * BD_ROWS rows' tracks (BD_TRACK_W px from card x BD_TRACK_X, BD_TRACK_H thick, centred BD_TRACK_Y into each BD_ROW_H row) baked in, a white fill from the left end to the thumb and a BD_THUMB round thumb; pod_hs_n<r> (name) and pod_hs_v<r> (value) are the row's labels in its top BD_TEXT_H px,
  * where a tap types the value. The graph card of the preset page is above them; BD_RING is the ring that marks the band on its curve. */
 #define BD_CARD_X 10

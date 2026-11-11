@@ -224,7 +224,7 @@ def draw_wifi(s, on=True, nets=(), scanning=True, joining=False, scroll=0):
         name, level, secured, saved, conn = n
         row(y, p, hair)
         w = by['wf_name0']; s.text(im, w.x + 2, y + ST.ROW_H / 2, s.clip(name, 21, w.w - 4), 21)
-        if conn: im.alpha_composite(s.img('wf_spin1' if joining else 'wf_check'), (by['wf_chk0'].x + (3 if joining else 0), y + by['wf_chk0'].y + (3 if joining else 0)))
+        if conn: im.alpha_composite(s.img('wf_spin1' if joining else 'pod_check'), (by['wf_chk0'].x + (3 if joining else 0), y + by['wf_chk0'].y + (3 if joining else 0)))
         if secured: im.alpha_composite(s.img('wf_lock'), (by['wf_lock0'].x, y + by['wf_lock0'].y))
         im.alpha_composite(s.img(f'wf_sig{[0, 1, 1, 2, 3][level]}'), (by['wf_sig0'].x, y + by['wf_sig0'].y))
         im.alpha_composite(s.img('wf_info'), (by['wf_info0'].x, y + by['wf_info0'].y))

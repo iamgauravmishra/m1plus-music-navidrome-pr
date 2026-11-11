@@ -220,8 +220,8 @@ def asset_tests(ctx):
            'the pill\'s text is a hidden label (the 18 px #141414 style and the translated "Play"; its white background is the pill\'s for the contrast scan)')
     for name, align, colour in (('label_row_num', 'right', '#AAAAAA'), ('label_row_title', 'left', '#FFFFFF')):
         w = f(name)
-        expect(w.get('visible') == 'false' and w.get('sensitive') == 'false' and w.get('style:normal:font_size') == '19' and w.get('style:normal:text_color') == colour and w.get('style:normal:text_align_h') == align,
-               f'{name}: the hidden 19 px {colour} {align} text style of the rows')
+        expect(w.get('visible') == 'false' and w.get('sensitive') == 'false' and w.get('style:normal:font_size') == '21' and w.get('style:normal:text_color') == colour and w.get('style:normal:text_align_h') == align,
+               f'{name}: the hidden 21 px {colour} {align} text style of the rows')
     # the glass controls
     k = {c.name: c for c in root.children}
     expect('navigationbar_view' not in k, 'the controls are children of the window itself (no bar view over the list)')
@@ -499,8 +499,8 @@ def rows_tests(ctx):
     blits, texts, fills = paint(m)
     num = [(t, r) for (t, r), s in texts if s == 'label_row_num']
     ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
-    expect(num == [(str(i + 1), (12, row_y(i) + O['AB_TEXT_Y'], 22, 22)) for i in range(2)], f'the number (position + 1) right aligned in a 22 px column at x 12, a 22 px line AB_TEXT_Y down the row: {num}')
-    expect(ttl == [(NAMES[i], (42, row_y(i) + O['AB_TEXT_Y'], 256, 22)) for i in range(2)], f'the title from x 42 (8 px after the number) to 298: {ttl}')
+    expect(num == [(str(i + 1), (12, row_y(i) + O['AB_TEXT_Y'], O['ROW_NUM_W'], 22)) for i in range(2)], f'the number (position + 1) right aligned in a 24 px column at x 12, a 22 px line AB_TEXT_Y down the row: {num}')
+    expect(ttl == [(NAMES[i], (44, row_y(i) + O['AB_TEXT_Y'], 254, 22)) for i in range(2)], f'the title from x 44 (8 px after the number) to 298: {ttl}')
     order = [s for _, s in texts if s in ('label_row_num', 'label_row_title')]
     expect(order == ['label_row_num'] * 2 + ['label_row_title'] * 2, 'the numbers, then the titles: one text style at a time')
     hair = [f_ for f_ in fills if f_[0] == 0x22ffffff]   # AB_HAIR: 13 % white
@@ -517,7 +517,7 @@ def rows_tests(ctx):
     m2 = opened(n=3, titles=[long_title, 'x', 'y'])
     blits, texts, fills = paint(m2)
     got = [t for (t, r), s in texts if s == 'label_row_title'][0]
-    expect(got == SG.fitted(long_title, 256).encode('latin-1').decode('utf-8') or utf(got) == utf(SG.fitted(long_title, 256)), f'a title wider than its 256 px is cut with an ellipsis ({got!r})')
+    expect(got == SG.fitted(long_title, 254 - 8).encode('latin-1').decode('utf-8') or utf(got) == utf(SG.fitted(long_title, 254 - 8)), f'a title wider than its 254 px is cut with an ellipsis ({got!r})')
     m2.call(PSYMS['ab_on_destroy'], count=4000000)
     # a CUE track shows its file name, a track without a title its file name
     m2 = opened(n=4, titles=['A', '', 'C', 'D'], cues=(2,))
@@ -536,8 +536,8 @@ def rows_tests(ctx):
            f'the playing track (is_playing: the file name and the url, the CUE start) keeps the white title style: no gold style ({styles})')
     num = [t for (t, r), s in texts if s == 'label_row_num']
     wv = [b for b in blits if b[2][2] == O['AB_WAVE'] and b[2][3] == O['AB_WAVE']]
-    expect(num == ['1'] and len(wv) == 1 and wv[0][2][:2] == (12 + 22 - O['AB_WAVE'], row_y(1) + O['AB_TEXT_Y'] + (O['AB_TEXT_H'] - O['AB_WAVE']) // 2) and wv[0][1] == (0, 0, O['AB_WAVE'], O['AB_WAVE']),
-           f'the playing row (row 1, the second) has no number but an AB_WAVE px wave right aligned in the number column, centred on the title line: {num} {[b[2] for b in wv]}')
+    expect(num == ['1'] and len(wv) == 1 and wv[0][2][:2] == (12 + O['ROW_NUM_W'] - O['AB_WAVE'], row_y(1) + O['AB_WAVE_Y']) and wv[0][1] == (0, 0, O['AB_WAVE'], O['AB_WAVE']),
+           f'the playing row (row 1, the second) has no number but an AB_WAVE px wave right aligned in the number column, AB_WAVE_Y down the row: {num} {[b[2] for b in wv]}')
     bm = wv[0][0]
     expect(SG.pixel(m, bm, 0, 0) >> 24 == 0 and SG.pixel(m, bm, 5, 8) == 0xff000000 | 0xECEEEE and (SG.pixel(m, bm, 5, 8) & 0xffffff) == 0xECEEEE,
            'the wave is #EEEEEC where the image has ink, transparent elsewhere')
@@ -549,8 +549,8 @@ def rows_tests(ctx):
     blits, texts, fills = paint(big)
     num = {t: r for (t, r), s in texts if s == 'label_row_num'}
     ttl = {t: r for (t, r), s in texts if s == 'label_row_title'}
-    expect(num['99'][2] == 22 and num['100'][2] == 32 and num['100'][0] == 12 and ttl['T98'][0] == 42 and ttl['T99'][0] == 52 and ttl['T99'][2] == 246 and ttl['T98'][2] == 256,
-           f'row 99 has a 22 px column, row 100 a 32 px one: the title starts at x 52 and is 246 px wide ({num["100"]}, {ttl["T99"]})')
+    expect(num['99'][2] == 24 and num['100'][2] == 34 and num['100'][0] == 12 and ttl['T98'][0] == 44 and ttl['T99'][0] == 54 and ttl['T99'][2] == 244 and ttl['T98'][2] == 254,
+           f'row 99 has a 24 px column, row 100 a 34 px one: the title starts at x 54 and is 244 px wide ({num["100"]}, {ttl["T99"]})')
     expect(big.props[(big.sv, 'virtual_h')] == HDR + 130 * ROW, 'the content grows with the tracks')
     scroll_to(big, HDR + 130 * ROW + 5000)
     blits, texts, fills = paint(big)
@@ -667,7 +667,7 @@ def select_tests(ctx):
     num = [(t, r) for (t, r), s in texts if s == 'label_row_num']
     ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
     expect(len(marks) == 5 and all(b[2][0] == 9 for b in marks) and [b[2][1] for b in marks] == [row_y(i) + 19 - OFF for i in range(5)]
-           and num[0][1][0] == 12 + O['SG_SEL_COL'] and ttl[0][1][0] == 42 + O['SG_SEL_COL'] and ttl[0][1][2] == 256 - O['SG_SEL_COL'],
+           and num[0][1][0] == 12 + O['SG_SEL_COL'] and ttl[0][1][0] == 44 + O['SG_SEL_COL'] and ttl[0][1][2] == 254 - O['SG_SEL_COL'],
            f'a 26 px mark on each row, the number and the title 30 px right (the title 30 px narrower): {len(marks)} marks')
     off_mark = marks[0][0]
     pix = lambda x, y: SG.pixel(m, off_mark, x, y)
@@ -873,7 +873,7 @@ def source_tests(ctx):
     blits, texts, fills = paint(m)
     wv = [b for b in blits if b[2][2] == O['AB_WAVE'] and b[2][3] == O['AB_WAVE']]
     num = [t for (t, r), s_ in texts if s_ == 'label_row_num']
-    expect(len(wv) == 1 and wv[0][2][1] == row_y(0) + O['AB_TEXT_Y'] + (O['AB_TEXT_H'] - O['AB_WAVE']) // 2 and '1' not in num and '2' in num,
+    expect(len(wv) == 1 and wv[0][2][1] == row_y(0) + O['AB_WAVE_Y'] and '1' not in num and '2' in num,
            f'the track whose url plays (row 0) has the wave in place of its number: {num} {[b[2] for b in wv]}')
     m.playing = ('0.flac', '/mnt/mmc/m/0.flac', 0)
     wv = [b for b in paint(m)[0] if b[2][2] == O['AB_WAVE'] and b[2][3] == O['AB_WAVE']]

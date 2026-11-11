@@ -58,7 +58,8 @@ static struct {
     int mode; /* what the pills show: stock's repeat mode, plus 0x100 while the Shuffle flag is on */
     unsigned hkey; /* the cover key of the header's track */
     int press; /* the row under the finger, + 1 */
-    int down, down_x, down_y; /* the row a press began on, + 1, and where */
+    int down; /* the row a press began on, + 1 */
+    m1_tap_t tap; /* and where */
     int dir, seen; /* the scroll direction (+1 down), and the offset it was last read at */
     int noscroll; /* the scroll events could not be registered: the loader runs from its own timer only */
     int clear_on; /* the Clear button is shown */
@@ -539,7 +540,7 @@ static int qp_on_down(void *ctx, void *e) {
     qp.down = 0;
     if (!e || !qp.view || !qp.n || !qp_valid()) return RET_OK;
     a = qp_item_of(e);
-    qp.down = a + 1, qp.down_x = I(e, PE_X), qp.down_y = I(e, PE_Y);
+    qp.down = a + 1, m1_tap_at(&qp.tap, e);
     qp_set_press(a + 1);
     return RET_OK;
 }
@@ -550,9 +551,7 @@ static int qp_on_up(void *ctx, void *e) {
     qp.down = 0;
     qp_set_press(0);
     if (a < 0 || !e || !qp.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - qp.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - qp.down_y) < SC_DRAG_PX &&
-        qp_item_of(e) == a)
-        qp_play_at(a);
+    if (m1_tap_near(&qp.tap, e) && qp_item_of(e) == a) qp_play_at(a);
     return RET_OK;
 }
 

@@ -22,11 +22,13 @@ W, WIN, NAV = 320, 450, 50
 RAW = PI.RAW
 O = PI.offsets()
 GREY, ACCENT = (0xAA, 0xAA, 0xAA), (0xEE, 0xEE, 0xEC)
+ACC = None   # an accent's (r, g, b): the rail's disc and the selected mark take it, the pressed sheet row is its tint (tools/preview_accent.py sets it)
+PRESSED_ROW = None   # the sheet row drawn pressed (row_menu)
 TOP, HDR_H, ROW_H = O['SG_TOP'], O['SG_HDR_H'], O['LIST_ROW_H']
 ART, ART_X, ART_Y = O['LIST_ART'], O['LIST_ART_X'], O['LIST_ART_Y']
 TEXT_X, TEXT_END, SEL_COL, MARK, BAR_H = O['LIST_TEXT_X'], O['LIST_HAIR_END'] - O['SG_RAIL_INSET'], O['SG_SEL_COL'], O['SG_MARK'], O['SG_BAR_H']
 PILL_Y, PILL_H, PILL_W, PILL_R = O['SG_PILL_Y'], O['SG_PILL_H'], O['SG_PILL_W'], O['SG_PILL_R']
-PILL_RGB, PILL_DOWN, GLYPH, GAP = (0x1E, 0x1E, 0x1E), (0x33, 0x33, 0x33), O['SG_PILL_GLYPH'], O['SG_PILL_GAP']
+PILL_RGB, PILL_DOWN, GLYPH, GAP = (0x1C, 0x1C, 0x1E), (0x33, 0x33, 0x33), O['SG_PILL_GLYPH'], O['SG_PILL_GAP']
 BAND, HAIR = (0x14, 0x14, 0x14), (0x22, 0x22, 0x22)
 RAIL_X, RAIL_W, RAIL_CX, RAIL_PITCH, RAIL_ITEMS, RAIL_DOT, DISC, BUBBLE = (O[k] for k in ('SG_RAIL_X', 'SG_RAIL_W', 'SG_RAIL_CX', 'SG_RAIL_PITCH', 'SG_RAIL_ITEMS', 'SG_RAIL_DOT', 'SG_RAIL_DISC', 'SG_BUBBLE'))
 DOT_RGB = tuple((O['SG_RAIL_DOT_RGB'] >> s) & 255 for s in (16, 8, 0))
@@ -146,6 +148,8 @@ def content(s, covers_on=True, select=None, title=None, head=False):
     tx = TEXT_X + shift
     more, title_none = dots(s), title is None   # (the library has the rail: the "..." sits left of it)
     on, off = s.img('selected'), s.img('unselect')
+    if ACC:   # patch/common.c m1_make_mark: the selected mark's lightness scales the accent (white goes to it, the black tick stays)
+        on = on.copy(); on.putdata([(((ACC[0] * p[0] + 127) // 255, (ACC[1] * p[0] + 127) // 255, (ACC[2] * p[0] + 127) // 255, p[3])) for p in on.getdata()])
     for kind, v, y in items:
         if kind == 'h':
             header(s, im, v, y); continue
@@ -196,7 +200,7 @@ def rail(s, im, letters, touched=None, view=WIN - NAV):
         if on:
             k = 4; r = DISC // 2
             disc = Image.new('L', (2 * r * k, 2 * r * k), 0); ImageDraw.Draw(disc).ellipse((0, 0, 2 * r * k - 1, 2 * r * k - 1), fill=255)
-            im.paste(Image.new('RGBA', (2 * r, 2 * r), ACCENT + (255,)), (RAIL_CX - r, top + disc_y), disc.resize((2 * r, 2 * r), Image.LANCZOS))
+            im.paste(Image.new('RGBA', (2 * r, 2 * r), (ACC or ACCENT) + (255,)), (RAIL_CX - r, top + disc_y), disc.resize((2 * r, 2 * r), Image.LANCZOS))
         # canvas_draw_text_in_rect: the rect (SG_RAIL_TEXT_W wide, centred on the dots' x, moved by the letter's SG_RAIL_DX), the text at rect.x + (rect.w - lw) / 2, its box (13 - 12) / 2 down
         tw = O['SG_RAIL_TEXT_W']; rx = RAIL_CX - tw // 2 + dxs[0 if c == '#' else ord(c) - 64]
         s.font.draw(im, rx + (tw - s.font.width(c, 12)) // 2, top + (RAIL_PITCH - 12) // 2, c, 12, ((0, 0, 0) if on else ACCENT) + (255,))
@@ -252,6 +256,7 @@ def row_menu(s, im, keys=('Play Next', 'Play After', 'Add to Playlist', 'Favorit
     for i, (key, name) in enumerate(zip(keys, glyphs)):
         ry = y + i * rh
         if i: im.alpha_composite(Image.new('RGBA', (W, 1), (255, 255, 255, 0x22)), (0, ry))
+        if i == PRESSED_ROW: im.alpha_composite(Image.new('RGBA', (W, rh), (ACC + (56,)) if ACC else (255, 255, 253, 0x10)), (0, ry))
         if fav_on and key == 'Favorite': name, key = 'rm_ic_unfav', 'Undo Favorite'
         g = s.img(name); im.alpha_composite(g, (pod_ui.RM_ICON_X, ry + (rh - g.height) // 2))
         s.text(im, pod_ui.RM_TEXT_X, ry + rh / 2, s.clip(tr(s, key), pod_ui.RM_LABEL_PX, W - pod_ui.RM_TEXT_X - pod_ui.RM_TEXT_R), pod_ui.RM_LABEL_PX)

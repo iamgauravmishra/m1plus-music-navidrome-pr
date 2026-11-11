@@ -2,7 +2,7 @@
 import hashlib, os, re, struct
 from harness import *   # noqa: F401,F403  (test/patch.py initialises the harness before loading a module)
 
-DARK = ('#000000', '#1E1E1E', '#2A2A2A', '#00000000')
+DARK = ('#000000', '#1C1C1E', '#2A2A2A', '#00000000')
 
 
 def is_dark(c): return c in DARK or (len(c) >= 7 and int(c[1:3], 16) < 0x40 and int(c[3:5], 16) < 0x40 and int(c[5:7], 16) < 0x40)
@@ -223,7 +223,7 @@ def run(ctx):
     head = pq.find('list_item')
     expect(head.h == 64 and head.get('style:normal:border') == 'bottom' and head.get('style:normal:border_width') == '1', 'a hairline under the 64 px mode header')
     btm = pq.find('button')
-    expect((btm.y, btm.h) == (396, 44) and btm.get('style:normal:bg_color') == '#1E1E1E' and btm.get('style:pressed:bg_color') == '#333333',
+    expect((btm.y, btm.h) == (396, 44) and btm.get('style:normal:bg_color') == '#1C1C1E' and btm.get('style:pressed:bg_color') == '#333333',
            'the bottom button keeps its 44 px target in the dark button colours')
     # touches by demo's own hit test: a row button in the template column, the bottom button, the scroll bar, the header
     m = Machine()

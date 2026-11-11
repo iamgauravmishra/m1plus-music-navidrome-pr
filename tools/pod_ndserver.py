@@ -12,8 +12,7 @@ LABEL_X = ST.CM + ST.PAD                       # the labels' left edge (no glyph
 
 
 def build(page):
-    from pod_ui import Widget, styled, navbar, stock_list, nav_fade, cards_spacer, cards_row, hidden, OFFSETS, STATES
-    import pod_i18n
+    from pod_ui import Widget, styled, navbar, stock_list, nav_fade, cards_spacer, cards_row, hidden, large_title, STATES
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     nb = navbar(page.title)
@@ -27,12 +26,7 @@ def build(page):
     for it, y in placed:
         if it == ST.TOP:
             top = cards_spacer('pod_top', BIG_H)
-            big = Widget('label', OFFSETS['SG_TITLE_X'], 0, OFFSETS['SG_TITLE_W'], OFFSETS['PP_TITLE_H'], [('name', 'pod_big'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
-            for st in STATES:
-                styled(big, (st,), 'text_color', '#FFFFFF')
-                styled(big, (st,), 'font_size', str(OFFSETS['PP_TITLE_PX']))
-                styled(big, (st,), 'text_align_h', 'left')
-                styled(big, (st,), 'text_align_v', 'middle')
+            big = large_title('pod_big', page.title, STATES)
             top.children.append(big)
             sv.children.append(top)
         elif it == ST.END: sv.children.append(cards_spacer('pod_end', end_h(y + BIG_H - ST.CM)))

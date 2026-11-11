@@ -37,6 +37,7 @@
 #include "pcopml.h"
 #include "pcregion.h"
 #include "pcwrap.h"
+#include "palette.h"
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one become List play */
@@ -48,7 +49,6 @@ extern void pod_set_in_order(void); /* patch/shuffle.c: Shuffle and Repeat one b
 #define PG_W 320
 #define PG_LOAD_MS 16
 #define PG_TICK_MS 1000
-#define PG_TAP_PX SC_DRAG_PX
 #define PG_HINT_H (8 + 4 * PS_TITLE_PITCH) /* the empty page's hint: room for four lines under the header */
 #define PG_BOTTOM 20 /* the Show level's last cell has this much under it */
 #define PG_REC_SIZE 0x58
@@ -206,8 +206,9 @@ static struct {
     int neps;
     int level, sel,
         show_off; /* the level, the show open (an index into shows), the Shows level's offset to come back to */
-    int press, down, down_part, down_x,
-        down_y; /* the row under the finger + 1; the row a press began on + 1 (0 none) and what of it (PH_*), and where */
+    int press, down, down_part;
+    m1_tap_t
+        tap; /* the row under the finger + 1; the row a press began on + 1 (0 none), what of it (PH_*), and where */
     int fg, noscroll;
     unsigned rev; /* pc_rev() the rows were made at */
     unsigned timer, load_timer, dlg_timer,
@@ -421,7 +422,6 @@ static void pg_span(int *r0, int *r1) {
  */
 static void pg_cat(char *out, unsigned size, const char *s);
 static int pg_wide(unsigned *dst, int cap, const char *utf8);
-static int pg_width(void *st, const unsigned *s);
 
 /* The words of a feed's state, for its grey line: what the worker found this session, else when it was last refreshed. */
 static const char *pg_status_word(int code) {
@@ -508,7 +508,6 @@ static int pg_dl_line(unsigned key, int part, char *out, unsigned size) {
 
 static void pg_row_sub(int a, char *out, unsigned size);
 static int pg_wide(unsigned *dst, int cap, const char *utf8);
-static int pg_width(void *st, const unsigned *s);
 static int pg_lines(void *st, unsigned *s, int n, int room, int maxl, pw_line_t *out);
 
 /* The Downloads level's rows: display row a lives in slot ord[a] (the slot is its tile's key, so rows coming and going do not make the tiles lose their covers). On the Subscriptions page the order is the identity. */
@@ -549,7 +548,7 @@ static void pg_dld_text(const struct pg_dl *d, grid_tile_t *t) {
     if (played) room -= PS_BADGE_CHECK_W;
     grid_set(t, d->title, "", 0);
     pg_wide(tw, GRID_TEXT, tail);
-    room -= pg_width(pg.st_sub, tw);
+    room -= m1_text_w(pg.st_sub, tw);
     k = 0;
     if (room >= 40) { /* the show's name, cut to what is left (the tail keeps its room) */
         n = pg_wide(w, PG_TEXT_MAX, pg.shows[d->si].title);
@@ -596,7 +595,7 @@ static void pg_caption(const pc_show_t *s, char *out, unsigned size) {
         pc_fmt(cnt, sizeof cnt, TR(s->count == 1 ? "%d episode" : "%d episodes"), s->count);
         snprintf(out, size, "%s \xc2\xb7 %s", TR("Local"), cnt); /* " · " */
         pg_wide(w, 96, out);
-        if (pg_width(pg.st[ST_GSUB], w) > GRID_COVER) {
+        if (m1_text_w(pg.st[ST_GSUB], w) > GRID_COVER) {
             out[0] = 0;
             pg_cat(out, size, TR("Local"));
         }
@@ -613,7 +612,7 @@ static void pg_caption(const pc_show_t *s, char *out, unsigned size) {
             pc_when(s->checked, now, when, sizeof when);
             snprintf(out, size, TR("Updated %s"), when);
             pg_wide(w, 96, out);
-            if (pg_width(pg.st[ST_GSUB], w) >
+            if (m1_text_w(pg.st[ST_GSUB], w) >
                 GRID_COVER) { /* a long language's "Updated <age>" is wider than the cover: the age alone (as the sheet's value does) */
                 out[0] = 0;
                 pg_cat(out, size, when);
@@ -699,8 +698,6 @@ static int pg_wide(unsigned *dst, int cap, const char *utf8) {
     return pg_wlen(dst);
 }
 
-static int pg_width(void *st, const unsigned *s) { return (int)(widget_measure_text(st, s) + 0.999f); }
-
 /* The advance AWTK charges for each of the n chars of s in the style label st (the glyph's width and 1 px: docs/modules/text-width.md): one measure per char, the widths being additive. */
 static void pg_adv(void *st, const unsigned *s, int n, unsigned short *adv) {
     unsigned t[2];
@@ -708,7 +705,7 @@ static void pg_adv(void *st, const unsigned *s, int n, unsigned short *adv) {
     t[1] = 0;
     for (i = 0; i < n; ++i) {
         t[0] = s[i];
-        adv[i] = (unsigned short)pg_width(st, t);
+        adv[i] = (unsigned short)m1_text_w(st, t);
     }
 }
 
@@ -719,7 +716,7 @@ static int pg_lines(void *st, unsigned *s, int n, int room, int maxl, pw_line_t 
     e[0] = ELLIPSIS, e[1] = 0;
     if (n > PG_TEXT_MAX - 1) n = PG_TEXT_MAX - 1, s[n] = 0;
     pg_adv(st, s, n, adv);
-    return pw_wrap(s, n, adv, room, maxl, pg_width(st, e), out);
+    return pw_wrap(s, n, adv, room, maxl, m1_text_w(st, e), out);
 }
 
 /* The Show header's layout of the show open: the name, the pill, the description and the "Category - Author" line wrapped, the blocks' tops (docs/modules/podcasts.md for the rhythm). */
@@ -864,7 +861,7 @@ static void pg_pill_of(const pc_ep_t *e, pg_pill_t *p) {
     char label[72];
     pg_pill_base(e, &p->kind, &p->ring, label, sizeof label);
     p->nlabel = pg_wide(p->label, PG_PILL_MAX, label);
-    p->w = PS_PILL_PADL + PA_G_PX + PS_PILL_GAP + pg_width(pg.st[ST_PILL], p->label) + PS_PILL_PADR;
+    p->w = PS_PILL_PADL + PA_G_PX + PS_PILL_GAP + m1_text_w(pg.st[ST_PILL], p->label) + PS_PILL_PADR;
 }
 
 /* The Latest Episode pill of episode e (the newest): white with the dark play glyph when it is on the card (a started one too); else outlined, reading "Latest Episode - <the cell's pill>". */
@@ -889,7 +886,7 @@ static void pg_latest_of(const pc_ep_t *e, pg_pill_t *p) {
                 ln.len; /* (a long state word in a long language: the label ends in an ellipsis, the pill is at most PS_LATEST_MAX) */
             p->label[ln.len] = 0;
         }
-        p->w = PS_LATEST_PADL + PS_LATEST_GLYPH + PS_LATEST_GAPG + pg_width(st, p->label) + PS_LATEST_PADR;
+        p->w = PS_LATEST_PADL + PS_LATEST_GLYPH + PS_LATEST_GAPG + m1_text_w(st, p->label) + PS_LATEST_PADR;
         p->tx = PS_LATEST_PADL + PS_LATEST_GLYPH + PS_LATEST_GAPG;
     }
 }
@@ -900,7 +897,7 @@ static void pg_sub_pill(pg_pill_t *p) {
     memset(p, 0, sizeof *p);
     p->kind = PK_SUB;
     p->nlabel = pg_wide(p->label, PG_PILL_MAX, TR("Subscribe"));
-    tw = pg_width(pg.st[ST_LATEST], p->label);
+    tw = m1_text_w(pg.st[ST_LATEST], p->label);
     p->w = tw + PS_LATEST_PADL + PS_LATEST_PADR;
     if (p->w < PQ_SUB_MIN) p->w = PQ_SUB_MIN;
     p->tx = (p->w - tw) / 2;
@@ -1040,8 +1037,27 @@ static void *pg_rgba(const char *name, unsigned w, unsigned h) {
     return b;
 }
 
+/* Under an accent the progress ring's arc is the accent (the atlas is ours after pg_rgba: tinting here, not by name, leaves the glyphs and the pills' ends white). In a ring cell the track is white at PA_TRACK_A
+ * alpha at most and the arc white at more, so the alpha above the track's says how much of a pixel is arc: that share goes to the accent, the rest stays white. Made with the atlas, once a page open. */
+static void pg_ring_tint(void *b) {
+    unsigned *px, x, y, acc = pal_fill(), s;
+    if (!pal_accent() || !b || !(px = (unsigned *)bitmap_lock_buffer_for_write(b))) return;
+    for (y = 0; y < PA_RING_PX * (PA_RING_N / PA_RING_COLS); ++y)
+        for (x = 0; x < PA_RING_PX * PA_RING_COLS; ++x) {
+            unsigned *p = px + y * PA_SIZE + x, a = *p >> 24, f;
+            if (a <= PA_TRACK_A) continue;
+            f = (a - PA_TRACK_A) * 255 / (255 - PA_TRACK_A);
+            *p &= 0xff000000u;
+            for (s = 0; s < 24; s += 8) *p |= (255 * (255 - f) + (acc >> s & 255) * f + 127) / 255 << s;
+        }
+    bitmap_unlock_buffer(b);
+}
+
 static void *pg_atlas(void) {
-    if (!pg.atlas) pg.atlas = pg_rgba("pc_atlas", PA_SIZE, PA_SIZE);
+    if (!pg.atlas) {
+        pg.atlas = pg_rgba("pc_atlas", PA_SIZE, PA_SIZE);
+        pg_ring_tint(pg.atlas);
+    }
     return pg.atlas;
 }
 
@@ -1321,7 +1337,7 @@ static void pg_line_make(pg_line_t *l) {
         const char *word = TR("Refresh");
         int k;
         l->nw = pg_wide(l->white, 24, word);
-        l->ww = pg_width(pg.st[ST_LINE], l->white);
+        l->ww = m1_text_w(pg.st[ST_LINE], l->white);
         for (k = 0; k < 2;
              ++k) { /* "Updated 1h ago · ", else "1h ago · " when a long language leaves no room for the whole */
             buf[0] = 0;
@@ -1336,13 +1352,13 @@ static void pg_line_make(pg_line_t *l) {
             }
             pg_cat(buf, sizeof buf, " \xc2\xb7 "); /* " · " */
             l->ng = pg_wide(l->grey, 96, buf);
-            l->gw = pg_width(pg.st[ST_META], l->grey);
+            l->gw = m1_text_w(pg.st[ST_META], l->grey);
             if (l->gw + l->ww <= PG_W - 2 * PP_LINE_X || !last) break;
         }
         return;
     }
     l->ng = pg_wide(l->grey, 96, buf);
-    l->gw = pg_width(pg.st[ST_META], l->grey);
+    l->gw = m1_text_w(pg.st[ST_META], l->grey);
 }
 
 /* Where the blocks of the Shows level are (content y) and how tall the content is: after the title the refresh line (when a show has a feed), Continue Listening (when something is partly played),
@@ -1401,7 +1417,7 @@ static void pg_paint_head(void *canvas, int top, const char *key, int x) {
 static int pg_fits(void *st, const char *text, int room) {
     unsigned w[96];
     pg_wide(w, 96, text);
-    return pg_width(st, w) <= room;
+    return m1_text_w(st, w) <= room;
 }
 
 /* The Downloads row's grey line: what the worker is doing (Downloading 42%, N waiting), else N paused (a .part nothing holds, or a failed download: a tap on its row goes on), else "12 episodes - 1.4 GB" (the size
@@ -1678,7 +1694,7 @@ static void pg_paint_disc(void *canvas) {
         int tw;
         pc_fmt(num, sizeof num, "%d", (unsigned)r + 1);
         n = pg_wide(w, 8, num);
-        tw = pg_width(pg.st_sub, w);
+        tw = m1_text_w(pg.st_sub, w);
         pg_text(canvas, w, n, DC_RANK_END - tw, DC_TOP + r * PC_ROW_H - off + (PC_ROW_H - 1 - LIST_SUB_H) / 2, tw + 2,
                 LIST_SUB_H);
     }
@@ -2826,11 +2842,11 @@ static void pg_srch_fail(int code) {
     pg_cat(msg, sizeof msg, ": ");
     pg_cat(msg, sizeof msg, pg_status_word(code));
     pg_wide(w, 128, msg);
-    if (pg_width(pg.st_sub, w) > 300) { /* the reason alone, and where even that is too wide only that it failed */
+    if (m1_text_w(pg.st_sub, w) > 300) { /* the reason alone, and where even that is too wide only that it failed */
         msg[0] = 0;
         pg_cat(msg, sizeof msg, pg_status_word(code));
         pg_wide(w, 128, msg);
-        if (pg_width(pg.st_sub, w) > 300) {
+        if (m1_text_w(pg.st_sub, w) > 300) {
             msg[0] = 0;
             pg_cat(msg, sizeof msg, TR("Can't subscribe"));
         }
@@ -3937,7 +3953,7 @@ static int pg_on_down(void *ctx, void *e) {
     a = pg_hit(e, &part);
     pg.down = a + 1; /* (-1: nothing) */
     pg.down_part = part;
-    pg.down_x = I(e, PE_X), pg.down_y = I(e, PE_Y);
+    m1_tap_at(&pg.tap, e);
     if (a >= 0 && !pg.select &&
         (pg.level == L_SHOWS ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW || part == PH_SRCHROW
          : pg.level == L_SRCH || pg.level == L_DISC ? part == PH_BODY
@@ -4171,11 +4187,11 @@ static void pg_sheet_value(int i, int v, const char *text) {
     int lw = 0, vw = 0, room;
     if (!pg.sh_vl[v]) return;
     w = widget_get_text(pg.sh_tx[i]);
-    if (w && *w) lw = pg_width(pg.sh_tx[i], w);
+    if (w && *w) lw = m1_text_w(pg.sh_tx[i], w);
     room = PS_SHEET_VALUE_R - PS_SHEET_TEXT_X - lw - PS_SHEET_GAP;
     widget_set_text_utf8(pg.sh_vl[v], text);
     w = widget_get_text(pg.sh_vl[v]);
-    if (w && *w) vw = pg_width(pg.sh_vl[v], w);
+    if (w && *w) vw = m1_text_w(pg.sh_vl[v], w);
     if (vw > room) vw = room > 0 ? room : 0;
     widget_move(pg.sh_vl[v], PS_SHEET_VALUE_R - vw, 0);
     widget_resize(pg.sh_vl[v], vw, PM_ROW_H);
@@ -4184,26 +4200,18 @@ static void pg_sheet_value(int i, int v, const char *text) {
 
 /* Show the rows (ids, in order) and the card that holds them: PM_ROW_H each from the card's top, the first without its hairline, the glass picture of that height. */
 static void pg_sheet_rows(const int *rows, int n) {
-    static const char *const glass[] = {"",          "pc_sheet1", "pc_sheet2", "pc_sheet3",
-                                        "pc_sheet4", "pc_sheet5", "pc_sheet6"};
-    int i, k, h = n * PM_ROW_H;
+    void *row[PG_SHEET_ROWS], *hr[PG_SHEET_ROWS];
+    int i, k;
     for (i = 0; i < PG_SHEET_ROWS; ++i) {
         int at = -1;
         for (k = 0; k < n; ++k)
             if (rows[k] == i) at = k;
-        if (at < 0) {
+        if (at < 0)
             m1_show(pg.sh_row[i], 0);
-            continue;
-        }
-        widget_move(pg.sh_row[i], 0, at * PM_ROW_H);
-        m1_show(pg.sh_row[i], 1);
-        widget_set_visible(pg.sh_hr[i], at > 0, 0);
+        else
+            row[at] = pg.sh_row[i], hr[at] = pg.sh_hr[i];
     }
-    widget_move(pg.sh_card, 0, AH_WIN_H - h);
-    widget_resize(pg.sh_card, PG_W, h);
-    widget_set_prop_str(pg.sh_card, "style:normal:bg_image", glass[n]);
-    m1_show(pg.sh_scrim, 1);
-    m1_show(pg.sh_card, 1);
+    m1_sheet_rows(pg.sh_scrim, pg.sh_card, PG_W, row, hr, n);
 }
 
 static int pg_any_unplayed(void) {
@@ -4610,7 +4618,7 @@ static int pg_on_up(void *ctx, void *e) {
     pg.down = 0;
     pg_set_press(0);
     if (!a || !e || !pg.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - pg.down_x) >= PG_TAP_PX || m1_abs(I(e, PE_Y) - pg.down_y) >= PG_TAP_PX) return RET_OK;
+    if (!m1_tap_near(&pg.tap, e)) return RET_OK;
     same = pg_hit(e, &part2);
     if (pg.select) {
         if (a > 0 && same == a - 1) pg_toggle_pick(same); /* a tap marks and unmarks; a drag marks nothing */

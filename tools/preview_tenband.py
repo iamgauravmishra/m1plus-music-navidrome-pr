@@ -14,6 +14,7 @@ RAW, W, NAV, SCREEN = PI.RAW, PS.W, PS.NAV, PS.SCREEN
 ROCK = [-2, 0, 2, 4, -2, -2, 0, 0, 4, 4]
 GRAPHIC_F = (31, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000)
 GREY = (0x8A,) * 3
+ACC = None   # an accent's (r, g, b): the thumbs and the graph's curve take it (tools/preview_accent.py sets it)
 
 
 REGIONS = [('Sub bass · rumble', 'Mid bass · punch and warmth', 'Lower mids · body and fullness', 'Upper mids · shouty if too much', 'Treble · detail and sparkle', 'Air · openness')[i] for i in (0, 1, 1, 2, 2, 3, 3, 3, 4, 5)]   # by band
@@ -24,7 +25,13 @@ def tree(s, page): return awtk_ui.parse(open(os.path.join(s.tree, RAW, 'ui', pag
 
 def paste_bitmap(im, model, w, h, x, y):
     px = Image.new('RGBA', (w, h))
-    px.putdata([(v, v, v, a) for row in model for a, v in row])
+    px.putdata([(p[1], p[1], p[-1], p[0]) for row in model for p in row])
+    im.alpha_composite(px, (x, y))
+
+
+def paste_rgba(im, model, w, h, x, y):
+    px = Image.new('RGBA', (w, h))
+    px.putdata([(p[1], p[2], p[3], p[0]) for row in model for p in row])
     im.alpha_composite(px, (x, y))
 
 
@@ -38,7 +45,8 @@ def content(s, root, values=None, shown=(), gains=None, drag=None, hdr_y=0):
     for c in kids:
         if c.name == 'pod_graph':
             db, rng = G.curve([(1, 0, f, float(g), 1.41) for f, g in zip(GRAPHIC_F, gains)])
-            paste_bitmap(im, G.render(db, rng), G.W, G.H, G.CARD_X, y)
+            if ACC: paste_rgba(im, G.render_accent(db, rng, ACC), G.W, G.H, G.CARD_X, y)
+            else: paste_bitmap(im, G.render(db, rng), G.W, G.H, G.CARD_X, y)
             for t in c.children:
                 al = t.get('style:normal:text_align_h')
                 text = f'+{rng}' if t.name == 'pod_gr_top' else f'{G.MINUS}{rng}' if t.name == 'pod_gr_bot' else s.shown(t)
@@ -49,7 +57,9 @@ def content(s, root, values=None, shown=(), gains=None, drag=None, hdr_y=0):
         elif c.name == 'pod_sliders':
             paste_bitmap(im, TB.bitmap(TB.card_px, TB.W, TB.H), TB.W, TB.H, TB.CARD_X, y)
             for col in range(TB.COLS):
-                paste_bitmap(im, TB.bitmap(TB.thumb_px, TB.THUMB_W, TB.THUMB_H), TB.THUMB_W, TB.THUMB_H, TB.CARD_X + TB.center_x(col) - TB.THUMB_W // 2, y + TB.thumb_y(gains[col]))
+                at = (TB.CARD_X + TB.center_x(col) - TB.THUMB_W // 2, y + TB.thumb_y(gains[col]))
+                if ACC: paste_rgba(im, TB.bitmap(lambda px, py: TB.thumb_px_acc(px, py, ACC), TB.THUMB_W, TB.THUMB_H), TB.THUMB_W, TB.THUMB_H, *at)
+                else: paste_bitmap(im, TB.bitmap(TB.thumb_px, TB.THUMB_W, TB.THUMB_H), TB.THUMB_W, TB.THUMB_H, *at)
             if drag is not None:
                 paste_bitmap(im, TB.bitmap(TB.pill_px, TB.PILL_W, TB.PILL_H), TB.PILL_W, TB.PILL_H, TB.CARD_X + TB.center_x(drag) - TB.PILL_W // 2, y + TB.VAL_Y)
             for col in range(TB.COLS):

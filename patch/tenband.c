@@ -148,9 +148,9 @@ unsigned tb_px(double grey, double alpha) {
     return (unsigned)(alpha * 255 + 0.5) << 24 | (unsigned)(grey + 0.5) * 0x010101u;
 }
 
-/* The card: #1C1C1C with TB_R corners in the alpha and, per column, a track (a capsule TB_TRACK_W wide from +12 dB to -12 dB, grey 62). */
+/* The card: #1C1C1E with TB_R corners in the alpha and, per column, a track (a capsule TB_TRACK_W wide from +12 dB to -12 dB, grey 62). */
 static unsigned tb_card_px(int x, int y, int w, int h) {
-    double v = 28, a = 1;
+    double v = TB_CARD_GREY, a = 1;
     int c =
         (x - TB_X0) /
         TB_COL_W; /* (the one column whose track can reach this pixel: they are TB_COL_W apart, a track TB_TRACK_W wide) */
@@ -165,13 +165,16 @@ static unsigned tb_card_px(int x, int y, int w, int h) {
         }
     }
     if ((x < TB_R || x >= w - TB_R) && (y < TB_R || y >= h - TB_R)) a = tb_cover(x, y, w, h, TB_R);
-    return tb_px(v, a);
+    return tb_cpx(v, a);
 }
 
-/* The thumb: a white pill with a darker line across its middle. */
+/* The thumb: a white pill (under an accent, the accent: it is the slider's value) with a darker line across its middle. */
+static unsigned tb_accent
+    __attribute__((section(".scratch"))); /* the thumb's colour while it is baked (tb_acc: 0 under Neutral) */
 static unsigned tb_thumb_px(int x, int y, int w, int h) {
     double v = 242;
     if (y == h / 2 && x >= 6 && x < w - 6) v = 196;
+    if (tb_accent) return tb_apx(tb_accent, v, 242, tb_cover(x, y, w, h, 5.5)); /* the accent, its line a darker one */
     return tb_px(v, tb_cover(x, y, w, h, 5.5));
 }
 
@@ -511,6 +514,7 @@ void tenband_opened(void *win) {
     tb.slide = 1;
     peq_state_load(&tb.st);
     tb.card = tb_make(TB_W, TB_H, tb_card_px);
+    tb_accent = tb_acc();
     tb.thumb = tb_make(TB_THUMB_W, TB_THUMB_H, tb_thumb_px);
     tb.pill = tb_make(TB_PILL_W, TB_PILL_H, tb_pill_px);
     tb.win = win;

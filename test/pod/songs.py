@@ -420,9 +420,9 @@ def asset_tests(ctx):
            'the song count: an insensitive label, 15 px #AAAAAA (the album page\'s footer\'s grey), left at x 10 (the covers\' edge), 20 px high')
     for nm, x, icon in (('btn_play', 10, 'sg_play'), ('btn_shuffle', 149, 'sg_shuffle')):
         b = kids[nm]
-        expect((b.x, b.y, b.w, b.h) == (x, 52, 129, 40) and b.type == 'button' and b.get('style:normal:bg_color') == '#1E1E1E' and b.get('style:pressed:bg_color') == '#333335'
+        expect((b.x, b.y, b.w, b.h) == (x, 52, 129, 40) and b.type == 'button' and b.get('style:normal:bg_color') == '#1C1C1E' and b.get('style:pressed:bg_color') == '#333335'
                and b.get('style:normal:round_radius') == '20' and b.get('style:normal:icon') == icon and b.get('style:normal:font_size') == '18' and b.get('style:normal:text_color') == '#FFFFFF'
-               and all(b.get(f'style:{st}:bg_color') not in (None, '#00000000') for st in pod_ui.STATES), f'{nm}: a flat 129 x 40 pill (#1E1E1E, #333335 pressed, radius 20) with its glyph and an 18 px white label')
+               and all(b.get(f'style:{st}:bg_color') not in (None, '#00000000') for st in pod_ui.STATES), f'{nm}: a flat 129 x 40 pill (#1C1C1E, #333335 pressed, radius 20) with its glyph and an 18 px white label')
     # the playlist header's set: the album page's disc, pill and glyph, hidden and insensitive until the payload shows them (patch/songs.c sg_pills), from y PH_BTN_Y
     for nm, x, w, rest, down in (('hd_shuffle', 42, 44, 'ah_shuffle', 'ah_shuffle_down'), ('hd_play', 96, 180, 'ah_pill', 'ah_pill_down')):
         b = kids[nm]
@@ -458,23 +458,23 @@ def asset_tests(ctx):
     barw = f('sg_bar')
     expect((barw.x, barw.y, barw.w, barw.h) == (0, 386, 320, 64) and barw.get('style:normal:bg_color') == '#000000' and f('sg_bar_line').get('style:normal:bg_color') == '#222222'
            and [(c.name, c.x, c.w, c.h) for c in barw.children if c.type == 'button'] == [('sg_add', 10, 145, 40), ('sg_del', 165, 145, 40)]
-           and f('sg_add').get('style:normal:icon') == 'sg_listplus' and f('sg_del').get('style:normal:icon') == 'sg_trash' and f('sg_add').get('style:normal:bg_color') == '#1E1E1E',
+           and f('sg_add').get('style:normal:icon') == 'sg_listplus' and f('sg_del').get('style:normal:icon') == 'sg_trash' and f('sg_add').get('style:normal:bg_color') == '#1C1C1E',
            'the select bar: 64 px, black with a #222222 hairline, the two flat pills Add to playlist and Delete')
     card, scrim = f('vs_card'), f('vs_scrim')
     items = {i: f(f'vs_item{i}') for i in range(7)}
-    expect((card.x, card.y, card.w, card.h) == (O['PL_CARD_RIGHT'] - O['PL_CARD_MAX'], O['PL_CARD_Y'], O['PL_CARD_MAX'], 7 * 48) and card.get('visible') == 'false'
+    expect((card.x, card.y, card.w, card.h) == (O['PL_CARD_RIGHT'] - O['PL_CARD_MAX'], O['PL_CARD_Y'], O['PL_CARD_MAX'], 7 * 50) and card.get('visible') == 'false'
            and all(card.get(f'style:{st}:bg_image') == 'vs_glass7' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x' and card.get(f'style:{st}:bg_color') == '#00000000' for st in pod_ui.STATES)
            and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450) and scrim.type == 'button' and all(scrim.get(f'style:{st}:bg_color') == '#00000082' for st in pod_ui.STATES)
            and tree.children.index(scrim) > tree.children.index(barw) and tree.children.index(card) == tree.children.index(scrim) + 1 == len(tree.children) - 3,
            'the Sort card is the shared view-sort card (patch/viewsort.c, built at its widest and narrowed to a glass of its height at run time) under the 130/255 dim scrim, then only the rows menu (rm_scrim, rm_card)')
     labs = {i: f(f'vs_label{i}') for i in range(4)}
-    expect([labs[i].get('tr_text') for i in range(4)] == list(pod_pages.SONGS_SORT_KEYS) and [items[i].y for i in range(4)] == [144, 192, 240, 288]
+    expect([labs[i].get('tr_text') for i in range(4)] == list(pod_pages.SONGS_SORT_KEYS) and [items[i].y for i in range(4)] == [150, 200, 250, 300]
            and all(labs[i].get('sensitive') == 'false' and labs[i].x == 38 and f(f'vs_tick{i}').get('image') == 'sg_tick' and f(f'vs_sub{i}') is not None for i in range(4)),
            'the four sort rows carry the keys Title, File Name, Format, Recently Added, a tick and a second line (the direction)')
     import mod_icons
     gw, gh, gr = mod_icons.GLASS_VIEWSORT4
     raw_ = open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/vs_glass4.png'), 'rb').read()
-    expect(raw_ == open(os.path.join(mod_icons.PNG, 'vs_glass4.png'), 'rb').read() and same_pixels(raw_, mod_icons.glass_image(gw, gh, gr, fill=mod_icons.GLASS_SHEET_FILL)) and gh == 4 * 48,
+    expect(raw_ == open(os.path.join(mod_icons.PNG, 'vs_glass4.png'), 'rb').read() and same_pixels(raw_, mod_icons.glass_image(gw, gh, gr, fill=mod_icons.GLASS_SHEET_FILL)) and gh == 4 * 50,
            'vs_glass4.png (the four-row card the payload picks) is the generator output')
     expect(not hasattr(mod_icons, 'GLASS_SORT') and not os.path.exists(os.path.join(mod_icons.PNG, 'sg_glass.png')) and not os.path.exists(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx/sg_glass.png'))
            and b'sg_glass' not in open(UI, 'rb').read() and b'sg_item' not in open(UI, 'rb').read() and os.path.exists(os.path.join(mod_icons.PNG, 'pl_glass.png')),
@@ -694,7 +694,15 @@ def rail_tests(ctx):
     expect(len(disc) == 1 and disc[0][2][1] == RAIL_PAD + k * pitch + (ink2 - RAIL_DISC) // 2 and disc[0][2][0] == 310 - RAIL_X - RAIL_DISC // 2, f'the touched letter sits on the {RAIL_DISC} px disc')
     expect([(t, s) for (t, _), s in zip(texts, styles) if s == 'label_rail_on'] == [(lay.secs[k][1], 'label_rail_on')] and len(texts) == n, 'the touched letter is black, the others stay')
     px = pixel(m, disc[0][0], RAIL_DISC // 2, RAIL_DISC // 2), pixel(m, disc[0][0], 0, 0), pixel(m, disc[0][0], RAIL_DISC // 2, 0)
-    expect(px[0] == O['SG_ACCENT'] and px[1] >> 24 == 0 and px[2] >> 24 > 100, f'the disc is #EEEEEC with its corners cut ({[hex(p) for p in px]})')
+    expect(px[0] == 0xffeceeee and px[1] >> 24 == 0 and px[2] >> 24 > 100, f'the disc is #EEEEEC with its corners cut ({[hex(p) for p in px]})')
+    # an accent: the same disc is the accent (made when the page opens), the letter on it stays black; the other letters and a Neutral page are as above
+    mt = songs_machine(TITLES); mt.fs['/mnt/data/m1plus/appearance-accent'] = b'4\n'; open_page(mt); settle(mt)
+    pitch_t = RAIL_P
+    touch(mt, 'down', 306, SCREEN_Y0 + (VIEW_H - n * pitch_t) // 2 + int((4 + 0.5) * pitch_t), 'sg_on_rail')
+    blits_t, texts_t, styles_t = rail_paint(mt)
+    disc_t = [b for b in blits_t if b[2][2] == O['SG_RAIL_DISC']]
+    expect(len(disc_t) == 1 and pixel(mt, disc_t[0][0], RAIL_DISC // 2, RAIL_DISC // 2) == 0xffe0c840 and pixel(mt, disc_t[0][0], 0, 0) >> 24 == 0 and 'label_rail_on' in styles_t,
+           'Teal: the selected letter\'s disc is #40C8E0 with its corners cut, the letter on it stays the black label_rail_on')
     rail_touch('move', 9)
     expect(off_of(m) == min(lay.hdr_y(9), lay.content() - VIEW_H) and m.wtext[m.widgets['sg_bubble_letter']] == lay.secs[9][1], 'dragging down to another letter jumps again')
     rail_touch('move', 9, 0.8)
@@ -911,7 +919,7 @@ def order_search_and_stale_tests(ctx):
     expect(ticks(m) == [1, 0, 0, 0] and sub(m, 0) == ['A–Z'], 'Title (sort_flag 0) is ticked with A–Z under it')
     expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass5' for st in ('normal', 'pressed', 'over')) and [vis(m, f'vs_item{i}') for i in (4, 5, 6)] == [(0, 0)] * 3 and vis(m, 'vs_hair')[0] == 1
            and all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 1, 2, 3, 7)) and m.props.get((m.widgets['vs_item0'], 'style:normal:border_width')) == 0
-           and ('widget_move', m.widgets['vs_hair'], 0, 48) in m.calls and ('widget_move', m.widgets['vs_item7'], 0, 0) in m.calls and ('widget_move', m.widgets['vs_item0'], 0, 48) in m.calls,
+           and ('widget_move', m.widgets['vs_hair'], 0, 50) in m.calls and ('widget_move', m.widgets['vs_item7'], 0, 0) in m.calls and ('widget_move', m.widgets['vs_item0'], 0, 50) in m.calls,
            'the library\'s card: Select, the hairline, the four sorts, five rows in the glass of that height (vs_glass5): no Search row (it is the navbar button), no view rows, no second hairline above Title')
     click(m, 'vs_scrim')
     expect(vis(m, 'vs_scrim') == (0, 0) and vis(m, 'vs_card') == (0, 0), 'the scrim closes it')
@@ -1120,6 +1128,21 @@ def collapse_and_select_tests(ctx):
     marks = {b[2][1]: b[0] for b in blits if b[2][2] == O['SG_MARK']}
     expect(marks[lay.row_y(1) + 19] != off_mark and marks[lay.row_y(3) + 19] != off_mark and marks[lay.row_y(2) + 19] == off_mark, 'the two marked rows show the selected mark')
     expect(not any(f_[0] == O['LIST_PRESS'] for f_ in fills), 'no press fill in select mode')
+    # the selected mark under an accent: white goes to the accent, a darker pixel (the tick) scales it, the unselected ring stays; Neutral keeps both as they are
+    white, grey = 0xffffffff, 0xff808080
+    scaled = lambda c, v: 0xff000000 | ((c >> 16 & 255) * v + 127) // 255 << 16 | ((c >> 8 & 255) * v + 127) // 255 << 8 | ((c & 255) * v + 127) // 255
+    for acc, name in ((b'4\n', 'Teal'), (None, 'Neutral')):
+        mt = songs_machine(TITLES)
+        if acc: mt.fs['/mnt/data/m1plus/appearance-accent'] = acc
+        mt.images['selected'] = (26, 26, b''.join(struct.pack('<I', grey if (x, y) == (13, 14) else white) for y in range(26) for x in range(26)))
+        mt.images['unselect'] = (26, 26, struct.pack('<I', white) * 676)
+        open_page(mt); settle(mt); pick(mt, 'select'); settle(mt)
+        tap(mt, 150, lay.row_y(1) + 30)
+        marks_t = {b[2][1]: b[0] for b in paint(mt)[0] if b[2][2] == O['SG_MARK']}
+        sel, off = marks_t[lay.row_y(1) + 19], marks_t[lay.row_y(2) + 19]
+        base = 0xffe0c840 if acc else 0xffffffff   # (ABGR: Teal #40C8E0)
+        expect(pixel(mt, sel, 13, 13) == base and pixel(mt, sel, 13, 14) == scaled(base, 0x80) and pixel(mt, sel, 0, 0) >> 24 == 0 and pixel(mt, off, 13, 13) == white,
+               f'{name}: the selected mark is {"the accent, its darker tick scaled" if acc else "white as before"} ({pixel(mt, sel, 13, 13):#x} {pixel(mt, sel, 13, 14):#x}), the unselected ring stays white')
     tap(m, 150, lay.row_y(1) + 30)
     expect(m.wtext[m.widgets['label_title']] == '1 Selected', 'a second tap unmarks')
     click(m, 'btn_selall')
@@ -2199,6 +2222,43 @@ def src_marks_tests(ctx):
     m.call(PSYMS['sg_on_destroy'], count=4000000)
 
 
+def src_ring_accent_tests(ctx):
+    """A source row's download ring under an accent (Teal): the arc steps of the marks bitmap are the model's (track grey to the accent by how much of a pixel is arc), the marks (arrow, stop square), the disc and the DSD tag are the PNG's; Neutral is the PNG."""
+    from PIL import Image
+    import palette
+    expect = ctx.expect
+    LS_SONGS, ACTIVE = 2, 2
+    im = Image.open(os.path.join(ROOT, 'assets', 'icons', 'png', 'pc_atlas.png')).convert('RGBA')
+    px_, dsd_h, cols = O['PA_DL_PX'], O['PA_DSD_H'], O['PA_DL_COLS']
+    def run(acc, ac):
+        m = list_machine(['Stock'])
+        if acc: m.fs['/mnt/data/m1plus/appearance-accent'] = acc
+        m.images['pc_atlas'] = (im.width, im.height, im.tobytes())
+        recs = src_records(m, ['Aa', 'Ab'])
+        src = fake_source(m, {LS_SONGS: recs}, rows={recs[0]: (ACTIVE, 7, 0, 0, 0), recs[1]: (ACTIVE, 7, 0, 0, 0)})
+        m.top_main = m.window
+        assert m.call(PSYMS['songs_open_src'], a0=src, a1=LS_SONGS, a2=m.cstr('Songs'), count=900000000) == 0
+        blits = settle(m)[0]
+        ring = [b for b in blits if tuple(b[2][2:]) == (px_, px_)]
+        bmp = ring[0][0]
+        data, w, h = m.bitmaps[bmp]
+        got = struct.unpack(f'<{w * h}I', m.u.mem_read(data, w * h * 4))
+        bad = []
+        for cell in range(O['PA_DL_STOP'] + 1):
+            for y in range(px_):
+                for x in range(px_):
+                    s = im.getpixel((O['PA_DL_X'] + cell % cols * px_ + x, O['PA_DL_Y'] + cell // cols * px_ + y))
+                    s = palette.dl_ring_pixel(s, ac) if cell < O['PA_DL_N'] else s
+                    g = got[(dsd_h + cell // cols * px_ + y) * w + cell % cols * px_ + x]
+                    if tuple(g >> t & 255 for t in (0, 8, 16, 24)) != s and (s[3] or g >> 24): bad.append((cell, x, y))
+        m.call(PSYMS['sg_on_destroy'], count=4000000)
+        return bad, ring, m
+    bad, ring, m = run(b'4\n', 'teal')
+    expect(ring and not bad, f'Teal: the download ring steps are the track grey with the arc in the accent, the marks as drawn ({len(bad)} pixels differ: {bad[:3]})')
+    bad, ring, m = run(None, 'neutral')
+    expect(ring and not bad, f'Neutral: the marks bitmap is the atlas as it is ({len(bad)} differ)')
+
+
 def src_dsd_tests(ctx):
     """20. The DSD confirm on a source's Songs page (ND-14): a row tap and Play answered -2 by the source ask "Download to Play?" for that row; Download is src->act(LS_ACT_DOWNLOAD), Cancel
     is nothing; a source that played or refused shows no dialog."""
@@ -2230,4 +2290,4 @@ def src_dsd_tests(ctx):
             expect(not [c for c in m.calls if c[0] == 'confirm'] and not m.fake['acts'], f'{what}: the source answering {ret} shows no dialog')
 
 
-SECTIONS = [asset_tests, open_and_paint_tests, touch_tests, rail_tests, switch_tests, order_search_and_stale_tests, collapse_and_select_tests, loader_tests, big_library_tests, lists_tests, src_tests, src_marks_tests, src_dsd_tests]   # tools/check.py runs each as its own task
+SECTIONS = [asset_tests, open_and_paint_tests, touch_tests, rail_tests, switch_tests, order_search_and_stale_tests, collapse_and_select_tests, loader_tests, big_library_tests, lists_tests, src_tests, src_marks_tests, src_ring_accent_tests, src_dsd_tests]   # tools/check.py runs each as its own task

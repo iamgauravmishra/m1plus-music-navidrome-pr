@@ -9,6 +9,7 @@
 #include "common.h"
 #include "utf8.h"
 #include "home.h"
+#include "palette.h"
 #include "azlist.h"
 
 #define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
@@ -354,7 +355,7 @@ void az_rail_paint(az_t *az, void *e) {
     }
 }
 
-/* The disc: SG_RAIL_DISC px, the accent colour, four corners of radius SG_RAIL_DISC / 2 cut in the alpha (a disc). */
+/* The disc: SG_RAIL_DISC px, pal_fill() (the accent, Neutral #EEEEEC; made when the page opens), black letter on it as on every accent fill, four corners of radius SG_RAIL_DISC / 2 cut in the alpha (a disc). */
 void az_make_disc(az_t *az) {
     unsigned char tab[(SG_RAIL_DISC / 2) * (SG_RAIL_DISC / 2)];
     unsigned *px;
@@ -368,7 +369,7 @@ void az_make_disc(az_t *az) {
         return;
     }
     m1_corner_fill(tab, r);
-    for (y = 0; y < SG_RAIL_DISC * SG_RAIL_DISC; ++y) px[y] = SG_ACCENT;
+    for (y = 0; y < SG_RAIL_DISC * SG_RAIL_DISC; ++y) px[y] = pal_fill();
     for (k = 0; k < 4; ++k)
         for (y = 0; y < r; ++y)
             for (x = 0; x < r; ++x) {
@@ -387,7 +388,6 @@ void az_free(az_t *az) {
 /* ---------------------------------------------------------------------------
  * Titles cut to their label
  */
-int az_text_w(void *w, const unsigned *t) { return (int)(widget_measure_text(w, t) + 0.999f); }
 
 /* The UTF-8 text on label w, cut with an ellipsis to the label's width, measured in its own style (grid_fit's rule: the longest prefix that fits with the
  * ellipsis after it, a binary search). At most SG_NAME_MAX wide chars are looked at. */
@@ -400,14 +400,14 @@ void az_fit(void *w, const char *text) {
     room = I(w, W_W);
     widget_set_text_utf8(w, text);
     t = widget_get_text(w);
-    if (!t || az_text_w(w, t) <= room) return;
+    if (!t || m1_text_w(w, t) <= room) return;
     while (t[len] && len < SG_NAME_MAX) s[len] = t[len], ++len;
     s[len] = 0;
     lo = 0, hi = len - 1;
     while (lo < hi) {
         unsigned mid = (lo + hi + 1) / 2, k0 = s[mid], k1 = s[mid + 1];
         s[mid] = ELLIPSIS, s[mid + 1] = 0;
-        if (az_text_w(w, s) <= room)
+        if (m1_text_w(w, s) <= room)
             lo = mid;
         else
             hi = mid - 1;

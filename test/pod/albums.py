@@ -19,7 +19,7 @@ CPITCH = COVER + GAP
 ART = O['ART_SIZE']
 SVW = 310                 # the scroll_view's width: 320 less the scroll bar's 10 px strip (the content view stays 320 wide: the list_view layouter gives it the list_view's width)
 CW = 320                  # the content view's width (the list_view layouter gives a child the list_view's width) and so the fills'
-TAP = O['SC_DRAG_PX']     # a release closer than this to the press on both axes is a tap (AL_TAP_PX): the scroll_view's own drag threshold
+TAP = O['SC_DRAG_PX']     # a release closer than this to the press on both axes is a tap (m1_tap_near): the scroll_view's own drag threshold
 SC_YOFF, SC_VH = O['SC_YOFF'], 0x7c   # the scroll_view's yoffset and virtual_h (its widget_t fields)
 ROW, LART, LAX, LAY = O['LIST_ROW_H'], O['LIST_ART'], O['LIST_ART_X'], O['LIST_ART_Y']
 TX, TW, TY, TH, SY, SH = O['LIST_TEXT_X'], O['LIST_TEXT_W_CHEV'], O['LIST_TITLE_Y'], O['LIST_TITLE_H'], O['LIST_SUB_Y'], O['LIST_SUB_H']
@@ -1641,36 +1641,36 @@ def card_asset_tests(ctx):
     expect(scrim.get('visible') == card.get('visible') == 'false' and scrim.get('enable') == 'true' and (scrim.x, scrim.y, scrim.w, scrim.h) == (0, 0, 320, 450)
            and all(scrim.get(f'style:{st}:bg_color') == '#00000082' for st in ('normal', 'pressed', 'over')),
            'the scrim covers the window, dims it like the Playlists menu (#00000082) and starts hidden')
-    expect((card.x, card.y, card.w, card.h) == (O['PL_CARD_RIGHT'] - O['PL_CARD_MAX'], O['PL_CARD_Y'], O['PL_CARD_MAX'], gh) == (19, 52, 292, 7 * 48)
+    expect((card.x, card.y, card.w, card.h) == (O['PL_CARD_RIGHT'] - O['PL_CARD_MAX'], O['PL_CARD_Y'], O['PL_CARD_MAX'], gh) == (19, 52, 292, 7 * 50)
            and all(card.get(f'style:{st}:bg_image') == 'vs_glass7' and card.get(f'style:{st}:bg_image_draw_type') == 'patch3_x' and card.get(f'style:{st}:bg_color') == '#00000000' for st in ('normal', 'pressed', 'over')),
-           'the card is at its widest (right edge 311, top y 52), Search, Grid, List and four sorts: seven 48 px rows = 336 px high, drawn in its own glass vs_glass7 with patch3_x and no fill')
+           'the card is at its widest (right edge 311, top y 52), Search, Grid, List and four sorts: seven 50 px rows = 350 px high, drawn in its own glass vs_glass7 with patch3_x and no fill')
     for name, (w_, h_, r_) in (('vs_glass7', mod_icons.GLASS_VIEWSORT), ('vs_glass6', mod_icons.GLASS_VIEWSORT6), ('vs_glass5', mod_icons.GLASS_VIEWSORT5)):
         raw = open(os.path.join(WORK, 'rootfs', f'release/assets/default/raw/images/xx/{name}.png'), 'rb').read()
         gen = mod_icons.glass_image(w_, h_, r_, fill=mod_icons.GLASS_SHEET_FILL)
         expect(raw == open(os.path.join(mod_icons.PNG, f'{name}.png'), 'rb').read() and same_pixels(raw, gen) and (w_, r_) == (72, O['PL_CARD_R']),
                f'{name}.png is the generator output pixel for pixel ({w_} x {h_}, r {r_}, the sheet\'s fill)')
-    expect(mod_icons.GLASS_VIEWSORT[1] == 7 * 48 and mod_icons.GLASS_VIEWSORT6[1] == 6 * 48 and mod_icons.GLASS_VIEWSORT5[1] == 5 * 48
+    expect(mod_icons.GLASS_VIEWSORT[1] == 7 * 50 and mod_icons.GLASS_VIEWSORT6[1] == 6 * 50 and mod_icons.GLASS_VIEWSORT5[1] == 5 * 50
            and not [n for n in ('vs_glass',) if os.path.exists(os.path.join(mod_icons.PNG, n + '.png')) or os.path.exists(os.path.join(WORK, 'rootfs', f'release/assets/default/raw/images/xx/{n}.png'))],
            'the glasses are seven rows (library), six rows (the scoped page) and five rows (the Songs library) high; the old vs_glass name is gone')
     order = (6, 4, 5, 0, 1, 2, 3)   # the rows top to bottom: Search, Grid, List, then the sorts
     items = {i: tree.find(f'vs_item{i}') for i in order}
-    expect([items[i].y for i in order] == [0, 48, 96, 144, 192, 240, 288] and all(it.h == 48 and it.w == 292 and it.type == 'button' for it in items.values())
-           and all(it.get('style:pressed:bg_color') == '#FFFFFF10' and it.get('style:normal:bg_color') == '#00000000' for it in items.values()),
-           'seven 48 px rows, Search above the View group (Grid, List) above the Sort group: transparent, pressed 6 % white')
+    expect([items[i].y for i in order] == [0, 50, 100, 150, 200, 250, 300] and all(it.h == 50 and it.w == 292 and it.type == 'button' for it in items.values())
+           and all(it.get('style:pressed:bg_color') == '#FFFFFD10' and it.get('style:normal:bg_color') == '#00000000' for it in items.values()),
+           'seven 50 px rows, Search above the View group (Grid, List) above the Sort group: transparent, pressed 6 % white')
     hair = tree.find('vs_hair')
     expect([items[i].get('style:normal:border_width') for i in order] == ['0', '0', '0', '1', '0', '0', '0'] and items[0].get('style:normal:border_color') == '#FFFFFF22'
            and all(items[i].get('style:normal:border_color') == '#00000000' for i in (6, 4, 5, 1, 2, 3)),
            'a 13 % white hairline above the first sort row (between the View and Sort groups); none between the rows of a group')
-    expect(hair is not None and hair.type == 'view' and (hair.x, hair.y, hair.w, hair.h) == (0, 48, 292, 1) and hair.get('sensitive') == 'false' and hair.get('style:normal:bg_color') == '#FFFFFF22'
-           and hair in card.children and [(w.name, w.y) for w in items.values() if w.y == hair.y] == [('vs_item4', 48)],
-           'the second hairline is its own insensitive 1 px widget vs_hair at y 48, under Search and above Grid (the Search row is optional: the helper hides it with the row)')
+    expect(hair is not None and hair.type == 'view' and (hair.x, hair.y, hair.w, hair.h) == (0, 50, 292, 1) and hair.get('sensitive') == 'false' and hair.get('style:normal:bg_color') == '#FFFFFF22'
+           and hair in card.children and [(w.name, w.y) for w in items.values() if w.y == hair.y] == [('vs_item4', 50)],
+           'the second hairline is its own insensitive 1 px widget vs_hair at y 50, under Search and above Grid (the Search row is optional: the helper hides it with the row)')
     expect(tree.find('vs_sep') is None and tree.find('vs_glyph') is None, 'no separator widget and no single view glyph')
     keys = {i: tree.find(f'vs_label{i}') for i in range(7)}
     expect([keys[i].get('tr_text') for i in range(7)] == ['Title', 'Artist', 'Recently Added', 'Year', 'Grid', 'List', 'Search Albums'] and all(k.get('sensitive') == 'false' for k in keys.values())
            and [keys[i].x for i in range(7)] == [38, 38, 38, 38, 66, 66, 66] and all(k.get('style:normal:font_size') == '18' for k in keys.values()),
            'the labels are Title, Artist, Recently Added, Year, Grid, List and Search Albums (their keys), 18 px, insensitive, from x 38 (x 66 after a glyph)')
     ticks_ = {i: tree.find(f'vs_tick{i}') for i in range(6)}
-    expect(all(w.get('image') == 'sg_tick' and w.get('visible') == 'false' and (w.x, w.y, w.w) == (14, 17, 14) for w in ticks_.values()),
+    expect(all(w.get('image') == 'sg_tick' and w.get('visible') == 'false' and (w.x, w.y, w.w) == (14, 18, 14) for w in ticks_.values()),
            'a hidden tick (the Songs card\'s image) at x 14 on every row but Search (it has none): the left column')
     expect(tree.find('vs_tick6') is None, 'the Search row has no tick')
     g = {i: tree.find(f'vs_glyph{i}') for i in (4, 5, 6)}
@@ -1782,14 +1782,14 @@ def sort_card_tests(ctx):
         return mv, rs, lab
     for widest, w in ((60, 206), (130, 206), (200, 254), (300, 292)):
         mv, rs, lab = fit(widest)
-        expect(mv == [(311 - w, 52)] and rs == [(w, 336)] and lab == [w - 38 - 16], f'a widest label of {widest} px: a card {w} px wide (38 + the label + 16, 206 .. 292), 336 px high, right edge 311 ({mv} {rs} {lab})')
+        expect(mv == [(311 - w, 52)] and rs == [(w, 350)] and lab == [w - 38 - 16], f'a widest label of {widest} px: a card {w} px wide (38 + the label + 16, 206 .. 292), 350 px high, right edge 311 ({mv} {rs} {lab})')
     m.measure = lambda t: 150 if t == 'Search Albums' else 40
     m.calls = []; m.click('btn_more')
     rs = [tuple(c[2:]) for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']]
     pos = [tuple(c[2:]) for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['vs_item6']]
     hr = [tuple(c[2:]) for c in m.calls if c[0] in ('widget_move', 'widget_resize') and c[1] == m.widgets['vs_hair']]
-    expect(rs == [(232, 336)] and pos == [(0, 0)] and hr == [(0, 48), (232, 1)],
-           f'the Search row counts, from its glyph x 66: 66 + 150 + 16 = 232 wide; it is the first row, the hairline under it at y 48 ({rs} {pos} {hr})')
+    expect(rs == [(232, 350)] and pos == [(0, 0)] and hr == [(0, 50), (232, 1)],
+           f'the Search row counts, from its glyph x 66: 66 + 150 + 16 = 232 wide; it is the first row, the hairline under it at y 50 ({rs} {pos} {hr})')
     m.click('btn_more')
     m.measure = lambda t: 0
     m.calls = []; m.click('btn_more')

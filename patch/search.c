@@ -90,7 +90,8 @@ static struct {
     int chip_x[SE_CHIPS + 1], chip_sx, chip_down, chip_dx, chip_sx0, chip_drag;
     unsigned chip_text[SE_CHIPS][24];
     int chip_len[SE_CHIPS];
-    int press, down, down_x, down_y, pressing;
+    int press, down, pressing;
+    m1_tap_t tap;
     int wait; /* ticks until the typed text is applied; 0 none */
     unsigned timer;
     void *chev;
@@ -1164,7 +1165,7 @@ static int se_on_down(void *ctx, void *e) {
     if (!e || !se.view) return RET_OK;
     a = se_item_of(e);
     se.dx = se.hitx;
-    se.down = a + 1, se.down_x = I(e, PE_X), se.down_y = I(e, PE_Y);
+    se.down = a + 1, m1_tap_at(&se.tap, e);
     se_set_press(a + 1);
     return RET_OK;
 }
@@ -1175,8 +1176,7 @@ static int se_on_up(void *ctx, void *e) {
     se.down = 0, se.pressing = 0;
     se_set_press(0);
     if (a < 0 || !e || !se.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - se.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - se.down_y) < SC_DRAG_PX &&
-        se_item_of(e) == a && se.hitx == se.dx) {
+    if (m1_tap_near(&se.tap, e) && se_item_of(e) == a && se.hitx == se.dx) {
         if (se.rm)
             se_rec_tap(a, se.dx);
         else

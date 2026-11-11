@@ -49,10 +49,10 @@ def page(s, n=8, sec=2745, scroll=None, playing=2):
         if y + row < 30 or y > 30 + win: continue
         d.rectangle((0, y + row - 1, 309, y + row - 1), fill=(0x3A, 0x3A, 0x3E))
         if i == playing:   # the playing track: the wave (ah_wave) in place of the number, the title stays white
-            im.alpha_composite(s.img('ah_wave'), (O['AB_NUM_X'] + 22 - O['AB_WAVE'], y + O['AB_TEXT_Y'] + (O['AB_TEXT_H'] - O['AB_WAVE']) // 2))
+            im.alpha_composite(s.img('ah_wave'), (O['AB_NUM_X'] + O['ROW_NUM_W'] - O['AB_WAVE'], y + O['AB_WAVE_Y']))
         else:
-            s.text(im, O['AB_NUM_X'] + 22, y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 19, (0xAA, 0xAA, 0xAA), 'r')
-        s.text(im, O['AB_NUM_X'] + 22 + O['AB_NUM_GAP'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, TRACKS[i % len(TRACKS)], 19)
+            s.text(im, O['AB_NUM_X'] + O['ROW_NUM_W'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 21, (0xAA, 0xAA, 0xAA), 'r')
+        s.text(im, O['AB_NUM_X'] + O['ROW_NUM_W'] + O['AB_NUM_GAP'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, TRACKS[i % len(TRACKS)], 21)
     fy = 30 + hdr + n * row + O['AB_FOOT_GAP'] - off
     for k, line in enumerate(lines):
         s.text(im, O['AB_NUM_X'], fy + k * O['AB_FOOT_TEXT_H'] + O['AB_FOOT_TEXT_H'] / 2, line, O['AB_FOOT_PX'], FOOT)

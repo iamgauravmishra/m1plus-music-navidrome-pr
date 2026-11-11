@@ -14,6 +14,7 @@ uses). Tapping it opens the entry page (PAGES[0]); the kill-switch file and ever
 included) fall through to stock behaviour.
 """
 import pcregion
+from pod_roles import CAPTION_H
 
 # Home item ids (must match patch/offsets.inc HOME_*). The entry icon and the destinations rows open.
 HOME_TIDAL = 1
@@ -564,7 +565,7 @@ EXTRAS_ORDER = [_LABELS.index(label) for _, group in EXTRAS_GROUPS for label in 
 EXTRAS_GROUP_OF = [next((g for g, (_, labels) in enumerate(EXTRAS_GROUPS) if label in labels), len(EXTRAS_GROUPS)) for label in _LABELS]   # item id -> its group (Settings: none)
 EXTRAS_TITLES = [title for title, _ in EXTRAS_GROUPS]
 assert sorted(EXTRAS_ORDER) == list(range(len(ITEMS))) and len(set(EXTRAS_TITLES)) == len(EXTRAS_GROUPS)
-HDR_H = 40         # the section header's strip: shorter than a row (patch/menu.c puts it above the group's first row)
+HDR_H = CAPTION_H  # the group caption's strip (pod_roles): shorter than a row (patch/menu.c puts it above the group's first row)
 
 
 def extras_display(ids, off=(), cfg=False):

@@ -43,7 +43,7 @@ def peqpage(s, title, bands, preamp, skipped=0):
     for c in kids:
         if c.name == 'pod_graph':
             px = Image.new('RGBA', (G.W, G.H))
-            px.putdata([(v, v, v, a) for row in G.render(db, rng) for a, v in row])
+            px.putdata([(v, v, b, a) for row in G.render(db, rng) for a, v, b in row])
             im.alpha_composite(px, (G.CARD_X, y))
             for t in c.children:
                 s.text(im, t.x + (t.w if t.get('style:normal:text_align_h') == 'right' else t.w / 2 if t.get('style:normal:text_align_h') == 'center' else 0), y + t.y + t.h / 2, s.shown(t),

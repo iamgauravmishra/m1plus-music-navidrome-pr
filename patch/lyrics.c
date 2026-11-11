@@ -203,7 +203,7 @@ static int ly_span(const char *s, int n) {
     t[n] = 0;
     if (widget_set_text_utf8(ly.probe, t) != RET_OK) return 0;
     u = widget_get_text(ly.probe);
-    return u && *u ? (int)(widget_measure_text(ly.probe, u) + 0.999f) : 0;
+    return u && *u ? m1_text_w(ly.probe, u) : 0;
 }
 
 /* Breaks line i (text s, probe ready in its face) into rows ourselves: greedy at the spaces, a word wider than a row (or a text with no spaces: CJK) at any code point.

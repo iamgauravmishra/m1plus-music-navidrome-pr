@@ -104,7 +104,7 @@ void vs_dated(vs_t *v, unsigned rows) { v->dated = rows & VS_ALL_SORTS; }
 /* The width of a text in a widget's own font; 0 when it cannot be measured. */
 static int vs_text_w(void *w) {
     const unsigned *t = widget_get_text(w);
-    return t && *t ? (int)(widget_measure_text(w, t) + 0.999f) : 0;
+    return t && *t ? m1_text_w(w, t) : 0;
 }
 
 /* The card as wide as the language needs: the widest label (widget_measure_text: the label's own font and translated text) or direction line, each from its own x, plus the margin, clamped; the right

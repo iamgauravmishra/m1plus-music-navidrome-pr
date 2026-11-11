@@ -21,6 +21,7 @@ from awtk_ui import Widget
 import pod_i18n, pod_pages
 import pod_keyboard as PK
 import pod_search as PS
+from pod_roles import INK_RGB, SUB_RGB, HINT_RGB, RED_RGB, PLACEHOLDER_RGB, CHEV_RGB, RAISED_RGB, SURFACE_RGB, LINE_RGB, SECTION_PX, CAPTION_LABEL_Y, CAPTION_LABEL_H
 
 UI = 'release/assets/default/raw/ui'   # relative to a rootfs dir
 SCREEN_W, SCREEN_H = 320, 480
@@ -183,7 +184,7 @@ def value_label(name, w, h, english):
     """The value at the right of a value row, #AAAAAA like the library rows' second line. Insensitive: the row takes the tap.
     The payload sets it with widget_set_tr_text, so it follows the language."""
     lab = Widget('label', value_x(w), 0, VALUE_W, h, [('name', name), pod_i18n.text_prop(english), ('sensitive', 'false')])
-    styled(lab, ('normal',), 'text_color', '#AAAAAA')
+    styled(lab, ('normal',), 'text_color', SUB_RGB)
     styled(lab, ('normal',), 'font_size', str(VALUE_PX))
     styled(lab, ('normal',), 'text_align_h', 'right')
     styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -215,9 +216,6 @@ def row_item(name, y, label, chevron, h=ROW_H, w=SCREEN_W, switch=None, value=No
     return item
 
 
-SUB_RGB = '#AAAAAA'    # the secondary text grey of every page (docs/modules/ui-rules.md): sub lines, footers, values, keys, credits
-HINT_RGB = SUB_RGB     # a page's empty-state hint (label_status): one line 20 px, a wrapped caption 18 px
-RED_RGB = '#FF6B6B'    # the one red: a destructive row's label and glyph
 
 
 def label(name, x, y, w, h, text, size, colour, align='center'):
@@ -228,6 +226,17 @@ def label(name, x, y, w, h, text, size, colour, align='center'):
     return lab
 
 
+def scroll_text(name, x, y, w, h, px, colour, align, text=None):
+    """An insensitive hscroll_label with its own size, colour and alignment (no style name), vertically middle; `text` is the English text of a translated label, empty when the payload sets it."""
+    lab = Widget('hscroll_label', x, y, w, h, [('name', name), pod_i18n.text_prop(text) if text else ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
+    for st in ('normal', 'disable', 'focused'):
+        styled(lab, (st,), 'font_size', str(px))
+        styled(lab, (st,), 'text_color', colour)
+        styled(lab, (st,), 'text_align_h', align)
+        styled(lab, (st,), 'text_align_v', 'middle')
+    return lab
+
+
 def hidden(w):
     """Start hidden *and* insensitive. This demo's AWTK hit test (widget_find_target_default
     0x6747d4) checks only enable and sensitive, never visible, so a merely hidden widget still
@@ -235,6 +244,21 @@ def hidden(w):
     w.set('visible', 'false')
     w.set('sensitive', 'false')
     return w
+
+
+STYLE_BG_STATES = ('normal', 'pressed', 'disable', 'focused')
+
+
+def style_labels(table, bg=None):
+    """Hidden labels that only carry text styles (widget_prepare_text_style; never shown): one per (name, px, colour[, align]) row, align 'left' by default, vertically middle;
+    bg = {name: colour} gives a label its own background (the contrast scan reads it, for a dark text on a light pill)."""
+    out = []
+    for name, px, colour, align in (r if len(r) == 4 else (*r, 'left') for r in table):
+        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
+        styled(lab, ('normal',), 'text_align_v', 'middle')
+        if bg and name in bg: styled(lab, STYLE_BG_STATES, 'bg_color', bg[name])
+        out.append(lab)
+    return out
 
 
 # Cover Flow's page layout (tests and previews read these): the shelf is 168 px covers in a 320x276
@@ -285,20 +309,20 @@ def build_cover_page(page):
     frame = Widget('view', 0, fy, SCREEN_W, COVER_FRAME_H, [('name', 'view_covers')])
     styled(frame, ('normal',), 'bg_color', '#000000')
     root.children.append(frame)
-    root.children.append(scroll_caption('label_album', ay, ah, 22, '#FFFFFF'))
-    root.children.append(scroll_caption('label_artist', ry, rh, 18, '#AAAAAA'))
+    root.children.append(scroll_caption('label_album', ay, ah, 22, INK_RGB))
+    root.children.append(scroll_caption('label_artist', ry, rh, 18, SUB_RGB))
     status = label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)
     root.children.append(hidden(status))
     cancel = Widget('button', 100, 260, 120, 46, [('name', 'btn_cancel'), ('enable', 'true'),
                                                   pod_i18n.text_prop('Cancel')])
     for st in ('normal', 'over', 'focused', 'disable', 'selected'):
-        styled(cancel, (st,), 'bg_color', '#1E1E1E')
-        styled(cancel, (st,), 'text_color', '#FFFFFF')
+        styled(cancel, (st,), 'bg_color', SURFACE_RGB)
+        styled(cancel, (st,), 'text_color', INK_RGB)
         styled(cancel, (st,), 'font_size', '20')
         styled(cancel, (st,), 'border_color', '#3A3A3A')
         styled(cancel, (st,), 'border_width', '1')
     styled(cancel, ('pressed',), 'bg_color', '#2A2A2A')
-    styled(cancel, ('pressed',), 'text_color', '#FFFFFF')
+    styled(cancel, ('pressed',), 'text_color', INK_RGB)
     styled(cancel, ('pressed',), 'font_size', '20')
     root.children.append(hidden(cancel))
     return root
@@ -340,15 +364,16 @@ GRID_ALBUM_PX, GRID_ARTIST_PX = 18, 15   # the grid's album / artist text under 
 LIST_TITLE_PX, LIST_SUB_PX = 21, 18   # the list mode's album / artist text (the library rows': 21 px white, 18 px #AAAAAA)
 
 
-def large_title(name, text):
-    """The large title of a page with a grid or list content (the Songs and Artists pages' label): 32 px white at x 12, SG_TITLE_W wide, SG_TITLE_H high,
-    insensitive; it is the first child of the content view and scrolls away with it (patch/albums.c, patch/playlists.c)."""
+def large_title(name, text, states=('normal',)):
+    """The large title of a page with a grid or list content (the Songs and Artists pages' label): 32 px white at x 12, SG_TITLE_W wide, SG_TITLE_H high (= PP_TITLE_H, the Podcasts levels' heading),
+    insensitive; it is the first child of the content view and scrolls away with it (patch/albums.c, patch/playlists.c). The Navidrome pages style every state in `states`."""
     o = OFFSETS
     title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', name), pod_i18n.text_prop(text), ('sensitive', 'false')])
-    styled(title, ('normal',), 'text_color', '#FFFFFF')
-    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
-    styled(title, ('normal',), 'text_align_h', 'left')
-    styled(title, ('normal',), 'text_align_v', 'middle')
+    for st in states:
+        styled(title, (st,), 'text_color', INK_RGB)
+        styled(title, (st,), 'font_size', str(SG_TITLE_PX))
+        styled(title, (st,), 'text_align_h', 'left')
+        styled(title, (st,), 'text_align_v', 'middle')
     return title
 
 
@@ -364,7 +389,7 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     sv.set('name', names[1])
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])   # the content: the payload sizes it to the whole library
     styled(grid, ('normal',), 'bg_color', '#000000')
-    styled(grid, ('normal',), 'text_color', '#FFFFFF')
+    styled(grid, ('normal',), 'text_color', INK_RGB)
     styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))
     styled(grid, ('normal',), 'text_align_h', 'left')
     styled(grid, ('normal',), 'text_align_v', 'middle')
@@ -375,7 +400,7 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
         grid.children += [hidden(sg_pill('btn_play', o['AL_PLAY_X'], o['SG_PILL_Y'], 'Play', 'sg_play', w=o['AL_PLAY_W'], down=SG_PILL_PRESS_RGB)),
                           hidden(sg_pill('btn_shuffle', o['AL_SHUFFLE_X'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', w=o['AL_SHUFFLE_W'], down=SG_PILL_PRESS_RGB)),
                           # the photo header's name (22 px white, centred, the album page's title label; docs/modules/albums.md "Scoped to an artist"): shown in place of al_title, the circle is drawn by the payload
-                          hidden(label('al_name', o['PH_NAME_X'], o['AL_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, '#FFFFFF'))]
+                          hidden(label('al_name', o['PH_NAME_X'], o['AL_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, INK_RGB))]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/albums.c / playlists.c show it while yoffset > 0
@@ -383,11 +408,8 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     if albums or title_name:   # a source's list still loading: the one spinner, centred in the content area (patch/libsrc.c ls_spin)
         root.children.append(hidden(wf_image((title_name or 'al_title')[:2] + '_spin', (SCREEN_W - WF_SPIN_PX) // 2, (CLIENT_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))
     # The two modes' text styles (patch/albums.c reads them with widget_prepare_text_style; never shown)
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
-                             ('label_grid_title', GRID_ALBUM_PX, '#FFFFFF'), ('label_grid_sub', GRID_ARTIST_PX, '#AAAAAA')):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB),
+                                   ('label_grid_title', GRID_ALBUM_PX, INK_RGB), ('label_grid_sub', GRID_ARTIST_PX, SUB_RGB)))
     if az:   # the list mode's section letters, rail and bubble (patch/albums.c, the Songs page's furniture); the payload hides the rail while the grid shows or the Index Rail switch is off
         root.children.extend(azlist_labels())
         root.children.extend(azlist_rail())
@@ -398,12 +420,12 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
 
 # The Show page's text styles (patch/podcasts.c; hidden labels the payload reads with widget_prepare_text_style and measures with widget_measure_text): name, px, colour, alignment.
 # Colours as the approved design: the description #B8B8B8, the grey lines, a played title and the empty pages' hint #AAAAAA; the Latest Episode pill's label is dark on its white pill.
-PS_STYLES = (('label_ps_name', 22, '#FFFFFF', 'center'), ('label_ps_sec', 16, '#B8B8B8', 'left'), ('label_ps_meta', 15, '#AAAAAA', 'left'), ('label_ps_head', 22, '#FFFFFF', 'left'),
-             ('label_ps_date', 15, '#AAAAAA', 'left'), ('label_ps_ctitle', 20, '#FFFFFF', 'left'), ('label_ps_cdim', 20, '#AAAAAA', 'left'), ('label_ps_cdesc', 16, '#AAAAAA', 'left'),
-             ('label_ps_pill', 16, '#FFFFFF', 'left'), ('label_ps_latest', 18, '#000000', 'left'), ('label_ps_latestw', 18, '#FFFFFF', 'left'),
+PS_STYLES = (('label_ps_name', 22, INK_RGB, 'center'), ('label_ps_sec', 16, '#B8B8B8', 'left'), ('label_ps_meta', 15, SUB_RGB, 'left'), ('label_ps_head', 22, INK_RGB, 'left'),
+             ('label_ps_date', 15, SUB_RGB, 'left'), ('label_ps_ctitle', 20, INK_RGB, 'left'), ('label_ps_cdim', 20, SUB_RGB, 'left'), ('label_ps_cdesc', 16, SUB_RGB, 'left'),
+             ('label_ps_pill', 16, INK_RGB, 'left'), ('label_ps_latest', 18, '#000000', 'left'), ('label_ps_latestw', 18, INK_RGB, 'left'),
              # the Shows page (round 2): the section headers (Continue Listening, Shows), the refresh line's white "Refresh", a Continue Listening item's title and its grey "35m left", the grid's title and grey line under each cover (the Albums grid's 18 / 15 px)
-             ('label_ps_sech', 20, '#FFFFFF', 'left'), ('label_ps_line', 15, '#FFFFFF', 'left'), ('label_ps_stitle', 14, '#FFFFFF', 'left'), ('label_ps_sleft', 13, '#AAAAAA', 'left'),
-             ('label_ps_gtitle', 18, '#FFFFFF', 'left'), ('label_ps_gsub', 15, '#AAAAAA', 'left'))
+             ('label_ps_sech', SECTION_PX, INK_RGB, 'left'), ('label_ps_line', 15, INK_RGB, 'left'), ('label_ps_stitle', 14, INK_RGB, 'left'), ('label_ps_sleft', 13, SUB_RGB, 'left'),
+             ('label_ps_gtitle', 18, INK_RGB, 'left'), ('label_ps_gsub', 15, SUB_RGB, 'left'))
 PS_TINT_NAME = 'img_ah_tint'   # the album page's tint gradient (ah_tint), a window sized insensitive image under everything; shown on the Show level once the cover's tone is set
 
 
@@ -447,14 +469,10 @@ def build_podcasts_page(page):
     for w in (lv, sv):
         for st in ('normal', 'disable', 'focused'): w.set(f'style:{st}:bg_color', '#00000000')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])   # the content: the payload sizes it to the level's rows
-    big = Widget('label', OFFSETS['SG_TITLE_X'], 0, OFFSETS['SG_TITLE_W'], OFFSETS['PP_TITLE_H'], [('name', 'pg_big'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])   # the large heading of the Shows, Downloads and Subscriptions levels (the Songs page's): a child of the content, so it scrolls and is clipped with it
-    styled(big, ('normal',), 'text_color', '#FFFFFF')
-    styled(big, ('normal',), 'font_size', str(OFFSETS['PP_TITLE_PX']))
-    styled(big, ('normal',), 'text_align_h', 'left')
-    styled(big, ('normal',), 'text_align_v', 'middle')
+    big = large_title('pg_big', page.title)   # the large heading of the Shows, Downloads and Subscriptions levels (the Songs page's): a child of the content, so it scrolls and is clipped with it
     grid.children = [big, search_field()]
     styled(grid, ('normal',), 'bg_color', '#00000000')
-    styled(grid, ('normal',), 'text_color', '#FFFFFF')
+    styled(grid, ('normal',), 'text_color', INK_RGB)
     styled(grid, ('normal',), 'font_size', str(GRID_TITLE_PX))
     styled(grid, ('normal',), 'text_align_h', 'left')
     styled(grid, ('normal',), 'text_align_v', 'middle')
@@ -464,15 +482,8 @@ def build_podcasts_page(page):
     status = hidden(label('label_status', 20, 180, SCREEN_W - 40, 90, '', 18, HINT_RGB))
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA')):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
-    for name, px, colour, align in PS_STYLES:
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        if name == 'label_ps_latest': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', '#FFFFFF')   # the dark label of the white pill: the contrast scan reads the label's own background
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB)))
+    root.children += style_labels(PS_STYLES, {'label_ps_latest': INK_RGB})   # the dark label of the white pill: the contrast scan reads the label's own background
     bar = select_bar('pg_bar', 'pg_bar_line', [('pg_del', OFFSETS['SG_PILL_X0'], 'Delete', 'sg_trash', OFFSETS['PL_BAR_PILL_W']), ('pg_unsubp', OFFSETS['SG_PILL_X0'], 'Unsubscribe', 'sg_trash', OFFSETS['PL_BAR_PILL_W'])])   # the select mode's bar: one Delete pill across it, as the Playlists page's; the Subscriptions page's Unsubscribe is a second pill in the same place (the payload shows one of them)
     hidden(bar.children[-1])
     root.children.append(bar)
@@ -508,12 +519,7 @@ def sheet_widgets(prefix, sheet_rows, tallest):
     from mod_icons import PC_SHEET_PX
     o = OFFSETS
     rh, rows = o['PM_ROW_H'], len(sheet_rows)
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', f'{prefix}_scrim'), ('enable', 'true')]))
-    for st in STATES:
-        styled(scrim, (st,), 'bg_color', PL_DIM)
-        styled(scrim, (st,), 'text_color', '#FFFFFF')
-        styled(scrim, (st,), 'border_width', '0')
-        styled(scrim, (st,), 'border_color', '#00000000')
+    scrim = modal_scrim(f'{prefix}_scrim')
     card = hidden(Widget('view', 0, CLIENT_H - tallest * rh, SCREEN_W, tallest * rh, [('name', f'{prefix}_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
@@ -524,7 +530,7 @@ def sheet_widgets(prefix, sheet_rows, tallest):
         item = hidden(Widget('button', 0, i * rh, SCREEN_W, rh, [('name', f'{prefix}_{rid}'), ('enable', 'true')]))
         for st in STATES:
             styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
-            styled(item, (st,), 'text_color', '#FFFFFF')
+            styled(item, (st,), 'text_color', INK_RGB)
             styled(item, (st,), 'border_width', '0')
             styled(item, (st,), 'border_color', '#00000000')
         item.children.append(Widget('image', PS_SHEET_ICON_X, (rh - PC_SHEET_PX) // 2, PC_SHEET_PX, PC_SHEET_PX, [
@@ -533,7 +539,7 @@ def sheet_widgets(prefix, sheet_rows, tallest):
             ('name', f'{prefix}_{rid}_tx'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
             styled(lab, (st,), 'font_size', str(PS_SHEET_PX))
-            styled(lab, (st,), 'text_color', PS_SHEET_RED if red else '#FFFFFF')
+            styled(lab, (st,), 'text_color', PS_SHEET_RED if red else INK_RGB)
             styled(lab, (st,), 'text_align_h', 'left')
             styled(lab, (st,), 'text_align_v', 'middle')
             styled(lab, (st,), 'margin_left', '0')
@@ -544,7 +550,7 @@ def sheet_widgets(prefix, sheet_rows, tallest):
                 ('name', f'{prefix}_{rid}_vl'), ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
             for st in ('normal', 'disable', 'focused'):
                 styled(val, (st,), 'font_size', str(PS_SHEET_PX))
-                styled(val, (st,), 'text_color', '#AAAAAA')
+                styled(val, (st,), 'text_color', SUB_RGB)
                 styled(val, (st,), 'text_align_h', 'right')
                 styled(val, (st,), 'text_align_v', 'middle')
                 styled(val, (st,), 'margin_left', '0')
@@ -575,12 +581,7 @@ def peq_dialog():
     """(scrim, card): the band page's unsaved-changes dialog (patch/peqband.c, docs/modules/peq.md "Preset editing"), the Podcasts refresh dialog's pieces (podcasts_dialog): a full-client dim scrim that takes every touch (a tap on it is Cancel) and a
     centred card in the Playlists menu's glass (pq_glass, patch3_x) with the title "Save Changes?" (pq_title, 20 px white), the preset's name (pq_name, 16 px grey, the payload sets it) and PQD_ROW_H button rows (pq_item<k>: PQD_KEYS, 18 px white
     centred, the menu rows' 13 % white hairline above each and 6 % white pressed). Hidden AND insensitive until the payload shows them."""
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'pq_scrim'), ('enable', 'true')]))
-    for st in STATES:
-        styled(scrim, (st,), 'bg_color', PL_DIM)
-        styled(scrim, (st,), 'text_color', '#FFFFFF')
-        styled(scrim, (st,), 'border_width', '0')
-        styled(scrim, (st,), 'border_color', '#00000000')
+    scrim = modal_scrim('pq_scrim')
     card = hidden(Widget('view', (SCREEN_W - PQD_W) // 2, (CLIENT_H - PQD_H) // 2, PQD_W, PQD_H, [('name', 'pq_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
@@ -595,13 +596,13 @@ def peq_dialog():
             styled(lab, (st,), 'text_align_h', 'center')
             styled(lab, (st,), 'text_align_v', 'middle')
         return lab
-    card.children.append(text('pq_title', 14, 30, 20, '#FFFFFF', pod_i18n.text_prop('Save Changes?')))
+    card.children.append(text('pq_title', 14, 30, 20, INK_RGB, pod_i18n.text_prop('Save Changes?')))
     card.children.append(text('pq_name', 44, 24, 16, PD_NAME_RGB, ('text', '')))
     for k, key in enumerate(PQD_KEYS):
         b = Widget('button', 0, PQD_HEAD + k * PQD_ROW_H, PQD_W, PQD_ROW_H, [('name', f'pq_item{k}'), ('enable', 'true'), pod_i18n.text_prop(key)])
         for st in STATES:
             styled(b, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
-            styled(b, (st,), 'text_color', '#FFFFFF')
+            styled(b, (st,), 'text_color', INK_RGB)
             styled(b, (st,), 'font_size', '18')
             styled(b, (st,), 'border', 'top')
             styled(b, (st,), 'border_width', '1')
@@ -619,19 +620,14 @@ BK_FIELD_R, BK_VAL_PX, BK_UNIT_PX = 12, 38, 17
 BK_KEY_X0, BK_KEY_PITCH_X, BK_KEY_W = 6, 78, 74                  # four columns of 74 px, 4 px apart
 BK_KEY_Y0, BK_KEY_PITCH_Y, BK_KEY_H, BK_KEY_PX = 136, 46, 40, 22
 BK_KEY_R = 9
-BK_FIELD_RGB, BK_GRAB_RGB, BK_DIM_RGB = '#2C2C2E', '#6E6E73', '#5A5A5E'
+BK_FIELD_RGB, BK_GRAB_RGB, BK_DIM_RGB = RAISED_RGB, '#6E6E73', '#5A5A5E'
 
 
 def band_keypad():
     """(scrim, card): the band page's number keypad (patch/peqband.c, docs/modules/peq.md "Preset editing", mockup 10c): the dim scrim (a tap on it is Cancel) and a bottom sheet in the track rows' menu's glass
     (bk_glass, BK_H high, top corners rounded) with a grabber, Cancel / the field's title / Done, a grey "Range ..." line, the value field (bk_val right aligned, bk_caret, bk_unit; the payload places the three by the unit's width) and
     the keys: 1-9, a wide 0, "." and, in the right column, backspace, the sign (Gain only) and the Hz / kHz key (Frequency only; the payload sets the texts of those two keys). Neutral greys, no accent. Hidden AND insensitive until the payload shows them."""
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'bk_scrim'), ('enable', 'true')]))
-    for st in STATES:
-        styled(scrim, (st,), 'bg_color', PL_DIM)
-        styled(scrim, (st,), 'text_color', '#FFFFFF')
-        styled(scrim, (st,), 'border_width', '0')
-        styled(scrim, (st,), 'border_color', '#00000000')
+    scrim = modal_scrim('bk_scrim')
     card = hidden(Widget('view', 0, CLIENT_H - BK_H, SCREEN_W, BK_H, [('name', 'bk_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
@@ -662,7 +658,7 @@ def band_keypad():
         b = Widget('button', x, y, w, BK_KEY_H, [('name', name), ('enable', 'true'), prop])
         for st in STATES:
             styled(b, (st,), 'bg_color', down if st == 'pressed' else fill)
-            styled(b, (st,), 'text_color', BK_DIM_RGB if st == 'disable' else '#FFFFFF')
+            styled(b, (st,), 'text_color', BK_DIM_RGB if st == 'disable' else INK_RGB)
             styled(b, (st,), 'font_size', str(px))
             styled(b, (st,), 'border_width', '0')
             styled(b, (st,), 'round_radius', str(BK_KEY_R))
@@ -673,16 +669,16 @@ def band_keypad():
         b = Widget('button', x, BK_TOP_Y, BK_TOP_W, BK_TOP_H, [('name', name), ('enable', 'true')])
         for st in STATES:
             styled(b, (st,), 'bg_color', '#00000000')
-            styled(b, (st,), 'text_color', '#FFFFFF')
+            styled(b, (st,), 'text_color', INK_RGB)
             styled(b, (st,), 'border_width', '0')
-        b.children.append(text(f'{name}_t', 16 if align == 'left' else 0, 0, BK_TOP_W - 16, BK_TOP_H, BK_TOP_PX, '#FFFFFF', align, pod_i18n.text_prop(key_text)))
+        b.children.append(text(f'{name}_t', 16 if align == 'left' else 0, 0, BK_TOP_W - 16, BK_TOP_H, BK_TOP_PX, INK_RGB, align, pod_i18n.text_prop(key_text)))
         card.children.append(b)
-    card.children.append(text('bk_title', BK_TOP_W, BK_TOP_Y, SCREEN_W - 2 * BK_TOP_W, BK_TOP_H, BK_TOP_PX, '#FFFFFF', 'center', ('text', '')))
+    card.children.append(text('bk_title', BK_TOP_W, BK_TOP_Y, SCREEN_W - 2 * BK_TOP_W, BK_TOP_H, BK_TOP_PX, INK_RGB, 'center', ('text', '')))
     card.children.append(text('bk_range', 16, BK_RANGE_Y, SCREEN_W - 32, BK_RANGE_H, BK_RANGE_PX, PD_COUNT_RGB, 'left', ('text', '')))
     card.children.append(plain('bk_field', BK_FIELD_X, BK_FIELD_Y, BK_FIELD_W, BK_FIELD_H, BK_FIELD_RGB, BK_FIELD_R))
-    card.children.append(text('bk_val', BK_FIELD_X + 10, BK_FIELD_Y + (BK_FIELD_H - BK_VAL_H) // 2, 200, BK_VAL_H, BK_VAL_PX, '#FFFFFF', 'right', ('text', '')))
-    card.children.append(plain('bk_caret', BK_FIELD_X + 220, BK_FIELD_Y + (BK_FIELD_H - BK_CARET_H) // 2, BK_CARET_W, BK_CARET_H, '#FFFFFF'))
-    card.children.append(text('bk_unit', BK_FIELD_X + 226, BK_FIELD_Y, 40, BK_FIELD_H, BK_UNIT_PX, '#8E8E93', 'left', ('text', '')))
+    card.children.append(text('bk_val', BK_FIELD_X + 10, BK_FIELD_Y + (BK_FIELD_H - BK_VAL_H) // 2, 200, BK_VAL_H, BK_VAL_PX, INK_RGB, 'right', ('text', '')))
+    card.children.append(plain('bk_caret', BK_FIELD_X + 220, BK_FIELD_Y + (BK_FIELD_H - BK_CARET_H) // 2, BK_CARET_W, BK_CARET_H, INK_RGB))
+    card.children.append(text('bk_unit', BK_FIELD_X + 226, BK_FIELD_Y, 40, BK_FIELD_H, BK_UNIT_PX, PLACEHOLDER_RGB, 'left', ('text', '')))
     kx = lambda c: BK_KEY_X0 + c * BK_KEY_PITCH_X
     ky = lambda r: BK_KEY_Y0 + r * BK_KEY_PITCH_Y
     for d in range(1, 10):
@@ -762,19 +758,14 @@ PD_NAME_Y, PD_NAME_H, PD_NAME_PX = 54, 26, 17
 PD_BAR_Y = 94
 PD_COUNT_Y, PD_COUNT_H, PD_COUNT_PX = 106, 26, 15
 PD_CANCEL_PX = 18
-PD_TRACK_RGB, PD_FILL_RGB, PD_NAME_RGB, PD_COUNT_RGB, PD_CANCEL_RGB = '#FFFFFF33', '#EBEBEB', '#EBEBEB', '#AAAAAA', '#FFFFFF'   # neutral: no accent colour
+PD_TRACK_RGB, PD_FILL_RGB, PD_NAME_RGB, PD_COUNT_RGB, PD_CANCEL_RGB = '#FFFFFF33', '#EBEBEC', '#EBEBEB', SUB_RGB, INK_RGB   # the fill is palette.ROLE_FILL (#EBEBEB one blue level up): the accent maps it; the track stays neutral
 
 
 def podcasts_dialog(prefix='pod_pd', title='Refreshing Podcasts', big=False):
     """(scrim, card) of the refresh dialog."""
     ty, th, tpx, ny, nh, npx, by, bh, cy, ch, cpx, row = (14, 30, 20, 48, 26, 18, 92, 6, 104, 28, 20, 48) if big else (PD_TITLE_Y, PD_TITLE_H, PD_TITLE_PX, PD_NAME_Y, PD_NAME_H, PD_NAME_PX, PD_BAR_Y, PD_BAR_H, PD_COUNT_Y, PD_COUNT_H, PD_COUNT_PX, PL_ROW_H)   # big: the Software Update popup, larger type, a 6 px bar, the stock dialog's 48 px button row
     assert PD_CARD_H == OFFSETS['PL_MENU_ROWS'] * PL_ROW_H
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', prefix + '_scrim'), ('enable', 'true')]))
-    for st in STATES:
-        styled(scrim, (st,), 'bg_color', PL_DIM)
-        styled(scrim, (st,), 'text_color', '#FFFFFF')
-        styled(scrim, (st,), 'border_width', '0')
-        styled(scrim, (st,), 'border_color', '#00000000')
+    scrim = modal_scrim(prefix + '_scrim')
     card = hidden(Widget('view', (SCREEN_W - PD_CARD_W) // 2, (CLIENT_H - PD_CARD_H) // 2, PD_CARD_W, PD_CARD_H, [('name', prefix + '_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
@@ -789,7 +780,7 @@ def podcasts_dialog(prefix='pod_pd', title='Refreshing Podcasts', big=False):
             styled(lab, (st,), 'text_align_h', 'center')
             styled(lab, (st,), 'text_align_v', 'middle')
         return lab
-    card.children.append(text(prefix + '_title', ty, th, tpx, '#FFFFFF', pod_i18n.text_prop(title)))
+    card.children.append(text(prefix + '_title', ty, th, tpx, INK_RGB, pod_i18n.text_prop(title)))
     card.children.append(text(prefix + '_name', ny, nh, npx, PD_NAME_RGB, ('text', '')))
     for name, w, rgb in ((prefix + '_track', PD_BAR_W, PD_TRACK_RGB), (prefix + '_fill', 1, PD_FILL_RGB)):
         bar = Widget('view', PD_MARGIN, by, w, bh, [('name', name), ('sensitive', 'false')])
@@ -821,7 +812,18 @@ PL_CARD_H = OFFSETS['PL_MENU_ROWS'] * PL_ROW_H   # the pl_glass card of the dial
 PL_LABEL_PX = 18
 PL_GLASS = 'pl_glass'
 PL_DIM = '#00000082'          # the sheet's highlight="default(alpha=130)" (tools/mod_lists.py edit_playmore)
-PL_PRESSED, PL_HAIR = '#FFFFFF10', '#FFFFFF22'   # the sheet's rows (tools/mod_lists.py PM_PRESSED, PM_HAIR)
+
+
+def modal_scrim(name):
+    """The full-client dimming button behind a sheet or dialog (PL_DIM in every state): hidden and insensitive until the payload shows it, takes every touch while shown."""
+    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', name), ('enable', 'true')]))
+    for st in STATES:
+        styled(scrim, (st,), 'bg_color', PL_DIM)
+        styled(scrim, (st,), 'text_color', INK_RGB)
+        styled(scrim, (st,), 'border_width', '0')
+        styled(scrim, (st,), 'border_color', '#00000000')
+    return scrim
+PL_PRESSED, PL_HAIR = '#FFFFFD10', '#FFFFFF22'   # the sheet's rows (tools/mod_lists.py PM_PRESSED, PM_HAIR); pressed is palette.ROLE_SHEET_PRESS (6 % white, one blue level off): an accent makes it the accent at 22 % alpha
 
 
 def build_playlists_page(page):
@@ -848,12 +850,7 @@ def row_menu():
     from mod_icons import RM_MENU_ICONS, BARE_PX
     rows, rh = OFFSETS['RM_ROWS'], OFFSETS['PM_ROW_H']
     assert len(RM_KEYS) == rows
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'rm_scrim'), ('enable', 'true')]))
-    for st in STATES:
-        styled(scrim, (st,), 'bg_color', PL_DIM)
-        styled(scrim, (st,), 'text_color', '#FFFFFF')
-        styled(scrim, (st,), 'border_width', '0')
-        styled(scrim, (st,), 'border_color', '#00000000')
+    scrim = modal_scrim('rm_scrim')
     card = hidden(Widget('view', 0, CLIENT_H - rows * rh, SCREEN_W, rows * rh, [('name', 'rm_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
@@ -864,7 +861,7 @@ def row_menu():
         item = Widget('button', 0, i * rh, SCREEN_W, rh, [('name', f'rm_item{i}'), ('enable', 'true')])
         for st in STATES:
             styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
-            styled(item, (st,), 'text_color', '#FFFFFF')
+            styled(item, (st,), 'text_color', INK_RGB)
             styled(item, (st,), 'border', 'top' if i else 'none')
             styled(item, (st,), 'border_width', '1' if i else '0')
             styled(item, (st,), 'border_color', PL_HAIR if i else '#00000000')
@@ -874,7 +871,7 @@ def row_menu():
             ('name', f'rm_label{i}'), pod_i18n.text_prop(text), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
             styled(lab, (st,), 'font_size', str(RM_LABEL_PX))
-            styled(lab, (st,), 'text_color', '#FFFFFF')
+            styled(lab, (st,), 'text_color', INK_RGB)
             styled(lab, (st,), 'text_align_h', 'left')
             styled(lab, (st,), 'text_align_v', 'middle')
         item.children.append(lab)
@@ -887,8 +884,9 @@ def row_menu():
 # large title and the Play / Shuffle pills (real flat buttons: they scroll with the list; a playlist's header has hidden album-style image buttons, hd_shuffle / hd_play, instead); over the list the rail (a view of its own, outside the scroll_view, so a
 # touch on it never starts a drag) and the letter bubble (insensitive); the sort card (a scrim and the Playlists card's glass) and, hidden until select mode, the
 # bar with the Add to playlist and Delete pills and the navbar's Select All text. Everything that is shown later starts hidden AND insensitive.
-SG_TITLE_PX, SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = 32, 20, 12, 56, 18
-SG_PILL_RGB, SG_PILL_DOWN_RGB, SG_PILL_OFF_RGB = '#1E1E1E', '#333333', '#141414'   # flat: no glass
+SG_HDR_PX, SG_RAIL_PX, SG_BUBBLE_PX, SG_PILL_PX = SECTION_PX, 12, 56, 18
+SG_TITLE_PX = OFFSETS['PP_TITLE_PX']   # the large title's size, the Podcasts heading's too (patch/offsets.inc PP_TITLE_PX)
+SG_PILL_RGB, SG_PILL_DOWN_RGB, SG_PILL_OFF_RGB = SURFACE_RGB, LINE_RGB, '#141414'   # flat: no glass
 SG_PILL_PRESS_RGB = '#333335'   # the Play / Shuffle pills pressed: palette.ROLE_PRESS_PILL, one blue level off #333333 so the accent can find it (the select bars' pills keep #333333)
 SG_FOOT_RGB = SUB_RGB   # the song count under the last row: the album page's footer's grey
 
@@ -930,19 +928,26 @@ def rail_metrics(font_path):
 SG_SELALL_X, SG_SELALL_W = 208, 104     # the select mode's "Select All" text, right aligned to a 8 px margin
 
 
-def sg_pill(name, x, y, text, icon, ink='#FFFFFF', w=None, down=SG_PILL_DOWN_RGB):
-    """A flat pill: the button's fill with round_radius (the stock dialogs' buttons do the same), the glyph and the 18 px label, which the payload centres as a pair."""
+def flat_pill(b, fill, down, radius, disabled=None, ink=None, px=None, dim=None, border_color=True, icon=None):
+    """Styles the button b as a flat pill (the stock dialogs' buttons do the same): the fill (down while pressed, disabled when given), round_radius, no border (border_color: the transparent one too),
+    the label's ink at px (dim while disabled; no label style when ink is None) and the glyph. The one loop of the pills and the keyboard's keys."""
+    for st in STATES:
+        styled(b, (st,), 'bg_color', down if st == 'pressed' else disabled if disabled and st == 'disable' else fill)
+        if ink is not None:
+            styled(b, (st,), 'text_color', dim if dim and st == 'disable' else ink)
+            styled(b, (st,), 'font_size', str(px))
+        styled(b, (st,), 'border_width', '0')
+        if border_color: styled(b, (st,), 'border_color', '#00000000')
+        styled(b, (st,), 'round_radius', str(radius))
+        if icon: styled(b, (st,), 'icon', icon)
+    return b
+
+
+def sg_pill(name, x, y, text, icon, ink=INK_RGB, w=None, down=SG_PILL_DOWN_RGB):
+    """The Shuffle / Play pill: the glyph and the 18 px label, which the payload centres as a pair."""
     o = OFFSETS
     b = Widget('button', x, y, w or o['SG_PILL_W'], o['SG_PILL_H'], [('name', name), ('enable', 'true'), pod_i18n.text_prop(text)])
-    for st in STATES:
-        styled(b, (st,), 'bg_color', down if st == 'pressed' else SG_PILL_OFF_RGB if st == 'disable' else SG_PILL_RGB)
-        styled(b, (st,), 'text_color', '#666666' if st == 'disable' else ink)
-        styled(b, (st,), 'font_size', str(SG_PILL_PX))
-        styled(b, (st,), 'border_width', '0')
-        styled(b, (st,), 'border_color', '#00000000')
-        styled(b, (st,), 'round_radius', str(o['SG_PILL_R']))
-        styled(b, (st,), 'icon', icon)
-    return b
+    return flat_pill(b, SG_PILL_RGB, down, o['SG_PILL_R'], SG_PILL_OFF_RGB, ink, SG_PILL_PX, '#666666', icon=icon)
 
 
 VS_SORT_KEYS = ('Title', 'Artist', 'Recently Added', 'Year')   # the Albums "..." card's sort rows in order (patch/covercache.h CC_SORT_*)
@@ -951,7 +956,7 @@ VS_SEARCH_KEY = 'Search Albums'                                  # the optional 
 VS_ROW_H, VS_TICK_X, VS_TICK_W, VS_GLYPH, VS_GLYPH_X, VS_LABEL_X, VS_LABEL_X_GLYPH = (OFFSETS[k] for k in (   # patch/offsets.inc: a tick column at x 14 (14 px), a glyph 10 px after it, the labels after the glyph
     'VS_ROW_H', 'VS_TICK_X', 'VS_TICK_W', 'VS_GLYPH', 'VS_GLYPH_X', 'VS_LABEL_X', 'VS_LABEL_X_GLYPH'))
 VS_CARD_H = (len(VS_SORT_KEYS) + len(VS_VIEW_KEYS) + 1) * VS_ROW_H   # = mod_icons.GLASS_VIEWSORT's height (the six-row glass for a card one row short is the payload's choice, vs_glass6)
-VS_SUB_PX, VS_SUB_Y, VS_SUB_H = 15, 24, 22   # a ticked sort row's second line (the direction): 15 px grey, y 24..46; its label then sits at y 4..26
+VS_SUB_PX, VS_SUB_Y, VS_SUB_H = 15, 25, 22   # a ticked sort row's second line (the direction): 15 px grey, y 25..47; its label then sits at y 5..27
 
 
 def view_sort_card(sort_keys=VS_SORT_KEYS, view_keys=VS_VIEW_KEYS, search_key=VS_SEARCH_KEY, view_glyphs=('pod_ic_vsgrid', 'pod_ic_vslist'), select_key='Select', act_keys=None, act_glyphs=None):
@@ -964,12 +969,7 @@ def view_sort_card(sort_keys=VS_SORT_KEYS, view_keys=VS_VIEW_KEYS, search_key=VS
     The Playlists page (patch/playlists.c) gives four action rows instead of Search and Select (act_keys, with the glyph image names act_glyphs): slots 6..9, vs_item8 / 9 exist only then."""
     from mod_icons import GLASS_VIEWSORT
     assert VS_CARD_H == GLASS_VIEWSORT[1]
-    scrim = hidden(Widget('button', 0, 0, SCREEN_W, CLIENT_H, [('name', 'vs_scrim'), ('enable', 'true')]))
-    for st in STATES:
-        styled(scrim, (st,), 'bg_color', PL_DIM)
-        styled(scrim, (st,), 'text_color', '#FFFFFF')
-        styled(scrim, (st,), 'border_width', '0')
-        styled(scrim, (st,), 'border_color', '#00000000')
+    scrim = modal_scrim('vs_scrim')
     card = hidden(Widget('view', PL_CARD_RIGHT - PL_CARD_MAX, PL_CARD_Y, PL_CARD_MAX, VS_CARD_H, [('name', 'vs_card')]))
     for st in STATES:
         styled(card, (st,), 'bg_color', '#00000000')
@@ -990,7 +990,7 @@ def view_sort_card(sort_keys=VS_SORT_KEYS, view_keys=VS_VIEW_KEYS, search_key=VS
         item = Widget('button', 0, y, PL_CARD_MAX, VS_ROW_H, [('name', f'vs_item{slot}'), ('enable', 'true')])
         for st in STATES:
             styled(item, (st,), 'bg_color', PL_PRESSED if st == 'pressed' else '#00000000')
-            styled(item, (st,), 'text_color', '#FFFFFF')
+            styled(item, (st,), 'text_color', INK_RGB)
             styled(item, (st,), 'border', 'top' if hair else 'none')
             styled(item, (st,), 'border_width', '1' if hair else '0')
             styled(item, (st,), 'border_color', PL_HAIR if hair else '#00000000')
@@ -999,7 +999,7 @@ def view_sort_card(sort_keys=VS_SORT_KEYS, view_keys=VS_VIEW_KEYS, search_key=VS
             ('name', f'vs_label{slot}'), pod_i18n.text_prop(key), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
             styled(lab, (st,), 'font_size', str(PL_LABEL_PX))
-            styled(lab, (st,), 'text_color', '#FFFFFF')
+            styled(lab, (st,), 'text_color', INK_RGB)
             styled(lab, (st,), 'text_align_h', 'left')
             styled(lab, (st,), 'text_align_v', 'middle')
         item.children.append(lab)
@@ -1014,7 +1014,7 @@ def view_sort_card(sort_keys=VS_SORT_KEYS, view_keys=VS_VIEW_KEYS, search_key=VS
                 ('name', f'vs_sub{slot}'), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')]))
             for st in ('normal', 'disable', 'focused'):
                 styled(sub, (st,), 'font_size', str(VS_SUB_PX))
-                styled(sub, (st,), 'text_color', '#AAAAAA')
+                styled(sub, (st,), 'text_color', SUB_RGB)
                 styled(sub, (st,), 'text_align_h', 'left')
                 styled(sub, (st,), 'text_align_v', 'middle')
             item.children.append(sub)
@@ -1030,7 +1030,7 @@ def selall_button():
     sa = hidden(Widget('button', SG_SELALL_X, 0, SG_SELALL_W, NAVBAR_H, [('name', 'btn_selall'), ('enable', 'true'), pod_i18n.text_prop('Select All')]))
     for st in STATES:   # select mode's text button: flat, right aligned
         styled(sa, (st,), 'bg_color', '#00000000')
-        styled(sa, (st,), 'text_color', '#777777' if st == 'pressed' else '#FFFFFF')
+        styled(sa, (st,), 'text_color', '#777777' if st == 'pressed' else INK_RGB)
         styled(sa, (st,), 'font_size', '18')
         styled(sa, (st,), 'border_width', '0')
         styled(sa, (st,), 'border_color', '#00000000')
@@ -1053,13 +1053,8 @@ def select_bar(name, line_name, pills):
 
 def azlist_labels():
     """The hidden text styles of the A-Z furniture (patch/azlist.c, shared by the Songs and Artists pages): the header letter, the rail letter and the touched rail letter."""
-    out = []
-    for name, px, colour, align in (('label_hdr', SG_HDR_PX, '#FFFFFF', 'left'), ('label_rail', SG_RAIL_PX, '#EEEEEC', 'center'), ('label_rail_on', SG_RAIL_PX, '#000000', 'center')):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))   # text styles only (widget_prepare_text_style); never shown
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        if name == 'label_rail_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', '#EEEEEC')   # the letter on the disc: black on the accent (the contrast scan reads the label's own background)
-        out.append(lab)
-    return out
+    return style_labels((('label_hdr', SG_HDR_PX, INK_RGB, 'left'), ('label_rail', SG_RAIL_PX, '#EEEEEC', 'center'), ('label_rail_on', SG_RAIL_PX, '#000000', 'center')),
+                        {'label_rail_on': '#EEEEEC'})   # the letter on the disc: black on the accent (the contrast scan reads the label's own background)
 
 
 def azlist_rail():
@@ -1075,7 +1070,7 @@ def azlist_rail():
         styled(bubble, (st,), 'border_width', '1')
     letter = Widget('label', 0, 0, o['SG_BUBBLE'], o['SG_BUBBLE'], [('name', 'sg_bubble_letter'), ('text', ''), ('sensitive', 'false')])
     for st in ('normal', 'disable', 'focused'):
-        styled(letter, (st,), 'text_color', '#FFFFFF')
+        styled(letter, (st,), 'text_color', INK_RGB)
         styled(letter, (st,), 'font_size', str(SG_BUBBLE_PX))
         styled(letter, (st,), 'text_align_h', 'center')
         styled(letter, (st,), 'text_align_v', 'middle')
@@ -1087,7 +1082,6 @@ def build_artists_page(page):
     """The Artists / Genres / Composers page (patch/artists.c, docs/modules/artists.md): the Songs page's structure (a stock list holding one content view that paints the
     rows, the section letters and the pinned header; the rail and the bubble beside it; the large title in the content view, the small one in the navbar once it has scrolled
     away) under the navbar with the "..." (the capsule's left cap; its card: Search Artists, the Show group Artists / Album Artists, Name). No pills, no select mode."""
-    o = OFFSETS
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     nb = navbar(page.title, more_left=True)
@@ -1099,20 +1093,14 @@ def build_artists_page(page):
     sv.set('name', 'artists_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'ar_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
-    styled(title, ('normal',), 'text_color', '#FFFFFF')
-    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
-    styled(title, ('normal',), 'text_align_h', 'left')
-    styled(title, ('normal',), 'text_align_v', 'middle')
+    title = large_title('ar_title', page.title)
     grid.children = [title]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/artists.c shows it while yoffset > 0 (at rest it would darken the large title)
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children.append(hidden(wf_image('ar_spin', (SCREEN_W - WF_SPIN_PX) // 2, (CLIENT_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))   # a source's list still loading (patch/libsrc.c ls_spin)
-    lab = hidden(label('label_row_title', 0, 0, 10, 10, '', LIST_TITLE_PX, '#FFFFFF', 'left'))   # the row text style (the stock srlabel_leftwhite21_style's 21 px white)
-    styled(lab, ('normal',), 'text_align_v', 'middle')
-    root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB),))   # the row text style (the stock srlabel_leftwhite21_style's 21 px white)
     root.children.extend(azlist_labels())
     root.children.extend(azlist_rail())
     scrim, card = view_sort_card(sort_keys=('Name',) * len(VS_SORT_KEYS), view_keys=('Artists', 'Album Artists'), search_key='Search Artists', view_glyphs=('pod_ic_vsartist', 'pod_ic_vsalbumartist'))
@@ -1120,21 +1108,29 @@ def build_artists_page(page):
     return root
 
 
-def search_field_widget():
-    """The Search page's field (kb_field with the magnifier, hint, text, caret and clear button; patch/keyboard.c keyboard_attach finds them by name); the Radio page has the same."""
-    field = kb_view('kb_field', PS.SE_FIELD_X, PS.SE_FIELD_Y, PS.SE_FIELD_W, PS.SE_FIELD_H, PS.FIELD_RGB, PS.SE_FIELD_R)
-    field.set('sensitive', 'true')   # the clear button inside it needs it, and a tap on the field brings the keyboard back
-    mag = Widget('image', PS.SE_MAG_X, (PS.SE_FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
-    hint = label('kb_hint', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_HINT, 'left')
-    text = label('kb_text', PS.SE_TEXT_X, 0, PS.SE_TEXT_W, PS.SE_FIELD_H, '', PS.FIELD_PX, PS.FIELD_INK, 'left')
+def text_field(x, y, w, h, fill, radius, text_x, text_w, px, hint_rgb, ink_rgb, caret_y, clear_x, clear_w, mag=None, sensitive=False):
+    """The keyboard's text field (kb_field with an optional magnifier (x, size), the hint, text, caret and clear button; patch/keyboard.c keyboard_attach finds them by name) at x, y, w x h; the label and caret
+    x are text_x, the labels are text_w wide, the caret_y and the clear button (clear_x, clear_w) are relative to the field. sensitive: the clear button inside needs it, and a tap on the field brings the keyboard back."""
+    field = kb_view('kb_field', x, y, w, h, fill, radius)
+    if sensitive: field.set('sensitive', 'true')
+    kids = []
+    if mag: kids.append(Widget('image', mag[0], (h - mag[1]) // 2, mag[1], mag[1], [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')]))
+    hint = label('kb_hint', text_x, 0, text_w, h, '', px, hint_rgb, 'left')
+    text = label('kb_text', text_x, 0, text_w, h, '', px, ink_rgb, 'left')
     for lab in (hint, text):
         lab.set('sensitive', 'false')
         styled(lab, ('normal',), 'text_align_v', 'middle')
-    caret = kb_view('kb_caret', PS.SE_TEXT_X, PS.SE_CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
-    clear = hidden(Widget('button', PS.SE_FIELD_W - PS.SE_CLEAR_W, 0, PS.SE_CLEAR_W, PS.SE_FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
+    caret = kb_view('kb_caret', text_x, caret_y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
+    clear = hidden(Widget('button', clear_x, 0, clear_w, h, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
                    ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
-    field.children = [mag, hint, text, caret, clear]
+    field.children = kids + [hint, text, caret, clear]
     return field
+
+
+def search_field_widget(y=PS.SE_FIELD_Y, w=PS.SE_FIELD_W, text_w=PS.SE_TEXT_W):
+    """The Search page's field (the magnifier, hint, text, caret and clear button); the Radio and AutoEq pages have the same at y, w wide with text_w wide labels."""
+    return text_field(PS.SE_FIELD_X, y, w, PS.SE_FIELD_H, PS.FIELD_RGB, PS.SE_FIELD_R, PS.SE_TEXT_X, text_w, PS.FIELD_PX, PS.FIELD_HINT, PS.FIELD_INK, PS.SE_CARET_Y,
+                      w - PS.SE_CLEAR_W, PS.SE_CLEAR_W, (PS.SE_MAG_X, PK.FIELD_MAG), True)
 
 
 def build_search_page(page):
@@ -1167,13 +1163,10 @@ def build_search_page(page):
         ('style:over:icon', 'se_close'), ('style:normal:icon', 'se_close'), ('style:pressed:icon', 'se_close_down')]))
     root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children.append(hidden(wf_image('se_spin', (SCREEN_W - WF_SPIN_PX) // 2, 120, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))   # a source's loading spinner (patch/search.c shows and turns it)
-    root.children.append(hidden(label('label_title', 0, 0, 200, 22, '', 16, '#FFFFFF', 'left')))
+    root.children.append(hidden(label('label_title', 0, 0, 200, 22, '', 16, INK_RGB, 'left')))
     root.children[-1].set(*pod_i18n.text_prop(page.title))
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB), ('label_chip', PS.SE_CHIP_PX, PS.CHIP_INK), ('label_chip_on', PS.SE_CHIP_PX, PS.CHIP_ON_INK)):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'center' if name.startswith('label_chip') else 'left'))   # text styles only (widget_prepare_text_style); never shown
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        if name == 'label_chip_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.CHIP_ON_RGB)   # the dark text is on the selected pill (the contrast scan reads the label's own background)
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB), ('label_chip', PS.SE_CHIP_PX, PS.CHIP_INK, 'center'),
+                                   ('label_chip_on', PS.SE_CHIP_PX, PS.CHIP_ON_INK, 'center')), {'label_chip_on': PS.CHIP_ON_RGB})   # the dark text is on the selected pill (the contrast scan reads the label's own background)
     root.children += keyboard_pad_widgets()
     return root
 
@@ -1195,18 +1188,10 @@ def build_autoeq_page(page):
     styled(grid, ('normal',), 'bg_color', '#000000')
     sv.children.append(grid)
     root.children.append(lv)
-    field = search_field_widget()
-    field.y = 56
-    field.w = RD_FIELD_W
-    for c in field.children:
-        if c.name == 'kb_clear': c.x = RD_FIELD_W - PS.SE_CLEAR_W
-        elif c.name in ('kb_hint', 'kb_text'): c.w = RD_TEXT_W
+    field = search_field_widget(56, RD_FIELD_W, RD_TEXT_W)
     root.children.append(field)
     root.children.append(hidden(label('label_status', 10, 150, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB)):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))   # text styles only (widget_prepare_text_style); never shown
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB)))
     root.children += keyboard_pad_widgets()
     return root
 
@@ -1225,17 +1210,13 @@ def build_songs_page(page):
     sv.set('name', 'songs_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
-    styled(title, ('normal',), 'text_color', '#FFFFFF')
-    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
-    styled(title, ('normal',), 'text_align_h', 'left')
-    styled(title, ('normal',), 'text_align_v', 'middle')
+    title = large_title('sg_title', page.title)
     foot = label('sg_foot', o['SG_HDR_X'], 0, SCREEN_W - 2 * o['SG_HDR_X'], o['SG_FOOT_TEXT_H'], '', o['SG_FOOT_PX'], SG_FOOT_RGB, 'left')   # the song count: the payload sets the text and puts it under the last row
     foot.set('sensitive', 'false')
     styled(foot, ('normal',), 'text_align_v', 'middle')
     # a playlist's header (patch/songs.c, class 0xff13): the name and the count, centred under the mosaic the payload paints; the payload moves the pills down and
     # shows these two (hidden and insensitive here, like every decoration it shows later)
-    hname = hidden(label('sg_hname', o['PH_NAME_X'], o['PH_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, '#FFFFFF', 'center'))
+    hname = hidden(label('sg_hname', o['PH_NAME_X'], o['PH_NAME_Y'], o['PH_NAME_W'], o['PH_NAME_H'], '', 22, INK_RGB, 'center'))
     styled(hname, ('normal',), 'text_align_v', 'middle')
     # the library's flat pills, and a playlist's header disc and pill (the album page's; hidden, patch/songs.c sg_pills shows one set)
     pills, ptext = play_header(o['PH_BTN_Y'])
@@ -1247,12 +1228,9 @@ def build_songs_page(page):
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/songs.c shows it while yoffset > 0 (at rest it would darken the large title)
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
-    for name, px, colour, align in (('label_row_title', LIST_TITLE_PX, '#FFFFFF', 'left'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA', 'left'),
-                                    ('label_row_dim', LIST_TITLE_PX, '#7A7A7A', 'left'), ('label_row_subdim', LIST_SUB_PX, '#7A7A7A', 'left'),   # a source's rows that cannot play
-                                    ('label_grid_title', GRID_ALBUM_PX, '#FFFFFF', 'left'), ('label_grid_sub', GRID_ARTIST_PX, '#AAAAAA', 'left')):   # the last two: Recently Added's album grid
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))   # text styles only (widget_prepare_text_style); never shown
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB),
+                                   ('label_row_dim', LIST_TITLE_PX, '#7A7A7A'), ('label_row_subdim', LIST_SUB_PX, '#7A7A7A'),   # a source's rows that cannot play
+                                   ('label_grid_title', GRID_ALBUM_PX, INK_RGB), ('label_grid_sub', GRID_ARTIST_PX, SUB_RGB)))   # the last two: Recently Added's album grid
     root.children.extend(azlist_labels())
     root.children.extend(azlist_rail())
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
@@ -1269,9 +1247,9 @@ def build_songs_page(page):
 # The window's colour is the cover's tone (the payload sets it); the gradient image img_ah_tint, first in the window, darkens it from the top (the stock page's), and the list over it is
 # transparent. The glass controls are the window's last child, so they paint and take touches over the rows: Back, Select | Now Playing as one capsule (the genre songs list's), and
 # in select mode the all / none toggle, Add, Delete and Cancel in the places the stock builder gave them. Two hidden labels carry the rows' text styles (the number, the title; the playing row's number is the ah_wave image); label_title (hidden) is the page's title for the i18n and asset tests.
-AB_STYLES = (('label_row_num', 'right', '#AAAAAA', 19), ('label_row_title', 'left', '#FFFFFF', 19),   # the stock rows' 19 px number (the grey line's colour) and title (white)
-             ('label_row_dim', 'left', '#7A7A7A', 19))   # a source's rows: the title of a row that cannot play (the dim grey, the lowest that keeps 4.5:1 on black)
-AB_META = (('ab_title', 'AH_TITLE_Y', 'AH_TITLE_H', 22, '#FFFFFF'), ('ab_artist', 'AH_ARTIST_Y', 'AH_ARTIST_H', 18, '#AAAAAA'), ('ab_meta', 'AH_META_Y', 'AH_META_H', 15, '#9C9C9C'))   # srlabel_ah{title,artist,meta}_style
+AB_STYLES = (('label_row_num', LIST_TITLE_PX, SUB_RGB, 'right'), ('label_row_title', LIST_TITLE_PX, INK_RGB),   # the number (the grey line's colour) and the title (white) at the list title size like every list
+             ('label_row_dim', LIST_TITLE_PX, '#7A7A7A'))   # a source's rows: the title of a row that cannot play (the dim grey, the lowest that keeps 4.5:1 on black)
+AB_META = (('ab_title', 'AH_TITLE_Y', 'AH_TITLE_H', 22, INK_RGB), ('ab_artist', 'AH_ARTIST_Y', 'AH_ARTIST_H', 18, SUB_RGB), ('ab_meta', 'AH_META_Y', 'AH_META_H', 15, '#9C9C9C'))   # srlabel_ah{title,artist,meta}_style
 AB_FOOT_RGB = SUB_RGB   # the footer's grey: the artist line's (not the meta line's #9C9C9C)
 AB_PLAY_TEXT_W = OFFSETS['AB_PLAY_TEXT_W']   # the English "Play" at 18 px, where the payload cannot measure it; the payload centres the pair for the language
 
@@ -1335,10 +1313,7 @@ def build_album_page(page):
     root.children.append(lv)
     root.children.append(play_text('ab_play_text'))   # the pill's text style and its translated text; the payload paints the text over the pill
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
-    for name, align, colour, px in AB_STYLES:
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))   # text styles only (widget_prepare_text_style); never shown
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels(AB_STYLES)
     root.children.extend(album_navbar(page))   # the glass controls paint and take touches over the list
     root.children.extend(view_sort_card(sort_keys=('Name',) * len(VS_SORT_KEYS), act_keys=('Download Album', 'Select'), act_glyphs=('pod_ic_vsdownload', 'pod_ic_vsselect')))   # a source's "..." card (patch/albumpage.c offers the first row alone: Download Album); hidden on the library's page
     root.children.extend(row_menu())   # last: the track rows' "..." menu (patch/rowmenu.c) covers the navbar too
@@ -1365,7 +1340,7 @@ def play_text(name):
         styled(t, (st,), 'text_color', '#141414')
         styled(t, (st,), 'text_align_h', 'left')
         styled(t, (st,), 'text_align_v', 'middle')
-        styled(t, (st,), 'bg_color', '#FFFFFF')   # the dark text of the white pill: the contrast scan reads the label's own background
+        styled(t, (st,), 'bg_color', INK_RGB)   # the dark text of the white pill: the contrast scan reads the label's own background
     return t
 
 
@@ -1382,20 +1357,14 @@ def ab_button(name, x, w, rest, down, y=None):
 QP_HEAD_PX, QP_EMPTY_PX = 20, 16
 QP_EMPTY_RGB = SUB_RGB
 QP_CLEAR_PX, QP_CLEAR_RGB, QP_CLEAR_DOWN_RGB = 17, SUB_RGB, '#7A7A7A'   # the Clear text button: neutral grey, dimmer while pressed
-QP_OFF_RGB, QP_OFF_DOWN_RGB = '#2C2C2E', '#3A3A3D'   # a mode button that is off (the payload sets the lit look: #C8C8C8, pressed #A8A8A8, with the dark glyph); patch/offsets.inc QP_PILL_*; pressed #3A3A3D is palette.ROLE_PRESS_QPILL (one blue level off #3A3A3C)
+QP_OFF_RGB, QP_OFF_DOWN_RGB = RAISED_RGB, '#3A3A3D'   # a mode button that is off (the payload sets the lit look: #C8C8C8, pressed #A8A8A8, with the dark glyph); patch/offsets.inc QP_PILL_*; pressed #3A3A3D is palette.ROLE_PRESS_QPILL (one blue level off #3A3A3C)
 
 
 def qp_button(name, x, icon):
     """An icon-only flat button (the Songs page's pill without its label): the glyph is centred by the button's own style."""
     o = OFFSETS
     b = Widget('button', x, o['QP_PILL_Y'], o['QP_PILL_W'], o['SG_PILL_H'], [('name', name), ('enable', 'true')])
-    for st in STATES:
-        styled(b, (st,), 'bg_color', QP_OFF_DOWN_RGB if st == 'pressed' else QP_OFF_RGB)
-        styled(b, (st,), 'border_width', '0')
-        styled(b, (st,), 'border_color', '#00000000')
-        styled(b, (st,), 'round_radius', str(o['SG_PILL_R']))
-        styled(b, (st,), 'icon', icon)
-    return b
+    return flat_pill(b, QP_OFF_RGB, QP_OFF_DOWN_RGB, o['SG_PILL_R'], icon=icon)
 
 
 def queue_navbar(page):
@@ -1415,7 +1384,7 @@ def build_queue_page(page):
     view = Widget('view', 0, 0, SCREEN_W, o['QP_WIN_H'], [('name', 'view_queue')])   # the content: the payload sizes it to the header and the rows
     styled(view, ('normal',), 'bg_color', '#000000')
     kids = []
-    for name, y, h, px, colour in (('qp_title', 'QP_TITLE_Y', 'QP_TITLE_H', 20, '#FFFFFF'), ('qp_artist', 'QP_ARTIST_Y', 'QP_ARTIST_H', 16, '#AAAAAA')):
+    for name, y, h, px, colour in (('qp_title', 'QP_TITLE_Y', 'QP_TITLE_H', 20, INK_RGB), ('qp_artist', 'QP_ARTIST_Y', 'QP_ARTIST_H', 16, SUB_RGB)):
         lab = Widget('hscroll_label', o['QP_TEXT_X'], o[y], o['QP_TEXT_W'], o[h], [('name', name), ('text', ''), ('sensitive', 'false'), ('yoyo', 'true'), ('loop', 'true'), ('lull', CAPTION_LULL), ('ellipses', 'true')])
         for st in ('normal', 'disable', 'focused'):
             styled(lab, (st,), 'font_size', str(px))
@@ -1425,7 +1394,7 @@ def build_queue_page(page):
     kids.append(qp_button('btn_shuffle', o['QP_PILL_X0'], 'sg_shuffle'))
     kids.append(qp_button('btn_repeat', o['QP_PILL_X1'], 'sg_repeat'))
     head = Widget('label', o['SG_HDR_X'], o['QP_HEAD_Y'], 310 - o['SG_HDR_X'], o['QP_HEAD_H'], [('name', 'qp_head'), pod_i18n.text_prop('Queue'), ('sensitive', 'false')])
-    for prop, v in (('text_color', '#FFFFFF'), ('font_size', str(QP_HEAD_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(head, ('normal',), prop, v)
+    for prop, v in (('text_color', INK_RGB), ('font_size', str(QP_HEAD_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(head, ('normal',), prop, v)
     empty = hidden(Widget('label', o['SG_HDR_X'], o['QP_TOP'] + o['QP_EMPTY_Y'], 310 - o['SG_HDR_X'], o['QP_EMPTY_H'], [('name', 'qp_empty'), pod_i18n.text_prop('No upcoming songs')]))   # shown by the payload when nothing follows
     for prop, v in (('text_color', QP_EMPTY_RGB), ('font_size', str(QP_EMPTY_PX)), ('text_align_h', 'left'), ('text_align_v', 'middle')): styled(empty, ('normal',), prop, v)
     clear = hidden(Widget('button', o['QP_CLEAR_X'], o['QP_CLEAR_Y'], o['QP_CLEAR_W'], o['QP_CLEAR_H'], [('name', 'btn_qclear'), ('enable', 'true'), pod_i18n.text_prop('Clear')]))   # shown by the payload while songs follow
@@ -1442,10 +1411,7 @@ def build_queue_page(page):
     sv.children.append(view)
     root.children.append(lv)
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA')):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))   # text styles only (widget_prepare_text_style); never shown
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB)))
     root.children.extend(queue_navbar(page))   # last: the glass controls paint and take touches over the list
     return root
 
@@ -1456,9 +1422,9 @@ def build_queue_page(page):
 # (insensitive: the pill takes the tap). A floating glass back disc (btn_return, the window's last child: fixed, over the list) is the only control outside the list.
 # Seven hidden, insensitive labels carry the text styles (the payload sets their colours from the tint). label_title (hidden) is the page's title: the i18n and asset tests
 # read it from every page; nothing shows it. The window, the list and the view are black here: the payload sets the tint on all of them (black is the fallback).
-DP_STYLES = (('label_dp_title', 'DP_TITLE_PX', '#FFFFFF', 'center'), ('label_dp_sub', 'DP_SUB_PX', '#FFFFFF', 'center'), ('label_dp_upd', 'DP_UPD_PX', '#FFFFFF', 'center'),
-             ('label_dp_desc', 'DP_DESC_PX', '#FFFFFF', 'left'), ('label_dp_play', 'DP_PLAY_PX', '#FFFFFF', 'left'), ('label_dp_row', 'DP_ROW_PX', '#FFFFFF', 'left'),
-             ('label_dp_artist', 'DP_ARTIST_PX', '#FFFFFF', 'left'))
+DP_STYLES = (('label_dp_title', 'DP_TITLE_PX', INK_RGB, 'center'), ('label_dp_sub', 'DP_SUB_PX', INK_RGB, 'center'), ('label_dp_upd', 'DP_UPD_PX', INK_RGB, 'center'),
+             ('label_dp_desc', 'DP_DESC_PX', INK_RGB, 'left'), ('label_dp_play', 'DP_PLAY_PX', INK_RGB, 'left'), ('label_dp_row', 'DP_ROW_PX', INK_RGB, 'left'),
+             ('label_dp_artist', 'DP_ARTIST_PX', INK_RGB, 'left'))
 DP_PLAY_PX, DP_ROW_PX, DP_ARTIST_PX = 18, LIST_TITLE_PX, LIST_SUB_PX
 
 
@@ -1490,10 +1456,7 @@ def build_dailymix_page(page):
     root.children.append(Widget('button', D.DP_BACK_X, D.DP_BACK_Y, D.DP_BACK_BTN, D.DP_BACK_BTN, [
         ('name', 'btn_return'), ('enable', 'true'), ('style', 'img_btn_style'),
         ('style:pressed:icon', 'dp_back_down'), ('style:normal:icon', 'dp_back'), ('style:over:icon', 'dp_back')]))
-    for name, px, colour, align in DP_STYLES:
-        lab = hidden(label(name, 0, 0, 10, 10, '', globals()[px] if px in globals() else getattr(D, px), colour, align))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels([(name, globals()[px] if px in globals() else getattr(D, px), colour, align) for name, px, colour, align in DP_STYLES])
     root.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
     return root
 
@@ -1502,8 +1465,8 @@ def build_dailymix_page(page):
 # the window is 320 x 480) in the wheel's body colour. ipod_screen (320 x 240) is painted by the payload in its own EVT_AFTER_PAINT and takes no touch (insensitive); ipod_wheel
 # (220 x 220, the touch target: the payload does the circle's hit test and grabs the touch) holds the wheel picture as an insensitive image child. Ten hidden, insensitive labels
 # only carry the text styles. label_title (hidden) is the page's title for the i18n and asset tests.
-IP_STYLES = (('label_ip_row', 18, '#000000', 'left'), ('label_ip_sel', 18, '#FFFFFF', 'left'), ('label_ip_title', 16, '#000000', 'left'),
-             ('label_ip_small', 16, '#666666', 'left'), ('label_ip_subsel', 16, '#FFFFFF', 'left'), ('label_ip_np1', 18, '#000000', 'left'), ('label_ip_np2', 16, '#666666', 'left'), ('label_ip_time', 15, '#000000', 'right'),
+IP_STYLES = (('label_ip_row', 18, '#000000', 'left'), ('label_ip_sel', 18, INK_RGB, 'left'), ('label_ip_title', 16, '#000000', 'left'),
+             ('label_ip_small', 16, '#666666', 'left'), ('label_ip_subsel', 16, INK_RGB, 'left'), ('label_ip_np1', 18, '#000000', 'left'), ('label_ip_np2', 16, '#666666', 'left'), ('label_ip_time', 15, '#000000', 'right'),
              ('label_ip_val', 16, '#0C62D2', 'left'), ('label_ip_np3', 14, '#666666', 'left'))
 
 
@@ -1512,17 +1475,15 @@ def build_ipod_page(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name), ('fullscreen', 'true')])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#C6C9CE')
     screen = Widget('view', 0, 0, o['IP_W'], o['IP_SCREEN_H'], [('name', 'ipod_screen'), ('sensitive', 'false')])
-    styled(screen, ('normal',), 'bg_color', '#FFFFFF')
+    styled(screen, ('normal',), 'bg_color', INK_RGB)
     wheel = Widget('view', o['IP_WHEEL_X'], o['IP_WHEEL_Y'], o['IP_WHEEL_D'], o['IP_WHEEL_D'], [('name', 'ipod_wheel')])
     wheel.children = [Widget('image', 0, 0, o['IP_WHEEL_D'], o['IP_WHEEL_D'], [('name', 'ipod_wheel_img'), ('image', 'ipod_wheel'), ('draw_type', 'default'), ('sensitive', 'false')])]
     root.children = [screen, wheel]
     # the style labels sit in two hidden, insensitive views whose background is the colour the text is drawn on (the theme scan reads a label's contrast against it)
-    light = hidden(Widget('view', 0, 0, 10, 10, [('name', 'ip_styles_light')])); styled(light, ('normal',), 'bg_color', '#FFFFFF')
+    light = hidden(Widget('view', 0, 0, 10, 10, [('name', 'ip_styles_light')])); styled(light, ('normal',), 'bg_color', INK_RGB)
     blue = hidden(Widget('view', 0, 0, 10, 10, [('name', 'ip_styles_blue')])); styled(blue, ('normal',), 'bg_color', '#0C62D2')
-    for name, px, colour, align in IP_STYLES:
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        (blue if name in ('label_ip_sel', 'label_ip_subsel') else light).children.append(lab)
+    for lab in style_labels(IP_STYLES):
+        (blue if lab.name in ('label_ip_sel', 'label_ip_subsel') else light).children.append(lab)
     blue.children.append(hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)])))
     root.children += [light, blue]
     return root
@@ -1537,8 +1498,7 @@ def build_tape_page(page):
     view = Widget('view', 0, 0, 320, 480, [('name', 'tape_view')])
     styled(view, ('normal',), 'bg_color', '#111112')
     holder = hidden(Widget('view', 0, 0, 10, 10, [('name', 'tp_styles')])); styled(holder, ('normal',), 'bg_color', '#111112')
-    lab = hidden(label('label_tp_font', 0, 0, 10, 10, '', 16, '#FFFFFF', 'left')); styled(lab, ('normal',), 'text_align_v', 'middle')
-    holder.children = [lab, hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))]
+    holder.children = [*style_labels((('label_tp_font', 16, INK_RGB),)), hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))]
     root.children = [view, holder]
     return root
 
@@ -1568,7 +1528,7 @@ def build_vinyl_page(page):
         root.children.append(lab)
     title = hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))
     if th == 'white':   # never seen; the build's contrast scan still reads it against the light plinth
-        for st in ('normal', 'disable', 'focused'): styled(title, (st,), 'text_color', '#1C1C1E')
+        for st in ('normal', 'disable', 'focused'): styled(title, (st,), 'text_color', SURFACE_RGB)
     root.children.append(title)
     return root
 
@@ -1612,15 +1572,15 @@ def oa_es_layout(glyph, text, pill):
     return tuple(ys)
 
 
-OA_STATUS =(16, 214, 288, OA_ES_TITLE_H, 18, '#FFFFFF')    # x, y, w, h, px, colour: the title of the state block
-OA_HEAD_TITLE = (16, 52, 288, 20, 17, '#FFFFFF')   # the lyrics detail's header, in the chip row's place
+OA_STATUS =(16, 214, 288, OA_ES_TITLE_H, 18, INK_RGB)    # x, y, w, h, px, colour: the title of the state block
+OA_HEAD_TITLE = (16, 52, 288, 20, 17, INK_RGB)   # the lyrics detail's header, in the chip row's place
 OA_HEAD_SUB = (16, 72, 288, 15, 13, SUB_RGB)
 OA_LPILL = (16, 400, 288, 40)    # the lyrics detail's pill (window y); the text lines stop above it (OA_LY_H of patch/onlineart.c)
 OA_DC = (0, NAVBAR_H, SCREEN_W, CLIENT_H - NAVBAR_H)   # the cover detail's container (window y)
 OA_DC_ART = (40, 8, 240, 240)    # the larger cover (container y)
 OA_DC_LABELS = (   # name, y (container), h, px, colour: the album, the artist, the source, the failure line
-    ('oa_dc_name', 256, 26, 20, '#FFFFFF'),
-    ('oa_dc_artist', 282, 22, 16, '#AAAAAA'),
+    ('oa_dc_name', 256, 26, 20, INK_RGB),
+    ('oa_dc_artist', 282, 22, 16, SUB_RGB),
     ('oa_dc_source', 304, 20, 13, SUB_RGB),
     ('oa_hint', 326, 20, 14, SUB_RGB))
 OA_PILL = (16, 352, 288, 40)     # the cover detail's pill (container y)
@@ -1640,14 +1600,7 @@ def _oa_label(name, x, y, w, h, px, colour, align='center', text=None, valign='m
 
 def _oa_pill(name, x, y, w, h, px=18):
     pill = hidden(Widget('button', x, y, w, h, [('name', name), ('enable', 'true'), ('text', '')]))
-    for st in STATES:
-        styled(pill, (st,), 'bg_color', SG_PILL_DOWN_RGB if st == 'pressed' else SG_PILL_OFF_RGB if st == 'disable' else SG_PILL_RGB)
-        styled(pill, (st,), 'text_color', '#FFFFFF')
-        styled(pill, (st,), 'font_size', str(px))
-        styled(pill, (st,), 'border_width', '0')
-        styled(pill, (st,), 'border_color', '#00000000')
-        styled(pill, (st,), 'round_radius', str(max(OFFSETS['SG_PILL_R'], h // 2)))
-    return pill
+    return flat_pill(pill, SG_PILL_RGB, SG_PILL_DOWN_RGB, max(OFFSETS['SG_PILL_R'], h // 2), SG_PILL_OFF_RGB, INK_RGB, px)
 
 
 def build_onlineart_page(page):
@@ -1692,15 +1645,9 @@ def build_onlineart_page(page):
     dc.children.append(_oa_pill('oa_save', 16, OA_PILL[1], OA_PILL[2], OA_PILL[3]))
     root.children.append(dc)
     # text styles only (widget_prepare_text_style), never shown; the title of the navbar is its own label_title
-    for name, px, colour, align in (('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB, 'left'), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB, 'left'), ('label_chip', PS.SE_CHIP_PX, PS.CHIP_INK, 'center'),
-                                    ('label_chip_on', PS.SE_CHIP_PX, PS.CHIP_ON_INK, 'center'), ('label_badge', OA_BADGE_PX, PS.SUB_RGB, 'center'), ('label_badge_on', OA_BADGE_PX, PS.CHIP_ON_INK, 'center'),
-                                    ('label_line', OA_LINE_PX, '#FFFFFF', 'left')):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, align))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        if name == 'label_chip_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.CHIP_ON_RGB)
-        if name == 'label_badge': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.SEP_RGB)
-        if name == 'label_badge_on': styled(lab, ('normal', 'pressed', 'disable', 'focused'), 'bg_color', PS.CHIP_ON_RGB)
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, PS.TITLE_RGB), ('label_row_sub', LIST_SUB_PX, PS.SUB_RGB), ('label_chip', PS.SE_CHIP_PX, PS.CHIP_INK, 'center'),
+                                   ('label_chip_on', PS.SE_CHIP_PX, PS.CHIP_ON_INK, 'center'), ('label_badge', OA_BADGE_PX, PS.SUB_RGB, 'center'), ('label_badge_on', OA_BADGE_PX, PS.CHIP_ON_INK, 'center'),
+                                   ('label_line', OA_LINE_PX, INK_RGB)), {'label_chip_on': PS.CHIP_ON_RGB, 'label_badge': PS.SEP_RGB, 'label_badge_on': PS.CHIP_ON_RGB})
     return root
 
 
@@ -1723,8 +1670,8 @@ def build_update_page(page):
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title))
     root.children.append(hidden(Widget('image', (SCREEN_W - UP_ICON) // 2, UP_YS[0], UP_ICON, UP_ICON, [('name', 'up_icon'), ('image', 'pod_es_download'), ('draw_type', 'center'), ('sensitive', 'false')])))
-    root.children.append(_oa_label('up_title', (SCREEN_W - UP_TITLE_W) // 2, UP_YS[1], UP_TITLE_W, UP_TITLE_H, UP_TITLE_PX, '#FFFFFF'))
-    root.children.append(hidden(_oa_label('up_text', (SCREEN_W - UP_TEXT_W) // 2, UP_YS[2], UP_TEXT_W, UP_TEXT_H, UP_TEXT_PX, '#AAAAAA', valign='top')))
+    root.children.append(_oa_label('up_title', (SCREEN_W - UP_TITLE_W) // 2, UP_YS[1], UP_TITLE_W, UP_TITLE_H, UP_TITLE_PX, INK_RGB))
+    root.children.append(hidden(_oa_label('up_text', (SCREEN_W - UP_TEXT_W) // 2, UP_YS[2], UP_TEXT_W, UP_TEXT_H, UP_TEXT_PX, SUB_RGB, valign='top')))
     root.children.append(_oa_pill('up_pill', (SCREEN_W - UP_PILL_W) // 2, UP_YS[3], UP_PILL_W, UP_PILL_H, UP_PILL_PX))
     root.children.append(_oa_pill('up_pill2', (SCREEN_W - UP_PILL_W) // 2, UP_YS[4], UP_PILL_W, UP_PILL_H, UP_PILL_PX))
     root.children.extend(podcasts_dialog('up_pd', 'Downloading %s', big=True))   # last: above everything
@@ -1750,10 +1697,7 @@ def build_relnotes_page(page):
     sv.children.append(view)
     root.children.append(lv)
     root.children.append(nav_fade())
-    for name, px, colour in (('label_head', RN_HEAD_PX, '#FFFFFF'), ('label_line', RN_LOCK_LINE_PX if page.key == pod_pages.LOCKINFO_PAGE.key else RN_LINE_PX, RN_LINE_RGB)):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_head', RN_HEAD_PX, INK_RGB), ('label_line', RN_LOCK_LINE_PX if page.key == pod_pages.LOCKINFO_PAGE.key else RN_LINE_PX, RN_LINE_RGB)))
     return root
 
 
@@ -1823,11 +1767,12 @@ def cfg_rows(w, labels, on):
 # The Extras page's section headers (patch/menu.c mn_extras; iOS grouped-list captions): one per group of pod_pages.EXTRAS_GROUPS, pod_hdr0 ..,
 # a plain view HDR_H (40) high, shorter than a row, the child of the list's scroll_view like a row (the stock list_view layouter keeps the height of a child that is not
 # a row, as it does the shelf's, and sums it). The caption is a stock hscroll_label (never scrolls, ellipsis) in the style of the Home menu's "Made for You" heading
-# (pod_dm_head) and the Recently Played shelf's: x 10, 20 px (SH_HEAD_X, SH_HEAD_PX, defined below; test/pod/menu.py asserts they agree), but in the secondary grey, left aligned,
-# so every section heading of the Music pages sits on one left edge. Insensitive always and hidden in the asset (the payload shows it by visible alone): never a touch target, and no list_item (no press visual, no
-# chevron or icon). The label is 22 px high in the strip's bottom 26 px.
-HDR_X, HDR_PX, HDR_RGB = 10, 20, '#AAAAAA'   # the secondary grey (SH_SUB_RGB, pod_settings.GREY): a group caption, dimmer than its rows
-HDR_LABEL_Y, HDR_LABEL_H = 14, 22
+# (pod_dm_head) and the Recently Played shelf's, but the group caption role (pod_roles CAPTION_*): 18 px secondary grey, in the Settings pages' strip, its label at the rows' glyph ink (x 18; the Settings
+# captions sit on the glyph ink of their cards, x 24). Insensitive always and hidden in the asset (the payload shows it by visible alone): never a touch target, and no list_item (no press visual, no
+# chevron or icon). The label is CAPTION_LABEL_H high, CAPTION_LABEL_Y down the strip.
+import pod_settings as _ST
+HDR_X, HDR_PX, HDR_RGB = 18, _ST.HDR_PX, SUB_RGB   # the Settings pages' caption (pod_settings.HDR_*; size and colour shared): the secondary grey, dimmer than its rows; x 18 = the left of the rows' glyph ink (the 24 px glyph at x 16, 20 px ink), as the Settings captions sit on theirs
+HDR_LABEL_Y, HDR_LABEL_H = CAPTION_LABEL_Y, CAPTION_LABEL_H
 
 
 def extras_headers(w):
@@ -1975,8 +1920,7 @@ def cards_row(i, row, piece, last, icon=True):
 
 
 GR_W, GR_H, GR_X0, GR_W0, GR_Y0, GR_H0, GR_DECADE = (OFFSETS[k] for k in ('GR_W', 'GR_H', 'GR_PX0', 'GR_PW', 'GR_PY0', 'GR_PH', 'GR_DECADE'))
-GR_LABEL_PX, GR_LABEL_RGB = 15, '#8A8A8A'
-import pod_settings as _ST
+GR_LABEL_PX, GR_LABEL_RGB = 15, CHEV_RGB
 assert GR_H == _ST.GRAPH_H and GR_W == _ST.CARD_W and GR_W0 == 3 * GR_DECADE and GR_X0 + GR_W0 < GR_W and GR_Y0 + GR_H0 + 19 <= GR_H   # (the labels under the plot fit in the card)
 
 
@@ -2045,7 +1989,7 @@ def cards_segment():
         l = Widget('label', ST.CM + k * w, BD['BD_SEG_Y'], w, BD['BD_SEG_H'], [('name', f'pod_seg_l{k}'), pod_i18n.text_prop(key), ('sensitive', 'false')])
         for st in ('normal', 'disable', 'focused'):
             styled(l, (st,), 'font_size', str(BD_SEG_PX))
-            styled(l, (st,), 'text_color', '#FFFFFF')
+            styled(l, (st,), 'text_color', INK_RGB)
             styled(l, (st,), 'text_align_h', 'center')
             styled(l, (st,), 'text_align_v', 'middle')
         v.children.append(l)
@@ -2059,7 +2003,7 @@ def cards_hsliders():
     v = Widget('view', 0, 0, ST.LIST_W, ST.HSL_H, [('name', 'pod_hsl')])
     for st in STATES: styled(v, (st,), 'bg_color', '#00000000')
     for r, key in enumerate(pod_pages.BAND_ROW_KEYS):
-        for name, x, w, text, rgb, al in ((f'pod_hs_n{r}', BD['BD_NAME_X'], BD['BD_NAME_W'], pod_i18n.text_prop(key), '#FFFFFF', 'left'),
+        for name, x, w, text, rgb, al in ((f'pod_hs_n{r}', BD['BD_NAME_X'], BD['BD_NAME_W'], pod_i18n.text_prop(key), INK_RGB, 'left'),
                                           (f'pod_hs_v{r}', BD['BD_TRACK_X'] + BD['BD_TRACK_W'] - BD['BD_VAL_W'], BD['BD_VAL_W'], ('text', ''), ST.GREY, 'right')):
             l = Widget('label', ST.CM + x, r * BD['BD_ROW_H'] + BD['BD_LABEL_Y'], w, BD['BD_LABEL_H'], [('name', name), text, ('sensitive', 'false')])
             for st in ('normal', 'disable', 'focused'):
@@ -2152,7 +2096,7 @@ MB_ARTIST_Y, MB_ARTIST_H, MB_ARTIST_PX = 29, 20, 16
 MB_PLAY_X, MB_NEXT_X, MB_BTN_W = 194, 245, 48
 MB_GLASS, MB_GLASS_DOWN = 'mb_glass', 'mb_glass_down'   # the pill's images (tools/mod_icons.py glass_image, MB_W x MB_H, alpha): normal and pressed (brighter)
 MB_PAD = 64                                  # the list's bottom padding while the bar shows: the window's 440 less (MB_Y - MB_GAP), so the last row scrolls clear above the pill
-MB_TITLE_RGB, MB_ARTIST_RGB = '#FFFFFF', '#D0D0D0'
+MB_TITLE_RGB, MB_ARTIST_RGB = INK_RGB, '#D0D0D0'
 MB_NAMES = ('pod_minibar', 'pod_mb_card', 'pod_mb_title', 'pod_mb_artist', 'pod_mb_play', 'pod_mb_pause', 'pod_mb_next')
 
 
@@ -2162,7 +2106,7 @@ def minibar():
     for st in ('normal', 'pressed', 'over', 'focused', 'disable', 'selected'):
         styled(card, (st,), 'bg_color', '#00000000')   # the glass image is the whole look; nothing is filled or stroked under or over it
         styled(card, (st,), 'bg_image', MB_GLASS_DOWN if st == 'pressed' else MB_GLASS)
-        styled(card, (st,), 'text_color', '#FFFFFF')   # the card has no text; every inline-styled button is dark with light text (test/pod/assets.py)
+        styled(card, (st,), 'text_color', INK_RGB)   # the card has no text; every inline-styled button is dark with light text (test/pod/assets.py)
         styled(card, (st,), 'border_width', '0')
         styled(card, (st,), 'border_color', '#00000000')
     bar.children.append(card)
@@ -2202,13 +2146,13 @@ GRID_PITCH = GRID_CELL_H + GRID_ROW_GAP                                       # 
 SH_W, SH_ROWS = 310, 3
 SH_TILES = GRID_COLS * SH_ROWS                    # 6: every album the file keeps (RC_MAX)
 assert SH_TILES == OFFSETS['SH_TILES'] and SH_ROWS == OFFSETS['SH_ROWS'] == 3
-SH_HEAD_X, SH_HEAD_W, SH_HEAD_TOP, SH_HEAD_H, SH_HEAD_PX, SH_HEAD_GAP = 10, 300, 17, 22, 20, 5   # the 20 px line's ink runs from 20 to 36 (the line box has slack): 20 px of air above, 8 below
+SH_HEAD_X, SH_HEAD_W, SH_HEAD_TOP, SH_HEAD_H, SH_HEAD_PX, SH_HEAD_GAP = 10, 300, 17, 22, SECTION_PX, 5   # the 20 px line's ink runs from 20 to 36 (the line box has slack): 20 px of air above, 8 below
 SH_TOP = SH_HEAD_TOP + SH_HEAD_H + SH_HEAD_GAP     # 44: the first row of covers
 SH_BOTTOM = 0                                      # the artist line's box ends the shelf: scrolled to the end it is MB_GAP above the pill, as the last row was
 def SH_H(n): return SH_TOP + n * GRID_CELL_H + (n - 1) * GRID_ROW_GAP + SH_BOTTOM   # the shelf's height for n rows of covers: 234, 434, 634
 SH_HMAX = SH_H(SH_ROWS)
 SH_NAMES = ('pod_shelf', 'pod_sh_head', 'pod_sh_title', 'pod_sh_sub')
-SH_TITLE_RGB, SH_SUB_RGB = '#FFFFFF', '#AAAAAA'
+SH_TITLE_RGB, SH_SUB_RGB = INK_RGB, SUB_RGB
 SH_TITLE_PX, SH_SUB_PX = GRID_ALBUM_PX, GRID_ARTIST_PX
 
 
@@ -2223,14 +2167,11 @@ def shelf():
         styled(head, (st,), 'text_align_h', 'left')
         styled(head, (st,), 'text_align_v', 'middle')
     sh.children.append(head)
-    for name, px, colour in (('pod_sh_title', SH_TITLE_PX, SH_TITLE_RGB), ('pod_sh_sub', SH_SUB_PX, SH_SUB_RGB)):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        sh.children.append(lab)
+    sh.children += style_labels((('pod_sh_title', SH_TITLE_PX, SH_TITLE_RGB), ('pod_sh_sub', SH_SUB_PX, SH_SUB_RGB)))
     return sh
 
 
-# The cache pill of the Home instance (patch/homecover.c, docs/modules/homecover.md; HC_* of patch/offsets.inc): a 296 x 40 capsule (#1C1C1C, fully rounded) above the list, hidden and insensitive until the payload
+# The cache pill of the Home instance (patch/homecover.c, docs/modules/homecover.md; HC_* of patch/offsets.inc): a 296 x 40 capsule (#1C1C1E, fully rounded) above the list, hidden and insensitive until the payload
 # shows it (and moves the list down by HC_H). Children: the text label pod_cover_prog (15 px #AAAAAA, "Preparing covers 120/840"), a 4 px progress bar (pod_cache_track #FFFFFF33, pod_cache_fill #EBEBEB, the
 # payload resizes the fill like the Podcasts refresh card's) and the stop button pod_cache_x (the disc pod_cache_x / _down; a 40 px touch box).
 COVER_PROG, CACHE_PILL, CACHE_FILL, CACHE_X = 'pod_cover_prog', 'pod_cache_pill', 'pod_cache_fill', 'pod_cache_x'
@@ -2241,7 +2182,7 @@ def cache_pill():
     o = OFFSETS
     pill = hidden(Widget('view', o['HC_X'], o['HC_Y'], o['HC_W'], o['HC_PH'], [('name', CACHE_PILL)]))
     for st in STATES:
-        styled(pill, (st,), 'bg_color', '#1C1C1C')
+        styled(pill, (st,), 'bg_color', SURFACE_RGB)
         styled(pill, (st,), 'border_width', '0')
         styled(pill, (st,), 'round_radius', str(o['HC_PH'] // 2))
     lab = label(COVER_PROG, o['HC_TX'], o['HC_TY'], o['HC_BW'], o['HC_TH'], '', HC_PX, SH_SUB_RGB, 'left')
@@ -2288,10 +2229,7 @@ def daily():
         ('style:pressed:icon', DM_DISC_IMAGE + '_down'), ('style:normal:icon', DM_DISC_IMAGE), ('style:over:icon', DM_DISC_IMAGE)])
     busy = hidden(Widget('image', D.DM_BUSY_X, D.DM_BUSY_Y, D.DM_BUSY_PX, D.DM_BUSY_PX, [('name', 'pod_dm_busy'), ('image', SYNC_DM), ('draw_type', 'center')]))
     sec.children = [head, busy, card, play]
-    for name, px, colour in (('pod_dm_title', D.DM_TITLE_PX, '#FFFFFF'), ('pod_dm_sub', D.DM_SUB_PX, '#%02X%02X%02X' % D.SUB_RGB)):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        sec.children.append(lab)
+    sec.children += style_labels((('pod_dm_title', D.DM_TITLE_PX, INK_RGB), ('pod_dm_sub', D.DM_SUB_PX, '#%02X%02X%02X' % D.SUB_RGB)))
     return sec
 
 
@@ -2300,14 +2238,7 @@ def daily():
 # last the key pop-up (a stem and a balloon with the letter): insensitive, shown by the payload while a key is down. White and grey only.
 def kb_button(name, x, y, w, fill, down, ink=PK.KB_INK, px=20, text=None, icon=None, dim=None):
     b = Widget('button', x, y, w, PK.KB_KH, [('name', name), ('enable', 'true')] + ([text] if text else []))
-    for st in STATES:
-        styled(b, (st,), 'bg_color', down if st == 'pressed' else fill)
-        styled(b, (st,), 'text_color', dim if dim and st == 'disable' else ink)
-        styled(b, (st,), 'font_size', str(px))
-        styled(b, (st,), 'border_width', '0')
-        styled(b, (st,), 'round_radius', str(PK.KB_RADIUS))
-        if icon: styled(b, (st,), 'icon', icon)
-    return b
+    return flat_pill(b, fill, down, PK.KB_RADIUS, None, ink, px, dim, False, icon)
 
 
 def kb_view(name, x, y, w, h, fill, radius=0):
@@ -2373,18 +2304,8 @@ def build_keyboard_page(page):
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     root.children.append(navbar(page.title))
-    field = kb_view('kb_field', PK.FIELD_X, PK.FIELD_Y, PK.FIELD_W, PK.FIELD_H, PK.KB_BG, PK.FIELD_R)
-    field.set('sensitive', 'true')   # the clear button inside it needs it: stock's hit test does not look into an insensitive parent
-    mag = Widget('image', PK.FIELD_MAG_X, (PK.FIELD_H - PK.FIELD_MAG) // 2, PK.FIELD_MAG, PK.FIELD_MAG, [('name', 'kb_mag'), ('image', 'qk_mag'), ('draw_type', 'center'), ('sensitive', 'false')])
-    hint = label('kb_hint', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_GREY, 'left')
-    text = label('kb_text', PK.FIELD_TEXT_X, 0, PK.FIELD_TEXT_W, PK.FIELD_H, '', PK.FIELD_PX, PK.KB_INK, 'left')
-    for lab in (hint, text):
-        lab.set('sensitive', 'false')
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-    caret = kb_view('kb_caret', PK.FIELD_TEXT_X, PK.CARET_Y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
-    clear = hidden(Widget('button', PK.FIELD_CLEAR_X, 0, PK.FIELD_CLEAR_W, PK.FIELD_H, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
-                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
-    field.children = [mag, hint, text, caret, clear]
+    field = text_field(PK.FIELD_X, PK.FIELD_Y, PK.FIELD_W, PK.FIELD_H, PK.KB_BG, PK.FIELD_R, PK.FIELD_TEXT_X, PK.FIELD_TEXT_W, PK.FIELD_PX, PK.KB_GREY, PK.KB_INK, PK.CARET_Y,
+                       PK.FIELD_CLEAR_X, PK.FIELD_CLEAR_W, (PK.FIELD_MAG_X, PK.FIELD_MAG), True)   # sensitive: stock's hit test does not look into an insensitive parent
     root.children.append(field)
     root.children += keyboard_pad_widgets()
     return root
@@ -2411,20 +2332,14 @@ def build_folders_page(page):
     sv.set('name', 'folders_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
-    styled(title, ('normal',), 'text_color', '#FFFFFF')
-    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
-    styled(title, ('normal',), 'text_align_h', 'left')
-    styled(title, ('normal',), 'text_align_v', 'middle')
+    title = large_title('sg_title', page.title)
     grid.children = [title, hidden(sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play', down=SG_PILL_PRESS_RGB)),
                      hidden(sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', down=SG_PILL_PRESS_RGB))]
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/folders.c shows it while yoffset > 0 (at rest it would darken the large title)
     root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
-    lab = hidden(label('label_row_title', 0, 0, 10, 10, '', LIST_TITLE_PX, '#FFFFFF', 'left'))   # the text style only (widget_prepare_text_style); never shown
-    styled(lab, ('normal',), 'text_align_v', 'middle')
-    root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB),))
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
                                                               ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
     root.children.extend(view_sort_card(sort_keys=pod_pages.FOLDERS_SORT_KEYS))   # the "..." card: Select, then Name, Date Modified, Type (patch/folders.c offers rows 0..2; Search and the view rows stay hidden)
@@ -2439,7 +2354,6 @@ RS_SHEET_ROWS = (('import', 'pod_ic_rd_import', 'Import from Card', False, False
 def build_radio_page(page):
     """The Radio page (patch/radiopage.c, docs/modules/radio.md): the Folders page's structure (the glass navbar with the globe as its left cap, a stock list holding one view the payload
     paints, the large title in that view) and the station grid's and the countries' text styles."""
-    o = OFFSETS
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
     styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#000000')
     nb = navbar(page.title, show_globe=True, show_more=True)   # btn_more: the Stations level's "...", the capsule's left cap where Search sits (hidden; the payload places and shows it)
@@ -2464,11 +2378,7 @@ def build_radio_page(page):
     sv.set('name', 'radio_scrollview')
     grid = Widget('view', 0, 0, SCREEN_W, GRID_VIEW_H, [('name', 'view_grid')])
     styled(grid, ('normal',), 'bg_color', '#000000')
-    title = Widget('label', o['SG_TITLE_X'], 0, o['SG_TITLE_W'], o['SG_TITLE_H'], [('name', 'sg_title'), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
-    styled(title, ('normal',), 'text_color', '#FFFFFF')
-    styled(title, ('normal',), 'font_size', str(SG_TITLE_PX))
-    styled(title, ('normal',), 'text_align_h', 'left')
-    styled(title, ('normal',), 'text_align_v', 'middle')
+    title = large_title('sg_title', page.title)
     credit = hidden(label('rd_credit', 0, 0, SCREEN_W - 2 * 12, 20, '', RD_CREDIT_PX, SUB_RGB, 'left'))   # the directory's credit under its rows (patch/radiopage.c moves it and shows it)
     credit.set(*pod_i18n.text_prop('Stations from radio-browser.info'))
     styled(credit, ('normal',), 'text_align_v', 'middle')
@@ -2479,19 +2389,11 @@ def build_radio_page(page):
     status = hidden(label('label_status', 20, 165, SCREEN_W - 40, 120, '', 18, HINT_RGB))   # the captions are grey, centred on y 225; up to four lines of 280 px (the payload sets line_wrap and word_wrap)
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
-    for name, px, colour in (('label_row_title', LIST_TITLE_PX, '#FFFFFF'), ('label_row_sub', LIST_SUB_PX, '#AAAAAA'),
-                             ('label_grid_title', GRID_ALBUM_PX, '#FFFFFF'), ('label_grid_sub', GRID_ARTIST_PX, '#AAAAAA')):   # the row and the Albums grid's text styles (never shown)
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB),
+                                   ('label_grid_title', GRID_ALBUM_PX, INK_RGB), ('label_grid_sub', GRID_ARTIST_PX, SUB_RGB)))   # the row and the Albums grid's text styles (never shown)
     root.children.extend(azlist_labels())   # the countries' A-Z list (patch/azlist.c): the header letter, the rail letters
     root.children.extend(azlist_rail())
-    field = search_field_widget()   # the search page's field and pad (keyboard_attach): hidden until the magnifier is tapped
-    field.y = 56
-    field.w = RD_FIELD_W   # no round X beside it here (the Search page's 250 leaves room for one): it runs the page's width, the Search page's margin each side
-    for c in field.children:
-        if c.name == 'kb_clear': c.x = RD_FIELD_W - PS.SE_CLEAR_W
-        elif c.name in ('kb_hint', 'kb_text'): c.w = RD_TEXT_W
+    field = search_field_widget(56, RD_FIELD_W, RD_TEXT_W)   # the search page's field and pad (keyboard_attach): hidden until the magnifier is tapped; no round X beside it here (the Search page's 250 leaves room for one): it runs the page's width, the Search page's margin each side
     hidden(field); field.set('sensitive', 'false')
     root.children.append(field)
     root.children += keyboard_pad_widgets()
@@ -2500,7 +2402,7 @@ def build_radio_page(page):
 
 
 RN_SHEET = 'rd_sh'   # the stations page's station sheet, the same widget set
-RN_CARD_GLYPH = '#2C2C2E'   # the art card without a logo (patch/radionp.c RN_CARD_GLYPH); with one it is white and the window takes the logo's tone
+RN_CARD_GLYPH = RAISED_RGB   # the art card without a logo (patch/radionp.c RN_CARD_GLYPH); with one it is white and the window takes the logo's tone
 RN_ART_R = 10   # the art card's corners (the album page's)
 RDN_TITLE_PX, RDN_LINE_PX, RDN_LIVE_PX, RDN_LIVE_Y, RN_PLAY = 22, 17, 13, 366, 64
 
@@ -2545,7 +2447,7 @@ def build_radionp_page(page):
     for name, x in (('rn_live_l', 0), ('rn_live_r', lw - side)):
         live.children.append(Widget('image', x, (16 - NP.LIVE_BAR_H) // 2, side, NP.LIVE_BAR_H, [('name', name), ('image', name), ('draw_type', 'default'), ('clickable', 'false'), ('sensitive', 'false')]))
     tx = Widget('label', (lw - live_w) // 2, 0, live_w, 16, [('name', 'rn_live_tx'), pod_i18n.text_prop('LIVE'), ('sensitive', 'false')])
-    NP.text_style(tx, RDN_LIVE_PX, '#FFFFFF', 'center')
+    NP.text_style(tx, RDN_LIVE_PX, INK_RGB, 'center')
     for st in NP.STATES: styled(tx, (st,), 'text_align_v', 'middle')
     live.children.append(tx)
     root.children.append(live)
@@ -2589,10 +2491,7 @@ def build_radioinfo_page(page):
     sv.children.append(view)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # the payload shows it while the content is scrolled (at rest it would darken the heading)
-    for name, px, colour in (('label_head', SI_HEAD_PX, '#FFFFFF'), ('label_key', SI_KEY_PX, SUB_RGB), ('label_val', SI_VAL_PX, '#FFFFFF')):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_head', SI_HEAD_PX, INK_RGB), ('label_key', SI_KEY_PX, SUB_RGB), ('label_val', SI_VAL_PX, INK_RGB)))
     return root
 
 
@@ -2614,14 +2513,11 @@ def build_songinfo_page(page):
     sv.children.append(view)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))
-    for name, px, colour in (('label_head', GI_HEAD_PX, '#FFFFFF'), ('label_sub', GI_SUB_PX, SUB_RGB), ('label_key', GI_KEY_PX, SUB_RGB), ('label_val', GI_VAL_PX, '#FFFFFF')):
-        lab = hidden(label(name, 0, 0, 10, 10, '', px, colour, 'left'))
-        styled(lab, ('normal',), 'text_align_v', 'middle')
-        root.children.append(lab)
+    root.children += style_labels((('label_head', GI_HEAD_PX, INK_RGB), ('label_sub', GI_SUB_PX, SUB_RGB), ('label_key', GI_KEY_PX, SUB_RGB), ('label_val', GI_VAL_PX, INK_RGB)))
     return root
 
 
-# The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): the Settings pages' grouped cards (tools/pod_settings.py numbers: 52 px rows, cards 10..310, #1C1C1C, 12 px corners, hairlines, the
+# The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): the Settings pages' grouped cards (tools/pod_settings.py numbers: 52 px rows, cards 10..310, #1C1C1E, 12 px corners, hairlines, the
 # stock switch) under our navbar, in the stock list. The payload shows and hides rows and sets each shown row's picture piece (single / top / mid / bottom) and text, so no widget is made at run
 # time. The children are in display order, so the stock list_view layouter (which stacks the visible children and ignores y) and the payload's own widget_move agree: a top spacer, the switch
 # row, the connected network's row (the first group's second row), the My Networks header and its rows, the Networks header (a spinner after its text while scanning), its rows and Other..., a bottom spacer.
@@ -2669,7 +2565,7 @@ def wf_net_row(k):
     import pod_settings as ST
     row = hidden(wf_row(f'wf_row{k}', 'mid'))
     mid = lambda h: (ST.ROW_H - h) // 2
-    row.children = [hidden(wf_image(f'wf_chk{k}', WF_CHK_X, mid(WF_CHK_PX), WF_CHK_PX, WF_CHK_PX, 'wf_check')), wf_label(f'wf_name{k}', WF_NAME_X, WF_NAME_W, ''),
+    row.children = [hidden(wf_image(f'wf_chk{k}', WF_CHK_X, mid(WF_CHK_PX), WF_CHK_PX, WF_CHK_PX, 'pod_check')), wf_label(f'wf_name{k}', WF_NAME_X, WF_NAME_W, ''),
                     hidden(wf_image(f'wf_lock{k}', WF_LOCK_X, mid(WF_LOCK_PX), WF_LOCK_PX, WF_LOCK_PX, 'wf_lock')),
                     wf_image(f'wf_sig{k}', WF_SIG_X, mid(WF_SIG_H), WF_SIG_W, WF_SIG_H, 'wf_sig3'), wf_image(f'wf_info{k}', WF_INFO_X, mid(WF_INFO_PX), WF_INFO_PX, WF_INFO_PX, 'wf_info'),
                     wf_hair(f'wf_hair{k}', WF_HDR_X)]
@@ -2679,13 +2575,7 @@ def wf_net_row(k):
 def wf_header(name, english, spinner=False):
     import pod_settings as ST
     v = hidden(cards_spacer(name, WF_HDR_H))
-    lab = Widget('hscroll_label', WF_HDR_X, ST.HDR_LABEL_Y, ST.HDR_W, ST.HDR_LABEL_H, [('name', name + '_t'), pod_i18n.text_prop(english), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
-    for st in ('normal', 'disable', 'focused'):
-        styled(lab, (st,), 'font_size', str(WF_HDR_PX))
-        styled(lab, (st,), 'text_color', ST.GREY)
-        styled(lab, (st,), 'text_align_h', 'left')
-        styled(lab, (st,), 'text_align_v', 'middle')
-    v.children.append(lab)
+    v.children.append(scroll_text(name + '_t', WF_HDR_X, ST.HDR_LABEL_Y, ST.HDR_W, ST.HDR_LABEL_H, WF_HDR_PX, ST.GREY, 'left', english))
     if spinner:   # after the text: the payload moves it there; hidden until a scan runs
         v.children.append(hidden(wf_image(name + '_spin', 100, ST.HDR_LABEL_Y + (ST.HDR_LABEL_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))
     return v
@@ -2729,13 +2619,7 @@ WI_LABEL_W, WI_VALUE_X, WI_VALUE_PX = 116, 140, 18   # a field row: the label's 
 
 def wi_text(name, x, w, english, px, rgb, align):
     """A label of a row that takes no style name: its own size, colour and alignment (the value labels of the Settings cards are made the same way)."""
-    lab = Widget('hscroll_label', x, 0, w, 52, [('name', name), pod_i18n.text_prop(english) if english else ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
-    for st in ('normal', 'disable', 'focused'):
-        styled(lab, (st,), 'font_size', str(px))
-        styled(lab, (st,), 'text_color', rgb)
-        styled(lab, (st,), 'text_align_h', align)
-        styled(lab, (st,), 'text_align_v', 'middle')
-    return lab
+    return scroll_text(name, x, 0, w, 52, px, rgb, align, english)
 
 
 def build_wifiinfo_page(page):
@@ -2748,7 +2632,7 @@ def build_wifiinfo_page(page):
     sv = lv.children[0]
     sv.set('name', 'wifiinfo_scrollview')
     x = ST.CM + ST.PAD
-    centred = lambda name, english: wi_text(name, x, ST.CARD_W - 2 * ST.PAD, english, 21, '#FFFFFF', 'center')
+    centred = lambda name, english: wi_text(name, x, ST.CARD_W - 2 * ST.PAD, english, 21, INK_RGB, 'center')
     forget = hidden(wf_row('wi_row_forget', 'single'))
     forget.children = [centred('wi_forget_t', 'Forget This Network')]
     auto = hidden(wf_row('wi_row_auto', 'single'))
@@ -2762,7 +2646,7 @@ def build_wifiinfo_page(page):
     for k in range(WI_FIELDS):
         row = hidden(wf_row(f'wi_f{k}', 'mid'))
         row.set('sensitive', 'false')
-        row.children = [wi_text(f'wi_fl{k}', x, WI_LABEL_W, '', 21, '#FFFFFF', 'left'), wi_text(f'wi_fv{k}', WI_VALUE_X, ST.RIGHT - WI_VALUE_X, '', WI_VALUE_PX, ST.GREY, 'right'), wf_hair(f'wi_fh{k}', WF_HDR_X)]
+        row.children = [wi_text(f'wi_fl{k}', x, WI_LABEL_W, '', 21, INK_RGB, 'left'), wi_text(f'wi_fv{k}', WI_VALUE_X, ST.RIGHT - WI_VALUE_X, '', WI_VALUE_PX, ST.GREY, 'right'), wf_hair(f'wi_fh{k}', WF_HDR_X)]
         sv.children.append(row)
     sv.children.append(hidden(cards_spacer('wi_gap1', ST.GAP_H)))
     sv.children.append(auto)
@@ -2792,18 +2676,8 @@ def trail_field_w(x):
 
 def kb_field_widget(x, y, w, h, caret_y):
     """The keyboard's own field (kb_field with its hint, text, caret and clear button, found by keyboard_attach by name) at x, y, w x h; the caret_y is relative to the field. It has no fill: the card is under it."""
-    field = kb_view('kb_field', x, y, w, h, '#00000000')
-    field.set('sensitive', 'true')   # the clear button inside it needs it: stock's hit test does not look into an insensitive parent (a page puts its eye button after the field, so over it)
-    hint = label('kb_hint', 0, 0, w, h, '', WK_FIELD_PX, PK.KB_GREY, 'left')
-    text = label('kb_text', 0, 0, w, h, '', WK_FIELD_PX, PK.KB_INK, 'left')
-    for l in (hint, text):
-        l.set('sensitive', 'false')
-        styled(l, ('normal',), 'text_align_v', 'middle')
-    caret = kb_view('kb_caret', 0, caret_y, PK.CARET_W, PK.CARET_H, PK.KB_INK)
-    clear = hidden(Widget('button', w - PK.FIELD_CLEAR_W, 0, PK.FIELD_CLEAR_W, h, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
-                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
-    field.children = [hint, text, caret, clear]
-    return field
+    return text_field(x, y, w, h, '#00000000', 0, 0, w, WK_FIELD_PX, PK.KB_GREY, PK.KB_INK, caret_y, w - PK.FIELD_CLEAR_W, PK.FIELD_CLEAR_W,
+                      sensitive=True)   # the clear button inside it needs it: stock's hit test does not look into an insensitive parent (a page puts its eye button after the field, so over it)
 
 
 def eye_button(name, x, y, w, h):
@@ -2822,7 +2696,7 @@ def build_wifipass_page(page):
     styled(line, ('normal',), 'text_align_v', 'middle')
     root.children.append(line)
     root.children.append(kb_view('wk_card', WK_CARD_X, WK_CARD_Y, WK_CARD_W, WK_CARD_H, ST.CARD_RGB, ST.CARD_R))
-    lab = label('wk_label', WK_LABEL_X, WK_CARD_Y, WK_LABEL_W, WK_CARD_H, '', WK_LABEL_PX, '#FFFFFF', 'left')
+    lab = label('wk_label', WK_LABEL_X, WK_CARD_Y, WK_LABEL_W, WK_CARD_H, '', WK_LABEL_PX, INK_RGB, 'left')
     lab.set(*pod_i18n.text_prop('Password'))
     lab.set('sensitive', 'false')
     styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -2860,7 +2734,7 @@ def build_wifiother_page(page):
     root.children.append(hidden(kb_view('wo_card1a', WK_CARD_X, WO_SEC_Y, WK_CARD_W, WO_ROW_H, ST.CARD_RGB, ST.CARD_R)))
     root.children.append(kb_view('wo_card1b', WK_CARD_X, WO_SEC_Y, WK_CARD_W, 2 * WO_ROW_H, ST.CARD_RGB, ST.CARD_R))
     def row_label(name, y, english, w=WO_LABEL_W):
-        lab = label(name, WK_LABEL_X, y, w, WO_ROW_H, '', WK_LABEL_PX, '#FFFFFF', 'left')
+        lab = label(name, WK_LABEL_X, y, w, WO_ROW_H, '', WK_LABEL_PX, INK_RGB, 'left')
         lab.set(*pod_i18n.text_prop(english))
         lab.set('sensitive', 'false')
         styled(lab, ('normal',), 'text_align_v', 'middle')
@@ -3094,7 +2968,7 @@ def add_battery_label(rootfs):
             assert right is not None and root.find(name) is None, 'unexpected status bar layout'
             props = [('name', name), ('text', '87%')]
             for st in statusbar.STATES:
-                props += [(f'style:{st}:text_color', '#FFFFFF'), (f'style:{st}:font_size', str(statusbar.PCT_PX)),
+                props += [(f'style:{st}:text_color', INK_RGB), (f'style:{st}:font_size', str(statusbar.PCT_PX)),
                           (f'style:{st}:text_align_h', 'right'), (f'style:{st}:text_align_v', 'middle')]
             label = hidden(Widget('label', 0, 0, w3, 0, props))
             at = len(right.children) - 1 if right.children and right.children[-1].name == SHOT_WIDGET else len(right.children)
@@ -3107,25 +2981,14 @@ def add_battery_label(rootfs):
 
 TIDAL_SEARCH = f'{UI}/tidal/tidal_serach_page.bin'
 TK = cdefs.defines(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'tidalkb.h'))
-TK_HINT_RGB = '#AAAAAA'   # the stock edit's tips_text_color
+TK_HINT_RGB = SUB_RGB   # the stock edit's tips_text_color
 
 
 def tidal_field():
     """The keyboard's field inside the Tidal search bar (patch/tidalkb.c): kb_field with its hint, text, caret and clear button, transparent so that the stock bar shows, in the stock edit's
     font size and colours. Sensitive: the clear button inside it needs it, and a view has no on_event of its own, so a tap on it still reaches the bar's list_item as a click."""
-    w, h = TK['TK_FIELD_W'], TK['TK_FIELD_H']
-    field = kb_view('kb_field', TK['TK_FIELD_X'], 0, w, h, '#00000000')
-    field.set('sensitive', 'true')
-    hint = label('kb_hint', TK['TK_TEXT_X'], 0, w - TK['TK_TEXT_X'], h, '', TK['TK_PX'], TK_HINT_RGB, 'left')
-    text = label('kb_text', TK['TK_TEXT_X'], 0, w - TK['TK_TEXT_X'], h, '', TK['TK_PX'], PK.KB_INK, 'left')
-    for l in (hint, text):
-        l.set('sensitive', 'false')
-        styled(l, ('normal',), 'text_align_v', 'middle')
-    caret = kb_view('kb_caret', TK['TK_TEXT_X'], TK['TK_CARET_Y'], PK.CARET_W, PK.CARET_H, PK.KB_INK)
-    clear = hidden(Widget('button', w - TK['TK_CLEAR_W'], 0, TK['TK_CLEAR_W'], h, [('name', 'kb_clear'), ('enable', 'true'), ('style', 'img_btn_style'),
-                   ('style:pressed:icon', 'qk_clear'), ('style:normal:icon', 'qk_clear'), ('style:over:icon', 'qk_clear')]))
-    field.children = [hint, text, caret, clear]
-    return field
+    w, tx = TK['TK_FIELD_W'], TK['TK_TEXT_X']
+    return text_field(TK['TK_FIELD_X'], 0, w, TK['TK_FIELD_H'], '#00000000', 0, tx, w - tx, TK['TK_PX'], TK_HINT_RGB, PK.KB_INK, TK['TK_CARET_Y'], w - TK['TK_CLEAR_W'], TK['TK_CLEAR_W'], sensitive=True)
 
 
 def add_tidal_keyboard(rootfs):

@@ -8,6 +8,9 @@ from unicorn.mips_const import UC_MIPS_REG_F12, UC_MIPS_REG_F14, UC_MIPS_REG_CP0
 import mod_player
 import pod_settings as ST
 import peq_graph as G
+import palette as PAL
+
+ACCENT_FILE = '/mnt/data/m1plus/appearance-accent'
 
 PODCASTS = sibling('podcasts')
 STATE, STATE_TMP, KILL, EQ_DIR = '/mnt/data/m1plus/playback-eq', '/mnt/data/m1plus/playback-eq.tmp', '/mnt/mmc/m1plus-off', '/mnt/mmc/EQ'
@@ -896,9 +899,10 @@ def preset_page_tests(ctx):
     b, w, h, px = pbitmap(m)
     db, rng = G.curve(bands)
     model_px = G.render(db, rng)
-    off = [(x, y) for y in range(h) for x in range(w) if abs((px[y * w + x] >> 24) - model_px[y][x][0]) > 1 or abs((px[y * w + x] & 255) - model_px[y][x][1]) > 2]
+    off = [(x, y) for y in range(h) for x in range(w) if abs((px[y * w + x] >> 24) - model_px[y][x][0]) > 1 or abs((px[y * w + x] & 255) - model_px[y][x][1]) > 2 or abs((px[y * w + x] >> 16 & 255) - model_px[y][x][2]) > 2]
     expect(rng == 18 and not off, f'the bitmap is the model\'s pixel for pixel (range {rng}; {len(off)} differ: {off[:3]})')
     expect(px[0] >> 24 == 0 and px[299] >> 24 == 0 and px[169 * 300] >> 24 == 0 and px[170 * 300 - 1] >> 24 == 0 and px[150] >> 24 == 255 and px[85 * 300] >> 24 == 255, 'the card\'s four corners are cut in the alpha, its edges opaque')
+    expect(px[85 * 300] == 0xff1e1c1c, f'the graph card is the one surface #1C1C1E ({px[85 * 300]:#x})')
     cols = []
     for c in range(G.PW):
         col = [(px[y * w + G.PX0 + c] & 255, y) for y in range(G.PY0, G.PY0 + G.PH)]
@@ -953,7 +957,7 @@ def preset_page_tests(ctx):
         db, rng = G.curve(pp['bands'])
         _, w, h, px = pbitmap(m)
         mp = G.render(db, rng)
-        same = all(abs((px[y * w + x] >> 24) - mp[y][x][0]) <= 1 and abs((px[y * w + x] & 255) - mp[y][x][1]) <= 2 for y in range(h) for x in range(w))
+        same = all(abs((px[y * w + x] >> 24) - mp[y][x][0]) <= 1 and abs((px[y * w + x] & 255) - mp[y][x][1]) <= 2 and abs((px[y * w + x] >> 16 & 255) - mp[y][x][2]) <= 2 for y in range(h) for x in range(w))
         expect(rng == want and ptext(m, 'pod_gr_top') == [f'+{want}'] and ptext(m, 'pod_gr_bot') == [f'−{want}'] and same, f'{what}: the scale is ±{want} dB ({ptext(m, "pod_gr_top")}) and the bitmap is the model\'s')
     # the 30 band limit: every row used, the last without a hairline (the asset's has none)
     many = ''.join(f'Filter {i + 1}: ON PK Fc {100 + 50 * i} Hz Gain {(i % 5) - 2} dB Q 2\n' for i in range(30)).encode()
@@ -1593,11 +1597,12 @@ HD_PATH = f'{EQ_DIR}/{HD}'
 TRK0 = 10 + 14   # the slider tracks' left end in the view (card x 10, track x 14)
 
 
-def epage(files, name=HD, state=None, flag=1, bitmap_ok=False):
+def epage(files, name=HD, state=None, flag=1, bitmap_ok=False, acc=None):
     """The Preset page of a file as peqpage_show opens it, with the band page's window ready (its own widgets by name) and no keyboard window (the test calls what the keyboard would)."""
     m = demo_machine()
     m.card_mounted = True
     m.bitmap_ok = bitmap_ok
+    if acc: m.fs[ACCENT_FILE] = acc
     m.folder(EQ_DIR)
     for fn, data in files: m.put(f'{EQ_DIR}/{fn}', data)
     register_peqpage(m)
@@ -2189,10 +2194,11 @@ def saves(m): return len([c for c in m.calls if c[0] == 'rename'])
 def sent(m): return len([c for c in m.calls if c[0] == 'set_equalizer_value'])
 
 
-def tpage(state=None, flag=1, bitmap_ok=True, drop=(), count=False):
+def tpage(state=None, flag=1, bitmap_ok=True, drop=(), count=False, acc=None):
     """The editor as m1plus.c open_page and tenband_opened leave it: the record, stock's switch, the asset's widgets by name."""
     m = demo_machine()
     m.bitmap_ok = bitmap_ok
+    if acc: m.fs[ACCENT_FILE] = acc
     m.u.mem_write(pod.DATA['EQ_FLAG'][0], bytes([flag])); m.setword(pod.DATA['EQ_MODE'][0], 4)
     if state is not None: m.fs[STATE] = state
     for n in TBW:
@@ -2217,7 +2223,8 @@ def bmp(m, i):
 
 
 def same_bitmap(px, w, h, model):
-    return [(x, y) for y in range(h) for x in range(w) if abs((px[y * w + x] >> 24) - model[y][x][0]) > 1 or abs((px[y * w + x] & 255) - model[y][x][1]) > 2]
+    return [(x, y) for y in range(h) for x in range(w) if abs((px[y * w + x] >> 24) - model[y][x][0]) > 1 or abs((px[y * w + x] & 255) - model[y][x][1]) > 2
+            or (len(model[y][x]) > 2 and abs((px[y * w + x] >> 16 & 255) - model[y][x][2]) > 2)]
 
 
 def vtexts(m): return [(ptext(m, f'pod_sl_v{c}') or [None])[-1] for c in range(10)]
@@ -2240,13 +2247,14 @@ def tenband_drag_tests(ctx):
     rock = [float(g) for g in CURVES[2]]
     m = tpage(tenband(rock, -1, 2), count=True)
     expect(m.opened == 1 and ('window_open', 'm1plus_tenband') in m.calls, 'tenband_open opens the editor\'s window')
-    expect(m.icount < 10_000_000, f'opening the editor (record, three small bitmaps, the card, the graph, the texts) costs {m.icount:,} payload instructions, once')
+    expect(m.icount < 10_500_000, f'opening the editor (record, three small bitmaps, the card, the graph, the texts) costs {m.icount:,} payload instructions, once')
     sizes = [(w, h) for _, (d_, w, h) in m.bitmaps.items()]
     expect(sizes == [(300, 170), (24, 13), (34, 18), (300, 170)], f'four bitmaps: the slider card, a thumb, the value pill, the graph card ({sizes})')
     _, w, h, px = bmp(m, 0)
     off = same_bitmap(px, w, h, TBM.bitmap(TBM.card_px, w, h))
     expect(not off, f'the slider card\'s bitmap is the model\'s pixel for pixel ({len(off)} differ: {off[:3]})')
     expect(px[0] >> 24 == 0 and px[299] >> 24 == 0 and px[170 * 300 - 1] >> 24 == 0 and px[85 * 300] >> 24 == 255, 'its corners are cut in the alpha, its edges opaque')
+    expect(px[85 * 300] == 0xff1e1c1c, f'the card is the one surface #1C1C1E ({px[85 * 300]:#x})')
     cx0 = TBM.center_x(0)
     track = [px[y * 300 + cx0] & 255 for y in range(170)]
     expect(track[TBM.Y0 + 8] > 55 and track[TBM.Y0 + TBM.SPAN - 8] > 55 and track[TBM.Y0 - 6] == 28 and track[TBM.Y0 + TBM.SPAN + 6] == 28, 'the track is a groove from +12 dB to -12 dB, nothing above or below it')
@@ -2328,6 +2336,53 @@ def tenband_drag_tests(ctx):
     sl_event(m, 'EVT_POINTER_UP', x2, TBM.y_of_step(-4), 5010)
     f = rec_fields(m.fs[STATE])
     expect(list(f[2:12]) == rock[:2] + [-2.0] + rock[3:6] + [-2.5] + rock[7:] and list(f[12:]) == list(f[2:12]) and f[0] == 9, 'on Custom a move changes its band alone: gain[] and custom[] agree, the curve stays Custom')
+
+def accent_tests(ctx):
+    """The EQ pages' "value" parts under an accent (Teal): the 10-Band thumb, the band page's fill and both graphs' curve and fill are the accent, baked when the page opens; the tracks, grid, cards, pill and the band page's thumb and ring stay neutral. Neutral is the pixel-for-pixel tests above."""
+    expect = ctx.expect
+    teal = PAL.ACCENT_RGB['teal']
+    def bitmap_of(m, w, h, nth=0):
+        hs = [k for k, (d, bw, bh) in m.bitmaps.items() if (bw, bh) == (w, h)]
+        data = m.bitmaps[hs[nth]][0]
+        return struct.unpack(f'<{w * h}I', m.u.mem_read(data, w * h * 4))
+    def off(px, w, h, model):   # (alpha, r, g, b) model against the ABGR words, one level of rounding allowed
+        return [(x, y) for y in range(h) for x in range(w) if any(abs(a - b) > 1 for a, b in zip(model[y][x], (px[y * w + x] >> 24, px[y * w + x] & 255, px[y * w + x] >> 8 & 255, px[y * w + x] >> 16 & 255)))]
+    # the 10-Band editor
+    rock = [float(g) for g in CURVES[2]]
+    m = tpage(tenband(rock, -1, 2), acc=b'4\n')
+    sizes = [(w, h) for _, (d_, w, h) in m.bitmaps.items()]
+    expect(sizes == [(300, 170), (24, 13), (34, 18), (300, 170)], f'the same four bitmaps ({sizes})')
+    px = bitmap_of(m, 24, 13)
+    bad = off(px, 24, 13, [[TBM.thumb_px_acc(x, y, teal) for x in range(24)] for y in range(13)])
+    expect(not bad, f'the thumb is the accent, its middle line a darker one ({len(bad)} differ from the model)')
+    expect(px[3 * 24 + 12] == 0xffe0c840, f'its body is #40C8E0 ({px[3 * 24 + 12]:#x})')
+    px = bitmap_of(m, 300, 170, 0)
+    expect(not same_bitmap(px, 300, 170, TBM.bitmap(TBM.card_px, 300, 170)), 'the slider card (tracks and all) is the neutral model\'s')
+    px = bitmap_of(m, 34, 18)
+    expect(not same_bitmap(px, 34, 18, TBM.bitmap(TBM.pill_px, 34, 18)), 'the value pill stays neutral')
+    px = bitmap_of(m, 300, 170, 1)
+    db, rng = G.curve(tbands(rock))
+    bad = off(px, 300, 170, G.render_accent(db, rng, teal))
+    expect(not bad, f'the graph card is the model\'s under Teal: the curve and the fill under it the accent, grid and corners as they were ({len(bad)} differ: {bad[:3]})')
+    on_curve = [px[y * 300 + 36 + c] for c in range(0, 249, 8) for y in range(9, 147) if (px[y * 300 + 36 + c] >> 8 & 255) > (px[y * 300 + 36 + c] & 255) + 40]
+    expect(len(on_curve) > 20, 'the curve is visibly the accent (green and blue above red)')
+    # the band page: the fill is the accent, the thumb and the ring stay white
+    m = epage([(HD, AUTOEQ)], bitmap_ok=True, acc=b'4\n')
+    open_band(m, 2)
+    expect(band_win_open(m), 'the band page opens')
+    px = bitmap_of(m, 272, 4)
+    expect(not off(px, 272, 4, [[TBM.apx(teal, 242, 242, TBM.cover(x, y, 272, 4, 2.0)) for x in range(272)] for y in range(4)]) and px[2 * 272 + 100] == 0xffe0c840, f'the band page\'s fill is the accent ({px[2 * 272 + 100]:#x}, {off(px, 272, 4, [[TBM.apx(teal, 242, 242, TBM.cover(x, y, 272, 4, 2.0)) for x in range(272)] for y in range(4)])[:3]})')
+    px = bitmap_of(m, 22, 22)
+    expect(px[11 * 22 + 11] & 0xffffff == 0xfafafa and (px[11 * 22 + 11] >> 24) == 255, 'its thumb stays white (250)')
+    gpx = bitmap_of(m, 300, 170, 0)
+    db, rng = G.curve(AUTOEQ_BANDS)
+    expect(not off(gpx, 300, 170, G.render_accent(db, rng, teal)), f'the Preset page\'s graph is the accent\'s too ({len(off(gpx, 300, 170, G.render_accent(db, rng, teal)))}, {gpx[60 * 300 + 100]:#x})')
+    # the Neutral page is untouched
+    m = epage([(HD, AUTOEQ)], bitmap_ok=True)
+    open_band(m, 2)
+    px = bitmap_of(m, 272, 4)
+    expect(px[2 * 272 + 100] == 0xfff2f2f2, f'Neutral: the fill is the grey #F2F2F2 ({px[2 * 272 + 100]:#x})')
+
 
 def tenband_edit_tests(ctx):
     expect = ctx.expect
@@ -3028,4 +3083,4 @@ def output_edit_tests(ctx):
     expect([c[1] for c in m.calls if c[0] == 'toast'] == ['Not saved'], 'Delete Preset with a slot that cannot be rewritten: "Not saved"')
 
 
-SECTIONS = [player_tests, carry_tests, parser_tests, page_tests, cross_tests, asset_tests, preset_page_tests, presets_page_tests, layout_peqp_tests, edit_band_tests, edit_select_tests, edit_dialog_tests, edit_revert_tests, edit_saveas_tests, edit_rename_tests, edit_channels_tests, layout_peqlib_tests, tenband_drag_tests, tenband_edit_tests, tenband_switch_tests, tenband_replace_tests, tenband_rows_tests, tenband_reopen_tests, tenband_memory_tests, tenband_reset_tests, tenband_curve_tests, tenband_preamp_tests, save_preset_tests, layout_tenband_tests, widths_tests, output_tests, output_edit_tests, retire_tests]
+SECTIONS = [player_tests, carry_tests, parser_tests, page_tests, cross_tests, asset_tests, preset_page_tests, presets_page_tests, layout_peqp_tests, edit_band_tests, edit_select_tests, edit_dialog_tests, edit_revert_tests, edit_saveas_tests, edit_rename_tests, edit_channels_tests, layout_peqlib_tests, tenband_drag_tests, accent_tests, tenband_edit_tests, tenband_switch_tests, tenband_replace_tests, tenband_rows_tests, tenband_reopen_tests, tenband_memory_tests, tenband_reset_tests, tenband_curve_tests, tenband_preamp_tests, save_preset_tests, layout_tenband_tests, widths_tests, output_tests, output_edit_tests, retire_tests]

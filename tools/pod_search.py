@@ -11,14 +11,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 D = cdefs.defines(os.path.join(os.path.dirname(HERE), 'patch', 'search.h'))
 
 globals().update(D)   # the layout numbers as module attributes (PS.SE_ROW_H ...)
+from pod_roles import INK_RGB, SUB_RGB, CHEV_RGB, THUMB_RGB, RAISED_RGB, SURFACE_RGB, PLACEHOLDER_RGB   # noqa: F401 (SUB_RGB, CHEV_RGB: the rows' and the chevron's, read as PS.*)
 
-FIELD_RGB, FIELD_INK, FIELD_HINT = '#1C1C1E', '#FFFFFF', '#8E8E93'   # the field is the keyboard's (tools/pod_keyboard.py KB_BG, KB_INK, KB_GREY)
+FIELD_RGB, FIELD_INK, FIELD_HINT = SURFACE_RGB, INK_RGB, PLACEHOLDER_RGB   # the field is the keyboard's (tools/pod_keyboard.py KB_BG, KB_INK, KB_GREY)
 FIELD_PX = 18
-CHIP_RGB, CHIP_INK, CHIP_ON_INK, CHIP_ON_RGB = '#FFFFFF', '#FFFFFF', '#1C1C1E', '#E5E5EA'   # the selected chip: a light grey pill with dark text
-SEP_RGB = '#2C2C2E'                                                                         # the line under the chips
-TITLE_RGB, SUB_RGB, HAIR_RGB, PRESS_RGB = '#FFFFFF', '#AAAAAA', '#222222', '#333334'       # the rows (the library lists' own: LIST_HAIR, LIST_PRESS of offsets.inc)
-CHEV_RGB = '#8A8A8A'
-ART_BG = '#2B2B2B'                                                                         # the thumbnail's placeholder grey
+CHIP_RGB, CHIP_INK, CHIP_ON_INK, CHIP_ON_RGB = INK_RGB, INK_RGB, SURFACE_RGB, '#E5E5EA'   # the selected chip: a light grey pill with dark text
+SEP_RGB = RAISED_RGB                                                                         # the line under the chips
+TITLE_RGB, HAIR_RGB, PRESS_RGB = INK_RGB, '#222222', '#333334'       # the rows (the library lists' own: LIST_HAIR, LIST_PRESS of offsets.inc)
+ART_BG = THUMB_RGB                                                                         # the thumbnail's placeholder grey
 CHIPS = ('Top Results', 'Artists', 'Albums', 'Songs', 'Playlists')
 KINDS = ('Artist', 'Album', 'Song', 'Playlist')
 

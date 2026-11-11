@@ -51,7 +51,6 @@ songs_open_playlist(int id,
 #define CELL_H GRID_CELL_H
 #define PITCH GRID_PITCH
 #define PL_W 320
-#define PL_TAP_PX SC_DRAG_PX
 #define PL_AHEAD (pl.list ? 2 : 1)
 #define HOME_PLAYLIST 14
 #define PL_PICK_MS 400 /* the picker's add after a New playlist: the keyboard page's close is over */
@@ -98,7 +97,8 @@ static struct {
     int albums_tried;
     unsigned *tmp; /* one quadrant (side / 2 squared words) for grid_mosaic */
     int seen, dir, noscroll;
-    int down, down_x, down_y;
+    int down;
+    m1_tap_t tap;
     int menu; /* a card is open: 0 none, 1 the "..." card (views, order), 2 the list-plus button's (the four actions) */
     unsigned more_timer;
     vs_t vs; /* the "..." card (patch/viewsort.c) */
@@ -947,7 +947,7 @@ static int pl_on_down(void *ctx, void *e) {
     pl.down = 0;
     if (!e || !pl.view) return RET_OK;
     a = pl_item_of(e);
-    pl.down = a + 1, pl.down_x = I(e, PE_X), pl.down_y = I(e, PE_Y);
+    pl.down = a + 1, m1_tap_at(&pl.tap, e);
     if (pl.list && !pl.select) pl_set_press(a + 1);
     return RET_OK;
 }
@@ -958,8 +958,7 @@ static int pl_on_up(void *ctx, void *e) {
     pl.down = 0;
     if (pl.list) pl_set_press(0);
     if (a < 0 || !e || !pl.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - pl.down_x) < PL_TAP_PX && m1_abs(I(e, PE_Y) - pl.down_y) < PL_TAP_PX &&
-        pl_item_of(e) == a) {
+    if (m1_tap_near(&pl.tap, e) && pl_item_of(e) == a) {
         if (pl.select)
             pl_toggle(a);
         else

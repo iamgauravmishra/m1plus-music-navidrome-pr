@@ -10,9 +10,9 @@ the Albums page, and shows a progress pill at the top of the page while it runs:
 ## The pill
 
 - Placement: a window child of the menu asset, `pod_cache_pill` (`tools/pod_ui.py` `cache_pill`, constants `HC_*` in `patch/offsets.inc`): a view at (`HC_X` 12, `HC_Y` 10) of
-  `HC_W` 296 x `HC_PH` 40, fill `#1C1C1C`, `round_radius` 20 (a capsule). The asset has it on the Normal menu too, hidden and insensitive; only Home ever shows it.
+  `HC_W` 296 x `HC_PH` 40, fill `#1C1C1E`, `round_radius` 20 (a capsule). The asset has it on the Normal menu too, hidden and insensitive; only Home ever shows it.
 - Children (pill coordinates): the label `pod_cover_prog` at (18, 5), 230 x 18, 15 px (`HC_PX`) `#AAAAAA` (the grey of the Recently Played subtitles), left, middle; under it
-  a 4 px progress bar at y 26, the track `pod_cache_track` (`#FFFFFF33`) and the fill `pod_cache_fill` (`#EBEBEB`), both 230 wide at most and fully rounded, the same pair as the Podcasts refresh card's;
+  a 4 px progress bar at y 26, the track `pod_cache_track` (`#FFFFFF33`) and the fill `pod_cache_fill` (`#EBEBEC`, role `ROLE_FILL`: the accent when one is chosen, a level off `#EBEBEB` under Neutral), both 230 wide at most and fully rounded, the same pair as the Podcasts refresh card's;
   at the right end the stop button `pod_cache_x`, a 40 x 40 touch box drawing the 28 px disc `pod_cache_x` / `pod_cache_x_down` (`#2C2C2E`, pressed `#3A3A3C`, a white 14 px x; `tools/mod_icons.py` `CACHE_X`).
   No Accent tint: neutral.
 - The bar is a resized child view: the payload sets the fill's width to `HC_BW * done / total` (230 px at most, never under 4 px) with `widget_resize` each time the counter moved.

@@ -257,17 +257,8 @@ static int rn_on_more(void *ctx, void *e) {
     rn.sheet = 1;
     widget_set_tr_text(rn.sh_tx, has ? "Remove from My Stations" : "Add to My Stations");
     image_base_set_image(rn.sh_ic, has ? "pod_ic_rd_remove" : "pod_ic_rd_add");
-    widget_set_visible(rn.sh_hr, 0, 0);
-    widget_set_visible(rn.sh_info_hr, 1, 0);
-    widget_move(rn.sh_row, 0, 0);
-    widget_move(rn.sh_info, 0, PM_ROW_H);
-    widget_move(rn.sh_card, 0, AH_WIN_H - 2 * PM_ROW_H);
-    widget_resize(rn.sh_card, 320, 2 * PM_ROW_H);
-    widget_set_prop_str(rn.sh_card, "style:normal:bg_image", "pc_sheet2");
-    m1_show(rn.sh_row, 1);
-    m1_show(rn.sh_info, 1);
-    m1_show(rn.sh_scrim, 1);
-    m1_show(rn.sh_card, 1);
+    m1_sheet_rows(rn.sh_scrim, rn.sh_card, 320, (void *const[]){rn.sh_row, rn.sh_info},
+                  (void *const[]){rn.sh_hr, rn.sh_info_hr}, 2);
     return RET_OK;
 }
 

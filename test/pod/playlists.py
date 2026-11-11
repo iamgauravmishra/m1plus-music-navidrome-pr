@@ -703,7 +703,7 @@ def stock_tests(ctx):
     items = [tree.find(f'vs_item{i}') for i in range(10)]
     expect(all(it is not None and it.type == 'button' and it in card.children and it.w == card.w for it in items)
            and card.h == 7 * O['VS_ROW_H'] and card.y + card.h <= 450 and card.x + card.w <= 320 and card.y == O['PL_CARD_Y'] and card.x + card.w == O['PL_CARD_RIGHT'],
-           'ten row buttons (the Playlists asset has the two extra action slots 8 and 9) in the 7-row 336 px card, its right edge at 311, under the navbar and above the window\'s foot (52 + 336 = 388 of 450)')
+           'ten row buttons (the Playlists asset has the two extra action slots 8 and 9) in the 7-row 350 px card, its right edge at 311, under the navbar and above the window\'s foot (52 + 350 = 402 of 450)')
     expect(tree.find('vs_hair') is not None and tree.find('vs_glyph8') is not None and tree.find('vs_glyph9') is not None and all(tree.find(f'vs_tick{i}') is not None for i in range(6))
            and tree.find('vs_tick6') is None and tree.find('vs_tick8') is None, 'the hairline, the glyphs of the action rows and the six ticks (no tick on an action row)')
     labels = {i: next(c for c in items[i].children if c.type == 'hscroll_label') for i in range(10)}
@@ -1023,11 +1023,11 @@ def stock_tests(ctx):
     ACTS, MORE = (6, 7, 8, 9), (4, 5, 0)
     m, _ = card_for('en_US', px, button='btn_plactions')
     expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1) and [vis(m, f'vs_item{i}') for i in ACTS] == [(1, 1)] * 4 and [vis(m, f'vs_item{i}') for i in (0, 1, 2, 3, 4, 5)] == [(0, 0)] * 6
-           and moved_of(m, ACTS) == [(0, 48 * k) for k in range(4)] and vis(m, 'vs_hair')[0] == 0 and glass(m) == ['vs_glass4'] * 3,
+           and moved_of(m, ACTS) == [(0, 50 * k) for k in range(4)] and vis(m, 'vs_hair')[0] == 0 and glass(m) == ['vs_glass4'] * 3,
            f'the list-plus button\'s card: the four actions in four rows packed from the top, no hairline, vs_glass4 ({moved_of(m, ACTS)})')
     m, _ = card_for('en_US', px)
     expect(vis(m, 'vs_card') == (1, 1) and vis(m, 'vs_scrim') == (1, 1) and [vis(m, f'vs_item{i}') for i in MORE] == [(1, 1)] * 3 and [vis(m, f'vs_item{i}') for i in (1, 2, 3, 6, 7, 8, 9)] == [(0, 0)] * 7
-           and moved_of(m, MORE) == [(0, 48 * k) for k in range(3)] and vis(m, 'vs_hair')[0] == 0 and glass(m) == ['vs_glass3'] * 3
+           and moved_of(m, MORE) == [(0, 50 * k) for k in range(3)] and vis(m, 'vs_hair')[0] == 0 and glass(m) == ['vs_glass3'] * 3
            and m.props.get((m.widgets['vs_item0'], 'style:normal:border_width')) in (None, 1),
            f'the "..." card: Grid, List, Name in three rows, the hairline is Name\'s top border, vs_glass3 ({moved_of(m, MORE)})')
     expect([vis(m, f'vs_tick{i}')[0] for i in (4, 5, 0)] == [1, 0, 1] and [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']] == ['A–Z'],
@@ -1036,7 +1036,7 @@ def stock_tests(ctx):
     expect([vis(m, f'vs_tick{i}')[0] for i in (4, 5)] == [0, 1], 'in the list mode the List row is ticked')
     m = PM(lists); m.fs['/mnt/data/m1plus/playlists-sort'] = b'a\n'; open_page(m); m.calls = []; m.click('btn_more')
     expect(vis(m, 'vs_tick0')[0] == 1 and [utf8(c[2]) for c in m.calls if c[0] == 'widget_set_tr_text' and c[1] == m.widgets['vs_sub0']] == ['Z–A']
-           and moved_of(m, (0,)) == [(0, 96)], 'with the saved order Z–A, Name is ticked, "Z–A" under it (Name is the third row)')
+           and moved_of(m, (0,)) == [(0, 100)], 'with the saved order Z–A, Name is ticked, "Z–A" under it (Name is the third row)')
     m.click('vs_scrim'); m.click('btn_plactions'); m.click('vs_scrim'); m.click('btn_more')
     expect(m.props.get((m.widgets['vs_item0'], 'style:normal:border_width')) == 1 and glass(m) == ['vs_glass3'] * 3,
            'the card offered again after the list-plus button\'s gets the hairline back (Name\'s top border) and the same glass')
@@ -1046,25 +1046,25 @@ def stock_tests(ctx):
         w = max(O['VS_CARD_MIN'], min(O['PL_CARD_MAX'], lx + max(px(t) for t in texts[6:]) + O['VS_LABEL_R']))
         pos, sizes = fit(m)
         moved = lambda name: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[name]][-1]
-        expect(pos == (311 - w, 52) and sizes.get('vs_card') == (w, 4 * 48) and all(sizes.get(f'vs_item{i}') == (w, 48) for i in ACTS) and 206 <= w <= 292
-               and all(moved(f'vs_glyph{i}') == (O['VS_TICK_X'], 14) for i in ACTS) and all(moved(f'vs_label{i}') == (lx, 0) for i in ACTS) and lx == 42,
-               f'{loc}: the list-plus button\'s card {w} px wide, x {311 - w}..311, 192 px high, glyphs at x 14 and labels at x 42 (no tick column) ({pos}, {sizes.get("vs_card")})')
+        expect(pos == (311 - w, 52) and sizes.get('vs_card') == (w, 4 * 50) and all(sizes.get(f'vs_item{i}') == (w, 50) for i in ACTS) and 206 <= w <= 292
+               and all(moved(f'vs_glyph{i}') == (O['VS_TICK_X'], 15) for i in ACTS) and all(moved(f'vs_label{i}') == (lx, 0) for i in ACTS) and lx == 42,
+               f'{loc}: the list-plus button\'s card {w} px wide, x {311 - w}..311, 200 px high, glyphs at x 14 and labels at x 42 (no tick column) ({pos}, {sizes.get("vs_card")})')
         m, texts = card_for(loc, px)
         w = max(O['VS_LABEL_X_GLYPH'] + max(px(t) for t in texts[4:6]), O['VS_LABEL_X'] + max(px(texts[0]), px('A–Z'))) + O['VS_LABEL_R']
         w = max(O['VS_CARD_MIN'], min(O['PL_CARD_MAX'], w))
         pos, sizes = fit(m)
         moved = lambda name: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[name]][-1]
-        expect(pos == (311 - w, 52) and sizes.get('vs_card') == (w, 3 * 48) and all(sizes.get(f'vs_item{i}') == (w, 48) for i in MORE) and 206 <= w <= 292
-               and all(moved(f'vs_glyph{i}') == (O['VS_GLYPH_X'], 14) for i in (4, 5)) and moved('vs_label4') == (O['VS_LABEL_X_GLYPH'], 0),
-               f'{loc}: the "..." card {w} px wide, x {311 - w}..311, 144 px high ({pos}, {sizes.get("vs_card")})')
+        expect(pos == (311 - w, 52) and sizes.get('vs_card') == (w, 3 * 50) and all(sizes.get(f'vs_item{i}') == (w, 50) for i in MORE) and 206 <= w <= 292
+               and all(moved(f'vs_glyph{i}') == (O['VS_GLYPH_X'], 15) for i in (4, 5)) and moved('vs_label4') == (O['VS_LABEL_X_GLYPH'], 0),
+               f'{loc}: the "..." card {w} px wide, x {311 - w}..311, 150 px high ({pos}, {sizes.get("vs_card")})')
     m, _ = card_for('en_US', lambda t: 300)
-    expect(fit(m)[0] == (19, 52) and fit(m)[1].get('vs_card') == (292, 144), f'a label wider than the room keeps the widest card (292 px, its ellipsis): {fit(m)}')
+    expect(fit(m)[0] == (19, 52) and fit(m)[1].get('vs_card') == (292, 150), f'a label wider than the room keeps the widest card (292 px, its ellipsis): {fit(m)}')
     m, _ = card_for('en_US', None)
     expect(fit(m)[0] is None and vis(m, 'vs_card') == (1, 1), 'a label that cannot be measured leaves the asset\'s card (292 px), and the menu opens')
     m, _ = card_for('en_US', lambda t: 100)
     m.click('btn_more'); m.measure = lambda t: 200; m.calls = []
     m.click('btn_more')
-    expect(fit(m)[1].get('vs_card') == (282, 144) and fit(m)[0] == (29, 52), f'every open measures again (a language changed meanwhile): {fit(m)}')
+    expect(fit(m)[1].get('vs_card') == (282, 150) and fit(m)[0] == (29, 52), f'every open measures again (a language changed meanwhile): {fit(m)}')
 
     # 12. Closing frees everything
     m = PM(lists, missing=(7,)); open_page(m); settle(m)

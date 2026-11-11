@@ -47,6 +47,14 @@ int m1_title_gone(int off, int head);
 void m1_show(void *w, int on);
 /* The timer *t removed (0: there is none) and *t cleared. */
 void m1_timer_stop(unsigned *t);
+/* The width of the text t in widget w's own font, rounded up to whole px (0 or less: it cannot be measured). */
+int m1_text_w(void *w, const unsigned *t);
+/* Where a pointer press began (screen coordinates). A page keeps its pressed row + 1 itself; the tap is a release closer than SC_DRAG_PX on both axes (the scroll_view's own drag threshold). */
+typedef struct {
+    int x, y;
+} m1_tap_t;
+void m1_tap_at(m1_tap_t *t, void *e);
+int m1_tap_near(const m1_tap_t *t, void *e);
 /* Select All on a page's mark bits (count rows, nsel marked): all of them, unless all are: then none. Returns the new number marked. */
 unsigned m1_sel_all(unsigned char *sel, unsigned count, unsigned nsel);
 static inline int m1_abs(int v) { return v < 0 ? -v : v; }
@@ -95,7 +103,12 @@ typedef struct {
     int tx, tw;
 } m1_pill_t;
 void m1_pill_place(m1_pill_t *p, int y);
+/* The centring m1_pill_place does, for a pill whose touch rectangle is x0, w0: glyph and gap px wide, a text tw px wide. Returns the glyph's x; *tx is the text's x and *twide its paint width (tw + AB_TEXT_SLACK). */
+int m1_pill_pair(int x0, int w0, int glyph, int gap, int tw, int *tx, int *twide);
 void m1_pill_paint(const m1_pill_t *p, void *canvas, int y);
+/* A bottom sheet's n rows (1 .. 6; their row widgets rows[] and hairlines hrs[], in order) PM_ROW_H each from the card's top, the first without its hairline, the card w px wide over the window's bottom edge, with the glass picture of its
+ * height (pc_sheet<n>); the rows, the card and the scrim shown. */
+void m1_sheet_rows(void *scrim, void *card, int w, void *const *rows, void *const *hrs, int n);
 /* A select mark: the stock image called name (the multi-select's unselect / selected, SG_MARK px) as an opaque bitmap, NULL when it cannot be made. win: any widget of the page. */
 void *m1_make_mark(void *win, const char *name);
 

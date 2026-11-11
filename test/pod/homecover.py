@@ -858,11 +858,11 @@ def pill_tests(ctx):
     p = ui.find('pod_cache_pill')
     expect(p is not None and (p.x, p.y, p.w, p.h) == (12, 10, 296, 40) and p.get('visible') == 'false' and p.get('sensitive') == 'false' and ui.find('pod_cover_prog') is not None
            and [c.name for c in p.children] == ['pod_cover_prog', 'pod_cache_track', 'pod_cache_fill', 'pod_cache_x'], 'the pill is a hidden, insensitive 296 x 40 capsule at (12, 10) with the label, the track, the fill and the x')
-    expect(all(p.get(f'style:{s}:bg_color') == '#1C1C1C' and p.get(f'style:{s}:round_radius') == '20' for s in ('normal', 'pressed', 'disable')), 'fill #1C1C1C, fully rounded')
+    expect(all(p.get(f'style:{s}:bg_color') == '#1C1C1E' and p.get(f'style:{s}:round_radius') == '20' for s in ('normal', 'pressed', 'disable')), 'fill #1C1C1E, fully rounded')
     lab, tr, fl, x = p.children
-    expect(lab.get('style:normal:font_size') == '15' and lab.get('style:normal:text_color') == '#AAAAAA' and tr.get('style:normal:bg_color') == '#FFFFFF33' and fl.get('style:normal:bg_color') == '#EBEBEB'
+    expect(lab.get('style:normal:font_size') == '15' and lab.get('style:normal:text_color') == '#AAAAAA' and tr.get('style:normal:bg_color') == '#FFFFFF33' and fl.get('style:normal:bg_color') == '#EBEBEC'
            and (tr.w, tr.h, fl.h, fl.x, fl.y) == (O_['HC_BW'], 4, 4, tr.x, tr.y) and x.type == 'button' and x.get('style:normal:icon') == 'pod_cache_x' and x.get('style:pressed:icon') == 'pod_cache_x_down'
-           and x.x + x.w == p.w and tr.x + tr.w <= x.x, '15 px #AAAAAA text, a 4 px bar (track #FFFFFF33, fill #EBEBEB), the x button at the right end clear of the bar')
+           and x.x + x.w == p.w and tr.x + tr.w <= x.x, '15 px #AAAAAA text, a 4 px bar (track #FFFFFF33, fill #EBEBEC, the accent role), the x button at the right end clear of the bar')
     for n in ('pod_cache_x', 'pod_cache_x_down'):
         expect(os.path.isfile(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/images/xx', n + '.png')), f'{n}.png is in the tree')
 

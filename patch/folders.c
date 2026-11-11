@@ -102,7 +102,8 @@ static struct {
     unsigned nsel;
     int select; /* select mode */
     int press; /* the row under the finger, + 1 */
-    int down, down_x, down_y; /* the row a press began on, + 1, and where */
+    int down; /* the row a press began on, + 1 */
+    m1_tap_t tap; /* and where */
     int title_on; /* the small title is shown */
     int noscroll; /* the scroll events could not be bound: the navbar keeps its title */
     int picker; /* the stock playlist picker is open over this page */
@@ -847,7 +848,7 @@ static int fo_on_down(void *ctx, void *e) {
     fo.down = 0;
     if (!e || !fo.view || !fo.nvis || !fo_valid()) return RET_OK;
     a = fo_item_of(e);
-    fo.down = a + 1, fo.down_x = I(e, PE_X), fo.down_y = I(e, PE_Y);
+    fo.down = a + 1, m1_tap_at(&fo.tap, e);
     if (!fo.select) fo_set_press(a + 1);
     return RET_OK;
 }
@@ -869,9 +870,7 @@ static int fo_on_up(void *ctx, void *e) {
     fo.down = 0;
     fo_set_press(0);
     if (a < 0 || !e || !fo.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - fo.down_x) < SC_DRAG_PX && m1_abs(I(e, PE_Y) - fo.down_y) < SC_DRAG_PX &&
-        fo_item_of(e) == a && (unsigned)a < fo.nvis)
-        fo_tap(a);
+    if (m1_tap_near(&fo.tap, e) && fo_item_of(e) == a && (unsigned)a < fo.nvis) fo_tap(a);
     return RET_OK;
 }
 

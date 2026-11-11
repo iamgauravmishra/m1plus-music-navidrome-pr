@@ -73,8 +73,8 @@ def albumpage(s, loaded=False):
     for i, t in enumerate(['So What', 'Freddie Freeloader']):
         y = O['AH_HDR_H'] + i * row
         d.rectangle((0, y + row - 1, 309, y + row - 1), fill=(0x3A, 0x3A, 0x3E))
-        s.text(im, O['AB_NUM_X'] + 22, y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 19, (0xAA,) * 3, 'r')
-        s.text(im, O['AB_NUM_X'] + 22 + O['AB_NUM_GAP'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, t, 19)
+        s.text(im, O['AB_NUM_X'] + O['ROW_NUM_W'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 21, (0xAA,) * 3, 'r')
+        s.text(im, O['AB_NUM_X'] + O['ROW_NUM_W'] + O['AB_NUM_GAP'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, t, 21)
     PS.glass(s, im, 'ah_nav_back', 7, 44); PS.glass(s, im, 'ah_nav_play', 260, 60); PS.glass(s, im, 'pod_nav_more', 214)
     return im
 

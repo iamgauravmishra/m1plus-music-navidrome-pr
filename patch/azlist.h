@@ -85,4 +85,3 @@ void az_redraw_rail(const az_t *az);
 
 /* The UTF-8 text on label w cut with an ellipsis to the label's width (wide chars, at most SG_NAME_MAX looked at). */
 void az_fit(void *w, const char *text);
-int az_text_w(void *w, const unsigned *t);

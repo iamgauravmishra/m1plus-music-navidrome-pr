@@ -30,7 +30,7 @@ extern int pod_open_peqpage(void); /* patch/m1plus.c: open_page(POD_PEQP_PAGE) *
 #define PP_RATE 48000
 #define MINUS "\xe2\x88\x92" /* U+2212: the sign of a cut */
 #define DOT " \xc2\xb7 "
-#define GR_GREY_CARD 28 /* #1C1C1C */
+#define GR_GREY_CARD TB_CARD_GREY /* #1C1C1E (its blue: tb_cpx) */
 #define GR_GREY_GRID 48
 #define GR_GREY_ZERO 62
 #define GR_GREY_INK 242
@@ -195,7 +195,24 @@ static void pg_render(const peq_graph *g, unsigned *px) {
                     v += (GR_GREY_INK - v) * cov;
                 }
             }
-            px[y * GR_W + x] = (unsigned)(a * 255 + 0.5) << 24 | (unsigned)(v + 0.5) * 0x010101u;
+            px[y * GR_W + x] = tb_cpx(v, a);
+        }
+}
+
+/* Under an accent the curve and the faint fill under it are the accent: a pass over the plot after the neutral render (which is untouched, so Neutral costs nothing more: the graph is redrawn on
+ * every drag step). A plot pixel's grey above the grid / zero-line grey under it is how far it went toward the ink (k), and the pixel goes that far toward the accent instead. */
+static void pg_accent(unsigned *px, unsigned acc) {
+    static const int grid_x[3] = {58, 141, 224};
+    int x, y;
+    for (y = GR_PY0; y < GR_PY0 + GR_PH; ++y)
+        for (x = 0; x < GR_PW; ++x) {
+            unsigned *p = px + y * GR_W + GR_PX0 + x;
+            double v0 = GR_GREY_CARD;
+            if (y == GR_PY0 || y == GR_PY0 + GR_PH - 1) v0 = GR_GREY_GRID;
+            if (y == GR_PY0 + GR_PH / 2) v0 = GR_GREY_ZERO;
+            if (x == grid_x[0] || x == grid_x[1] || x == grid_x[2]) v0 = GR_GREY_GRID;
+            if ((*p & 255) > v0)
+                *p = tb_cmix(v0, (double)(*p >> 24) / 255, acc, ((*p & 255) - v0) / (GR_GREY_INK - v0));
         }
 }
 
@@ -211,6 +228,7 @@ int peq_graph_draw(peq_graph *g) {
         return 0;
     }
     pg_render(g, px);
+    if (tb_acc()) pg_accent(px, tb_acc());
     bitmap_unlock_buffer(b);
     g->bmp = b;
     return 1;

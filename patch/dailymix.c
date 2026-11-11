@@ -1796,7 +1796,6 @@ void dailymix_start(void *win) {
  * and its glyph are widgets of the content view (their images are the style's); their text is painted. Page-scoped: its widgets, their events, one loader timer.
  * No stock hook. Everything is freed with the window. The songs are the mix file's paths found in the library (copied: the stock list is replaced by every other query).
  */
-#define DP_TAP_PX SC_DRAG_PX
 #define DP_AHEAD 2 /* rows loaded beyond the view in the scroll direction */
 #define DP_DESC_WIDE 160 /* wide chars of the description (DM_STEXT) */
 
@@ -1817,7 +1816,8 @@ static struct {
     unsigned dl[DP_DESC_LINES][DP_DESC_WIDE];
     int dlen[DP_DESC_LINES], dn;
     unsigned key[DP_ROWS_MAX]; /* the cover cache key of each song's album */
-    int press, down, down_x, down_y; /* the row under the finger + 1 / the row a press began on + 1 and where */
+    int press, down; /* the row under the finger + 1 / the row a press began on + 1 */
+    m1_tap_t tap; /* and where */
     int seen, dir, noscroll;
     int saved,
         away; /* the mix's playlist exists (the Add disc shows a check); the window went to the back since it was looked up */
@@ -2003,16 +2003,12 @@ static void dp_layout(void *canvas) {
  * hidden label's own style; one that cannot be measured is taken as AB_PLAY_TEXT_W px, the album's fallback. */
 static void dp_pill(void) {
     unsigned wide[DM_TEXT];
-    float w;
     int tw, room = DP_PLAY_W - 2 * (DP_PILL_GLYPH + DP_PILL_GAP);
     dp_wide(wide, DM_TEXT, TR("Play"));
-    w = widget_measure_text(dp.st_play, wide);
-    tw = (int)(w + 0.999f);
+    tw = m1_text_w(dp.st_play, wide);
     if (tw <= 0) tw = AB_PLAY_TEXT_W;
     if (tw > room) tw = room;
-    dp.glyph_x = DP_PLAY_X + (DP_PLAY_W - (DP_PILL_GLYPH + DP_PILL_GAP + tw)) / 2;
-    dp.text_x = dp.glyph_x + DP_PILL_GLYPH + DP_PILL_GAP;
-    dp.text_w = tw + AB_TEXT_SLACK;
+    dp.glyph_x = m1_pill_pair(DP_PLAY_X, DP_PLAY_W, DP_PILL_GLYPH, DP_PILL_GAP, tw, &dp.text_x, &dp.text_w);
     if (dp.glyph) widget_move(dp.glyph, dp.glyph_x, DP_BTN_Y + (DP_BTN_H - DP_PILL_GLYPH) / 2);
 }
 
@@ -2215,7 +2211,7 @@ static int dp_on_down(void *ctx, void *e) {
     dp.down = 0;
     if (!e || !dp.view) return RET_OK;
     a = dp_item_of(e);
-    dp.down = a + 1, dp.down_x = I(e, PE_X), dp.down_y = I(e, PE_Y);
+    dp.down = a + 1, m1_tap_at(&dp.tap, e);
     dp_set_press(a + 1);
     return RET_OK;
 }
@@ -2226,8 +2222,7 @@ static int dp_on_up(void *ctx, void *e) {
     dp.down = 0;
     dp_set_press(0);
     if (a < 0 || !e || !dp.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - dp.down_x) < DP_TAP_PX && m1_abs(I(e, PE_Y) - dp.down_y) < DP_TAP_PX && dp_item_of(e) == a)
-        dp_play(cc_str(dp.rows[a].raw, REC_PATH), 0);
+    if (m1_tap_near(&dp.tap, e) && dp_item_of(e) == a) dp_play(cc_str(dp.rows[a].raw, REC_PATH), 0);
     return RET_OK;
 }
 

@@ -75,7 +75,6 @@ extern int search_open_src(const lib_src_t *src); /* patch/search.c: the same ov
     1 /* a source row's marks sit 1 px above the grey line's box centre: that box centres the font's whole line, and the letters' own middle (cap height) is higher */
 #define SG_WIN_H 450 /* the window's height (the spinner is centred in it) */
 #define SG_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
-#define SG_TAP_PX SC_DRAG_PX
 #define SG_AHEAD 2 /* rows loaded beyond the view in the scroll direction */
 #if GRID_TILES < (GRID_VIEW_H / LIST_ROW_H) + 2 + 2 + 2
 #error GRID_TILES cannot hold the visible rows, the next two and the history
@@ -140,7 +139,8 @@ static struct {
     void *mark[2]; /* unselect, selected */
     int press; /* the row under the finger, + 1 */
     int seen, dir, noscroll;
-    int down, down_x, down_y; /* the row a press began on, + 1, and where */
+    int down; /* the row a press began on, + 1 */
+    m1_tap_t tap; /* and where */
     int title_on; /* the small title is shown */
     int menu; /* the sort card is open */
     int picker; /* the stock playlist picker is open over this page */
@@ -1371,12 +1371,12 @@ static int sg_on_down(void *ctx, void *e) {
         if (!e || !sg.view) return RET_OK;
         pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
         widget_to_local(sg.view, pt);
-        sg.down = rv_cell_at(pt[0], pt[1]) + 1, sg.down_x = I(e, PE_X), sg.down_y = I(e, PE_Y);
+        sg.down = rv_cell_at(pt[0], pt[1]) + 1, m1_tap_at(&sg.tap, e);
         return RET_OK;
     }
     if (!e || !sg.view || !sg.count || !sg_valid()) return RET_OK;
     a = sg_item_of(e);
-    sg.down = a + 1, sg.down_x = I(e, PE_X), sg.down_y = I(e, PE_Y);
+    sg.down = a + 1, m1_tap_at(&sg.tap, e);
     sg.down_more = a >= 0 && sg_in_zone(e);
     if (!sg.select && !sg.down_more) sg_set_press(a + 1);
     return RET_OK;
@@ -1392,13 +1392,11 @@ static int sg_on_up(void *ctx, void *e) {
         int pt[2];
         pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
         widget_to_local(sg.view, pt);
-        if (m1_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && m1_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
-            rv_cell_at(pt[0], pt[1]) == a && (unsigned)a < sg.rn)
+        if (m1_tap_near(&sg.tap, e) && rv_cell_at(pt[0], pt[1]) == a && (unsigned)a < sg.rn)
             cc_open_album((void *)0, 0, (int)sg.rrow[a]);
         return RET_OK;
     }
-    if (m1_abs(I(e, PE_X) - sg.down_x) < SG_TAP_PX && m1_abs(I(e, PE_Y) - sg.down_y) < SG_TAP_PX &&
-        sg_item_of(e) == a) {
+    if (m1_tap_near(&sg.tap, e) && sg_item_of(e) == a) {
         if (sg.select)
             sg_toggle(a);
         else if (more) {

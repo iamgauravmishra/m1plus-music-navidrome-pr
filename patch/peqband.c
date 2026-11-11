@@ -107,14 +107,14 @@ static int bd_set(int r, double v) {
 /* ---------------------------------------------------------------------------
  * Bitmaps: the control's container and pill, the card with its tracks, the fill, the thumb, the ring
  */
-static unsigned bd_seg_px(int x, int y, int w, int h) { return tb_px(28, tb_cover(x, y, w, h, BD_SEG_R)); }
+static unsigned bd_seg_px(int x, int y, int w, int h) { return tb_cpx(TB_CARD_GREY, tb_cover(x, y, w, h, BD_SEG_R)); }
 static unsigned bd_pill_px(int x, int y, int w, int h) {
     return tb_px(229, tb_cover(x, y, w, h, BD_SEG_R - BD_SEG_PAD + 1));
 }
 
-/* The card: #1C1C1C with BD_HSL_R corners, a hairline under the first two rows and a track (a capsule, grey 62) in each row. */
+/* The card: #1C1C1E with BD_HSL_R corners, a hairline under the first two rows and a track (a capsule, grey 62) in each row. */
 static unsigned bd_card_px(int x, int y, int w, int h) {
-    double v = 28, a = 1, r = BD_TRACK_H / 2.0;
+    double v = TB_CARD_GREY, a = 1, r = BD_TRACK_H / 2.0;
     int row = y / BD_ROW_H;
     if (y % BD_ROW_H == BD_ROW_H - 1 && row < BD_ROWS - 1 && x >= BD_TRACK_X) v = 51;
     if (x >= BD_TRACK_X - 3 && x < BD_TRACK_X + BD_TRACK_W + 3 && row < BD_ROWS) {
@@ -126,10 +126,15 @@ static unsigned bd_card_px(int x, int y, int w, int h) {
         v += (62 - v) * bd_clamp(r + 0.5 - d, 0, 1);
     }
     if ((x < BD_HSL_R || x >= w - BD_HSL_R) && (y < BD_HSL_R || y >= h - BD_HSL_R)) a = tb_cover(x, y, w, h, BD_HSL_R);
-    return tb_px(v, a);
+    return tb_cpx(v, a);
 }
 
-static unsigned bd_fill_px(int x, int y, int w, int h) { return tb_px(242, tb_cover(x, y, w, h, BD_TRACK_H / 2.0)); }
+static unsigned bd_accent
+    __attribute__((section(".scratch"))); /* the fill's colour while it is baked (tb_acc: 0 under Neutral) */
+static unsigned bd_fill_px(int x, int y, int w, int h) {
+    double a = tb_cover(x, y, w, h, BD_TRACK_H / 2.0);
+    return bd_accent ? tb_apx(bd_accent, 242, 242, a) : tb_px(242, a);
+}
 static unsigned bd_thumb_px(int x, int y, int w, int h) { return tb_px(250, tb_cover(x, y, w, h, w / 2.0)); }
 
 /* The ring that marks the band on the curve: a white ring BD_RING wide with a black centre. */
@@ -726,6 +731,7 @@ void peqband_opened(void *win) {
     bd.segbg = tb_make(BD_SEG_W, BD_SEG_H, bd_seg_px);
     bd.pill = tb_make(BD_SEG_PILL_W, BD_SEG_PILL_H, bd_pill_px);
     bd.card = tb_make(BD_HSL_W, BD_HSL_H, bd_card_px);
+    bd_accent = tb_acc();
     bd.fill = tb_make(BD_TRACK_W, BD_TRACK_H, bd_fill_px);
     bd.thumb = tb_make(BD_THUMB, BD_THUMB, bd_thumb_px);
     bd.ring = tb_make(BD_RING, BD_RING, bd_ring_px);

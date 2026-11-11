@@ -52,6 +52,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_style, awtk_ui
 from awtk_style import T_INT32, T_UINT32
 from modlib import clone_workdir, edit_ui
+from pod_roles import SURFACE_RGB, LINE_RGB
 
 RAW = 'rootfs/release/assets/default/raw'
 STYLE_MODE = 0o744                           # stock styles/*.bin mode
@@ -83,7 +84,7 @@ PM_SPEED = {'scrlabel1': ((48, 8, 60, 20), (48, 8, 96, 20)),          # Playback
             'img_2x': ((272, 0, 36, 50), (268, 0, 36, 50))}
 PM_SHEET = 'pc_sheet5'                               # the glass image of page 2 (320 x 250, five rows, top corners r 18; tools/mod_icons.py GLASS_SHEET); page 1's is pc_sheet6 (320 x 300, GLASS_SHEET6): the payload sets the one the page needs on the dialog's first child, the insensitive image pod_glass
 PM_GLASS = 'pod_glass'
-PM_PRESSED, PM_HAIR = '#FFFFFF10', '#FFFFFF22'      # the rows over it: transparent, pressed 6 % white (a 20 % band, as the album page's, takes the red under 3:1), hairline 13 % white
+PM_PRESSED, PM_HAIR = '#FFFFFD10', '#FFFFFF22'      # the rows over it: transparent, pressed 6 % white (palette.ROLE_SHEET_PRESS, one blue level off so an accent maps it; a 20 % band, as the album page's, takes the red under 3:1), hairline 13 % white
 PM_RED = '#FF6B6B'                                 # the Delete label: >= 4.5:1 on the glass at rest (test/pod/playmore.py; a label in a pressed row stays in its normal state)
 QUEUE_ROW, QUEUE_BTN = 44, 40                       # the queue drawer's rows: table row, its button / label (4 px gap)
 QUEUE_NAME_PX, QUEUE_NOW_PX = 18, 20                # other rows / the playing row
@@ -361,8 +362,8 @@ def edit_playqueue(root, pal):
         head.set(f'style:{st}:border_width', '1')
     for st in ('normal', 'disable', 'focused'): mode.set(f'style:{st}:font_size', str(QUEUE_NAME_PX))
     btm = root.find('button')
-    for st in ('normal', 'over', 'disable', 'focused'): btm.set(f'style:{st}:bg_color', '#1E1E1E')
-    btm.set('style:pressed:bg_color', '#333333')
+    for st in ('normal', 'over', 'disable', 'focused'): btm.set(f'style:{st}:bg_color', SURFACE_RGB)
+    btm.set('style:pressed:bg_color', LINE_RGB)
     for st in ('normal', 'pressed', 'over', 'disable', 'focused'): btm.set(f'style:{st}:font_size', '20')
 
 def ui_edit(rel, root, pal):

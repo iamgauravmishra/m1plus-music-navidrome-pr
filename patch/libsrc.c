@@ -14,6 +14,7 @@
 #include "songops.h"
 #include "libsrc.h"
 #include "sbapi.h"
+#include "palette.h"
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 
@@ -107,15 +108,33 @@ static unsigned ls_gen(const lib_src_t *s) {
      PA_DL_COLS) /* the bitmap: the disc and the DSD tag in the top LS_MK_H rows, the download ring's cells under them (steps, then the marks: the atlas' rows copied as they are) */
 #define LS_MK_BH (LS_MK_H + PA_DL_PX * (PA_DL_STOP / PA_DL_COLS + 1))
 static void *ls_marks_bmp __attribute__((section(".scratch")));
+static unsigned ls_marks_acc __attribute__((section(".scratch"))); /* the accent it was made under (0: Neutral) */
 
-/* pc_atlas' disc, DSD tag and download rings copied into one small straight-alpha RGBA bitmap, once (the atlas is decoded with its alpha and dropped at once, as the Podcasts page does). NULL when it cannot be made. */
+/* Under an accent the download ring's arc is the accent: the ring cells' pixels are the track grey (PA_DL_TRACK_R) to the arc's (PA_DL_ARC_R, the marks' too, which are left alone: they are outside these rows), so
+ * a pixel's grey says how much of it is arc; that share goes to the accent. */
+static void ls_ring_tint(unsigned *px, unsigned acc) {
+    unsigned x, y, s;
+    for (y = LS_MK_H; y < LS_MK_H + PA_DL_PX * (PA_DL_N / PA_DL_COLS); ++y)
+        for (x = 0; x < PA_DL_PX * PA_DL_COLS; ++x) {
+            unsigned *p = px + y * LS_MK_BW + x, g = *p & 255, f;
+            if (!(*p >> 24) || g <= PA_DL_TRACK_R) continue;
+            f = (g - PA_DL_TRACK_R) * 255 / (PA_DL_ARC_R - PA_DL_TRACK_R);
+            if (f > 255) f = 255;
+            *p &= 0xff000000u;
+            for (s = 0; s < 24; s += 8) *p |= (PA_DL_TRACK_R * (255 - f) + (acc >> s & 255) * f + 127) / 255 << s;
+        }
+}
+
+/* pc_atlas' disc, DSD tag and download rings copied into one small straight-alpha RGBA bitmap, once (re-made when the accent changed) (the atlas is decoded with its alpha and dropped at once, as the Podcasts page does). NULL when it cannot be made. */
 static void *ls_marks_get(void *win) {
     static const unsigned char at[4][4] = BITMAP_RGBA_AT;
     unsigned bitmap[32], format, x, y, *px;
     const unsigned char *data;
     void *b = (void *)0;
-    if (ls_marks_bmp) return ls_marks_bmp;
-    if (!win) return (void *)0;
+    unsigned acc = pal_accent() ? pal_fill() : 0;
+    if (ls_marks_bmp && acc == ls_marks_acc) return ls_marks_bmp;
+    if (!win) return ls_marks_bmp;
+    if (ls_marks_bmp) bitmap_destroy(ls_marks_bmp), ls_marks_bmp = (void *)0;
     memset(bitmap, 0, sizeof bitmap);
     if (widget_load_image(win, "pc_atlas", bitmap)) return (void *)0;
     format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
@@ -148,10 +167,12 @@ static void *ls_marks_get(void *win) {
         bitmap_destroy(b);
         b = (void *)0;
     }
+    if (px && b && acc) ls_ring_tint(px, acc);
     if (px) bitmap_unlock_buffer(b);
     if (data) bitmap_unlock_buffer(bitmap);
     widget_unload_image(win, bitmap);
     ls_marks_bmp = b;
+    ls_marks_acc = acc;
     return b;
 }
 

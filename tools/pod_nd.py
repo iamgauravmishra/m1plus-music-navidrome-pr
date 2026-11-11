@@ -7,6 +7,7 @@ saved (the Find Cover & Lyrics block: tools/pod_ui.py OA_ES_*): a plug, "Not Con
 (the payload binds them); nothing here has a colour of its own (white, the grey of the cards and the Main Menu's hairline)."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from pod_roles import SUB_RGB
 
 PP_TITLE_H, PP_LINE_Y, PP_LINE_H = 52, 52, 20   # patch/offsets.inc: the large title, then the grey line under it (the podcast pages' refresh line)
 BIG_H = PP_LINE_Y + PP_LINE_H + 8   # the top item: the large title and the status line under it (the first row's centre lies 80 + 26 px down the page)
@@ -20,8 +21,8 @@ TEXT_X = 56         # the label, after the glyph (patch/radiopage.c RP_TEXT_X)
 CHEV_X, TEXT_END = 288, 278   # the shared list chevron's left edge and where a row with one ends its text
 HAIR_RGB = '#222222'          # patch/offsets.inc LIST_HAIR
 STATUS_PX = 15
-GREY = '#AAAAAA'            # the empty state's sentence: the secondary grey (tools/pod_ui.py SUB_RGB)
-ROW_GREY = '#AAAAAA'        # the status line: the grey must pass the build's 4.5:1 check on black (tools/mod_theme.py)
+GREY = SUB_RGB            # the empty state's sentence: the secondary grey (tools/pod_ui.py SUB_RGB)
+ROW_GREY = SUB_RGB        # the status line: the grey must pass the build's 4.5:1 check on black (tools/mod_theme.py)
 ROWS = (('Albums', 'pod_ic_albums'), ('Artists', 'pod_ic_artists'), ('Songs', 'pod_ic_songs'), ('Playlists', 'pod_ic_playlists'), ('Favorites', 'pod_ic_fav'), ('Downloaded', 'pod_sb_download'))
 
 
@@ -33,18 +34,6 @@ def column():
         out.append((f'pod_row{i}', y, ROW_H)); y += ROW_H
     out.append(('nd_end', y, FOOT_H)); y += FOOT_H
     return out, y
-
-
-def _text_label(name, x, y, w, h, px, colour, align, text=None):
-    from pod_ui import Widget, styled
-    import pod_i18n
-    lab = Widget('hscroll_label', x, y, w, h, [('name', name), pod_i18n.text_prop(text) if text else ('text', ''), ('only_parent_focus', 'true'), ('ellipses', 'true'), ('sensitive', 'false')])
-    for st in ('normal', 'disable', 'focused'):
-        styled(lab, (st,), 'font_size', str(px))
-        styled(lab, (st,), 'text_color', colour)
-        styled(lab, (st,), 'text_align_h', align)
-        styled(lab, (st,), 'text_align_v', 'middle')
-    return lab
 
 
 def _row(i, label, icon, h):
@@ -64,7 +53,7 @@ def _row(i, label, icon, h):
 
 
 def build(page):
-    from pod_ui import (Widget, styled, navbar, stock_list, nav_fade, cards_spacer, hidden, view_sort_card, wf_image, label as plain_label, SG_FOOT_RGB, VS_SORT_KEYS, _oa_label, _oa_pill, oa_es_layout, OFFSETS, STATES,
+    from pod_ui import (Widget, styled, scroll_text, large_title, navbar, stock_list, nav_fade, cards_spacer, hidden, view_sort_card, wf_image, label as plain_label, SG_FOOT_RGB, VS_SORT_KEYS, _oa_label, _oa_pill, oa_es_layout, OFFSETS, STATES,
                         OA_ES_ICON, OA_ES_TITLE_H, OA_ES_TEXT_H, OA_ES_TEXT_W, OA_ES_PILL_W, OA_ES_PILL_H, OA_ES_TEXT_PX, SCREEN_W, NAVBAR_H)
     import pod_i18n
     root = Widget('window', 0, 0, 0, 0, [('name', page.name)])
@@ -77,13 +66,7 @@ def build(page):
     sv = lv.children[0]
 
     def big(name):
-        w = Widget('label', OFFSETS['SG_TITLE_X'], 0, OFFSETS['SG_TITLE_W'], OFFSETS['PP_TITLE_H'], [('name', name), pod_i18n.text_prop(page.title), ('sensitive', 'false')])
-        for st in STATES:
-            styled(w, (st,), 'text_color', '#FFFFFF')
-            styled(w, (st,), 'font_size', str(OFFSETS['PP_TITLE_PX']))
-            styled(w, (st,), 'text_align_h', 'left')
-            styled(w, (st,), 'text_align_v', 'middle')
-        return w
+        return large_title(name, page.title, STATES)
     placed, end = column()
     for name, y, h in placed:
         if name == 'nd_top':
@@ -94,7 +77,7 @@ def build(page):
             it.children.append(wf_image('nd_st_icon', ix, iy, SPIN_PX, SPIN_PX, 'nd_st_ok', 'default'))
             it.children.append(hidden(wf_image('nd_st_spin', ix, iy, SPIN_PX, SPIN_PX, 'wf_spin0', 'default')))
             tx = ix + SPIN_PX + SPIN_GAP
-            it.children.append(_text_label('nd_status', tx, PP_LINE_Y, OFFSETS['SG_TITLE_X'] + OFFSETS['SG_TITLE_W'] - tx, PP_LINE_H, STATUS_PX, ROW_GREY, 'left'))
+            it.children.append(scroll_text('nd_status', tx, PP_LINE_Y, OFFSETS['SG_TITLE_X'] + OFFSETS['SG_TITLE_W'] - tx, PP_LINE_H, STATUS_PX, ROW_GREY, 'left'))
         elif name.startswith('pod_row'):
             i = int(name[7:])
             it = _row(i, ROWS[i][0], ROWS[i][1], h)

@@ -120,7 +120,7 @@ def asset_tests(ctx):
                f'{name}: the card is a 320 x 250 bottom sheet (five 50 px rows) on the window\'s foot, the glass drawn 1:1 over no fill')
         expect(all(w.get('visible') == 'false' and w.get('sensitive') == 'false' for w in (scrim, card)), f'{name}: the scrim and the card start hidden and insensitive')
         expect([(i.type, i.x, i.y, i.h, i.w) for i in items] == [('button', 0, k * PLROW, PLROW, 320) for k in range(5)]
-               and all(i.get(f'style:{st}:bg_color') == ('#FFFFFF10' if st == 'pressed' else '#00000000') and i.get(f'style:{st}:text_color') == '#FFFFFF' for i in items for st in pod_ui.STATES)
+               and all(i.get(f'style:{st}:bg_color') == ('#FFFFFD10' if st == 'pressed' else '#00000000') and i.get(f'style:{st}:text_color') == '#FFFFFF' for i in items for st in pod_ui.STATES)
                and all(i.get(f'style:{st}:border') == ('top' if k else 'none') and i.get(f'style:{st}:border_width') == ('1' if k else '0')
                        and i.get(f'style:{st}:border_color') == ('#FFFFFF22' if k else '#00000000') for k, i in enumerate(items) for st in pod_ui.STATES),
                f'{name}: five transparent full-width 50 px rows, pressed 6 % white, the sheet\'s 13 % white hairline above every row but the first')

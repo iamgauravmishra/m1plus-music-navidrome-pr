@@ -8,6 +8,7 @@ the graph's bitmap pixel by pixel, the curve against peq_response, every string.
 import math, os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pod_settings as ST
+import tenband_model as TBM
 
 RATE = 48000
 W, H, CARD_X, CARD_R = 300, ST.GRAPH_H, ST.CM, ST.CARD_R
@@ -55,7 +56,7 @@ def clamp(v, lo, hi): return lo if v < lo else hi if v > hi else v
 
 
 def render(db, rng):
-    """The graph card's bitmap as rows of (alpha, grey) a pixel: patch/peqpage.c pg_render (the card, its rounded corners in the alpha, the grid, the faint fill down to 0 dB, a 1.5 px white line)."""
+    """The graph card's bitmap as rows of (alpha, grey, blue) a pixel: patch/peqpage.c pg_render (the card, its rounded corners in the alpha, the grid, the faint fill down to 0 dB, a 1.5 px white line)."""
     y0, half = PY0 + PH // 2 + 0.5, PH / 2
     yc = [clamp(y0 - v * half / rng, PY0 + 0.5, PY0 + PH - 0.5) for v in db]
     out = []
@@ -78,8 +79,22 @@ def render(db, rng):
                 s = ((yc[col + 1] if col + 1 < PW else yc[col]) - (yc[col - 1] if col else yc[col])) / (2 if col and col + 1 < PW else 1)
                 d = abs(y + 0.5 - yc[col]) / math.sqrt(1 + s * s)
                 v += (GREY_INK - v) * clamp(1.25 - d, 0, 1)
-            row.append((int(a * 255 + 0.5), int(v + 0.5)))
+            row.append((int(a * 255 + 0.5), int(v + 0.5), TBM.card_blue(v)))
         out.append(row)
+    return out
+
+
+def render_accent(db, rng, acc):
+    """The same card under an accent (patch/peqpage.c pg_accent): a plot pixel above its grid / zero-line grey goes that far toward the accent, read back from the neutral pixel's grey. Rows of (alpha, r, g, b)."""
+    out = [[(a, g, g, b) for a, g, b in row] for row in render(db, rng)]
+    for y in range(PY0, PY0 + PH):
+        for x in range(PW):
+            a, g, _, _ = out[y][PX0 + x]
+            v0 = GREY_CARD
+            if y in (PY0, PY0 + PH - 1): v0 = GREY_GRID
+            if y == PY0 + PH // 2: v0 = GREY_ZERO
+            if x in GRID_X: v0 = GREY_GRID
+            if g > v0: out[y][PX0 + x] = TBM.cmix(v0, a, acc, (g - v0) / (GREY_INK - v0))
     return out
 
 

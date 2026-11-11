@@ -574,9 +574,9 @@ def rgba(rgb, a=255):
 
 
 ROLE_WORDS = [word(rgba(L.ROLE_PRESS_ROW)), word(rgba(L.ROLE_PRESS_ROW, 0x80)), word(rgba(L.ROLE_PROGRESS, 0xeb)), word(rgba(L.ROLE_PROGRESS)), word(rgba(L.ROLE_PROGRESS, 0)),
-              word(rgba(L.ROLE_PRESS_PILL)), word(rgba(L.ROLE_PRESS_QPILL, 0x80))]
-NEAR_WORDS = [word((0x33, 0x33, 0x33, 255)), word((0x33, 0x33, 0x36, 255)), word((0x3a, 0x3a, 0x3c, 255)), word((0x34, 0x33, 0x34, 255)), word((255, 255, 255, 0xeb)), word((0xff, 0xff, 0xfd, 0xeb)), word((0xee, 0xee, 0xec, 255)),
-              BLACK, WHITE, 0xff1c1c1c, 0xff2060ff, 0x00000000]
+              word(rgba(L.ROLE_PRESS_PILL)), word(rgba(L.ROLE_PRESS_QPILL, 0x80)), word(rgba(L.ROLE_FILL)), word(rgba(L.ROLE_SHEET_PRESS, 0x10))]
+NEAR_WORDS = [word((0x33, 0x33, 0x33, 255)), word((0x33, 0x33, 0x36, 255)), word((0x3a, 0x3a, 0x3c, 255)), word((0x34, 0x33, 0x34, 255)), word((255, 255, 255, 0xeb)), word((0xff, 0xff, 0xfd, 0xeb)), word((0xee, 0xee, 0xec, 255)), word((0xeb, 0xeb, 0xeb, 255)), word((0xeb, 0xeb, 0xed, 255)), word((255, 255, 255, 0x10)), word((255, 255, 0xfc, 0x10)),
+              BLACK, WHITE, 0xff1e1c1c, 0xff2060ff, 0x00000000]
 
 
 def accent_map_tests(ctx):
@@ -951,10 +951,10 @@ def tinted_tests(ctx):
     # the hooks
     for i, ac in enumerate(L.ACCENTS[1:], 1):
         m = LM(b'1\n', acc=b'%d\n' % i, hook=True)
-        blk, card = word(L.map_colour((0, 0, 0, 255), 'tinted', ac)), word(L.map_colour((0x1c,) * 3 + (255,), 'tinted', ac))
-        ok = (m.call(PSYMS['pal_active'], count=20000) == 1 and m.call(PSYMS['pal_background'], count=20000) == 2 and m.color(m.style(color=BLACK)) == blk and m.color(m.style(color=0xff1c1c1c)) == card
+        blk, card = word(L.map_colour((0, 0, 0, 255), 'tinted', ac)), word(L.map_colour((0x1c, 0x1c, 0x1e, 255), 'tinted', ac))
+        ok = (m.call(PSYMS['pal_active'], count=20000) == 1 and m.call(PSYMS['pal_background'], count=20000) == 2 and m.color(m.style(color=BLACK)) == blk and m.color(m.style(color=0xff1e1c1c)) == card
               and m.color(m.style(color=WHITE)) == WHITE and m.color(m.style(color=0xff8c8c8c)) == 0xff8c8c8c and m.color(m.style(color=0x00000000)) == 0
-              and m.gradient(m.style(grads=[BLACK, WHITE, 0xff1c1c1c]))[1] == [blk, WHITE, card] and m.call(PSYMS['ui_ink'], a0=BLACK, count=20000) == blk and m.call(PSYMS['ui_ink'], a0=0, count=20000) == 0
+              and m.gradient(m.style(grads=[BLACK, WHITE, 0xff1e1c1c]))[1] == [blk, WHITE, card] and m.call(PSYMS['ui_ink'], a0=BLACK, count=20000) == blk and m.call(PSYMS['ui_ink'], a0=0, count=20000) == 0
               and m.color(m.style(color=ROLE_WORDS[0])) == word(L.map_colour(px(ROLE_WORDS[0]), 'tinted', ac)))
         expect(ok, f'{ac}: style_get_color, style_get_gradient and ui_ink tint a dark neutral colour; white, grey text and a clear colour stay')
     m = LM(b'1\n', acc=b'4\n', hook=True)
@@ -974,7 +974,7 @@ def tinted_tests(ctx):
     m = LM(b'1\n', acc=b'4\n', hook=True)
     m.on_top('home_page')
     expect(m.color(m.style(color=tone)) == teal(tone, False) != tone and m.color(m.style(color=0xff202020)) == teal(0xff202020, False) != 0xff202020, 'on any other page a dark neutral tone and #202020 are tinted like any colour')
-    cover_words = [tone, 0xff202020, 0xff333333, BLACK, 0xff1c1c1c, 0xff0a0b0c, WHITE, 0xff8c8c8c] + ROLE_WORDS
+    cover_words = [tone, 0xff202020, 0xff333333, BLACK, 0xff1e1c1c, 0xff0a0b0c, WHITE, 0xff8c8c8c] + ROLE_WORDS
     for name in ('playing_page', 'm1plus_dailymix_page'):
         m.on_top(name)
         got = [(m.color(m.style(color=c)), m.call(PSYMS['pal_map'], a0=c, count=20000), m.call(PSYMS['ui_ink'], a0=c, count=20000)) for c in cover_words]
@@ -1082,12 +1082,12 @@ def rest_glyph_tests(ctx):
     m = LM(acc=b'1\n')
     expect(L.accent_kind('pod_ic_rd_art') is None and all(LM(acc=b'%d\n' % i).image('pod_ic_rd_art', 8, 8, glyph) == glyph for i in range(1, 7)), 'the Radio placeholder art pod_ic_rd_art stays neutral under every accent')
     expect(all(m.image(nm, 8, 8, glyph) == glyph for nm in ('pod_sw0', 'pod_sw3', 'pod_chev')), 'the swatches and the chevron stay as they are at rest')
-    # the Library tiles: the #1E1E1E square stays exactly, white is the accent, the antialiased glyph edge and the square's alpha edge blend
-    tp = [(30, 30, 30, 255), (255, 255, 255, 255), (142, 142, 142, 255), (30, 30, 30, 90), (30, 30, 30, 0), (255, 255, 255, 128), (31, 31, 31, 255), (200, 200, 200, 255)]
+    # the Library tiles: the #1C1C1E square stays exactly, white is the accent, the antialiased glyph edge and the square's alpha edge blend
+    tp = [(28, 28, 30, 255), (255, 255, 255, 255), (142, 142, 142, 255), (28, 28, 30, 90), (28, 28, 30, 0), (255, 255, 255, 128), (29, 29, 31, 255), (200, 200, 200, 255)]
     for i, ac in enumerate(L.ACCENTS[1:], 1):
         for nm in L.ACCENT_TILE:
             got = LM(acc=b'%d\n' % i).image(nm, 8, 1, tp)
-            expect(got == [L.accent_pixel('tile', p, ac) for p in tp] and got[0] == (30, 30, 30, 255) and got[3] == (30, 30, 30, 90) and got[1] == L.ACCENT_RGB[ac] + (255,) and got[5][:3] == L.ACCENT_RGB[ac], f'{nm} under {ac}: the square stays #1E1E1E, white is the accent, alpha kept ({got[:3]})')
+            expect(got == [L.accent_pixel('tile', p, ac) for p in tp] and got[0] == (28, 28, 30, 255) and got[3] == (28, 28, 30, 90) and got[1] == L.ACCENT_RGB[ac] + (255,) and got[5][:3] == L.ACCENT_RGB[ac], f'{nm} under {ac}: the square stays #1C1C1E, white is the accent, alpha kept ({got[:3]})')
     expect(all(LM().image(nm, 8, 1, tp) == tp for nm in L.ACCENT_TILE), 'Neutral: the Library tiles render exactly as before')
     expect(LM(acc=b'1\n').image('pod_ic_dltile', 8, 1, tp, premul=True) is not None and LM(b'2\n', acc=b'1\n').image('pod_ic_dltile', 8, 1, tp) == [L.accent_pixel('tile', p, 'red') for p in tp], 'a tile is tinted instead of flipped (accent over Light)')
     expect(all(LM(acc=b'%d\n' % i).image('pod_ci_wifi', 8, 8, glyph) == [L.accent_pixel('glyph', p, ac) for p in glyph] for i, ac in enumerate(L.ACCENTS[1:], 1)), 'each accent: a Settings card glyph (pod_ci_*) is the accent at rest')
@@ -1120,7 +1120,7 @@ def findings_tests(ctx):
     grey = m.call(PSYMS['pal_tone'], a0=0xff333333, count=20000)
     m.on_top('playing_page')
     m.on_top('home_page')
-    expect(grey == 0xff333333 and m.color(m.style(color=0xff333333)) == teal(0xff333333) != 0xff333333 and m.color(m.style(color=0xff1c1c1c)) == teal(0xff1c1c1c), 'a cover averaging grey #333333 does not keep that colour on other pages (the Settings separators stay tinted)')
+    expect(grey == 0xff333333 and m.color(m.style(color=0xff333333)) == teal(0xff333333) != 0xff333333 and m.color(m.style(color=0xff1e1c1c)) == teal(0xff1e1c1c), 'a cover averaging grey #333333 does not keep that colour on other pages (the Settings separators stay tinted)')
     # finding 1: a cover tone is never a role colour
     for i, ac in enumerate(L.ACCENTS[1:], 1):
         for bgmode in (b'0\n', b'1\n'):
@@ -1165,9 +1165,9 @@ def press_tests(ctx):
         a = L.ACCENT_RGB[ac]
         for bg, mode, wsh in (('black', b'0\n', lambda c: c), ('tinted', b'1\n', lambda c: L.wash(c, ac))):
             m = LM(mode, acc=b'%d\n' % i, hook=True)
-            want = (word(mix(wsh((0x1e, 0x1e, 0x1e)), a) + (255,)), word(mix(wsh((0x2c, 0x2c, 0x2e)), a) + (0x80,)))
+            want = (word(mix(wsh((0x1c, 0x1c, 0x1e)), a) + (255,)), word(mix(wsh((0x2c, 0x2c, 0x2e)), a) + (0x80,)))
             got = (m.call(PSYMS['pal_map'], a0=pill, count=20000), m.call(PSYMS['pal_map'], a0=qp, count=20000))
-            expect(got == want and got == (word(L.map_colour(px(pill), bg, ac)), word(L.map_colour(px(qp), bg, ac))), f'{ac} {bg}: the pressed pill is mix(#1E1E1E, accent, 22 %), the Queue off button mix(#2C2C2E, accent, 22 %) ({got[0]:#x} {got[1]:#x})')
+            expect(got == want and got == (word(L.map_colour(px(pill), bg, ac)), word(L.map_colour(px(qp), bg, ac))), f'{ac} {bg}: the pressed pill is mix(#1C1C1E, accent, 22 %), the Queue off button mix(#2C2C2E, accent, 22 %) ({got[0]:#x} {got[1]:#x})')
     expect(all(L.map_colour(px(c), 'black', 'neutral') == px(c) for c in (pill, qp)) and LM(hook=True).call(PSYMS['pal_map'], a0=pill, count=20000) == pill, 'Neutral: the pressed pill colours pass through (#333335 and #3A3A3D are one blue level off today\'s greys)')
     expect(L.not_role((0x33, 0x33, 0x35, 255)) == (0x33, 0x33, 0x36, 255) and L.not_role((0x3a, 0x3a, 0x3d, 255)) == (0x3a, 0x3a, 0x3e, 255), 'a cover colour equal to a pill role moves one blue level off it')
     m = LM(acc=b'1\n', hook=True); m.on_top('playing_page')
@@ -1215,4 +1215,38 @@ def press_tests(ctx):
     expect(plays == {'btn_play', 'btn_shuffle'} and {w for _, w in hits.get('#3A3A3D', ())} == {'btn_shuffle', 'btn_repeat'}, f'#333335 only on the Play / Shuffle pills, #3A3A3D only on the Queue buttons ({hits})')
 
 
-SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, tinted_tests, findings_tests, rest_glyph_tests]
+def own_roles_tests(ctx):
+    """The own progress fills (ROLE_FILL) and the pressed rows of bottom sheets and floating cards (ROLE_SHEET_PRESS, translucent): accent against the model, Neutral as before."""
+    expect = ctx.expect
+    import re, awtk_ui
+    fill, sheet = word(rgba(L.ROLE_FILL)), word(rgba(L.ROLE_SHEET_PRESS, 0x10))
+    expect(L.ROLE_FILL == 0xebebec == O['ROLE_FILL'] and L.ROLE_SHEET_PRESS == 0xfffffd == O['ROLE_SHEET_PRESS'] and O['ACC_SHEET_A'] == 56 and L.SHEET_A == round(255 * L.TINT / 100), 'the roles: fill #EBEBEC (the own bars), sheet press #FFFFFD at 22 % alpha under an accent')
+    for i, ac in enumerate(L.ACCENTS):
+        for mode, bg in ((b'0\n', 'black'), (b'1\n', 'tinted')):
+            if ac == 'neutral' and bg == 'tinted': continue
+            m = LM(mode, acc=b'%d\n' % i, hook=True)
+            got = [m.call(PSYMS['pal_map'], a0=c, count=20000) for c in (fill, sheet)]
+            want = [fill, sheet] if ac == 'neutral' else [word(L.map_colour(px(fill), bg, ac)), word(L.map_colour(px(sheet), bg, ac))]
+            expect(got == want, f'{ac} {bg}: pal_map of the fill and of the sheet press match the model ({got[0]:#x} {got[1]:#x})')
+            if ac != 'neutral': expect(got[0] == word(L.ACCENT_RGB[ac] + (255,)) and got[1] == word(L.ACCENT_RGB[ac] + (L.SHEET_A,)), f'{ac} {bg}: the fill is the solid accent, the sheet press the accent at alpha {L.SHEET_A}')
+    expect(LM(hook=True).call(PSYMS['pal_map'], a0=fill, count=20000) == fill and LM(hook=True).call(PSYMS['pal_map'], a0=sheet, count=20000) == sheet, 'Neutral: both pass through')
+    m = LM(acc=b'1\n', hook=True)
+    expect(m.call(PSYMS['pal_not_role'], a0=fill, count=2000) == word((0xeb, 0xeb, 0xed, 255)) and m.call(PSYMS['pal_not_role'], a0=sheet, count=2000) == word((0xff, 0xff, 0xfe, 0x10)), 'a cover colour equal to either moves one blue level off it')
+    # the built pages carry them where they belong
+    raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'ui')
+    hits = {'EBEBEC': set(), 'FFFFFD': set()}
+    for f in sorted(os.listdir(raw)):
+        if not f.endswith('.bin'): continue
+        for w in awtk_ui.parse(open(os.path.join(raw, f), 'rb').read()).walk():
+            for k, v in w.props:
+                if isinstance(v, str) and 'color' in k and v[1:7].upper() in hits: hits[v[1:7].upper()].add((w.name, k.split(':')[1], v[7:].upper()))
+    expect({n for n, _, _ in hits['EBEBEC']} == {'pod_cache_fill', 'pod_pd_fill', 'up_pd_fill'}, f'#EBEBEC is only the three own progress fills ({sorted(hits["EBEBEC"])})')
+    expect(hits['FFFFFD'] and all(st == 'pressed' and a == '10' for _, st, a in hits['FFFFFD']), 'the sheet press (#FFFFFD10) is only a pressed background')
+    expect({n for n, _, _ in hits['FFFFFD']} >= {'rm_item0', 'vs_item0', 'pq_item0'}, f'... on the Radio sheet, the sort card and the Save Changes dialog rows (and the other sheets) ({sorted({n for n, _, _ in hits["FFFFFD"]})[:12]})')
+    srcs = {f'{d}/{f}': open(os.path.join(ROOT, d, f)).read() for d in ('patch', 'tools') for f in sorted(os.listdir(os.path.join(ROOT, d))) if f.endswith(('.c', '.h', '.inc', '.py')) and not f.startswith('preview')}
+    for k, pat, allowed in (('fill', r'0x[0-9a-fA-F]{2}ecebebu?\b|#EBEBEC', {'patch/offsets.inc', 'tools/pod_ui.py', 'tools/palette.py', 'patch/palette.c'}), ('sheet', r'#FFFFFD|0x[0-9a-fA-F]{2}fdffffu?\b', {'patch/offsets.inc', 'tools/pod_ui.py', 'tools/mod_lists.py', 'tools/palette.py', 'patch/palette.c'})):
+        h = sorted({f for f, s in srcs.items() if re.search(pat, s, re.I)})
+        expect(set(h) <= allowed, f'in the sources the {k} role colour is only where it is defined ({h})')
+
+
+SECTIONS = [hooks_tests, flip_tests, style_tests, image_tests, model_tests, setting_tests, settings_tests, accent_map_tests, accent_image_tests, accent_setting_tests, accent_picker_tests, roles_tests, press_tests, own_roles_tests, tinted_tests, findings_tests, rest_glyph_tests]

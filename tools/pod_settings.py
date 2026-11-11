@@ -16,12 +16,13 @@ left of the chevron. A header is secondary grey and a note smaller grey text; th
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pod_pages
+from pod_roles import SUB_RGB, SURFACE_RGB, LINE_RGB, RAISED_RGB, CAPTION_PX, CAPTION_H, CAPTION_LABEL_Y, CAPTION_LABEL_H
 
 ROW_H = 52                   # tools/pod_ui.py ROW_H
 CM, CARD_W, CARD_R = 10, 300, 12
-CARD_RGB, CARD_HAIR_RGB, PRESSED_RGB = '#1C1C1C', '#333333', '#2C2C2E'   # PRESSED_RGB: a tapped row (the Songs sort card's pressed grey)
+CARD_RGB, CARD_HAIR_RGB, PRESSED_RGB = SURFACE_RGB, LINE_RGB, RAISED_RGB   # PRESSED_RGB: a tapped row (the Songs sort card's pressed grey)
 PAD, GLYPH_PX, ICON_PX, LABEL_GAP = 14, 20, 24, 14
-HDR_H, HDR_PX, HDR_LABEL_Y, HDR_LABEL_H = 40, 18, 14, 22
+HDR_H, HDR_PX, HDR_LABEL_Y, HDR_LABEL_H = CAPTION_H, CAPTION_PX, CAPTION_LABEL_Y, CAPTION_LABEL_H   # the group caption (pod_roles)
 NOTE_H, NOTE_PX, NOTE_LABEL_Y, NOTE_LABEL_H = 34, 15, 6, 22
 WRAP_LINE = 21               # a wrapping note (Note.lines > 1, a plain label): each further line adds this
 GAP_H, END_H = 20, 10       # the space between two cards without a header or note; the list's bottom padding
@@ -35,7 +36,7 @@ BAND_TITLE_PX, BAND_SUB_PX = 20, 16   # a two-line row's text sizes: the Podcast
 BAND_TITLE_Y, BAND_TITLE_H, BAND_SUB_Y, BAND_SUB_H = 5, 22, 28, 19   # a band row's two lines in the 52 px row: 5 px above the title box, 5 px below the grey line's
 LIB_TITLE_Y, LIB_TITLE_H, LIB_SUB_Y, LIB_SUB_H = 8, 22, 32, 19   # a Presets page row's (LIB_ROW_H 60): the same boxes, 8 above and 9 below
 BAND_GAIN_W, BAND_GAIN_GAP = 76, 4   # the gain's box (a value: VALUE_PX grey, right aligned at band_right(), centred on the row like every value row's and the chevron) and the gap before it
-GREY = '#AAAAAA'             # headers, notes and values
+GREY = SUB_RGB             # headers, notes and values
 VALUE_PX, VALUE_GAP, VALUE_W, VALUE_MAX, VALUE_LABEL_GAP = 18, 8, 100, 140, 6   # a value: its size, the gap to the chevron, its box at rest (right aligned), the most the payload gives it (it takes the room its text needs: patch/m1plus.c value_fit), the gap to the label
 INFO_PX, INFO_W, INFO_MAX = 16, 100, 190   # an About row's value: 16 px grey, its box at rest (right aligned, ink at RIGHT), the most the payload gives it (it takes the room its text needs; the label gets the rest)
 SWITCH_W, SWITCH_H = 57, 28  # the stock switch images sset_on / sset_off (their ink fills the image)

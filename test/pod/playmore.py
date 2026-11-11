@@ -334,9 +334,9 @@ def glass_checks(expect, built_ui, stock_ui, lum):
     expect(all(x.get(f'style:{s}:bg_color') == '#00000000' for x in (lv, sv) for s in ('normal', 'disable', 'focused')), 'the list_view and its scroll_view are transparent')
     states = ('normal', 'pressed', 'over', 'disable', 'focused')
     rows = [c for c in sv.children]
-    expect(all(c.type == 'list_item' and all(c.get(f'style:{s}:bg_color') == ('#FFFFFF10' if s == 'pressed' else '#00000000') and c.get(f'style:{s}:border_color') == '#FFFFFF22' for s in states)
+    expect(all(c.type == 'list_item' and all(c.get(f'style:{s}:bg_color') == ('#FFFFFD10' if s == 'pressed' else '#00000000') and c.get(f'style:{s}:border_color') == '#FFFFFF22' for s in states)
                for c in rows) and len(rows) == 14,
-           'all fourteen rows: transparent in every state but pressed (#FFFFFF10, 6 % white), the hairline #FFFFFF22 (13 % white)')
+           'all fourteen rows: transparent in every state but pressed (#FFFFFD10, 6 % white), the hairline #FFFFFF22 (13 % white)')
     expect(not any('pc_sheet5' in str(c.props) for c in stock_ui.walk()) and 'pc_sheet5' not in str([p for w_ in built_ui.walk() if w_.name not in ('pod_glass',) for p in w_.props]),
            'only pod_glass refers to pc_sheet5; the rows and every other widget carry inline styles of this dialog, no shared style name')
     # the other pages' row styles are untouched: no ui asset but this one, and no style file, mentions the image or a transparent list_item_style

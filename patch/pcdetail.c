@@ -22,8 +22,6 @@ static int pd_wide(unsigned *dst, int cap, const char *utf8) {
     return pd_wlen(dst);
 }
 
-static int pd_width(void *st, const unsigned *s) { return (int)(widget_measure_text(st, s) + 0.999f); }
-
 /* The advance AWTK charges for each of the n chars of s in the style label st (docs/modules/text-width.md): one measure a distinct char (a 4 KB text has a few hundred), a newline is nothing. */
 static void pd_adv(pd_t *d, void *st, const unsigned *s, int n, unsigned short *adv) {
     unsigned t[2];
@@ -42,7 +40,7 @@ static void pd_adv(pd_t *d, void *st, const unsigned *s, int n, unsigned short *
             continue;
         }
         t[0] = cp;
-        adv[i] = (unsigned short)pd_width(st, t);
+        adv[i] = (unsigned short)m1_text_w(st, t);
         d->cache[slot].cp = cp,
         d->cache[slot].w = (unsigned short)(adv[i] + 1); /* (w is the advance + 1: 0 is an empty slot) */
     }
@@ -55,7 +53,7 @@ int pd_lines(pd_t *d, void *st, unsigned *s, int n, int room, int maxl, pw_line_
     e[0] = ELLIPSIS, e[1] = 0;
     if (n > PD_WIDE - 1) n = PD_WIDE - 1, s[n] = 0;
     pd_adv(d, st, s, n, adv);
-    return pw_wrap(s, n, adv, room, maxl, pd_width(st, e), out);
+    return pw_wrap(s, n, adv, room, maxl, m1_text_w(st, e), out);
 }
 
 void pd_date(char *out, unsigned size, const char *when, unsigned length) {

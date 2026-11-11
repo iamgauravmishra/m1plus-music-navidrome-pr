@@ -128,8 +128,13 @@ static unsigned pal_wash(unsigned c, unsigned acc) {
 /* A role colour (ROLE_*, compared without its alpha, which is kept) becomes the accent's: a pressed row the black page tinted, the progress fill the accent. 1 when c was one. */
 static int pal_role(unsigned *c, unsigned acc) {
     unsigned rgb = (*c & 255) << 16 | (*c & 0xff00) | (*c >> 16 & 255), surface;
-    if (rgb == ROLE_PROGRESS) {
+    if (rgb == ROLE_PROGRESS || rgb == ROLE_FILL) {
         *c = (*c & 0xff000000u) | (acc & 0xffffffu);
+        return 1;
+    }
+    /* a pressed row on glass is translucent: under an accent it is the accent at ACC_SHEET_A (the alpha ACC_TINT percent is) */
+    if (rgb == ROLE_SHEET_PRESS) {
+        *c = ACC_SHEET_A << 24 | (acc & 0xffffffu);
         return 1;
     }
     if (rgb == ROLE_PRESS_ROW)
@@ -299,7 +304,9 @@ unsigned ui_ink(unsigned c) { return pal_active() && c >> 24 ? pal_map(c) : c; }
 unsigned pal_not_role(unsigned c) {
     unsigned rgb = (c & 255) << 16 | (c & 0xff00) | (c >> 16 & 255);
     if (rgb == ROLE_PRESS_ROW) return c - 0x10000u;
-    if (rgb == ROLE_PROGRESS || rgb == ROLE_PRESS_PILL || rgb == ROLE_PRESS_QPILL) return c + 0x10000u;
+    if (rgb == ROLE_PROGRESS || rgb == ROLE_FILL || rgb == ROLE_SHEET_PRESS || rgb == ROLE_PRESS_PILL ||
+        rgb == ROLE_PRESS_QPILL)
+        return c + 0x10000u;
     return c;
 }
 
@@ -498,7 +505,7 @@ static int in_names(const char *s, const char *list) {
 }
 
 /* The accent's tint of a decoded image (tools/palette.py accent_pixel is the model): kind 0 FILL (slider and progress fills, the check, the playing wave: a pixel as light as the fill or
- * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 6 SHUFDOWN (the album page's pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays), 5 TILE (a Podcasts Library tile: the #1E1E1E square stays, white goes to the accent, between by lightness), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
+ * lighter becomes the accent, one at the track grey or darker stays, and one between (an antialiased edge over the track) moves by the same share of the way from the fill to the accent), 1 SWITCH (the track #EEEEEC to the accent, the knob #141414 to white), 2 PRESS (the pressed card piece: mix(card, accent)), 4 GLYPH (a row glyph: every colour the accent), 6 SHUFDOWN (the album page's pressed Shuffle disc: the grey disc becomes the tinted disc, the white glyph stays), 5 TILE (a Podcasts Library tile: the #1C1C1E square stays, white goes to the accent, between by lightness), 3 DISC (a pull-down ON tile: white to the accent, the #141414 glyph stays, between by lightness).
  * Alpha stays; a clear pixel is left. Premultiplied pixels are converted to straight and back. */
 static void accent_image(int kind, void *bitmap, unsigned acc) {
     static const unsigned char at[4][4] = BITMAP_RGBA_AT;
@@ -553,15 +560,18 @@ static void accent_image(int kind, void *bitmap, unsigned acc) {
                         v[i] = dv < 0 ? 0 : dv > 255 ? 255 : (unsigned)dv;
                     }
                 }
-            } else if (kind == 3 ||
-                       kind == 5) { /* the fixed end: the disc's #141414 glyph, or the tile's #1E1E1E square */
-                unsigned lo = kind == 3 ? ACC_KNOB_R : ACC_TILE_R;
+            } else if (
+                kind == 3 ||
+                kind ==
+                    5) { /* the fixed end: the disc's #141414 glyph, or the tile's #1C1C1E square (a colour: its channels differ) */
+                unsigned lo = kind == 3 ? ACC_KNOB_R : RGBW(ACC_TILE) & 255;
                 t = v[0] <= lo ? 0 : (v[0] - lo) * 255 / (255 - lo);
                 if (t > 255) t = 255;
                 for (i = 0; i < 3; ++i) {
-                    int c = (int)(acc >> (8 * i) & 255), dv = (c - (int)lo) * (int)t;
+                    int e = kind == 3 ? (int)lo : (int)(RGBW(ACC_TILE) >> (8 * i) & 255),
+                        c = (int)(acc >> (8 * i) & 255), dv = (c - e) * (int)t;
                     dv = dv >= 0 ? dv / 255 : -(-dv / 255);
-                    v[i] = (unsigned)((int)lo + dv);
+                    v[i] = (unsigned)(e + dv);
                 }
             } else {
                 t = v[0] >= ACC_FILL_R ? 0 : (ACC_FILL_R - v[0]) * 255 / (ACC_FILL_R - ACC_KNOB_R);

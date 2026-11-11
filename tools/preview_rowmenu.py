@@ -41,9 +41,9 @@ def album(s, scroll=300, menu=False, playing=2, nd=None):
         y = hdr + i * ROW - scroll
         if y + ROW < 0 or y > win: continue
         d.rectangle((0, y + ROW - 1, 309, y + ROW - 1), fill=(0x55, 0x3A, 0x40))
-        if i == playing: im.alpha_composite(s.img('ah_wave'), (O['AB_NUM_X'] + O['ROW_NUM_W'] - O['AB_WAVE'], y + O['AB_TEXT_Y'] + (O['AB_TEXT_H'] - O['AB_WAVE']) // 2))
-        else: s.text(im, O['AB_NUM_X'] + O['ROW_NUM_W'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 19, (0xAA, 0xAA, 0xAA), 'r')
-        s.text(im, tx, y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, s.clip(TRACKS[i], 19, room), 19)
+        if i == playing: im.alpha_composite(s.img('ah_wave'), (O['AB_NUM_X'] + O['ROW_NUM_W'] - O['AB_WAVE'], y + O['AB_WAVE_Y']))
+        else: s.text(im, O['AB_NUM_X'] + O['ROW_NUM_W'], y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, str(i + 1), 21, (0xAA, 0xAA, 0xAA), 'r')
+        s.text(im, tx, y + O['AB_TEXT_Y'] + O['AB_TEXT_H'] / 2, s.clip(TRACKS[i], 21, room), 21)
         im.alpha_composite(more, (right - O['RM_MORE_W'] + (O['RM_MORE_W'] - O['RM_DOTS_PX']) // 2, y + (ROW - 1 - O['RM_DOTS_PX']) // 2))
     for name, x, w in (('ah_nav_back', 7, 44), ('pod_nav_selectl', O['NAV_VIEW_X'], O['NAV_VIEW_W']), ('ah_nav_play', 260, 60)):
         g = s.img(name); im.alpha_composite(g, (x + (w - g.width) // 2, (NAV - g.height) // 2))

@@ -26,7 +26,6 @@
 
 #define I(w, off) (*(int *)((char *)(w) + (off)))
 #define CV_W 320 /* the content's width: the list_view's */
-#define CV_TAP_PX SC_DRAG_PX
 #define CV_RING 12 /* tiles: the rows in view are at most GRID_VIEW_H / LIST_ROW_H + 2 */
 #define CV_TEXT_X 16 /* the rows' text starts where the menu rows' do (no cover) */
 
@@ -37,7 +36,8 @@ static struct {
     unsigned short *idx; /* the rows: display positions, in order */
     unsigned n;
     int files; /* kind 2: the rows are retired entries (setfiles.c) and a tap deletes one */
-    int press, down, down_x, down_y; /* the pressed row + 1 (fill), the row a press began on + 1 and where */
+    int press, down; /* the pressed row + 1 (fill), the row a press began on + 1 */
+    m1_tap_t tap; /* and where */
     grid_t
         g; /* all zero: no bitmaps, no placeholder (grid_blit draws nothing); the painter only wants it for the cover */
     grid_tile_t ring[CV_RING];
@@ -116,7 +116,7 @@ static int cv_on_down(void *ctx, void *e) {
     cv.down = 0;
     if (!e || !cv.view) return RET_OK;
     r = cv_row_of(e);
-    cv.down = r + 1, cv.down_x = I(e, PE_X), cv.down_y = I(e, PE_Y);
+    cv.down = r + 1, m1_tap_at(&cv.tap, e);
     cv_set_press(r + 1);
     return RET_OK;
 }
@@ -161,7 +161,7 @@ static int cv_on_up(void *ctx, void *e) {
     cv.down = 0;
     cv_set_press(0);
     if (r < 0 || !e || !cv.view) return RET_OK;
-    if (m1_abs(I(e, PE_X) - cv.down_x) < CV_TAP_PX && m1_abs(I(e, PE_Y) - cv.down_y) < CV_TAP_PX && cv_row_of(e) == r) {
+    if (m1_tap_near(&cv.tap, e) && cv_row_of(e) == r) {
         unsigned d = cv.idx[r];
         if (cv.files)
             cv_file_ask(r);

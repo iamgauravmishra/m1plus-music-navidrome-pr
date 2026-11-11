@@ -8,6 +8,8 @@ which test/pod/palette.py compares with the C of patch/palette.c) (row glyphs ti
   out/preview/accent-picker.png   the Appearance page and the Accent picker (Settings > System > Appearance > Accent) with each accent chosen, and the pressed row of the picker
   out/preview/accent-tinted.png   Background Tinted x each accent: the M1+ Music menu, Settings, the Appearance page (Background row), a song list, the pull-down, Now Playing (its cover background untouched)
   out/preview/accent-tints.png    the images the accent tints, one row per accent (the mixed track / fill pixels of other_progress and datetime_back zoomed)
+  out/preview/uic2/accent-*.png   the elements the second consistency pass made follow the accent (Neutral | Teal | Orange panels): tenband, band (the EQ pages' thumb, fill and curve), songs-select (selected mark),
+                                  songs-rail (the index rail's disc), sheet (a bottom sheet's pressed row), cachepill (Home cache pill's fill), podring (the Podcasts and download rings' arcs)
 
 Roles (Neutral = today's colours for all of them): a pressed row is mix(surface, accent, 22 %) with white text and its glyph in the accent; a switch on has an accent track and a white knob; the
 slider and progress fill, the picker check and the playing wave are the accent. Never accent: chevrons, secondary text, navbar buttons, body text, card backgrounds. The main menu's glyphs are the accent at rest. Backgrounds: Black, and Tinted (dark neutrals take 12 % of the accent).
@@ -206,7 +208,7 @@ def tinted_sheet(s, raw, work, path):
     for j, c in enumerate(cols): d.text((pad + j * (W + pad), 28), c, fill=(0xAA,) * 3, font=PI.ANN)
     for i, (ac, shots) in enumerate(rows):
         y = top + i * (H + pad + lab)
-        pal = Palette('tinted', ac); b, c = pal.ink((0, 0, 0)), pal.ink((0x1C,) * 3)
+        pal = Palette('tinted', ac); b, c = pal.ink((0, 0, 0)), pal.ink((0x1C, 0x1C, 0x1E))
         d.text((pad, y), label_of(ac) + f'   page #{b[0]:02X}{b[1]:02X}{b[2]:02X}  card #{c[0]:02X}{c[1]:02X}{c[2]:02X}', fill=(0xEE,) * 3, font=PI.ANN_B)
         for j, im in enumerate(shots): out.paste(im.convert('RGB').crop((0, 0, W, H)), (pad + j * (W + pad), y + lab))
     out.save(path, optimize=True)
@@ -220,7 +222,7 @@ def tinted_contrast():
              f'{"accent":<10} {"page":>8} {"card":>8} {"8C/page":>8} {"8C/card":>8} {"card/pg":>8} {"wht/prs":>8} {"acc/pg":>8}']
     for ac in ACC[1:]:
         a = PM.ACCENT_RGB[ac]; p = Palette('tinted', ac)
-        base, card, prs = p.ink((0, 0, 0)), p.ink((0x1C,) * 3), p.row_down
+        base, card, prs = p.ink((0, 0, 0)), p.ink((0x1C, 0x1C, 0x1E)), p.row_down
         lines.append(f'{ac:<10} {hx(base):>8} {hx(card):>8} {contrast(sec, base):>8.2f} {contrast(sec, card):>8.2f} {contrast(card, base):>8.2f} {contrast(white, prs):>8.2f} {contrast(a, base):>8.2f}   press {hx(prs)}')
     return '\n'.join(lines)
 
@@ -286,6 +288,86 @@ def contrast_table():
     return '\n'.join(lines)
 
 
+def uic2_sheet(path, panels):
+    """panels: [(title, image)] side by side on a dark ground."""
+    pad, lab = 12, 20
+    wid = sum(im.width for _, im in panels) + pad * (len(panels) + 1)
+    out = Image.new('RGB', (wid, max(im.height for _, im in panels) + lab + 2 * pad), (0x2A,) * 3); d = ImageDraw.Draw(out)
+    x = pad
+    for title, im in panels:
+        d.text((x, pad), title, fill=(0xAA,) * 3, font=PI.ANN); out.paste(im.convert('RGB'), (x, pad + lab)); x += im.width + pad
+    out.save(path, optimize=True); print('wrote', path, out.size)
+
+
+def cache_pill(s, ac):
+    """Home's cache pill (patch/homecover.c, tools/pod_ui.py cache_pill): the capsule, the 15 px text, the track and the fill at 40 % (ROLE_FILL through the hook), the stop x."""
+    O = PI.offsets()
+    im = Image.new('RGBA', (320, 70), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    pal = Palette('black', ac)
+    d.rounded_rectangle((12, 10, 12 + 296 - 1, 10 + O['HC_PH'] - 1), radius=O['HC_PH'] // 2, fill=(0x1C, 0x1C, 0x1E))
+    s.text(im, 12 + O['HC_TX'], 10 + O['HC_TY'] + 10, 'Preparing covers 336/840', 15, (0xAA,) * 3)
+    bx, by = 12 + O['HC_TX'], 10 + O['HC_BY']
+    ov = Image.new('RGBA', im.size, (0, 0, 0, 0)); od = ImageDraw.Draw(ov)
+    od.rounded_rectangle((bx, by, bx + O['HC_BW'] - 1, by + O['HC_BH'] - 1), radius=O['HC_BH'] // 2, fill=(255, 255, 255, 0x33))
+    od.rounded_rectangle((bx, by, bx + O['HC_BW'] * 4 // 10 - 1, by + O['HC_BH'] - 1), radius=O['HC_BH'] // 2, fill=pal.ink((0xEB, 0xEB, 0xEC)) + (255,))
+    im.alpha_composite(ov)
+    od = ImageDraw.Draw(im); od.ellipse((12 + O['HC_XX'] + 6, 10 + 6, 12 + O['HC_XX'] + 33, 10 + 33), fill=(0x3A, 0x3A, 0x3C))
+    s.text(im, 12 + O['HC_XX'] + 20, 10 + 20, 'x', 18, (255, 255, 255), 'm')
+    return im
+
+
+def ring_panel(s, ac):
+    """The Podcasts progress ring (a state pill at 42 %, the ring cell 5 of pc_atlas) and the source rows' download ring steps, at 1:1 and 4x, with the arcs as the payload tints them."""
+    import mod_icons
+    atlas = Image.open(os.path.join(mod_icons.PNG, 'pc_atlas.png')).convert('RGBA')
+    def cell(x0, y0, n, k, cols, tint):
+        c = atlas.crop((x0 + k % cols * n, y0 + k // cols * n, x0 + k % cols * n + n, y0 + k // cols * n + n))
+        c.putdata([tint(p, ac) for p in c.getdata()])
+        return c
+    im = Image.new('RGBA', (320, 200), (0, 0, 0, 255)); d = ImageDraw.Draw(im)
+    d.rounded_rectangle((16, 12, 16 + 100, 12 + 29), radius=15, outline=(255, 255, 255, 110), width=2)
+    im.alpha_composite(cell(0, 0, PM_RING_PX, 5, 6, PM.ring_pixel), (26, 19))
+    s.text(im, 48, 27, '42%', 15, (255, 255, 255))
+    for k in range(0, 12, 2):   # the ring's steps zoomed 4x
+        im.alpha_composite(cell(0, 0, PM_RING_PX, k, 6, PM.ring_pixel).resize((PM_RING_PX * 2, PM_RING_PX * 2), Image.NEAREST), (16 + k // 2 * 40, 60))
+    for k in range(12):   # the download ring's steps
+        c = cell(76, 112, 14, k, 6, PM.dl_ring_pixel)
+        im.alpha_composite(c.resize((28, 28), Image.NEAREST), (16 + k % 6 * 40, 120 + k // 6 * 36))
+    return im
+
+
+PM_RING_PX = 16
+
+
+def uic2(s, work, out):
+    """The elements of the second consistency pass: Neutral | Teal | Orange panels each."""
+    import preview_tenband as PT, preview_peqband as PB, preview_peqpage as PP, preview_songs as PSG
+    os.makedirs(out, exist_ok=True)
+    accents = ('neutral', 'teal', 'orange')
+    def panels(path, titled, fn):
+        shots = []
+        for ac in accents:
+            rgb_ = PM.ACCENT_RGB.get(ac)
+            PT.ACC = PB.ACC = PSG.ACC = rgb_
+            shots.append((f'{titled}: {label_of(ac)}', fn(PalSide(s, Palette('black', ac)), ac)))
+        PT.ACC = PB.ACC = PSG.ACC = None
+        uic2_sheet(os.path.join(out, path), shots)
+    custom = PT.ROCK[:6] + [5] + PT.ROCK[7:]
+    panels('accent-tenband.png', '10-Band editor, dragging 2k', lambda sd, ac: PT.screen(sd, '10-Band EQ', PT.editor(sd, custom, 'Custom', 'Auto · −5.6 dB', drag=6)))
+    edited = [tuple(b) for b in PP.HD600]; edited[3] = (1, 0, 2600, -4.1, 3.2)
+    panels('accent-band.png', 'Band page', lambda sd, ac: PB.band_page(sd, edited, 3).crop((0, 0, W, PS.SCREEN)))
+    _, heads, _ = PSG.build_items()
+    panels('accent-songs-select.png', 'Songs, select mode', lambda sd, ac: PSG.page(sd, scroll=heads['C'] - 8, select={'Creep', '春よ、来い'}))
+    panels('accent-songs-rail.png', 'Songs, finger on the rail', lambda sd, ac: PSG.page(sd, scroll=heads['M'], touched='M', letters=PSG.ALL_LETTERS))
+    def sheet_panel(sd, ac):
+        PSG.PRESSED_ROW = 2
+        try: return PSG.page(sd, scroll=heads['A'] - 8, row_menu_at=True)
+        finally: PSG.PRESSED_ROW = None
+    panels('accent-sheet.png', 'Track menu, a row pressed', sheet_panel)
+    panels('accent-cachepill.png', 'Home cache pill', lambda sd, ac: cache_pill(s, ac))
+    panels('accent-podring.png', 'Rings', lambda sd, ac: ring_panel(s, ac))
+
+
 def main():
     if len(sys.argv) < 2: sys.exit(__doc__)
     work = sys.argv[1]
@@ -297,6 +379,7 @@ def main():
     picker_sheet(s, 'black', os.path.join(out, 'accent-picker.png'))
     tinted_sheet(s, raw, work, os.path.join(out, 'accent-tinted.png'))
     tints_sheet(s, 'black', os.path.join(out, 'accent-tints.png'))
+    uic2(s, work, os.path.join(out, 'uic2'))
     print(contrast_table())
     print(tinted_contrast())
 
