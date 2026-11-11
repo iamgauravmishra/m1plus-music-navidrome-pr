@@ -7,7 +7,7 @@ import cdefs
 
 DEFS = cdefs.defines(os.path.join(ROOT, 'patch', 'battery.h'), strings=True)
 FILE, GAUGE, KILL = DEFS['BP_FILE'], DEFS['BP_GAUGE'], '/mnt/mmc/m1plus-off'
-LABEL, LABEL_DD = DEFS['BP_LABEL'], DEFS['BP_LABEL_DD']
+LABEL, LABEL_DD, LABEL_LK = DEFS['BP_LABEL'], DEFS['BP_LABEL_DD'], DEFS['BP_LABEL_LK']
 STOCK_CAP = 40
 
 
@@ -145,6 +145,33 @@ def run(ctx):
     m.fs[FILE] = b'0\n'; m.calls = []
     expect(tick(m) == 87 and ('open', FILE, 0) not in m.calls, 'the setting is read once, at the first tick')
 
+    # 4b. The lock screen's label (pod_pct_lk): the same tick sets it, in its fixed box; bp_lock sets it at the page's init
+    keep = m   # section 5 goes on with the machine above
+
+    def lock_machine(**kw):
+        m = machine(**kw); h = m.widget(LABEL_LK); m.setword(h + DEFS['BP_W_W'], 32); m.setword(h + DEFS['BP_W_H'], 16); m.setword(h + DEFS['BP_W_PARENT'], 0x32000000)
+        return m, h
+    for text in (b'5\n', b'87\n', b'100\n'):
+        m, lk = lock_machine(gauge=text); tick(m)
+        expect((lk, text.decode().strip() + '%') in texts(m) and (lk, 1) in vis(m) and not any(c[0] == 'widget_resize' and c[1] == lk for c in m.calls)
+               and ('widget_set_need_relayout_children', 0x32000000) not in m.calls and m.word(lk + 8) == 32,
+               f'gauge {text!r}: the tick shows the number in the lock screen\'s label too, its box untouched')
+    m, lk = lock_machine(gauge=b'87\n'); tick(m)
+    m.fs[GAUGE] = b'garbage'; m.calls = []; tick(m)
+    expect((lk, 0) in vis(m) and ('widget_set_sensitive', lk, 0) in [c[:3] for c in m.calls], 'the gauge goes bad: the lock screen\'s label is hidden with the others')
+    win = 0x33000000
+    m, lk = lock_machine(gauge=b'42\n'); m.call(PSYMS['bp_lock'], a0=win, count=200000)
+    expect(texts(m) == [(lk, '42%')] and vis(m) == [(lk, 1)] and ('widget_lookup', LABEL_LK) in m.calls and not any(c[0] == 'widget_resize' for c in m.calls)
+           and power(m) != 42, 'bp_lock (the lock screen\'s init): the gauge\'s number in the page\'s label at once; power_capacity is the tick\'s business')
+    m.fs[GAUGE] = b'garbage'; m.calls = []; tick(m)
+    expect((lk, 0) in vis(m), 'a label bp_lock showed is hidden by the next tick when the gauge is bad')
+    for kw, why in ((dict(setting=b'0\n'), 'the setting off'), (dict(setting=None), 'no setting file'), (dict(gauge=b'x'), 'a bad gauge'), (dict(gauge=None), 'no gauge')):
+        m, lk = lock_machine(**kw); m.call(PSYMS['bp_lock'], a0=win, count=200000)
+        expect(texts(m) == [] and vis(m) == [] and not any(c[0] == 'widget_lookup' for c in m.calls), f'bp_lock with {why}: nothing looked up, the label stays hidden as the asset has it')
+    m = machine(gauge=b'42\n'); m.call(PSYMS['bp_lock'], a0=win, count=200000)
+    expect(texts(m) == [] and vis(m) == [], 'bp_lock without the label in the page: nothing shown')
+    m = keep
+
     # 5. The Settings switch
     expect(m.call(PSYMS['battpct_setting'], count=2000000) == 0, 'battpct_setting reads the file: 0 now')
     for saved, on in ((None, 0), (b'1\n', 1), (b'1', 1), (b'0\n', 0), (b'', 0), (b'x', 0), (b'1x', 0), (b'11', 0), (b'\n1', 0)):
@@ -245,3 +272,24 @@ def run(ctx):
     s = spans(['img_btclass', 'img_wifi', LABEL, 'pod_shot'])
     expect(s['pod_shot'] == (edge - 16, edge) and all(s[n][0] + ink_left[n] >= clock_end + 3 for n in ('img_btclass', 'img_wifi')),
            'with the Screenshot camera too (against the outline), Bluetooth and Wi-Fi lit, the ink is still at least 3 px clear of the clock')
+
+    # 8. The lock screen: the status bar's gauge (pictures, size, fill, right edge, the fill under the picture) and the hidden label left of it, clear of the date
+    from awtk_text import awtk_width, worst_case_text
+    lock = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/screensaver_page.bin'), 'rb').read())
+    view, limg, lpg, lab, date = (lock.find(n) for n in ('view_timeinfo', 'img_battery', 'pgbar_battery', LABEL_LK, 'dclock_date'))
+    simg, spg = bar.find('img_battery'), bar.find('pgbar_battery')
+    xx = os.path.join(WORK, 'rootfs/release/assets/default/raw/images/xx')
+    same = all(open(os.path.join(xx, a + '.png'), 'rb').read() == open(os.path.join(xx, b + '.png'), 'rb').read()
+               for a, b in (('screens_battery', 'bar_power'), ('screens_charge', 'bar_charge'), ('screens_lowbattery', 'bar_lowpower')))
+    expect(same and (limg.w, limg.h, lpg.w, lpg.h) == (simg.w, simg.h, spg.w, spg.h) and (lpg.x - limg.x, lpg.y - limg.y) == (spg.x - simg.x, spg.y - simg.y)
+           and limg.x + limg.w == simg.x + simg.w, 'the lock screen\'s gauge is the status bar\'s: the same three pictures, size, fill box and right edge')
+    kids = [c.name for c in view.children]
+    expect(kids.index('pgbar_battery') < kids.index('img_battery') and [c.name for c in bar.walk() if c.name in ('pgbar_battery', 'img_battery')] == ['pgbar_battery', 'img_battery'],
+           'the fill is drawn under the picture on both (the charging bolt stays whole)')
+    sty = {st: (lab.get(f'style:{st}:text_color'), lab.get(f'style:{st}:font_size'), lab.get(f'style:{st}:text_align_h'), lab.get(f'style:{st}:text_align_v')) for st in statusbar.STATES}
+    expect(lab is not None and lab.type == 'label' and lab in view.children and lab.get('visible') == 'false' and lab.get('sensitive') == 'false' and sum(c.name == LABEL_LK for c in lock.walk()) == 1
+           and all(v == ('#FFFFFF', str(statusbar.PCT_PX), 'right', 'middle') for v in sty.values()), f'{LABEL_LK} is one hidden, insensitive label of the time block, the status bar label\'s text style')
+    expect(lab.w == w4 and lab.x + lab.w + 4 == limg.x and 2 * lab.y + lab.h == 2 * limg.y + limg.h, f'its {w4} px box (the widest text, so the payload never resizes it) ends 4 px before the outline and is centred on it')
+    date_px = int(date.get('style:normal:font_size'))
+    date_w = awtk_width(font, worst_case_text(date.get('format'), font), date_px)
+    expect(date.x + (date.w + date_w) // 2 + 4 <= lab.x, f'the widest date ({date_w} px, centred) ends at least 4 px before the label ({lab.x})')

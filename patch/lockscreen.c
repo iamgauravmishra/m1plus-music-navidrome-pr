@@ -19,6 +19,7 @@
 #include "minibar.h"
 #include "common.h"
 #include "palette.h"
+#include "battery.h"
 
 #define LK_N 6
 
@@ -280,7 +281,10 @@ static void lk_start(void *win, void *const *w) {
 int m1plus_lockscreen_init(void *win, void *ctx) {
     int ret = stock_lockscreen_init_trampoline(win, ctx);
     void *w[LK_N];
-    if (ret == RET_OK && win && access(KILL_SD, F_OK) != 0 && lk_layout() == 1 && lk_mini(win, w)) lk_start(win, w);
+    if (ret == RET_OK && win && access(KILL_SD, F_OK) != 0) {
+        bp_lock(win); /* the Battery Percentage beside the page's gauge (patch/battery.c) */
+        if (lk_layout() == 1 && lk_mini(win, w)) lk_start(win, w);
+    }
     return ret;
 }
 

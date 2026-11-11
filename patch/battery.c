@@ -9,6 +9,7 @@
  * /sys/class/power_supply/battery/capacity reads a plain integer 0..100, stores that percentage in power_capacity (so the fill, the charging picture's fill and the
  * pull-down's bar use the real level, charging included) and shows "N%" in the label pod_pct that sits left of the outline (its twin pod_pct_dd in the pull-down's bar).
  * At BP_LOW (5) percent or less on battery (and when stock's own bucket is 0) the stored value is 0, which is how stock's own test shows the red bar_lowpower (battery.md "Other readers").
+ * The lock screen (screensaver_page) draws its gauge from the same power_capacity; its label pod_pct_lk is set by the same tick and, at once, by bp_lock at the page's init.
  * In every other case the stock value stays and the labels are hidden (visible and sensitive off). The icon pictures stay stock's (charging, low).
  * The same tick then runs the Charge Limit's check (patch/charging.c chg_tick: the kill switch and, when it was read here, the gauge).
  *
@@ -57,7 +58,7 @@ int battery_gauge(void) {
 }
 
 /* Show the percentage in the label w (the number as its text, its width fitted), or hide it for pct < 0. */
-static void bp_label(void *w, int pct) {
+static void bp_label(void *w, int pct, int fit) {
     char t[5];
     int n = 0;
     if (!w) return;
@@ -74,7 +75,7 @@ static void bp_label(void *w, int pct) {
     }
     t[n++] = '%';
     t[n] = 0;
-    {
+    if (fit) {
         int want = n == 4 ? BP_W4 : n == 3 ? BP_W3 : BP_W2;
         int *geo = (int *)w;
         if (geo[BP_W_W / 4] != want) {
@@ -84,6 +85,16 @@ static void bp_label(void *w, int pct) {
     }
     widget_set_text_utf8(w, t);
     widget_set_visible(w, 1, 0);
+}
+
+/* The lock screen's label, at the page's init (patch/lockscreen.c, after stock's init and only without the kill switch): the percentage at once, where the status bar's tick would show it
+ * up to a second later. The label is hidden in the asset, so with the setting off or an unreadable gauge nothing is touched. Its box is fixed (the widest text, right-aligned). */
+void bp_lock(void *win) {
+    int pct;
+    if (bp.state == 0) bp.state = bp_read_setting() ? 2 : 1;
+    if (bp.state != 2 || (pct = battery_gauge()) < 0) return;
+    bp_label(widget_lookup(win, BP_LABEL_LK, 1), pct, 0);
+    bp.shown = 1;
 }
 
 /* The hook (tools/pod.py BATTERY_SITE): stock's get_battery_capacity, then the real percentage when asked for. Returns what stock's function returned, or the percentage. */
@@ -103,9 +114,10 @@ int bp_capacity(void) {
         *(int *)POWER_CAPACITY = cap = low_test && (pct <= BP_LOW || cap <= 0) ? 0 : pct;
     }
     bar = *(void **)SYSTEM_BAR;
-    bp_label(bar ? widget_lookup(bar, BP_LABEL, 1) : (void *)0, pct);
+    bp_label(bar ? widget_lookup(bar, BP_LABEL, 1) : (void *)0, pct, 1);
     wm = window_manager();
-    bp_label(wm ? widget_lookup(wm, BP_LABEL_DD, 1) : (void *)0, pct);
+    bp_label(wm ? widget_lookup(wm, BP_LABEL_DD, 1) : (void *)0, pct, 1);
+    bp_label(wm ? widget_lookup(wm, BP_LABEL_LK, 1) : (void *)0, pct, 0);
     bp.shown = pct >= 0;
     return cap;
 }

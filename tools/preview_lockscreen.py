@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the 320x480 lock screen (ui/screensaver_page.bin); not pixel-exact AWTK.
 
-  preview_lockscreen.py RAW_DIR OUT.png LABEL=UI.bin[,pct=N][,charging][,idle][,mini][,raw=DIR] ...  [--wallpaper KIND]
+  preview_lockscreen.py RAW_DIR OUT.png LABEL=UI.bin[,pct=N][,charging][,number][,idle][,mini][,raw=DIR] ...  [--wallpaper KIND]
 
 RAW_DIR is rootfs/release/assets/default/raw (images/, fonts/default.ttf, styles/); raw=DIR overrides it
 for one panel (e.g. a "before" tree). Text is sized like AWTK's stb font backend (font_size = ascender -
 descender) and placed by its middle/left/right rules. Button icons come from the page theme
 (styles/screensaver_page.bin, then default.bin) like AWTK's window theme lookup.
 App-driven content is sample data: the cover is a synthetic picture, title/artist sample strings;
+`number` shows the Battery Percentage's label (pod_pct_lk, hidden in the asset; patch/battery.c);
 `idle` draws the nothing-queued state (the app hides view_bottomview); `mini` gives the tree the mini player layout
 (mod_lockscreen.apply_mini, the model of what patch/lockscreen.c does when /mnt/data/m1plus/lockscreen-layout is 1). The wallpaper is app-driven too;
 by default a plain gradient stands in for it; --wallpaper busy draws a synthetic busy picture (to show
@@ -97,7 +98,8 @@ class Painter:
         layer = Image.new('RGBA', (W, H)); ImageDraw.Draw(layer).text((x, top + f.getmetrics()[0]), s, font=f,
                                                                    fill=wd.get('style:normal:text_color', '#FFFFFF'), anchor='ls')
         im.alpha_composite(layer.crop(clip), clip[:2])
-    def render(self, root, pct, charging, idle, mini=False):
+    def render(self, root, pct, charging, idle, mini=False, number=False):
+        self.number = number
         if self.wallpaper == 'stock':
             im = self.icon('screensaver_default').resize((W, H))
         elif self.wallpaper == 'busy':
@@ -121,7 +123,7 @@ class Painter:
         layer = Image.new('RGBA', (W, H)); ImageDraw.Draw(layer).text((x, top + f.getmetrics()[0]), s, font=f, fill=rgb or (255, 255, 255), anchor='ls')
         im.alpha_composite(layer)
     def walk(self, im, wd, ox, oy, clip, pct, charging, idle):
-        if wd.get('visible') == 'false' or (idle or self.mini) and wd.name == 'view_bottomview': return
+        if wd.get('visible') == 'false' and not (self.number and wd.name == mod_lockscreen.PCT_WIDGET) or (idle or self.mini) and wd.name == 'view_bottomview': return
         r = (ox + wd.x, oy + wd.y, wd.w or W, wd.h or H)
         c = (max(clip[0], r[0]), max(clip[1], r[1]), min(clip[2], r[0] + r[2]), min(clip[3], r[1] + r[3]))
         if c[0] >= c[2] or c[1] >= c[3]: return
@@ -144,6 +146,8 @@ class Painter:
                 im.alpha_composite(img.crop((c[0] - r[0], c[1] - r[1], c[2] - r[0], c[3] - r[1])), c[:2])
         elif t == 'digit_clock':
             self.text(im, c, r, fmt_time(wd.get('format', 'hh:mm:ss'), NOW), wd)
+        elif t == 'label' and name == mod_lockscreen.PCT_WIDGET:
+            self.text(im, c, r, f'{pct}%', wd)
         elif t == 'hscroll_label':
             self.text(im, c, r, {'view_scrlabel_title': TITLE, 'view_scrlabel_artist': ARTIST}.get(name, wd.get('text', '')), wd)
         elif t == 'progress_bar':
@@ -162,13 +166,13 @@ def main():
     painters, shots = {}, []
     for spec in a.panels:
         label, rest = spec.split('=', 1); path, *opts = rest.split(',')
-        pct = next((int(o[4:]) for o in opts if o.startswith('pct=')), 86); charging, idle, mini = 'charging' in opts, 'idle' in opts, 'mini' in opts
+        pct = next((int(o[4:]) for o in opts if o.startswith('pct=')), 86); charging, idle, mini, number = 'charging' in opts, 'idle' in opts, 'mini' in opts, 'number' in opts
         raw = next((o[4:] for o in opts if o.startswith('raw=')), a.raw)
         p = painters.setdefault(raw, Painter(raw, a.wallpaper))
         state = ('nothing queued, ' if idle else '') + f'{pct}%{", charging" if charging else ""}'
         root = awtk_ui.parse(open(path, 'rb').read())
         if mini: mod_lockscreen.apply_mini(root)
-        shots.append((f'{label}  ({state})', p.render(root, pct, charging, idle, mini)))
+        shots.append((f'{label}  ({state})', p.render(root, pct, charging, idle, mini, number)))
     top, pad = 18, 10
     out = Image.new('RGB', (len(shots) * (W + pad) + pad, H + top + 18), (40, 40, 40)); d = ImageDraw.Draw(out)
     for i, (label, im) in enumerate(shots):

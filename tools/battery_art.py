@@ -12,7 +12,7 @@ Same drawing at both sizes (stroke 1.5 px like the Tabler status icons, rounded 
 rounded nub), only the canvas and the body rectangle differ; each widget keeps its stock geometry:
 
   STATUS  22 x 12 canvas, body 20 x 12, fill (pgbar_battery) 16 x 8 at (2, 2)   bar_power/charge/lowpower
-  LOCK    34 x 12 canvas, body 22 x 12 at x 9, fill 16 x 6 at (12, 3)            screens_battery/charge/lowbattery
+          the lock screen's screens_battery/charge/lowbattery are the same three pictures (tools/mod_lockscreen.py)
 
 `fill_gap` checks the fill rectangle stays inside the outline's inner edge. Output is a plain zlib
 RGBA PNG (the bytes do not depend on an image library's version; supersampling is integer box
@@ -29,7 +29,6 @@ class Spec:
         self.canvas, self.body, self.nub, self.radius, self.fill, self.bolt_h = canvas, body, nub, radius, fill, bolt_h
 
 STATUS = Spec((22, 12), (0, 0, 20, 12), (20, 3, 2, 6), 3.0, (2, 2, 16, 8), 8.0)
-LOCK = Spec((34, 12), (9, 0, 22, 12), (31, 4, 2, 4), 3.0, (12, 3, 16, 6), 8.0)
 STATES = {'normal': (WHITE, False), 'charge': (CHARGE, True), 'low': (LOW, False)}
 
 BOLT = ((0.62, 0.0), (0.0, 0.58), (0.42, 0.58), (0.30, 1.0), (1.0, 0.38), (0.55, 0.38))   # unit box, y down
@@ -81,5 +80,5 @@ def png(spec, state):
             + chunk(b'IDAT', zlib.compress(raw, 9)) + chunk(b'IEND', b''))
 
 if __name__ == '__main__':
-    for sp, n in ((STATUS, 'status'), (LOCK, 'lock')):
+    for sp, n in ((STATUS, 'status'),):
         print(n, 'fill gap', fill_gap(sp), {s: len(png(sp, s)) for s in STATES})

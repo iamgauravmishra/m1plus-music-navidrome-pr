@@ -46,7 +46,7 @@ def main():
     xx = os.path.join(tree, RAW, 'images/xx')
     sets = [('Status bar (bar_power / bar_charge / bar_lowpower, black bar)', B.STATUS, 'system_bar.bin', 'img_battery', 'pgbar_battery',
              {'normal': 'bar_power', 'charge': 'bar_charge', 'low': 'bar_lowpower'}, (0, 0, 0, 255)),
-            ('Lock screen (screens_battery / screens_charge / screens_lowbattery, over the card)', B.LOCK, 'screensaver_page.bin', 'img_battery', 'pgbar_battery',
+            ('Lock screen (screens_battery / screens_charge / screens_lowbattery, over the card)', B.STATUS, 'screensaver_page.bin', 'img_battery', 'pgbar_battery',
              {'normal': 'screens_battery', 'charge': 'screens_charge', 'low': 'screens_lowbattery'}, (0x40, 0x3A, 0x38, 255))]
     cols = [('empty', 'normal', 0), ('half', 'normal', 50), ('full', 'normal', 100), ('charging 50%', 'charge', 50),
             ('charging 100%', 'charge', 100), ('low (0%)', 'low', 0)]

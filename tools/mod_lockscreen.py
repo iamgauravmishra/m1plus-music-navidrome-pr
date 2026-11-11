@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui
 import battery_art
 import cdefs
+import statusbar
 from awtk_text import Ttf, awtk_width, fit_size, worst_case_text
 from modlib import clone_workdir, edit_ui
 
@@ -88,9 +89,15 @@ MINI_TITLE_PX, MINI_ARTIST_PX, MINI_ARTIST_RGB = _C['LK_TITLE_PX'], _C['LK_ARTIS
 # The small battery gauge: the app sets img_battery's image to screens_battery / screens_charge /
 # screens_lowbattery (by name, 0x53f5f0..0x53f694, nowhere else in demo or the other ui files) and
 # feeds pgbar_battery the level; pgbar_battery is drawn over the image (stock child order). So the
-# three images are redrawn small (tools/battery_art.py LOCK) and the fill box sits inside the outline.
-GAUGE_W, GAUGE_H = 34, 12
-GAUGE_FILL = (12, 3, 16, 6)                  # pgbar_battery inside the image: x, y, w, h
+# three images are the status bar's own (tools/battery_art.py STATUS: the same outline, size and fill as the
+# Home page's bar) with the fill box inside the outline, the image's right edge where the bar's is (x 310).
+# pgbar_battery is moved before img_battery, so the fill is drawn under the image as in the status bar (the
+# charging bolt stays whole). pod_pct_lk is the Battery Percentage's label (patch/battery.c bp_lock): hidden,
+# the status bar label's size and colour, its text's right edge 4 px before the outline.
+GAUGE_W, GAUGE_H = battery_art.STATUS.canvas
+GAUGE_FILL = battery_art.STATUS.fill         # pgbar_battery inside the image: x, y, w, h
+GAUGE_RIGHT = 310                            # the status bar outline's right edge
+PCT_WIDGET, PCT_GAP, PCT_H = 'pod_pct_lk', 4, 16   # patch/battery.h BP_LABEL_LK
 GAUGE_STATE = {'screens_battery': 'normal', 'screens_charge': 'charge', 'screens_lowbattery': 'low'}
 SLIDE_IMAGE = 'screens_rightslide'           # only this page uses it
 STOCK_IMAGE_SHA = {
@@ -272,7 +279,8 @@ def apply(root, ttf):
     date.set('format', DATE_FORMAT)
     dsample = worst_case_text(DATE_FORMAT, ttf)
     dw = awtk_width(ttf, dsample, DATE_SIZE)
-    side = 12 + GAUGE_W + 4    # keep clear of the gauge in the top right corner
+    pct_w = awtk_width(ttf, '100%', statusbar.PCT_PX)
+    side = SCREEN_W - (GAUGE_RIGHT - GAUGE_W - PCT_GAP - pct_w) + 4    # keep clear of the gauge and its percentage in the top right corner
     if dw > SCREEN_W - 2 * side: raise SystemExit(f'date size {DATE_SIZE}: "{dsample}" is {dw} px, more than {SCREEN_W - 2 * side}')
     d_top, d_bot = ttf.digit_ink(DATE_SIZE)
     date.y, date.h = text_box(ttf, DATE_SIZE, TOP)
@@ -295,12 +303,16 @@ def apply(root, ttf):
     for st in STATES:
         clock.set(f'style:{st}:font_size', str(size)); clock.set(f'style:{st}:text_align_h', 'center')
 
-    # --- battery: no percentage. The redrawn 34 x 12 images, right on the date line.
+    # --- battery: the status bar's gauge, right on the date line, and the hidden percentage label left of it.
     pg.props = list(STOCK_PGBAR)
     fx, fy, fw, fh = GAUGE_FILL
     img.w, img.h = GAUGE_W, GAUGE_H
-    img.x, img.y = SCREEN_W - 12 - GAUGE_W, round(TOP + (d_bot - d_top) / 2 - GAUGE_H / 2)
+    img.x, img.y = GAUGE_RIGHT - GAUGE_W, round(TOP + (d_bot - d_top) / 2 - GAUGE_H / 2)
     pg.x, pg.y, pg.w, pg.h = img.x + fx, img.y + fy, fw, fh
+    view.children.remove(pg); view.children.insert(view.children.index(img), pg)
+    pct = awtk_ui.Widget('label', img.x - PCT_GAP - pct_w, img.y + GAUGE_H // 2 - PCT_H // 2, pct_w, PCT_H, [('name', PCT_WIDGET), ('text', '87%'), ('visible', 'false'), ('sensitive', 'false')])
+    text_style(pct, statusbar.PCT_PX, '#FFFFFF', 'right')
+    view.children.append(pct)
     view.x, view.y, view.w = 0, 0, SCREEN_W
     view.h = max(clock.y + clock.h, date.y + date.h, img.y + img.h)
     assert view.h <= card_y, f'time block (0..{view.h}) runs into the card at {card_y}'
@@ -319,7 +331,7 @@ def main():
     info = {}
     old, new, root = edit_ui(os.path.join(out, UI), lambda root: info.update(apply(root, ttf)))
     so, sn = edit_page_style(out)
-    images = {f'default/raw/images/xx/{n}.png': battery_art.png(battery_art.LOCK, st) for n, st in GAUGE_STATE.items()}
+    images = {f'default/raw/images/xx/{n}.png': battery_art.png(battery_art.STATUS, st) for n, st in GAUGE_STATE.items()}
     sl = root.find('img_slide')
     images[f'default/raw/images/xx/{SLIDE_IMAGE}.png'] = slide_image(os.path.join(out, ASSETS, 'default', 'raw/images/xx', SLIDE_IMAGE + '.png'), sl.w, sl.h)
     extra = f'; {PAGE_STYLE} {len(so)} -> {len(sn)} bytes'

@@ -136,6 +136,15 @@ def hook_tests(ctx):
     expect(r == 0 and m.nc('widget_move') == 0 and not [c for c in m.calls if c[0] == 'widget_lookup'], 'a null window: the stock result, nothing moved')
     m = LK(); m.present.add(KILL); r = m.open()
     expect(r == 0 and m.nc('widget_move') == 0 and not [c for c in m.calls if c[0] == 'widget_lookup'] and ('access', KILL) in m.calls, 'the kill switch: the stock init only, the large card')
+    # the Battery Percentage's label (patch/battery.c bp_lock, test/pod/battery.py): set at init in either layout, never with the kill switch
+    BP = cdefs.defines(os.path.join(ROOT, 'patch', 'battery.h'), strings=True)
+    for setting in (b'0', b'1'):
+        m = LK(setting=setting); lab = m.widget(BP['BP_LABEL_LK']); m.fs[BP['BP_FILE']] = b'1\n'; m.fs[BP['BP_GAUGE']] = b'64\n'; m.open()
+        expect(('widget_set_text_utf8', lab, '64%') in [c[:3] for c in m.calls] and ('widget_set_visible', lab, 1) in [c[:3] for c in m.calls], f'layout {setting!r}, Battery Percentage on: the init shows 64% beside the gauge')
+    m = LK(); lab = m.widget(BP['BP_LABEL_LK']); m.fs[BP['BP_GAUGE']] = b'64\n'; m.open()
+    expect(not any(c[0] == 'widget_set_text_utf8' and c[1] == lab for c in m.calls), 'Battery Percentage off: the label is left hidden')
+    m = LK(); lab = m.widget(BP['BP_LABEL_LK']); m.fs[BP['BP_FILE']] = b'1\n'; m.fs[BP['BP_GAUGE']] = b'64\n'; m.present.add(KILL); m.open()
+    expect(not any(c[0] == 'widget_set_text_utf8' for c in m.calls) and ('open', BP['BP_GAUGE'], 0) not in m.calls, 'the kill switch: no percentage, the gauge not read')
 
     # -- 2. the setting: only "1" (alone, or with a line feed) is the mini player; read, never written
     for data, mini in ((b'1', 1), (b'1\n', 1), (None, 0), (b'0', 0), (b'0\n', 0), (b'', 0), (b'2', 0), (b'11', 0), (b'1x', 0), (b'1\n\n', 0), (b'x1', 0), (b' 1', 0)):

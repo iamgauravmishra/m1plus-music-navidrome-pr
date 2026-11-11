@@ -20,10 +20,10 @@ Layout, top to bottom (window y): date `W, MMM D` 20 px, ink top 12 (box from `t
 16,108 288x334 (the image `lk_card`, see Glass card) holding the **square 264x264 cover** at 12,12 (no mask), title
 (20 px white) and artist (16 px `#DDDDDD`) at 12,282 / 12,306 (164 wide), play and next at 180,278 /
 228,278 (48x56, off-white `np_*` glyphs via the page theme's `btn_imgplay1/pause1_style`); the swipe hint
-`img_slide` 31x14 (65 %) at 144,452; a small gauge on the date line at 274,12 (34x12 `LOCK` art; fill
-`pgbar_battery` 286,15 16x6). With nothing queued the card is the hidden widget's own background, so
+`img_slide` 31x14 (65 %) at 144,452; the status bar's gauge on the date line at 288,12 (the same 22x12 pictures, `battery_art.STATUS`, right edge x 310 as the bar's; fill
+`pgbar_battery` 290,14 16x8, moved before `img_battery` so it is drawn under the picture as in the bar) and, hidden, the Battery Percentage label `pod_pct_lk` at 252,10 32x16 (13 px white, right-aligned, 4 px before the outline; [battery](battery.md) "The lock screen"; the widest date stays 4 px clear of it). With nothing queued the card is the hidden widget's own background, so
 the page is date, clock and gauge on the wallpaper and the whole screen swipes. `screens_rightslide` is replaced (premultiplied Lanczos).
-The stock battery props are restored on `pgbar_battery` (no text readout).
+The stock battery props are restored on `pgbar_battery` (no text readout of its own).
 
 - **Glass card.** The card (`view_bottomview`) has `bg_image` `lk_card` and a transparent `bg_color` in every state, no radius of its own: the same
   pane as the Home mini player bar (`docs/modules/minibar.md`, `mod_icons.py glass_image(288, 334, 18, fill=GLASS_CARD_FILL)`: dark vertical gradient

@@ -20,7 +20,7 @@ from modlib import clone_workdir, edit_ui, write_keep_mode
 UI = 'rootfs/release/assets/default/raw/ui/system_bar.bin'
 DROPDOWN = 'rootfs/release/assets/default/raw/ui/dialog/dropdown_dialog.bin'
 IMAGES = 'rootfs/release/assets/default/raw/images/xx/{name}.png'
-BODY_W, BODY_H, NUB_W = 20, 12, 2                    # the body (the lock screen's is 22 x 12) and the nub
+BODY_W, BODY_H, NUB_W = 20, 12, 2                    # the body and the nub (the lock screen uses the same pictures)
 ICON_W = BODY_W + NUB_W                              # 22 x 12 canvas
 # the state images the app swaps between; the stock 14x20 files, pinned
 STATE = {'bar_power': 'normal', 'bar_charge': 'charge', 'bar_lowpower': 'low'}

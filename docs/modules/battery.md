@@ -17,8 +17,8 @@ supersampled and box-reduced, written as a plain zlib PNG (bytes independent of 
 outline, the level is the white fill; charging: green `#34C759` outline and bolt with a 0.5 px black
 keyline; low: red `#FF1448` outline. Status bar (`STATUS`): image 22x12 at (288,9), body 20x12, nub 2x6 at (20,3), corner radius 3, fill
 16x8 at (290,11) (0.5 px gap), right edge at x 310 as stock (it was 18x11 at (292,10) with a 12x7 fill until the sizing change), the right icon group ending 4 px before it
-(its box is x 183..284); the same in `dropdown_dialog.bin`. Lock screen (`LOCK`): 34x12, body 22x12 at x 9,
-fill 16x6 at (12,3), for `screens_battery/charge/lowbattery`. `fill_gap` asserts the fill stays inside
+(its box is x 183..284); the same in `dropdown_dialog.bin`. Lock screen: the same three pictures as `screens_battery/charge/lowbattery`,
+the same size, fill and right edge (the image at 288,12 on the date line), the fill under the picture too. `fill_gap` asserts the fill stays inside
 the outline; `tools/preview_battery.py` draws empty/half/full/charging/low from the tree's files.
 
 ## The percentage (`patch/battery.c`, `patch/battery.h`, `test/pod/battery.py`; hook 8 in [payload](payload.md))
@@ -47,10 +47,12 @@ glyph in the right 11 px, so with Bluetooth, SyncLink and Wi-Fi all lit and `100
 5 s countdown) and SyncLink off, the same 189 (the tests require at least 3 px) (`test/pod/battery.py` computes both). `tools/preview.py` shows the bar with 100%, 87%, 5% and 87% with the camera (`preview.shot_bars`).
 
 **Cost and safety.** Setting off (the default): stock's call, one `access` (the kill switch) and a cached flag, read once from a 1 byte file at the first tick (the Settings switch keeps it; a file edited by
-hand applies after a restart): no lookup, no label touched. On: one open / read / close of the 4 byte gauge and two `widget_lookup`s per second, `widget_set_text_utf8` (an invalidate of a 25 px box). No allocation,
+hand applies after a restart): no lookup, no label touched. On: one open / read / close of the 4 byte gauge and three `widget_lookup`s per second, `widget_set_text_utf8` (an invalidate of a 25 px box). No allocation,
 no timer, no thread; a missing label or window just skips that label. Boot path: `tools/reach.py` does not reach `0x5450f8`, `show_sysbar_face`, `system_bar_init` or `systembar_timer_start` from `main` /
 `platform_init` except through the navigator's page-init dispatcher (the cut; `system_bar_init` is its call `0x4d1cb8`), so the hook first runs when the UI starts, with stock's value as the result unless the user
 turned the setting on.
+
+**The lock screen.** Stock's lock page (`0x53f520`, at its init, on its timer and after play / next) draws its gauge from the same `power_capacity` and with the same low / charging tests, so its fill and picture already follow the stored percentage. Its label `pod_pct_lk` (`tools/mod_lockscreen.py`: a child of `view_timeinfo`, so Show Time off hides it with the gauge; a fixed 32 px box for `100%`, right-aligned, never resized) is set by the same tick through the window manager (a third lookup per second while the setting is on) and by `bp_lock` at the page's init (`patch/lockscreen.c`, after stock's init, not with the kill switch), so the number is there in the first frame: the setting (cached) and one gauge read; with the setting off or a bad gauge nothing is looked up and the label stays hidden as the asset has it. `bp_lock` does not store `power_capacity` (the fill is the last tick's value until the next one, at most 1 s later while the bar's timer runs).
 
 **Other readers of `power_capacity`.** `poweroff_page_init` (the low-battery screen at 0), `check_updatefw_exist` / `check_otginfo` (only whether capacity or charge status is non-zero), `on_poweroff_keyup_fun`.
 With the setting on they see the stored value, which is **0 at a gauge reading of 5% or less on battery** (`BP_LOW`), and also whenever stock's own bucket is 0 (so never later than stock), else the percentage.
