@@ -182,10 +182,26 @@ def state(m, i='tr-1', inside=False):
     return st, m.word(code), m.word(got), m.word(total)
 
 
+def take(m):
+    """The worker takes the messages the UI thread posted, as it does at the top of its loop and inside a transfer (patch/sbdl.c sbd_drain). For a worker that was started and has not run yet."""
+    m.call(PSYMS['sbd_drain'], count=1 << 40)
+
+
+def failure(m):
+    """sba_dl_failure: (the code nobody was told of yet, its HTTP status). Taking it clears it."""
+    status = m.alloc(4)
+    code = m.call(PSYMS['sba_dl_failure'], a0=status, count=2000000)
+    return code, m.word(status)
+
+
 def fn(m, name, **kw): return m.call(PSYMS[name], count=2000000, **kw)
 
 
-def cancel(m, i): m.call(PSYMS['sba_dl_cancel'], a0=m.cstr(i), count=2000000)
+def cancel(m, i):
+    """sba_dl_cancel on the UI thread: (result, the thread it started: none while a worker runs)."""
+    m.thread = None
+    r = m.call(PSYMS['sba_dl_cancel'], a0=m.cstr(i), count=2000000)
+    return r, m.thread
 
 
 def path_of(m, i='tr-1'):
@@ -267,10 +283,36 @@ def queue_tests(ctx):
     # the card refuses the queue file
     m = machine(); m.fail.add(('open', QUEUE))
     r, th = add(m, track())
-    expect(r == SBA['STORAGE'] and th is None and state(m)[0] == DL['NONE'], 'a queue row that cannot be written: SBA_STORAGE, not queued')
+    shown = state(m)[0]
+    calls = work(m, th)
+    expect(r == 0 and shown == DL['WAIT'] and state(m)[0] == DL['NONE'] and failure(m) == (SBA['STORAGE'], 0) and 'curl_perform' not in [c[0] for c in calls] and not fn(m, 'sba_dl_busy'),
+           f'a queue row the card does not take: the add is posted, the worker finds out, the track is not queued and the page is told SBA_STORAGE ({r}, {shown})')
     # a track without an id
     r, th = add(m, track(''))
     expect(r == SBA['PARSE'] and th is None, 'a track with no id is refused')
+
+
+def cap_tests(ctx):
+    """A full queue (1024) with messages in the box: what the UI thread answers by itself and what it leaves to the worker (patch/sbdl.c sbd_room). Slow: a queue file of 1024 rows is rewritten twice."""
+    expect = ctx.expect
+    # a track that has its slot and a message in the box at once (asked twice; or the worker is at its row) is one track, not two
+    m = machine(); m.curl_site = server(m)
+    m.dirs.add('/mnt/mmc/.m1plus/subsonic')
+    m.put(QUEUE, ''.join(f'i=q{k}\tt=q{k}\tx=flac\tp=\n' for k in range(1022)).encode())
+    add(m, track('t0', 't0')); take(m)
+    r0, _ = add(m, track('t0', 't0')); ra, _ = add(m, track('t1', 't1')); rb, _ = add(m, track('t1', 't1')); r2, _ = add(m, track('t2', 't2'))
+    expect((r0, ra, rb, r2) == (0, 0, 0, SBA['QFULL']), f'1023 queued, one of them asked again: the 1024th still fits (also asked twice), the 1025th does not ({r0}, {ra}, {rb}, {r2})')
+    # full, one cancelled and added again before the worker has taken the cancel: it needs no new place
+    take(m)
+    rc, _ = cancel(m, 'q5'); r5, _ = add(m, track('q5', 'q5'))
+    expect((rc, r5) == (0, 0) and state(m, 'q5')[0] == DL['WAIT'], f'a full queue, a track cancelled and asked again at once: taken ({rc}, {r5})')
+    take(m)
+    expect(state(m, 'q5')[0] == DL['WAIT'] and state(m, 't1')[0] == DL['WAIT'] and failure(m) == (0, 0) and fn(m, 'sba_dl_pending') == 1024, 'and it waits, with the other 1023')
+    # with a cancel in the box the UI thread cannot count: the add is posted and the worker says what did not fit
+    cancel(m, 'q6'); r8, _ = add(m, track('t8', 't8')); r9, _ = add(m, track('t9', 't9'))
+    take(m)
+    expect((r8, r9) == (0, 0) and state(m, 't8')[0] == DL['WAIT'] and state(m, 't9')[0] == DL['NONE'] and failure(m) == (SBA['QFULL'], 0) and 't9' not in queued(m),
+           f'one place freed, two tracks asked: the first has it, the second is refused by the worker (SBA_QFULL through sba_dl_failure) ({r8}, {r9})')
 
 
 def transfer_tests(ctx):
@@ -446,11 +488,6 @@ def report_tests(ctx):
     t = track()
     final = f'{MUSIC}/{name_of(t)}'
 
-    def failure(m):
-        status, code = m.alloc(4), None
-        code = m.call(PSYMS['sba_dl_failure'], a0=status, count=2000000)
-        return code, m.word(status)
-
     m = machine(); m.curl_site = server(m); m.fail.add(('write', f'{final}.part'))
     r, th = add(m, t); work(m, th)
     expect(state(m)[:2] == (DL['FAILED'], SBA['WRITE']) and f'{final}.part' not in m.fs, 'a write the card refuses: FAILED, SBA_WRITE (not "storage" or "network"), no .part')
@@ -529,8 +566,12 @@ def control_tests(ctx):
     t1, t2, t3 = track(), track('tr-2', 'Song Two'), track('tr-3', 'Song Three')
     m = machine(); m.curl_site = server(m)
     r, th = add(m, t1); add(m, t2); add(m, t3)
+    expect(QUEUE not in m.fs and [state(m, i)[0] for i in ('tr-1', 'tr-2', 'tr-3')] == [DL['WAIT']] * 3, 'an add is a message: the page shows the track waiting at once, the card is the worker\'s to write')
+    take(m)
     expect(queued(m) == ['tr-1', 'tr-2', 'tr-3'], 'each add appends the track\'s row to dlq.idx')
-    cancel(m, 'tr-2')
+    rc, th2 = cancel(m, 'tr-2')
+    expect(rc == 0 and th2 is None and state(m, 'tr-2')[0] == DL['NONE'] and queued(m) == ['tr-1', 'tr-2', 'tr-3'], 'a cancel is a message too: gone for the page at once, no second thread')
+    take(m)
     expect(state(m, 'tr-2')[0] == DL['NONE'] and queued(m) == ['tr-1', 'tr-3'], 'a waiting download leaves the queue, and the card')
     calls = work(m, th)
     reqs = [c[1] for c in calls if c[0] == 'curl_perform']
@@ -558,14 +599,17 @@ def control_tests(ctx):
         if sent >= 300000 and not hits:
             hits.append(sent); cancel_in(m, 'tr-1')
             buf = m.alloc(SIZE); m.u.mem_write(buf, pack(t1))
-            hits.append(m.nested(PSYMS['sba_dl_add'], buf)); hits.append(bytes(m.fs.get(QUEUE, b'')))
+            hits.append(m.nested(PSYMS['sba_dl_add'], buf)); hits.append(state(m, inside=True)[0])
+        elif len(hits) == 3 and sent >= 600000:
+            hits.append(bytes(m.fs.get(QUEUE, b'')))   # (the worker has taken both messages by now: the transfer-info hook)
     m.curl_site = lambda url, o: dict(base(url, o), xfer=again)
     r, th = add(m, t1)
     work(m, th)
-    lines = hits[2].decode().split('\n') if len(hits) == 3 else []
-    expect(len(hits) == 3 and hits[1] == 0 and state(m)[0] == DL['DONE'] and '-=tr-1' in lines and any(x.startswith('i=tr-1\t') for x in lines[lines.index('-=tr-1'):]),
-           f'the download goes on and finishes; dlq.idx has the cancel\'s line and a row of the track after it ({lines})')
-    m2 = machine(); m2.dirs.add('/mnt/mmc/.m1plus/subsonic'); m2.put(QUEUE, hits[2] if len(hits) == 3 else b'')
+    lines = hits[3].decode().split('\n') if len(hits) == 4 else []
+    reqs = [c for c in m.calls if c[0] == 'curl_perform']
+    expect(len(hits) == 4 and hits[1] == 0 and hits[2] == DL['WAIT'] and len(reqs) == 1 and state(m)[0] == DL['DONE'] and [x.split('\t')[0] for x in lines] == ['i=tr-1', ''],
+           f'the download goes on and finishes in the one request; the worker took the cancel and the add in the order asked and left the track\'s row alone in dlq.idx ({hits[:3]}, {lines})')
+    m2 = machine(); m2.dirs.add('/mnt/mmc/.m1plus/subsonic'); m2.put(QUEUE, hits[3] if len(hits) == 4 else b'')
     expect(state(m2)[0] == DL['WAIT'], 'a restart at that moment: the track still waits')
     # the same, but the transfer has already stopped for the cancel when the add comes (the worker has not handled it yet): the add is told yes, so the track is fetched again
     m = machine(); base = server(m)
@@ -619,22 +663,61 @@ def control_tests(ctx):
     m.curl_site = lambda url, o: dict(base(url, o), xfer=refused)
     r, th = add(m, t1)
     work(m, th)
-    expect(len(hits) == 2 and hits[1] == SBA['STORAGE'] and state(m)[0] == DL['NONE'] and f'{MUSIC}/{name_of(t1)}' not in m.fs, f'the row cannot be written: the add says SBA_STORAGE and the cancel stands ({hits})')
+    expect(len(hits) == 2 and hits[1] == 0 and state(m)[0] == DL['NONE'] and f'{MUSIC}/{name_of(t1)}' not in m.fs and failure(m) == (SBA['STORAGE'], 0),
+           f'the row cannot be written: the cancel stands and the page is told SBA_STORAGE ({hits})')
     # a card that takes neither the cancel's line nor the rewrite: the download stops for this run and the answer says the card did not take it
     m = machine(); m.curl_site = server(m)
-    r, th = add(m, t1); add(m, t2)
+    r, th = add(m, t1); add(m, t2); take(m)
     m.fail.add(('write', QUEUE)); m.fail.add(('read', QUEUE))
-    r = m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('tr-2'), count=2000000)
-    expect(r == SBA['STORAGE'] and state(m, 'tr-2')[0] == DL['NONE'], f'a cancel the card does not take: SBA_STORAGE, the track is out of this run\'s queue ({r})')
+    r, _ = cancel(m, 'tr-2'); take(m)
+    expect(r == 0 and state(m, 'tr-2')[0] == DL['NONE'] and failure(m) == (SBA['STORAGE'], 0), f'a cancel the card does not take: the track is out of this run\'s queue and the page is told SBA_STORAGE ({r})')
     m.fail.clear()
-    expect(m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('tr-1'), count=2000000) == 0 and m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('nope'), count=2000000) == 0, 'a cancel that is written, and one of a track that is not queued: SBA_OK')
+    r1, _ = cancel(m, 'tr-1'); r2, _ = cancel(m, 'nope'); take(m)
+    expect(r1 == 0 and r2 == 0 and failure(m) == (0, 0) and queued(m) == [], 'a cancel that is written, and one of a track that is not queued: SBA_OK, nothing to tell')
+    # no thread can be made: no worker runs, so the cancel is applied where it is asked (an add says SBA_MEM)
+    m = machine(); m.dirs.add('/mnt/mmc/.m1plus/subsonic'); m.put(QUEUE, b'i=k1\tt=One\tx=flac\tp=\ni=k2\tt=Two\tx=flac\tp=\n')
+    m.thread_ok = False
+    r, th = cancel(m, 'k1')
+    expect(r == 0 and th is None and state(m, 'k1')[0] == DL['NONE'] and queued(m) == ['k2'] and not fn(m, 'sba_dl_busy'), f'a cancel with no thread to be had: done at once, on the card too ({r}, {queued(m)})')
     # cancel all
     m = machine(); m.curl_site = server(m)
     r, th = add(m, t1); add(m, t2); add(m, t3)
+    take(m)
     m.call(PSYMS['sba_dl_cancel_all'], count=2000000)
-    expect(QUEUE not in m.fs, 'cancel all: the queue file goes')
+    expect(all(state(m, i)[0] == DL['NONE'] for i in ('tr-1', 'tr-2', 'tr-3')) and fn(m, 'sba_dl_pending') == 0, 'cancel all: nothing waits for the page from that moment')
     calls = work(m, th)
+    expect(QUEUE not in m.fs, 'cancel all: the queue file goes')
     expect(all(state(m, i)[0] == DL['NONE'] for i in ('tr-1', 'tr-2', 'tr-3')) and 'curl_perform' not in [c[0] for c in calls] and not fn(m, 'sba_dl_busy'), 'cancel all: nothing is fetched, the worker ends')
+    # cancel all needs no memory (its message is not allocated), and one asked again while the first is still in the box covers what came between
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2)
+    m.calloc_fail = True
+    m.call(PSYMS['sba_dl_cancel_all'], count=2000000)
+    m.calloc_fail = False
+    expect(state(m)[0] == DL['NONE'] and state(m, 'tr-2')[0] == DL['NONE'] and fn(m, 'sba_dl_pending') == 0, 'cancel all with no memory to be had: asked all the same')
+    r3, _ = add(m, t3)
+    expect(r3 == 0 and state(m, 'tr-3')[0] == DL['WAIT'], 'an add after it waits')
+    m.call(PSYMS['sba_dl_cancel_all'], count=2000000)
+    expect(state(m, 'tr-3')[0] == DL['NONE'] and fn(m, 'sba_dl_pending') == 0, 'a second cancel all, the first not yet taken: the add between them is gone too')
+    r1, _ = add(m, t1)
+    calls = work(m, th)
+    expect(r1 == 0 and [c[1].split('id=')[1].split('&')[0] for c in calls if c[0] == 'curl_perform'] == ['tr-1'] and state(m)[0] == DL['DONE'] and state(m, 'tr-3')[0] == DL['NONE']
+           and QUEUE not in m.fs and not fn(m, 'sba_dl_busy'), 'the worker fetches only what was added after the last cancel all')
+    m.thread = None
+    m.call(PSYMS['sba_dl_cancel_all'], count=2000000)
+    r2, th = add(m, t2)
+    th = th or m.thread
+    work(m, th)
+    expect(r2 == 0 and state(m, 'tr-2')[0] == DL['DONE'], 'and cancel all is there again for the next time (its message is used over)')
+    # cancel all with no worker running and a queue on the card that was never read this run (Sign Out after a restart)
+    m = machine(); m.dirs.add('/mnt/mmc/.m1plus/subsonic'); m.put(QUEUE, b'i=k1\tt=One\tx=flac\tp=\n')
+    m.thread = None
+    m.call(PSYMS['sba_dl_cancel_all'], count=2000000)
+    calls = work(m, m.thread) if m.thread else []
+    expect(QUEUE not in m.fs and state(m, 'k1')[0] == DL['NONE'] and 'curl_perform' not in [c[0] for c in calls] and not fn(m, 'sba_dl_busy'), 'cancel all after a restart: the queue the card kept goes, nothing is fetched')
+    m = machine(); m.thread = None
+    m.call(PSYMS['sba_dl_cancel_all'], count=2000000)
+    expect(m.thread is None, 'cancel all with nothing queued anywhere: no thread is made')
     # delete
     m = machine(); m.curl_site = server(m)
     r, th = add(m, t1); work(m, th)
@@ -672,6 +755,71 @@ def control_tests(ctx):
 
 def cancel_in(m, i):
     m.nested(PSYMS['sba_dl_cancel'], m.cstr(i))
+
+
+def add_in(m, t):
+    buf = m.alloc(SIZE); m.u.mem_write(buf, pack(t))
+    return m.nested(PSYMS['sba_dl_add'], buf)
+
+
+def order_tests(ctx):
+    """The queue is the worker's: what the UI thread asks while a file comes is applied in the order asked, whatever the mix, and the page sees the outcome at once."""
+    expect = ctx.expect
+    t1, t2, t3 = track(), track('tr-2', 'Song Two'), track('tr-3', 'Song Three')
+    f1, f2, f3 = (f'{MUSIC}/{name_of(t)}' for t in (t1, t2, t3))
+
+    def during(steps, tracks=(t1,), at=300000):
+        """Download `tracks`; when the first file has `at` bytes the UI thread does `steps` in one go. (machine, requests, what the page saw right after the steps)."""
+        m = machine(); base = server(m)
+        seen = []
+
+        def hook(u, sent, total):
+            if sent >= at and not seen:
+                seen.append(None)
+                for op, t in steps: (cancel_in(m, t['id']) if op == '-' else add_in(m, t))
+                seen[0] = {t['id']: state(m, t['id'], inside=True)[0] for t in (t1, t2, t3)}
+        m.curl_site = lambda url, o: dict(base(url, o), xfer=hook)
+        th = None
+        for t in tracks:
+            r, started = add(m, t)
+            th = th or started
+        calls = work(m, th)
+        return m, [(c[1].split('id=')[1].split('&')[0], c[2]) for c in calls if c[0] == 'curl_perform'], seen[0] if seen else {}
+
+    m, reqs, saw = during([('-', t1), ('+', t1), ('-', t1)])
+    expect(saw['tr-1'] == DL['NONE'] and reqs == [('tr-1', 42)] and state(m)[0] == DL['NONE'] and f1 not in m.fs and queued(m) == [] and failure(m) == (0, 0),
+           f'cancel, add, cancel of the running track: the last word is the cancel; the transfer stops and nothing of the track waits ({saw}, {reqs})')
+    m, reqs, saw = during([('-', t1), ('+', t1), ('-', t1), ('+', t1)])
+    expect(saw['tr-1'] == DL['WAIT'] and reqs == [('tr-1', 0)] and state(m)[0] == DL['DONE'] and m.fs.get(f1) == DATA and QUEUE not in m.fs,
+           f'and with an add last the one transfer goes on to its end ({saw}, {reqs})')
+    m, reqs, saw = during([('+', t2), ('-', t2), ('+', t3)])
+    expect(saw['tr-2'] == DL['NONE'] and saw['tr-3'] == DL['WAIT'] and [r[0] for r in reqs] == ['tr-1', 'tr-3'] and state(m, 'tr-2')[0] == DL['NONE'] and m.fs.get(f3) == DATA and f2 not in m.fs,
+           f'other tracks added and cancelled while a file comes: the file is not disturbed, the cancelled one is never fetched, the added one is next ({saw}, {reqs})')
+    m, reqs, saw = during([('-', t2), ('+', t2)], tracks=(t1, t2, t3))
+    expect(saw['tr-2'] == DL['WAIT'] and [r[0] for r in reqs] == ['tr-1', 'tr-3', 'tr-2'] and all(state(m, i)[0] == DL['DONE'] for i in ('tr-1', 'tr-2', 'tr-3')),
+           f'a waiting track cancelled and added again: it waits anew, behind the others ({saw}, {reqs})')
+    # what is asked while a file comes is on the card before the file is done (a restart then keeps it)
+    m = machine(); base = server(m)
+    snap = []
+
+    def hook2(u, sent, total):
+        if sent >= 300000 and not snap: snap.append(None); add_in(m, t2)
+        elif sent >= 600000 and len(snap) == 1: snap.append(queued(m))
+    m.curl_site = lambda url, o: dict(base(url, o), xfer=hook2)
+    r, th = add(m, t1); work(m, th)
+    expect(len(snap) == 2 and snap[1] == ['tr-1', 'tr-2'] and state(m, 'tr-2')[0] == DL['DONE'], f'an add made while a file comes has its row on the card within the transfer ({snap[1:]})')
+    # the page's count follows the messages
+    m = machine(); m.curl_site = server(m)
+    r, th = add(m, t1); add(m, t2); add(m, t3)
+    n3 = fn(m, 'sba_dl_pending'); cancel(m, 'tr-2'); n2 = fn(m, 'sba_dl_pending')
+    take(m)
+    expect((n3, n2, fn(m, 'sba_dl_pending')) == (3, 2, 2), f'sba_dl_pending counts the adds and cancels not yet taken, and the same once they are ({n3}, {n2})')
+    # a worker that has ended leaves nothing behind: the next message starts a new one
+    work(m, th)
+    r, th2 = add(m, t2)
+    expect(r == 0 and th2 and state(m, 'tr-2')[0] == DL['WAIT'] and fn(m, 'sba_dl_busy') == 1, 'after the worker ended, an add starts a new one')
+    work(m, th2)
+    expect(state(m, 'tr-2')[0] == DL['DONE'] and not fn(m, 'sba_dl_busy') and QUEUE not in m.fs, 'which fetches it and ends')
 
 
 def collision_tests(ctx):
@@ -785,7 +933,7 @@ def persist_tests(ctx):
     expect = ctx.expect
     t1, t2, t3 = track(), track('tr-2', 'Song Two'), track('tr-3', 'Song Three')
     m = machine(); m.curl_site = server(m)
-    r, th = add(m, t1); add(m, t2); add(m, t3)
+    r, th = add(m, t1); add(m, t2); add(m, t3); take(m)
     rows = m.fs[QUEUE].decode().split('\n')
     expect(queued(m) == ['tr-1', 'tr-2', 'tr-3'] and 't=Song One' in rows[0] and 'a=An Artist' in rows[0] and 'n=3' in rows[0] and f'z={len(DATA)}' in rows[0], 'dlq.idx has the whole row of each waiting track')
     # a reboot before the worker ran: the three wait again, nothing runs until asked
@@ -853,7 +1001,7 @@ def persist_tests(ctx):
     expect(state(m)[:2] == (DL['FAILED'], SBA['NOTFOUND']) and state(m, 'tr-2')[0] == DL['DONE'] and QUEUE not in m.fs, 'a 404 on one track: the next still downloads, and the failed one is not queued again after a reboot')
     # a row with no line on the card (the file was removed under it)
     m = machine(); m.curl_site = server(m)
-    r, th = add(m, t1); add(m, t2)
+    r, th = add(m, t1); add(m, t2); take(m)
     del m.fs[QUEUE]
     calls = work(m, th)
     expect(state(m)[:2] == (DL['FAILED'], SBA['PARSE']) and 'curl_perform' not in [c[0] for c in calls] and not fn(m, 'sba_dl_busy'), 'a waiting track whose row is gone from the card fails without a request')
@@ -897,12 +1045,14 @@ def qread_tests(ctx):
     expect(state(m, 'k1')[0] == DL['WAIT'] and state(m, 'k2')[0] == DL['WAIT'], 'the next use reads it: both wait')
     # a read that fails while a waiting track is cancelled: the file is not rewritten from nothing (the other track's row stays)
     m.fail.add(('read', QUEUE))
-    m.call(PSYMS['sba_dl_cancel'], a0=m.cstr('k1'), count=20000000)
+    r, th = cancel(m, 'k1')
+    calls = work(m, th) if th else []
+    expect(r == 0 and th and 'curl_perform' not in [c[0] for c in calls] and not fn(m, 'sba_dl_busy') and failure(m) == (0, 0), 'a cancel while no worker runs starts one for the card\'s side; it fetches nothing (the queue was not started) and ends')
     expect(m.fs.get(QUEUE) == rows + b'-=k1\n' and state(m, 'k2')[0] == DL['WAIT'], 'a compaction that cannot read the file leaves its rows as they are; the cancel is one line appended (no read needed)')
     m.fail.discard(('read', QUEUE))
     m2 = reboot(m)
     expect(state(m2, 'k1')[0] == DL['NONE'] and state(m2, 'k2')[0] == DL['WAIT'], 'a restart before any compaction: the cancelled track does not wait again, the other does')
-    r, th = add(m2, track('k1', 'One'))
+    r, th = add(m2, track('k1', 'One')); take(m2)
     m3 = reboot(m2)
     expect(r == 0 and state(m3, 'k1')[0] == DL['WAIT'] and state(m3, 'k2')[0] == DL['WAIT'], 'added again after the cancel: its new row counts')
     n, th = resume(m); work(m, th)
@@ -917,7 +1067,7 @@ def qlast_tests(ctx):
     m.put(QUEUE, b'i=k1\tt=Old Title\tx=flac\tp=\n-=k1\ni=k2\tt=Two\tx=flac\tp=\n')
     expect(state(m, 'k1')[0] == DL['NONE'] and state(m, 'k2')[0] == DL['WAIT'], 'a row, its cancel and another row on the card: only the other track waits')
     r, th = add(m, track('k1', 'New Title'))
-    cancel(m, 'k2')
+    cancel(m, 'k2'); take(m)
     text = m.fs.get(QUEUE, b'').decode()
     expect(r == 0 and text.count('i=k1\t') == 1 and 'New Title' in text and 'Old Title' not in text and '-=' not in text and 'k2' not in text,
            f'added again with another title, then a rewrite: the file holds the new row alone ({text!r})')
@@ -935,17 +1085,17 @@ def qlist_tests(ctx):
     m = machine(); m.curl_site = server(m)
     expect(waiting(m) == [] and QUEUE not in m.fs, 'nothing queued: no rows (and no file made)')
     s0 = fn(m, 'sba_dl_rows')
-    r, th = add(m, t1)
+    r, th = add(m, t1); take(m)   # (the list is the slots': a row shows once the worker has taken its message)
     s1 = fn(m, 'sba_dl_rows')
-    add(m, t2); add(m, t3)
+    add(m, t2); add(m, t3); take(m)
     s3 = fn(m, 'sba_dl_rows')
     expect(waiting(m) == [t1, t2, t3], f'three queued: their whole rows, in the order asked ({[t["id"] for t in waiting(m)]})')
     expect(len({s0, s1, s3}) == 3 and fn(m, 'sba_dl_rows') == s3, 'sba_dl_rows moves with every track that joins, and stands still otherwise')
     # a cancel takes the row out; the same track added again goes to the end
-    cancel(m, 'tr-2')
+    cancel(m, 'tr-2'); take(m)
     s4 = fn(m, 'sba_dl_rows')
     expect([t['id'] for t in waiting(m)] == ['tr-1', 'tr-3'] and s4 != s3, 'a cancelled track is not listed, and the number moved')
-    add(m, t2)
+    add(m, t2); take(m)
     expect(waiting(m) == [t1, t3, t2], 'added again: at the end, its row whole')
     # a reboot: the list is the card's
     m = reboot(m)
@@ -978,11 +1128,14 @@ def qlist_tests(ctx):
     work(m, th)
     expect(state(m)[0] == DL['FAILED'] and [t['id'] for t in waiting(m)] == ['tr-1', 'tr-2'] and not fn(m, 'sba_dl_busy'), f'a stopped worker: both tracks are still listed ({state(m)}, {[t["id"] for t in waiting(m)]})')
     # cancel all: none
+    m.thread = None; s6 = fn(m, 'sba_dl_rows')
     fn(m, 'sba_dl_cancel_all')
-    expect(waiting(m) == [] and QUEUE not in m.fs, 'sba_dl_cancel_all: nothing waits, the queue file is gone')
+    expect(waiting(m) == [] and fn(m, 'sba_dl_rows') != s6, 'sba_dl_cancel_all: nothing is listed from that moment (the worker has not run yet), and the number moved')
+    work(m, m.thread)
+    expect(waiting(m) == [] and QUEUE not in m.fs, 'and the queue file is gone once the worker has taken it')
     # a queue file that cannot be read: no rows (the tracks still wait)
     m = machine(); m.curl_site = server(m)
-    add(m, t1)
+    add(m, t1); take(m)
     m.fail.add(('read', QUEUE))
     expect(waiting(m) == [] and state(m)[0] == DL['WAIT'], 'a queue file that will not read: no rows listed, the track still waits')
 
@@ -1025,4 +1178,4 @@ def manifest_tests(ctx):
     expect(m.fs.get(IDX) == big, 'an oversized manifest is kept, not replaced by one row')
 
 
-SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, scan_tests, layout_tests, persist_tests, qread_tests, qlast_tests, qlist_tests, manifest_tests]
+SECTIONS = [queue_tests, cap_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, order_tests, collision_tests, scan_tests, layout_tests, persist_tests, qread_tests, qlast_tests, qlist_tests, manifest_tests]

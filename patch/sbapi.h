@@ -340,10 +340,10 @@ enum { SBA_DL_NONE = 0, SBA_DL_WAIT, SBA_DL_ACTIVE, SBA_DL_DONE, SBA_DL_FAILED }
 
 int sba_dl_add(
     const sba_track_t *
-        t); /* queue t: SBA_OK, a guard (SBA_NOWIFI ...), SBA_QFULL, SBA_CARDFULL; a track already on the card is SBA_OK and DONE */
+        t); /* queue t (a message to the download worker; the row shows waiting at once): SBA_OK, a guard (SBA_NOWIFI ...), SBA_STORAGE (no card), SBA_QFULL, SBA_CARDFULL, SBA_MEM; a track already on the card is SBA_OK and DONE. A row the card then refuses is told through sba_dl_failure */
 int sba_dl_cancel(
     const char *
-        id); /* a waiting (or failed) download leaves the queue; the active one stops (sbn_download then removes its .part, as the PR did; a network fault keeps it for the next try). SBA_OK, or SBA_STORAGE when the card did not take the cancel (stopped for this run, but the track waits again after a restart) */
+        id); /* a waiting (or failed) download leaves the queue; the active one stops (sbn_download then removes its .part, as the PR did; a network fault keeps it for the next try). A message to the download worker (the row shows it at once): SBA_OK, or SBA_MEM when it could not be posted. A cancel the card did not take (stopped for this run, but the track waits again after a restart) is told through sba_dl_failure as SBA_STORAGE */
 void sba_dl_cancel_all(void);
 int sba_dl_resume(
     void); /* UI thread: with the guard clear and no worker running, the waiting downloads (a queue the card kept over a reboot, or one the worker stopped at a lost Wi-Fi, a full card ...) start again, the one it stopped at last; the number waiting, 0 when nothing was started */

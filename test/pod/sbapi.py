@@ -1215,7 +1215,7 @@ def bg(ctx):
     # a download goes first: phase 2 waits for it
     site, songs, ids = bg_lib()
     m = bg_machine(site)
-    sbd_busy = PSYMS['sbd'] + 12   # (patch/sbdl.c: lock, mf, qf, busy)
+    sbd_busy = PSYMS['sbd'] + 4   # (patch/sbdl.c: sbd.job, patch/m1job.h: lock, busy)
     m.setword(sbd_busy, 1)
     waits = []
 

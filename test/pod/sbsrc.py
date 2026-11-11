@@ -278,7 +278,11 @@ def lists(ctx):
     expect([r['title'] for r in rs] == ['Wait One', 'Wait Two', 'One', 'Two'] and n == 2 and asked == [] and m.thread is None,
            f'Downloaded: the downloads the card kept come first, then the finished ones; dl_rows counts the two; reading starts no worker ({[r["title"] for r in rs]}, {n})')
     expect(rid(m, deque_row(m, h, 0)) == 'w1' and dl_rows()[0] == sig, 'the waiting rows are tracks with their ids; dl_rows stands still while nothing changes')
-    expect(call(m, F_ACT, LIB, 0, CANCEL_ALL) == 0 and SD.QUEUE not in m.fs, 'the Clear action (no record): every download to come is cancelled, the queue file goes')
+    m.thread = None
+    r = call(m, F_ACT, LIB, 0, CANCEL_ALL)
+    sig2, n2 = dl_rows()
+    SD.work(m, m.thread)
+    expect(r == 0 and sig2 != sig and SD.QUEUE not in m.fs, f'the Clear action (no record): every download to come is cancelled, dl_rows moves at once (the page reads again), and the queue file goes with the worker ({r}, {n2})')
     sig2 = dl_rows()[0]
     h, rs, asked = listing(m, LS_DOWNLOADED)
     expect([r['title'] for r in rs] == ['One', 'Two'] and dl_rows()[1] == 0 and sig2 != sig, 'after it the list is the finished downloads alone, and dl_rows moved')
@@ -721,10 +725,14 @@ def sheet(ctx):
     mc = machine(); SD.guard(mc, 0)
     hc = play_setup(mc, [trk(1), trk(2)])
     call(mc, F_ACT, LIB, deque_row(mc, hc, 0), ACT_DOWNLOAD); call(mc, F_ACT, LIB, deque_row(mc, hc, 1), ACT_DOWNLOAD)
+    SD.take(mc)
     mc.fail.add(('write', SD.QUEUE)); mc.fail.add(('read', SD.QUEUE))
     r = call(mc, F_ACT, LIB, deque_row(mc, hc, 1), ACT_CANCEL_DL)
-    expect(S32(r) == -1 and [c[1] for c in mc.calls if c[0] == 'toast'] == ['Storage unavailable'] and SD.state(mc, 't2')[0] == SD.DL['NONE'],
-           f'a cancel the card does not take: the download stops and a toast says the card is the trouble ({r})')
+    quiet = [c[1] for c in mc.calls if c[0] == 'toast']
+    SD.take(mc)
+    call(mc, F_GEN, LIB)
+    expect(S32(r) == 0 and quiet == [] and [c[1] for c in mc.calls if c[0] == 'toast'] == ['Storage unavailable'] and SD.state(mc, 't2')[0] == SD.DL['NONE'],
+           f'a cancel the card does not take: the download stops, and once the worker has found out a toast says the card is the trouble ({r}, {quiet})')
     # the DSD confirm
     DSD = lambda m_, h_, at: S32(m_.call(PSYMS['ls_dsd_confirm'], a0=LIB, a1=h_, a2=at & 0xffffffff, count=1 << 30))
     m = machine()

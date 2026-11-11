@@ -1,15 +1,22 @@
 /* Navidrome downloads (docs/modules/subsonic.md "Data and cache", "File split"): ONE detached download worker, a queue whose rows wait on the card (dlq.idx), the manifest dl.idx of finished downloads and the
- * target files in SBA_MUSIC_DIR. The pages never block here: sba_dl_add queues a track and returns, the worker writes the file (sbn_download: a .part file, a Range resume, the PR's
+ * target files in SBA_MUSIC_DIR. The pages never block here: sba_dl_add posts the track and returns, the worker writes the file (sbn_download: a .part file, a Range resume, the PR's
  * stall limit of 512 B/s for 45 s and the 32 MB free-space floor), appends the manifest row, and the page's timer reads sba_dl_gen / sba_dl_state.
  * The worker never calls AWTK; the stock functions it calls are the library scan of a finished album's folder (scanSpecFolder, as the PR does after a DSD file) and, through sba_guard at the start of a download, get_wifisignal (the Wi-Fi check; sba_configured reads the saved login).
+ *
+ * Who owns what (patch/m1job.h): the queue -- its slots in memory and dlq.idx on the card -- is the worker's alone. The UI thread changes it only by a message (add, cancel, cancel all,
+ * resume) that the worker applies in the order posted: at the top of its loop, inside a transfer (the transfer-info hook, about once a second or more) and after each track. So an add
+ * and a cancel can never cross: whichever was posted last is what holds. What the UI thread reads (sba_dl_state, sba_dl_pending) is the slots with the waiting messages laid over them, so
+ * a tap shows at once. The checks that only read (the guard, the card, the free space, a full queue) are still answered by sba_dl_add itself; what the card refuses when the worker
+ * writes (a queue row, a cancel's line) is reported the way a failed transfer is, through sba_dl_failure.
  *
  * The manifest holds the track's whole row (title, artist, album, suffix, ...) plus the file name, so Downloaded works offline and with the server gone. It is a text file, one
  * track a line of tab-separated key=value fields (the keys are in sbd_row_text), replaced whole and atomically; a torn or odd line is skipped. A copy of (id, file, size, DSD)
  * stays in memory after the first use so that painting a row's state never touches the card; a file that was deleted by hand is found out (and dropped) when the path or the
  * list is asked for.
  *
- * Locks: sbd.lock guards the memory (queue, index) and is held for a few instructions only, never across a call; sbd.mf serialises the writers of dl.idx (it is held across the
- * file work, and a waiting UI thread sleeps 1 ms at a time). Order: mf, then lock.
+ * Locks: sbd.job.lock guards the memory (slots, index, the message box) and is held for a few instructions only, never across a call; sbd.mf serialises the file work on dl.idx
+ * (the worker's finished rows, the UI thread's deletes) and on dlq.idx (the worker, and the one first read, which may be the UI thread's); a waiting thread sleeps 1 ms at a time.
+ * Order: mf, then the lock.
  */
 #include "offsets.inc"
 #include "stock.h"
@@ -18,6 +25,7 @@
 #include "sbapi.h"
 #include "sbnet.h"
 #include "fnv.h"
+#include "m1job.h"
 
 extern int pn_free_kb(const char *path, unsigned *kb);
 
@@ -50,12 +58,26 @@ typedef struct {
     unsigned seq;
 } sbd_slot_t; /* (the track's row waits in dlq.idx: the worker reads it when its turn comes) */
 
+/* What the UI thread asks of the worker. An add carries the track's row (t[1]); the others the id, or nothing. Op 0 is a message a later cancel-all made void (sba_dl_cancel_all). SBD_OP_GO is the add of a track that waits or runs already: no new track, it only starts the fetching again. */
+enum { SBD_OP_ADD = 1, SBD_OP_CANCEL, SBD_OP_CANCEL_ALL, SBD_OP_RESUME, SBD_OP_GO };
+typedef struct {
+    m1_msg_t m;
+    char id[SBA_ID];
+    sba_track_t t[]; /* (SBD_OP_ADD only) */
+} sbd_msg_t;
+
 /* Writable state lives in .scratch (the payload has no .bss). */
 static struct {
-    volatile int lock, mf, qf;
-    int busy, loaded, qloaded, stop,
-        again; /* again: the active track's cancel was withdrawn by an add (sba_dl_add); if the transfer had obeyed the cancel already, the worker puts the track back in line */
+    m1_job_t job; /* lock, busy (the worker runs), the message box (test/pod/sbapi.py pokes busy at +4) */
+    m1_msg_t all; /* the one cancel-all message: not allocated, so Sign Out's cancel cannot fail for memory */
+    volatile int mf;
+    int loaded, qloaded;
     int qbad; /* dlq.idx was there and could not be read whole: no queue is loaded, the next use reads again */
+    /* The worker's (the UI thread reads stop under the lock, nothing else):
+     * go: tracks are being fetched; cleared by a failure that is not the track's (the rest waits), set by an add or a resume.
+     * stop: the active track was cancelled; told: the transfer has been told to stop (no message is taken until it has ended).
+     * dirty: dlq.idx has rows to drop; lost: the card did not take a cancel's line. */
+    int go, stop, told, dirty, lost;
     int status; /* the HTTP status of the last failed transfer (the worker writes it before it reports the failure) */
     int fail_code, fail_status; /* the newest failure nobody has been told of (0 none) */
     long fail_at; /* when it happened (time(), seconds) */
@@ -67,19 +89,12 @@ static struct {
     char al_id[SBA_ID], al_artist[SBA_TEXT]; /* the worker's last album artist lookup */
 } sbd __attribute__((section(".scratch")));
 
-static void sbd_lock(void) {
-    while (__sync_lock_test_and_set(&sbd.lock, 1)) {
-    }
-}
-static void sbd_unlock(void) { __sync_lock_release(&sbd.lock); }
+static void sbd_lock(void) { m1_job_lock(&sbd.job); }
+static void sbd_unlock(void) { m1_job_unlock(&sbd.job); }
 static void sbd_mf_lock(void) {
     while (__sync_lock_test_and_set(&sbd.mf, 1)) usleep(1000);
 }
 static void sbd_mf_unlock(void) { __sync_lock_release(&sbd.mf); }
-static void sbd_qf_lock(void) {
-    while (__sync_lock_test_and_set(&sbd.qf, 1)) usleep(1000);
-}
-static void sbd_qf_unlock(void) { __sync_lock_release(&sbd.qf); }
 static void sbd_bump(void) {
     __sync_synchronize();
     __sync_add_and_fetch(&sbd.gen, 1);
@@ -564,10 +579,10 @@ static int sbd_file_name(const sba_track_t *t, const char *artist, int variant, 
 }
 
 /* ---- the queue: SBA_DLMAX slots of (id, state) in memory, the tracks' rows in dlq.idx on the card ----
- * An add appends the track's row to dlq.idx (one write, no sync: a lost line is a download asked for again) and the worker reads it back when the slot's turn comes, so a queue of
- * hundreds costs no memory and outlives a reboot: the first use reads the file and every row whose track is not downloaded waits again (the worker starts with sba_dl_resume or
- * the next add). Rows of finished, cancelled and given-up tracks are dropped when the queue drains or a waiting one is cancelled (sbd_q_compact). qf serialises the file's writers
- * and the worker's read; order: qf, then lock. */
+ * The worker's, both of them. An add appends the track's row to dlq.idx (one write, no sync: a lost line is a download asked for again) and the worker reads it back when the slot's
+ * turn comes, so a queue of hundreds costs no memory and outlives a reboot: the first use reads the file and every row whose track is not downloaded waits again (the worker starts
+ * with sba_dl_resume or the next add). Rows of finished, cancelled and given-up tracks are dropped when the queue drains or after a cancel (sbd_q_compact). The file work is done
+ * under mf (the first read may be the UI thread's). */
 
 /* The slot of an id (any state), -1 none. The caller holds lock. */
 static int sbd_slot(const char *id) {
@@ -651,9 +666,9 @@ static int sbd_q_row(const char *id, sba_track_t *t) {
     int r = 0, bad = 0;
     char *text, rid[SBA_ID], file[8];
     const char *p, *end, *ls, *le;
-    sbd_qf_lock();
+    sbd_mf_lock();
     text = sbd_slurp_st(SBD_Q, &n, &bad);
-    sbd_qf_unlock();
+    sbd_mf_unlock();
     if (bad || (!text && !m1_card_mounted())) {
         free(text);
         return -1;
@@ -672,16 +687,16 @@ static int sbd_q_row(const char *id, sba_track_t *t) {
     return r;
 }
 
-/* A track leaves the queue by the user's word (a cancel, an add that could not start): one line "-=<id>" appended to dlq.idx, before the file is compacted. The compaction needs the
+/* A track leaves the queue by the user's word (a cancel, an add whose row the card took in part): one line "-=<id>" appended to dlq.idx, before the file is compacted. The compaction needs the
  * whole file read back and may not get it (then it leaves the file alone); this line needs no read, and with it the row does not wait again after a restart. A later add of the same
- * track appends its row after the line and counts. 1 when the card has it (or has no queue file). Takes qf. */
+ * track appends its row after the line and counts. 1 when the card has it (or has no queue file). Takes mf. */
 static int sbd_q_cancelled(const char *id) {
     char line[SBA_ID + 4];
     int fd, n, ok = 0;
     if (!m1_card_mounted()) return 0;
     n = snprintf(line, sizeof line, "-=%s\n", id);
     if (n <= 0 || n >= (int)sizeof line) return 0;
-    sbd_qf_lock();
+    sbd_mf_lock();
     if (access(SBD_Q, 0) != 0)
         ok = 1; /* no queue file: nothing of the track is on the card */
     else {
@@ -691,11 +706,11 @@ static int sbd_q_cancelled(const char *id) {
             ok = close(fd) == 0 && ok;
         }
     }
-    sbd_qf_unlock();
+    sbd_mf_unlock();
     return ok;
 }
 
-/* Append a track's row to dlq.idx. 1 written. The caller holds qf. */
+/* Append a track's row to dlq.idx. 1 written. Takes mf. */
 static int sbd_q_append(const sba_track_t *t) {
     char *row = (char *)calloc(SBD_LINE, 1);
     unsigned n;
@@ -703,6 +718,7 @@ static int sbd_q_append(const sba_track_t *t) {
     if (!row) return 0;
     n = sbd_row_text(row, SBD_LINE - 1, t, "", 0);
     row[n++] = '\n';
+    sbd_mf_lock();
     mkdir("/mnt/mmc/.m1plus", 0755);
     mkdir(SBA_DIR, 0755);
     fd = open(SBD_Q, O_WRONLY | O_APPEND | O_CREAT, 0644);
@@ -710,6 +726,7 @@ static int sbd_q_append(const sba_track_t *t) {
         ok = write(fd, row, n) == (int)n;
         ok = close(fd) == 0 && ok;
     }
+    sbd_mf_unlock();
     free(row);
     return ok;
 }
@@ -722,7 +739,7 @@ static int sbd_q_compact(void) {
     const char **last; /* per slot: the start of the last row of its track */
     const char *p, *end, *ls, *le;
     if (!m1_card_mounted()) return 0;
-    sbd_qf_lock();
+    sbd_mf_lock();
     text = sbd_slurp_st(SBD_Q, &n, &bad);
     if (bad) { /* not read whole: the file stays as it is (rewritten from a part, the rows not read would be lost; the rows of finished tracks cost nothing until the next time) */
         free(text);
@@ -766,13 +783,176 @@ static int sbd_q_compact(void) {
     free(last);
     free(buf);
     free(text);
-    sbd_qf_unlock();
+    sbd_mf_unlock();
     return ok;
+}
+
+/* ---- the messages (the worker; the UI thread only when no thread could be made, and then no worker runs) ---- */
+
+/* A failure with no slot to show it (a row or a cancel the card did not take, a queue that filled meanwhile): what sba_dl_failure tells the page. */
+static void sbd_report(int code) {
+    long now = time((long *)0);
+    sbd_lock();
+    sbd.fail_code = code;
+    sbd.fail_status = 0;
+    sbd.fail_at = now;
+    sbd_unlock();
+}
+
+/* Add: a track that waits or runs is left as it is (a cancel of the running one that the transfer has not been told of yet is taken back: its line is on the card, so the row is
+ * written again after it); a failed one waits again in its slot; a new one takes a free slot, or the oldest failed one's. Fetching starts (again). */
+static void sbd_do_add(const sba_track_t *t) {
+    int i, slot = -1, state = 0, back = 0;
+    sbd_lock();
+    if (!sbd.q) {
+        int bad = sbd.qbad;
+        sbd_unlock();
+        sbd_report(
+            bad ? SBA_STORAGE
+                : SBA_MEM); /* (the queue on the card would not read: nothing is added on top of rows not seen) */
+        return;
+    }
+    i = sbd_slot(t->id);
+    if (i >= 0) state = sbd.q[i].state;
+    back = state == SBA_DL_ACTIVE && sbd.stop;
+    if (state == SBA_DL_FAILED) slot = i;
+    for (i = 0; !state && slot < 0 && i < SBA_DLMAX; ++i)
+        if (!sbd.q[i].state) slot = i;
+    if (!state && slot < 0) /* the oldest failed one gives way */
+        for (i = 0; i < SBA_DLMAX; ++i)
+            if (sbd.q[i].state == SBA_DL_FAILED && (slot < 0 || (int)(sbd.q[i].seq - sbd.q[slot].seq) < 0)) slot = i;
+    if (slot >= 0) {
+        sbd_slot_free(&sbd.q[slot]);
+        sbd_set(sbd.q[slot].id, sizeof sbd.q[slot].id, t->id);
+        sbd.q[slot].seq = ++sbd.seq;
+        sbd.q[slot].state = SBA_DL_WAIT;
+    }
+    sbd_unlock();
+    if (state == SBA_DL_WAIT || (state == SBA_DL_ACTIVE && !back)) {
+        sbd.go = 1;
+        return;
+    }
+    if (!back && slot < 0) {
+        sbd_report(SBA_QFULL);
+        return;
+    }
+    if (sbd_q_append(t)) {
+        if (back) {
+            sbd_lock();
+            sbd.stop = 0;
+            sbd_unlock();
+        }
+        sbd.go = 1;
+        return;
+    }
+    if (!back) { /* (a taken-back cancel whose row the card refuses stands) */
+        sbd_lock();
+        sbd_slot_free(&sbd.q[slot]);
+        sbd_unlock();
+        if (!sbd_q_cancelled(t->id)) sbd.lost = 1; /* (whatever of the row the card did take does not wait there) */
+        sbd.dirty = 1;
+    }
+    sbd_report(SBA_STORAGE);
+}
+
+/* Cancel: the running track is stopped (the transfer-info hook tells the transfer), a waiting or failed one leaves its slot; the cancel's line goes to the card first, the rows are
+ * dropped by sbd_settle. */
+static void sbd_do_cancel(const char *id) {
+    int i;
+    sbd_lock();
+    i = sbd_slot(id);
+    if (i >= 0) {
+        if (sbd.q[i].state == SBA_DL_ACTIVE)
+            sbd.stop = 1;
+        else
+            sbd_slot_free(&sbd.q[i]);
+    }
+    sbd_unlock();
+    if (i < 0) return;
+    if (!sbd_q_cancelled(id)) sbd.lost = 1;
+    sbd.dirty = 1;
+}
+
+static void sbd_do_cancel_all(void) {
+    int i;
+    sbd_lock();
+    for (i = 0; sbd.q && i < SBA_DLMAX; ++i) {
+        if (sbd.q[i].state == SBA_DL_ACTIVE)
+            sbd.stop = 1;
+        else if (sbd.q[i].state)
+            sbd_slot_free(&sbd.q[i]);
+    }
+    sbd_unlock();
+    if (m1_card_mounted()) { /* nothing waits on the card either */
+        sbd_mf_lock();
+        unlink(SBD_Q);
+        sbd_mf_unlock();
+    }
+    sbd.dirty = sbd.lost = 0;
+}
+
+/* Resume: the tracks the worker stopped at wait again, behind the others. */
+static void sbd_do_resume(void) {
+    int i;
+    sbd_lock();
+    for (i = 0; sbd.q && i < SBA_DLMAX; ++i)
+        if (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code)) {
+            sbd.q[i].state = SBA_DL_WAIT;
+            sbd.q[i].code = 0;
+            sbd.q[i].seq = ++sbd.seq;
+        }
+    sbd_unlock();
+    sbd.go = 1;
+}
+
+static void sbd_apply(const m1_msg_t *m) {
+    switch (m->op) {
+    case SBD_OP_ADD:
+        sbd_do_add(((const sbd_msg_t *)m)->t);
+        break;
+    case SBD_OP_CANCEL:
+        sbd_do_cancel(((const sbd_msg_t *)m)->id);
+        break;
+    case SBD_OP_CANCEL_ALL:
+        sbd_do_cancel_all();
+        break;
+    case SBD_OP_RESUME:
+        sbd_do_resume();
+        break;
+    case SBD_OP_GO:
+        sbd.go = 1;
+        break;
+    }
+}
+
+/* After the messages: the rows of the tracks that left go from dlq.idx, once for all of them. A cancel is on the card when its line or this rewrite is; with neither the track
+ * would wait again after a restart, and the page is told (SBA_STORAGE). */
+static void sbd_settle(void) {
+    if (sbd.dirty) {
+        int ok = sbd_q_compact();
+        if (sbd.lost && !ok) sbd_report(SBA_STORAGE);
+        sbd.dirty = sbd.lost = 0;
+    }
+}
+
+/* Every message in the box, in order. A message stays in the box until it is applied, so the UI thread's readers (the box first, then the slots) always see it in one of the two. */
+static void sbd_drain(void) {
+    m1_msg_t *m;
+    int any = 0;
+    while ((m = m1_job_first(&sbd.job))) {
+        sbd_apply(m);
+        m1_job_done(&sbd.job);
+        if (m != &sbd.all) free(m);
+        any = 1;
+    }
+    sbd_settle();
+    if (any) sbd_bump();
 }
 
 /* ---- progress ---- */
 
-/* The transfer-info hook for the download sink (sbapi.c's hook gives every sink to this first). Non-zero aborts. */
+/* The transfer-info hook for the download sink (sbapi.c's hook gives every sink to this first). Non-zero aborts. The worker takes its messages here while a file comes; once it has
+ * told the transfer to stop it takes none until the transfer has ended (a cancel that is taken back is taken back before the transfer hears of it, or not at all). */
 int sba_dl_xfer(void *ctx, long long total, long long now, long long up_total, long long up_now) {
     sbn_sink_t *s = (sbn_sink_t *)ctx;
     long long resume, got;
@@ -780,7 +960,11 @@ int sba_dl_xfer(void *ctx, long long total, long long now, long long up_total, l
     (void)up_total;
     (void)up_now;
     if (!s || s != sbd.sink) return 0;
-    if (sbd.stop) return 1;
+    if (!sbd.told) sbd_drain();
+    if (sbd.stop) {
+        sbd.told = 1;
+        return 1;
+    }
     if (now < 0) return 0;
     resume = s->resume_offset;
     got = now + (resume > 0 ? resume : 0);
@@ -884,7 +1068,7 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     sink = (sbn_sink_t *)calloc(1, sizeof *sink);
     if (!sink) return SBA_MEM;
     sbn_sink_reset(sink);
-    sbd.sink = sink;
+    sbd.sink = sink; /* (from here to the transfer's end the transfer-info hook takes the messages) */
     /* who the .part file is for: a resume record of another server, user or track is not followed */
     identity[0] = 0;
     if (snprintf(identity, sizeof identity, "%s\n%s\n%s", base, user, t->id) >= (int)sizeof identity) identity[0] = 0;
@@ -912,40 +1096,45 @@ static void sbd_scan(char *dir) {
     dir[0] = 0;
 }
 
+/* The worker: the messages, then the oldest waiting track while fetching is on; with neither, the last folder's scan and the queue file's tidy, and it ends when the box is still
+ * empty (m1_job_end: a post that follows starts a new one). */
 static void *sbd_main(void *arg) {
     char scan[SBD_PATH], dir[SBD_PATH], file[SBD_FILE], id[SBA_ID];
     sba_track_t *t = (sba_track_t *)calloc(1, sizeof *t);
     int tidy = 0;
     (void)arg;
     scan[0] = 0;
+    sbd_ensure();
     for (;;) {
         int i, best = -1, code, pause;
         unsigned size = 0;
+        sbd_drain();
         sbd_lock();
-        for (i = 0; sbd.q && i < SBA_DLMAX; ++i)
+        for (i = 0; sbd.go && sbd.q && i < SBA_DLMAX; ++i)
             if (sbd.q[i].state == SBA_DL_WAIT && (best < 0 || (int)(sbd.q[i].seq - sbd.q[best].seq) < 0)) best = i;
+        if (best >= 0) {
+            sbd.q[best].state = SBA_DL_ACTIVE;
+            sbd.q[best].code = 0;
+            sbd.stop = sbd.told = 0;
+            sbd.got = sbd.total = 0;
+            sbd.step = ~0u;
+            sbd_set(id, sizeof id, sbd.q[best].id);
+        }
+        sbd_unlock();
         if (best < 0 &&
-            tidy) { /* the queue is drained: the last folder's scan and the queue file, before the worker ends (another may start the moment it does) */
-            sbd_unlock();
+            tidy) { /* nothing to fetch: the last folder's scan and the queue file, then the box once more */
             sbd_scan(scan);
             sbd_q_compact();
             tidy = 0;
+            sbd_bump();
             continue;
         }
-        if (best < 0) { /* nothing left: the worker ends under the lock, so an add that follows starts a new one */
-            sbd.busy = 0;
-            sbd_unlock();
+        if (best < 0) {
+            if (!m1_job_end(&sbd.job)) continue;
             sbd_bump();
             free(t);
             return (void *)0;
         }
-        sbd.q[best].state = SBA_DL_ACTIVE;
-        sbd.q[best].code = 0;
-        sbd.stop = sbd.again = 0;
-        sbd.got = sbd.total = 0;
-        sbd.step = ~0u;
-        sbd_set(id, sizeof id, sbd.q[best].id);
-        sbd_unlock();
         sbd_bump();
         tidy = 1;
         file[0] = 0;
@@ -954,8 +1143,8 @@ static void *sbd_main(void *arg) {
         else {
             int row = sbd_q_row(id, t);
             code = row < 0 ? SBA_STORAGE
-                   : !row  ? SBA_PARSE
-                           : sbd_run(t, file, &size); /* (SBA_STORAGE stops the worker and keeps the row: sbd_later) */
+                   : !row ? SBA_PARSE
+                          : sbd_run(t, file, &size); /* (SBA_STORAGE stops the fetching and keeps the row: sbd_later) */
         }
         if (code == SBA_OK) {
             char *row = (char *)calloc(SBD_LINE, 1);
@@ -973,16 +1162,11 @@ static void *sbd_main(void *arg) {
             sbd_set(scan, sizeof scan, dir);
         }
         pause = code != SBA_OK && code != SBA_CANCELLED && sbd_later(code);
-        if (pause) sbd_scan(scan); /* (before the worker is seen to have ended) */
+        if (pause) sbd_scan(scan);
+        /* The track's end, by what the transfer answered; the messages that came meanwhile are taken after it (the loop's top), so a cancel of a track that has just failed takes
+         * it out, and an add of one that has just been stopped queues it anew. */
         sbd_lock();
-        if (sbd.stop && code != SBA_OK)
-            code = SBA_CANCELLED,
-            pause =
-                0; /* cancelled after the transfer had ended with a fault of its own (the cancel was told yes): the track leaves the queue, it is not kept as failed for sba_dl_resume */
-        if (code == SBA_CANCELLED && sbd.again)
-            sbd.q[best].state =
-                SBA_DL_WAIT; /* the transfer stopped for a cancel that an add took back before this point: the add was told yes and its row is on the card, so the track is fetched again (its place in line is kept) */
-        else if (code == SBA_OK || code == SBA_CANCELLED)
+        if (code == SBA_OK || code == SBA_CANCELLED)
             sbd_slot_free(&sbd.q[best]);
         else {
             sbd.q[best].state = SBA_DL_FAILED;
@@ -990,41 +1174,82 @@ static void *sbd_main(void *arg) {
             sbd.fail_code = code;
             sbd.fail_status = code == SBA_HTTP ? sbd.status : 0;
             sbd.fail_at = time((long *)0);
-            if (pause) sbd.busy = 0; /* the rest keeps waiting: sba_dl_resume or the next add starts a worker again */
         }
+        sbd.stop = sbd.told = 0;
         sbd_unlock();
-        if (code == SBA_CANCELLED && !pause) sbd_q_compact(); /* its row goes now, not at the next start */
+        if (pause) sbd.go = 0; /* the rest keeps waiting: sba_dl_resume or the next add starts the fetching again */
+        if (code == SBA_CANCELLED) sbd.dirty = 1; /* its row goes now, not at the next start */
         sbd_bump();
-        if (pause) {
-            free(t);
-            return (void *)0;
-        }
     }
 }
 
-/* ---- the API ---- */
+/* ---- the API (the UI thread) ---- */
 
-/* A worker when none runs. SBA_OK (started, or one is running), SBA_MEM for no thread. */
-static int sbd_start(void) {
-    unsigned long th = 0;
-    int start = 0;
-    sbd_lock();
-    if (!sbd.busy) sbd.busy = 1, start = 1;
-    sbd_unlock();
-    if (!start) return SBA_OK;
-    if (pthread_create(&th, (const void *)0, sbd_main, (void *)0) != 0) {
-        sbd_lock();
-        sbd.busy = 0;
-        sbd_unlock();
-        return SBA_MEM;
+/* What the page sees of a track in the queue: its slot with the messages not yet applied laid over it (SBA_DL_NONE / WAIT / ACTIVE / FAILED; *code the failure's). The caller holds
+ * the lock. */
+static int sbd_view(const char *id, int *code) {
+    const m1_msg_t *m;
+    int i = sbd_slot(id), st = i >= 0 ? sbd.q[i].state : SBA_DL_NONE, why = i >= 0 ? sbd.q[i].code : 0;
+    if (st == SBA_DL_FAILED && code) *code = why;
+    if (st == SBA_DL_ACTIVE && sbd.stop) st = SBA_DL_NONE; /* cancelled: the worker is about to drop it */
+    for (m = sbd.job.head; m; m = m->next) {
+        if (m->op == SBD_OP_CANCEL_ALL)
+            st = SBA_DL_NONE;
+        else if (m->op == SBD_OP_RESUME)
+            st = st == SBA_DL_FAILED && sbd_later(why) ? SBA_DL_WAIT : st;
+        else if ((m->op == SBD_OP_ADD || m->op == SBD_OP_CANCEL) && sbd_same(((const sbd_msg_t *)m)->id, id))
+            st = m->op == SBD_OP_CANCEL ? SBA_DL_NONE : st == SBA_DL_NONE || st == SBA_DL_FAILED ? SBA_DL_WAIT : st;
     }
-    pthread_detach(th);
-    return SBA_OK;
+    return st;
+}
+
+/* Whether one more track may be asked for: SBA_OK, or SBA_QFULL when it surely has no place. The UI thread refuses only what it can tell cheaply and for sure (one pass over the
+ * slots and the box, no ids compared but the head's); everything else is the worker's to say (sbd_do_add, SBA_QFULL through sba_dl_failure):
+ * - a cancel in the box, or the running track's cancel, frees a place nobody can count from here: not refused;
+ * - otherwise the waiting and running slots plus the adds in the box are the tracks there will be: sba_dl_add posts an add only for a track that neither waits nor runs
+ *   (SBD_OP_GO for the others), so with no cancel between them no two adds are one track, and none has a slot but the head while the worker is at it (taken off).
+ * The box itself holds no more than 2 * SBA_DLMAX adds (SBA_MEM: each carries a track's row). The caller holds the lock. */
+static int sbd_room(void) {
+    const m1_msg_t *m, *h = sbd.job.head;
+    int i, n = 0, adds = 0, frees = sbd.stop;
+    for (m = h; m; m = m->next) {
+        adds += m->op == SBD_OP_ADD;
+        frees |= m->op == SBD_OP_CANCEL || m->op == SBD_OP_CANCEL_ALL;
+    }
+    if (adds >= 2 * SBA_DLMAX) return SBA_MEM;
+    if (frees) return SBA_OK;
+    for (i = 0; sbd.q && i < SBA_DLMAX; ++i) n += sbd.q[i].state == SBA_DL_WAIT || sbd.q[i].state == SBA_DL_ACTIVE;
+    n += adds;
+    if (n >= SBA_DLMAX && h && h->op == SBD_OP_ADD) {
+        i = sbd_slot(((const sbd_msg_t *)h)->id);
+        n -= i >= 0 && (sbd.q[i].state == SBA_DL_WAIT || sbd.q[i].state == SBA_DL_ACTIVE);
+    }
+    return n >= SBA_DLMAX ? SBA_QFULL : SBA_OK;
+}
+
+/* Post a message (id and, for an add, the track). SBA_OK; SBA_MEM when there is no memory, or no thread for an add. Without a thread no worker runs, so a cancel is applied here. */
+static int sbd_post(int op, const char *id, const sba_track_t *t) {
+    sbd_msg_t *m = (sbd_msg_t *)calloc(1, sizeof *m + (t ? sizeof *t : 0));
+    int r = SBA_OK;
+    if (!m) return SBA_MEM;
+    m->m.op = op;
+    if (id) sbd_set(m->id, sizeof m->id, id);
+    if (t) memcpy(m->t, t, sizeof *t);
+    if (m1_job_post(&sbd.job, &m->m, sbd_main) != 0) {
+        if (op == SBD_OP_CANCEL) {
+            sbd_apply(&m->m);
+            sbd_settle();
+        } else
+            r = SBA_MEM;
+        free(m);
+    }
+    sbd_bump();
+    return r;
 }
 
 int sba_dl_add(const sba_track_t *t) {
     sbd_ent_t e;
-    int i, slot = -1, g, known = 0, again;
+    int st, g, known, room, noq, bad;
     unsigned kb = 0;
     if (!t || !t->id[0]) return SBA_PARSE;
     if (sbd_find(t->id, &e)) {
@@ -1032,126 +1257,68 @@ int sba_dl_add(const sba_track_t *t) {
         sbd_edit(t->id, (const char *)0); /* deleted by hand: the row goes and the track downloads again */
     }
     sbd_lock();
-    i = sbd_slot(t->id);
-    again = i >= 0 && sbd.q[i].state == SBA_DL_ACTIVE && sbd.stop;
-    if (i >= 0 && sbd.q[i].state != SBA_DL_FAILED) known = 1; /* waiting or running: asked twice is once */
+    st = sbd_view(t->id, (int *)0);
+    room = sbd_room();
+    noq = !sbd.q, bad = sbd.qbad;
     sbd_unlock();
-    if (again) { /* a cancel the worker has not seen yet is withdrawn: its line is on the card, so the track's row is written again after it first (else a restart would drop the track) */
-        int ok;
-        sbd_qf_lock();
-        ok = sbd_q_append(t);
-        sbd_qf_unlock();
-        if (!ok) return SBA_STORAGE; /* (the cancel stands) */
-        sbd_lock();
-        i = sbd_slot(t->id);
-        if (i >= 0 && sbd.q[i].state == SBA_DL_ACTIVE && sbd.stop)
-            sbd.stop = 0,
-            sbd.again =
-                1; /* (the transfer goes on if it has not looked yet; if it has, the worker queues the track again) */
-        else if (i < 0)
-            known =
-                0; /* the worker ended it meanwhile: a plain add from here (one more row of the track; the last one counts) */
-        sbd_unlock();
-    }
+    known =
+        st == SBA_DL_WAIT ||
+        st ==
+            SBA_DL_ACTIVE; /* waiting or running: asked twice is once (the message only starts a queue that stopped or came back from the card) */
     g = sba_guard();
-    if (g) return known && sbd.busy ? SBA_OK : g;
-    if (known) return sbd_start(); /* (a queue that stopped or came back from the card starts here) */
-    if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
-    if (!sbd.q)
-        return sbd.qbad
-                   ? SBA_STORAGE
-                   : SBA_MEM; /* (the queue on the card would not read: nothing is added on top of rows not seen) */
-    if (kb <= SBA_RESERVE_KB || (t->size >> 10) > kb - SBA_RESERVE_KB) return SBA_CARDFULL;
-    sbd_qf_lock();
-    sbd_lock();
-    i = sbd_slot(t->id); /* (the same id is now a failed slot, or nothing) */
-    if (i >= 0) slot = i;
-    for (i = 0; slot < 0 && i < SBA_DLMAX; ++i)
-        if (!sbd.q[i].state) slot = i;
-    if (slot < 0) /* the oldest failed one gives way */
-        for (i = 0; i < SBA_DLMAX; ++i)
-            if (sbd.q[i].state == SBA_DL_FAILED && (slot < 0 || (int)(sbd.q[i].seq - sbd.q[slot].seq) < 0)) slot = i;
-    if (slot < 0) {
-        sbd_unlock();
-        sbd_qf_unlock();
-        return SBA_QFULL;
+    if (g) return known && sbd.job.busy ? SBA_OK : g;
+    if (!known) {
+        if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
+        if (noq)
+            return bad ? SBA_STORAGE
+                       : SBA_MEM; /* (the queue on the card would not read: nothing is added on top of rows not seen) */
+        if (kb <= SBA_RESERVE_KB || (t->size >> 10) > kb - SBA_RESERVE_KB) return SBA_CARDFULL;
+        if (room != SBA_OK) return room;
     }
-    sbd_slot_free(&sbd.q[slot]);
-    sbd_set(sbd.q[slot].id, sizeof sbd.q[slot].id, t->id);
-    sbd.q[slot].seq = ++sbd.seq;
-    sbd.q[slot].state = SBA_DL_WAIT;
-    sbd_unlock();
-    g = sbd_q_append(t) ? SBA_OK : SBA_STORAGE; /* (the worker reads the row under qf: never before it is there) */
-    sbd_qf_unlock();
-    if (g == SBA_OK) g = sbd_start();
-    if (g != SBA_OK) {
-        sbd_lock();
-        if (sbd.q[slot].state == SBA_DL_WAIT && sbd_same(sbd.q[slot].id, t->id)) sbd_slot_free(&sbd.q[slot]);
-        sbd_unlock();
-        sbd_q_cancelled(t->id);
-        sbd_q_compact(); /* (a row written for a worker that could not be started does not wait on the card) */
-    }
-    sbd_bump();
-    return g;
+    return known ? sbd_post(SBD_OP_GO, (const char *)0, (const sba_track_t *)0) : sbd_post(SBD_OP_ADD, t->id, t);
 }
 
 int sba_dl_resume(void) {
     int i, n = 0;
     sbd_ensure();
-    if (!sbd.q || sbd.busy || !m1_card_mounted() || sba_guard()) return 0;
+    if (!sbd.q || sbd.job.busy || !m1_card_mounted() || sba_guard()) return 0;
     sbd_lock();
-    for (i = 0; i < SBA_DLMAX; ++i) {
-        if (sbd.q[i].state == SBA_DL_FAILED &&
-            sbd_later(sbd.q[i].code)) { /* the one the worker stopped at: again, behind the others */
-            sbd.q[i].state = SBA_DL_WAIT;
-            sbd.q[i].code = 0;
-            sbd.q[i].seq = ++sbd.seq;
-        }
-        n += sbd.q[i].state == SBA_DL_WAIT;
-    }
+    for (i = 0; i < SBA_DLMAX; ++i)
+        n += sbd.q[i].state == SBA_DL_WAIT || (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code));
     sbd_unlock();
-    if (!n || sbd_start() != SBA_OK) return 0;
-    sbd_bump();
-    return n;
-}
-
-static void sbd_cancel_locked(int i) {
-    if (sbd.q[i].state == SBA_DL_ACTIVE)
-        sbd.stop = 1, sbd.again = 0;
-    else
-        sbd_slot_free(&sbd.q[i]); /* waiting or failed */
+    return n && sbd_post(SBD_OP_RESUME, (const char *)0, (const sba_track_t *)0) == SBA_OK ? n : 0;
 }
 
 int sba_dl_cancel(const char *id) {
-    int i, waited = 0, kept = 1;
+    int st;
     if (!id) return SBA_OK;
     sbd_ensure();
     sbd_lock();
-    i = sbd_slot(id);
-    if (i >= 0) {
-        waited = sbd.q[i].state != SBA_DL_ACTIVE;
-        sbd_cancel_locked(i);
-    }
+    st = sbd_view(id, (int *)0);
     sbd_unlock();
-    if (i >= 0)
-        kept = sbd_q_cancelled(id); /* (first, and whatever the compaction can do: the cancel outlives a restart) */
-    if (waited && sbd_q_compact()) kept = 1; /* (the worker drops the row of the one it was on) */
-    sbd_bump();
-    return kept
-               ? SBA_OK
-               : SBA_STORAGE; /* (stopped for this run either way; SBA_STORAGE: the card did not take it, so the track waits again after a restart) */
+    if (st == SBA_DL_NONE) return SBA_OK; /* not in the queue (or cancelled already) */
+    return sbd_post(SBD_OP_CANCEL, id, (const sba_track_t *)0);
 }
 
+/* The message is sbd.all, the same one every time, so nothing here can fail for memory. While it is still in the box (the worker may be at it) it is not posted again: the messages
+ * that came after it are made void instead (they are never the one the worker holds, which is the head), which is the same as a cancel-all behind them. */
 void sba_dl_cancel_all(void) {
-    int i;
+    m1_msg_t *m;
+    int i, any, in = 0;
     sbd_lock();
-    for (i = 0; sbd.q && i < SBA_DLMAX; ++i)
-        if (sbd.q[i].state) sbd_cancel_locked(i);
+    any = sbd.job.busy; /* (a queue never read this run is on the card or nowhere: the file is looked for below) */
+    for (i = 0; !any && sbd.q && i < SBA_DLMAX; ++i) any = sbd.q[i].state != 0;
+    for (m = sbd.job.head; m; m = m->next) {
+        if (m == &sbd.all)
+            in = 1;
+        else if (in)
+            m->op = 0;
+    }
     sbd_unlock();
-    if (m1_card_mounted()) { /* nothing waits on the card either (also when the queue was never read this run) */
-        sbd_qf_lock();
-        unlink(SBD_Q);
-        sbd_qf_unlock();
+    if (!in) {
+        if (!any && access(SBD_Q, 0) != 0) return;
+        sbd.all.op = SBD_OP_CANCEL_ALL;
+        if (m1_job_post(&sbd.job, &sbd.all, sbd_main) != 0) sbd_do_cancel_all(); /* (no thread: no worker runs) */
     }
     sbd_bump();
 }
@@ -1169,23 +1336,14 @@ int sba_dl_failure(int *status) {
 }
 
 int sba_dl_state(const char *id, int *code, unsigned *got, unsigned *total) {
-    int i, r = SBA_DL_NONE;
+    int r;
     sbd_ent_t e;
     unsigned g = 0, tt = 0;
     if (!id || !id[0]) return SBA_DL_NONE;
     sbd_ensure();
     sbd_lock();
-    i = sbd_slot(id);
-    if (i >= 0) {
-        r = sbd.q[i].state;
-        if (r == SBA_DL_FAILED && code) *code = sbd.q[i].code;
-        if (r == SBA_DL_ACTIVE) {
-            if (sbd.stop)
-                r = SBA_DL_NONE; /* cancelled: the worker is about to drop it */
-            else
-                g = sbd.got, tt = sbd.total;
-        }
-    }
+    r = sbd_view(id, code);
+    if (r == SBA_DL_ACTIVE) g = sbd.got, tt = sbd.total;
     sbd_unlock();
     if (r == SBA_DL_NONE &&
         sbd_find(id,
@@ -1200,9 +1358,11 @@ int sba_dl_state(const char *id, int *code, unsigned *got, unsigned *total) {
 
 unsigned sba_dl_gen(void) { return sbd.gen; }
 
-int sba_dl_busy(void) { return sbd.busy; }
+int sba_dl_busy(void) { return sbd.job.busy; }
 
+/* (The messages not yet applied are counted as posted: an add as one more, a cancel as one less. Exact once the worker has taken them.) */
 int sba_dl_pending(void) {
+    const m1_msg_t *m;
     int i, n = 0;
     sbd_ensure();
     if (!sbd.q) return 0;
@@ -1211,6 +1371,8 @@ int sba_dl_pending(void) {
         if (sbd.q[i].state == SBA_DL_WAIT || sbd.q[i].state == SBA_DL_ACTIVE ||
             (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code)))
             ++n;
+    for (m = sbd.job.head; m; m = m->next)
+        n = m->op == SBD_OP_CANCEL_ALL ? 0 : n + (m->op == SBD_OP_ADD) - (m->op == SBD_OP_CANCEL && n > 0);
     sbd_unlock();
     return n;
 }
@@ -1306,13 +1468,21 @@ static int sbd_pending_locked(int i) {
            (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code));
 }
 
+/* A cancel-all waits in the box: the list is empty from the tap on (the other messages show when the worker has taken them, within about a second). The caller holds lock. */
+static int sbd_wiped_locked(void) {
+    const m1_msg_t *m;
+    for (m = sbd.job.head; m; m = m->next)
+        if (m->op == SBD_OP_CANCEL_ALL) return 1;
+    return 0;
+}
+
 unsigned sba_dl_rows(void) {
     unsigned sig;
     int i;
     sbd_ensure();
     sbd_lock();
     sig = (unsigned)sbd.nix * 0x9e3779b1u;
-    for (i = 0; sbd.q && i < SBA_DLMAX; ++i)
+    for (i = 0; sbd.q && i < SBA_DLMAX && !sbd_wiped_locked(); ++i)
         if (sbd_pending_locked(i)) sig += (sbd.q[i].seq + 1u) * 2654435761u;
     sbd_unlock();
     return sig;
@@ -1337,7 +1507,7 @@ int sba_dl_queue(sba_tracks_t *out) {
     e = (ent_t *)calloc(SBA_DLMAX, sizeof *e);
     if (!e) return -1;
     sbd_lock();
-    for (i = 0; i < SBA_DLMAX; ++i)
+    for (i = sbd_wiped_locked() ? SBA_DLMAX : 0; i < SBA_DLMAX; ++i)
         if (sbd_pending_locked(i)) {
             sbd_set(e[cnt].id, sizeof e[cnt].id, sbd.q[i].id);
             e[cnt].seq = sbd.q[i].seq;
@@ -1355,9 +1525,9 @@ int sba_dl_queue(sba_tracks_t *out) {
     if (cnt) {
         v = (sba_track_t *)calloc((unsigned)cnt, sizeof *v);
         t = (sba_track_t *)calloc(1, sizeof *t);
-        sbd_qf_lock();
+        sbd_mf_lock();
         text = sbd_slurp_st(SBD_Q, &n, &bad);
-        sbd_qf_unlock();
+        sbd_mf_unlock();
     }
     if (v && t && text && !bad) {
         p = text;

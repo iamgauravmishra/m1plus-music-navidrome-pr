@@ -173,28 +173,45 @@ tap toasts. Sign Out clears the cache (the music files and their manifest stay),
 
 One detached worker drains a queue of up to 1024 (`SBA_DLMAX`; the oldest waiting entry runs first, so a second add never starts a second thread).
 
-**The queue is on the card.** Memory holds only a slot a track (id, state, failure code); `sba_dl_add` appends the track's whole row to `dlq.idx` (one `O_APPEND` write, no sync: a lost
-line is a download asked for again) and the worker reads it back when the slot's turn comes (`sbd_q_row`; both under the file lock `qf`, so the worker never looks before the row is
-there). The first use of the download layer reads `dlq.idx` (`sbd_q_load`, after the manifest): every row whose track is not downloaded waits again, in the file's order, so a queue
-outlives a reboot, a crash or a pulled card. Nothing starts by itself: `sba_dl_resume` (the Subsonic root page's open, and its tick when the guard clears: `sbs_dl_resume`, which arms
-the keep-awake timer) or the next `sba_dl_add` starts the worker. Rows of finished, cancelled and given-up tracks are dropped when the queue drains or a waiting track is cancelled
-(`sbd_q_compact`, an atomic rewrite; an empty queue removes the file); Sign Out (`sba_dl_cancel_all`) removes it.
+**The queue is the worker's** (`patch/m1job.h`). Its slots in memory and `dlq.idx` on the card are changed by the worker thread only. The UI thread posts a message -- add (with the
+track's row), cancel, cancel all, resume -- and returns (`sbd_post`, `m1_job_post`: the post that finds no worker makes the thread; a worker ends only with the box empty, under the
+box's lock, so no message is left behind). The worker applies the messages in the order posted (`sbd_drain`): at the top of its loop, inside a transfer (the transfer-info hook
+`sba_dl_xfer`, so an add or a cancel made while a file comes is on the card within about a second) and after each track. An add and a cancel therefore never cross: the last one
+posted holds. A cancel of the running track that is followed by an add of it in the same batch is taken back before the transfer hears of it; once the transfer has been told to
+stop (`sbd.told`) no message is taken until it has ended, and an add that comes then queues the track anew, behind the others. A track's end is recorded from what its transfer
+answered before the next messages are taken, so a cancel of a track that has just failed takes it out and it does not come back with the network.
 
-A `dlq.idx` that cannot be read (it will not open, a read fails or comes short) is the card's failure, `SBA_STORAGE`, not a missing row: `sbd_q_row` answers -1, the worker stops and the row
+What the UI thread reads is the slots with the messages not yet applied laid over them (`sbd_view`, under the box's lock; a message stays in the box until it is applied): a tapped
+row shows waiting, or gone, at once. `sba_dl_pending` counts the same way (an add as one more, a cancel as one less), exact once the worker has taken them. `sba_dl_add` still answers
+by itself what only needs reading: the guard, the card, the free space and a full queue. That last answer is given only when it is sure and cheap (`sbd_room`, one pass, no ids compared): the waiting and running slots plus the adds in the box, which are
+distinct tracks because an add of a track that waits or runs already is posted as `SBD_OP_GO` (start fetching, no track); with a cancel in the box the count cannot be known from
+there, the add is posted and the worker answers. The box takes at most 2 * `SBA_DLMAX` adds (`SBA_MEM`). What the card refuses when the
+worker writes -- a queue row, or a cancel that got neither its line nor the rewrite -- is reported as a failed transfer is (`sbd_report`, `sba_dl_failure`: the page toasts
+"Storage unavailable" at its next tick); the same for a queue that filled between the add and the worker (`SBA_QFULL`). A message that cannot be posted is `SBA_MEM`; when the
+thread cannot be made no worker runs, so a cancel is applied where it was asked and an add is refused. Cancel all (Sign Out) cannot fail that way: its message is one fixed struct
+(`sbd.all`), not an allocated one; asked again while that is still in the box, the messages posted after it are made void (op 0) instead, which is the same as a second one behind them.
+
+**The queue is on the card.** Memory holds only a slot a track (id, state, failure code); an add appends the track's whole row to `dlq.idx` (one `O_APPEND` write, no sync: a lost
+line is a download asked for again) and the worker reads it back when the slot's turn comes (`sbd_q_row`). The first use of the download layer reads `dlq.idx` (`sbd_q_load`, after
+the manifest; the one read of the file that may be the UI thread's, under the file lock `mf` that all the file work on `dl.idx` and `dlq.idx` takes): every row whose track is not
+downloaded waits again, in the file's order, so a queue outlives a reboot, a crash or a pulled card. Nothing starts by itself: `sba_dl_resume` (the Subsonic root page's open, and its
+tick when the guard clears: `sbs_dl_resume`, which arms the keep-awake timer) or the next `sba_dl_add` starts the fetching (`sbd.go`); a worker started for a cancel alone does the
+card's side and ends without fetching a queue that was stopped. Rows of finished, cancelled and given-up tracks are dropped when the queue drains or after a batch of messages with
+a cancel (`sbd_settle`, `sbd_q_compact`: an atomic rewrite, once for the batch; an empty queue removes the file); Sign Out (`sba_dl_cancel_all`) removes it.
+
+A `dlq.idx` that cannot be read (it will not open, a read fails or comes short) is the card's failure, `SBA_STORAGE`, not a missing row: `sbd_q_row` answers -1, the fetching stops and the row
 is kept for the next start (a row that is really not there, in a file that was read whole, is `SBA_PARSE` and is dropped). The other two readers follow the same rule (`sbd_slurp_st`):
 `sbd_q_load` loads no queue from a file read in part and reads again at the next use (`sba_dl_add` answers `SBA_STORAGE` meanwhile: nothing is added on top of rows not seen), and
 `sbd_q_compact` leaves such a file as it is. A cancel does not depend on that rewrite: `sbd_q_cancelled` first appends one line `-=<id>` (no read needed), and `sbd_q_load` takes
 the rows before such a line out of the queue, so a cancelled track does not wait again after a restart; a later add of the track appends its row after the line and counts. The
 compaction drops these lines with the rows. The file is read as a log: the LAST row of a track is the track's (`sbd_q_row`, and the row `sbd_q_compact` keeps), so a row an earlier
-failed rewrite left before a cancel's line is never the one downloaded. An add that withdraws a cancel the worker has not seen yet writes the track's row again first, after the
-cancel's line (it answers `SBA_STORAGE` and the cancel stands when the card refuses the row). If the transfer had already stopped for that cancel, the worker puts the track back in line instead of dropping it (`sbd.again`) and it is fetched again. A cancel that comes after the transfer ended with a fault of its own, before the worker has marked the track failed, still takes it out (the worker looks at `sbd.stop` when it handles the result), and `sbd_q_row` finds no row for a track whose last line is a cancel, so `sba_dl_resume` never fetches it. `sba_dl_cancel` answers `SBA_STORAGE` when the card took neither the line nor the
-rewrite: the download is stopped for this run, the page toasts "Storage unavailable", and the track would wait again after a restart.
+failed rewrite left before a cancel's line is never the one downloaded, and `sbd_q_row` finds no row for a track whose last line is a cancel, so `sba_dl_resume` never fetches it.
 
 **The root page tells the downloads.** `sba_dl_pending` counts the running download, the waiting ones and the one a stopped worker left to try again; when no sync runs the status line
 reads "Downloading 12 songs" with the spinner while the worker runs and "12 downloads waiting" (the state's own glyph) while it does not (`nr_refresh`, `patch/ndroot.c`).
 
 **The worker stops at a failure that is not the track's** (`sbd_later`: no server saved, no Wi-Fi, the clock, a certificate, the network, the login, the card, memory, a full card). That
-track is `FAILED` with its code (the page toasts it once, as before), the rest stay `WAIT` and the worker ends, so a lost Wi-Fi no longer turns the whole queue into failures and the
+track is `FAILED` with its code (the page toasts it once, as before), the rest stay `WAIT`, the fetching stops (`sbd.go`) and the worker ends, so a lost Wi-Fi no longer turns the whole queue into failures and the
 device may go to standby (`sba_dl_busy` is 0). `sba_dl_resume` puts the track it stopped at back in the queue, behind the others (a track that keeps failing cannot block them), and
 starts a worker; adding a waiting track again does the same for the rest. A failure of the track itself (404, an HTTP error, not audio, a refused write) leaves it `FAILED` and the
 worker goes on with the next; its row is not kept past the drain.
@@ -234,7 +251,7 @@ never touches the card. A file deleted by hand is dropped when `sba_dl_path` or 
 Albums, Artists and Songs like copied music, and in Subsonic > Downloaded as well.
 
 **Download queue on the Downloaded page.** `nd_list(LS_DOWNLOADED)` puts the downloads still to come first (`sba_dl_queue`: the running one, then the waiting ones in the worker's `seq` order, and the track a stopped
-worker left for `sba_dl_resume`; their rows are the last row of each track in `dlq.idx`, a cancel's line after it leaves none; a queue file that will not read lists none) and the manifest's rows after them.
+worker left for `sba_dl_resume`; the list is the worker's slots, so an add or a single cancel shows once the worker has taken its message, within about a second, while a cancel-all in the box empties it at once; their rows are the last row of each track in `dlq.idx`, a cancel's line after it leaves none; a queue file that will not read lists none) and the manifest's rows after them.
 `lib_src_t.dl_rows` (appended last; `nd_dl_rows`) tells the page how many leading rows those are and returns `sba_dl_rows`, a number made from the manifest's row count and the `seq` of every pending slot: it moves
 when a track joins or leaves the queue or a download lands or is removed, never with progress, so `gen_rows` stays what it was for every other page and only the Downloaded page reads its list again (`sg_rows_same`).
 With rows to come the Songs page shows two named sections through the A-Z furniture (`az_t.sec_text`: "Downloading", "Downloaded"; headers on whatever the Section Headers switch says, no rail) and a grey text
