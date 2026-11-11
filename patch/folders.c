@@ -21,6 +21,8 @@
  *             Add to Playlist run the stock code on the stock selection vector, which is filled from the bitset at that moment (patch/songops.c so_selection): Delete is the stock folder
  *             handler's sequence (@0x5324d0: the confirm dialog, "can't be removed" while a playlist file is open, batch_delete_file(1, list, vector, 0, 1)), Add the stock playlist
  *             picker (so_add, class 1; the stock handler's Favourites question is not asked).
+ *   covers    with stock's Folder cover switch on (FOLDER_COVER) the rows are the Songs page's (64 px, a 52 px cover): a file's cover is its library album's, a folder's the album of the first
+ *             library track under it; looked up one visible row a tick (fo_album_of: one targeted query, nothing kept), glyph centred in the cover box where there is none. Off: the 52 px rows.
  * No hook; everything runs from the page's widgets and timers.
  */
 #include "offsets.inc"
@@ -52,9 +54,21 @@ extern int ft_statx(int dirfd, const char *path, int flags, unsigned mask,
 #define FO_ICON 24
 #define FO_ICON_X 16
 #define FO_ICON_Y ((ROW - FO_ICON) / 2)
+/* With stock's Folder cover switch on the rows keep this pitch and text column; only a row that has a cover differs: a 40 px cover (the size of stock's own folder-row icon, img_icon of
+ * folder_create_tablerow) at x 8, centred in the row, in place of the glyph (the Songs page's LIST_R corners) */
+#define FO_COVER 40
+#define FO_COVER_X 8
+#define FO_COVER_Y ((ROW - FO_COVER) / 2)
+#define FO_LOAD_MS 16 /* one cover (and its path lookup) a tick */
+#define FO_SQL_PATH 300 /* the longest path a library lookup is made for */
 #define FO_TEXT_X 56
-#define FO_TEXT_END 256
+#define FO_TEXT_END 256 /* the name's end on a file row (no chevron) and the wave's x 262 */
 #define FO_MARK_X 262
+/* A row with a chevron (folder, storage) that plays: the wave sits 8 px before the chevron and the name ends before it */
+#define FO_MARK_X_CHEV 254
+#define FO_TEXT_END_CHEV 248
+#define FO_FIT_NARROW \
+    0x100 /* a tile's fit bit of ours (over GRID_FIT_*): the name was cut for the playing folder's width */
 #define FO_CHEV_X LIST_CHEV_X /* 288: the shared list chevron */
 #define FO_TEXT_Y ((ROW - LIST_TITLE_H) / 2) /* the name centred in the row */
 /* the most entries a level may have for Date Modified: one statx each, run when the level is read (more: the row is not
@@ -112,10 +126,15 @@ static struct {
     void *mark[2]; /* the select marks: unselect, selected */
     void *chev; /* the chevron */
     void *ic[FO_ICONS]; /* the glyphs, FO_ICON px */
-    grid_t g; /* the rows' texts: the ring (a tile holds a name cut to its width and the extension; no cover) */
+    grid_t g; /* the rows' texts: the ring (a tile holds a name cut to its width and, with covers on, its cover) */
+    int cov; /* stock's Folder cover switch was on when the level was read: the Songs page's rows with covers */
+    cc_cmap_t *cmap; /* the library's albums -> cover files (cc_cmap_build), made on the first lookup of the page */
+    int cmap_tried;
+    unsigned more_timer; /* the cover loader's timer */
 } fo __attribute__((section(".scratch")));
 
 static int fo_on_stale(const void *unused);
+static void fo_kick(void);
 static void fo_cap(void);
 static void fo_select(int on);
 
@@ -406,32 +425,139 @@ static int fo_playing(int rec_i) {
     return 0;
 }
 
+/* ---------------------------------------------------------------------------
+ * Covers (stock's Folder cover switch): a file's cover is its album's, a folder's the album of the first library track under it. The library is asked one path at a time, one row a tick, for
+ * the rows in view (never from a paint): `select * from songtable where fileurl=<path>` for a file, and for a folder the first path of the range <path>/ .. <path>0 (`order by fileurl
+ * limit 1`: one record, a scan of the table with no sort and no list kept). The record lands in *tools_pdeq_directory (the Daily Mix's way) and is cleared at once; *pdeq_showlist, the
+ * page's list, is not touched. The album's cover file comes from the cover map (cc_cmap_build: one getAllAlbum query, 8 bytes an album, made on the first lookup). Nothing is built or written.
+ */
+static int fo_album_of(const char *path, int dir, char *out, unsigned n) {
+    static const char file_head[] = "select * from songtable where fileurl='",
+                      dir_head[] = "select * from songtable where fileurl>='";
+    char sql[4 * FO_SQL_PATH + 96],
+        *o = sql; /* a folder's query holds the path twice, and each apostrophe is doubled */
+    const char *p;
+    void *dq = (void *)0;
+    unsigned len = 0;
+    *out = 0;
+    for (p = path; *p; ++p)
+        if (p - path >= FO_SQL_PATH) return 0;
+    if (!*path) return 0;
+    memcpy(o, dir ? dir_head : file_head, dir ? sizeof dir_head - 1 : sizeof file_head - 1);
+    o += dir ? sizeof dir_head - 1 : sizeof file_head - 1;
+    for (p = path; *p; ++p) {
+        if (*p == '\'') *o++ = '\'';
+        *o++ = *p;
+    }
+    if (dir) {
+        memcpy(o, "/' and fileurl<'", 16), o += 16;
+        for (p = path; *p; ++p) {
+            if (*p == '\'') *o++ = '\'';
+            *o++ = *p;
+        }
+        memcpy(o, "0' order by fileurl limit 1", 28);
+    } else
+        memcpy(o, "' limit 1", 10);
+    if (toolsQueryDbTable(STOCK_DB_PATH, sql, STOCK_SONG_ROW, 0) >= 0) dq = *(void **)PDEQ_TOOLS_TMP;
+    if (dq && deque_size(dq)) {
+        p = cc_str(deque_at(dq, 0), REC_ALBUM);
+        while (p[len] && len < n - 1) out[len] = p[len], ++len;
+        out[len] = 0;
+    }
+    if (dq) deque_clear(dq);
+    return len != 0;
+}
+
+/* The cover of a row's tile: art 1 with its picture, or 2 (the glyph). Storages and playlist files have none; neither has a record the library does not know. */
+static void fo_art(grid_tile_t *t, int rec_i) {
+    void *rec = deque_at(fo.list, (unsigned)rec_i);
+    int type = I(rec, REC_TYPE);
+    char album[256], url[80];
+    unsigned key;
+    t->art = 2;
+    if (type != T_FILE && type != T_DIR) return;
+    if (!fo.cmap_tried) fo.cmap = cc_cmap_build((cc_cmap_stat_t *)0), fo.cmap_tried = 1;
+    if (!fo.cmap || !fo_album_of(cc_str(rec, REC_PATH), type == T_DIR, album, sizeof album)) return;
+    key = cc_cmap_key(fo.cmap, album);
+    if (key && cc_url(url, key)) grid_art_url(&fo.g, t, url);
+}
+
+/* The visible row still to try, the one nearest the middle of the view (-1: none). */
+static int fo_next_load(void) {
+    int r0, r1, r, best = -1, bd = 0x7fffffff;
+    if (!fo.cov || !fo.g.tiles || !fo.nvis || !fo_valid()) return -1;
+    fo_span(&r0, &r1);
+    for (r = r0; r <= r1; ++r) {
+        grid_tile_t *t = fo_tile(r);
+        int d = m1_abs(fo_row_y(r) - fo_off() + ROW / 2 - GRID_VIEW_H / 2);
+        if (t->art) continue;
+        if (d < bd) bd = d, best = r;
+    }
+    return best;
+}
+
+static int fo_on_load(const void *unused) {
+    int r;
+    (void)unused;
+    fo.more_timer = 0;
+    if (!fo.view) return RET_OK;
+    if (grid_moving(fo.sv)) { /* nothing is looked up or decoded while the list moves */
+        fo_kick();
+        return RET_OK;
+    }
+    r = fo_next_load();
+    if (r >= 0) {
+        fo_art(fo_tile(r), fo.vis[r]);
+        fo_redraw();
+    }
+    fo_kick();
+    return RET_OK;
+}
+
+static void fo_kick(void) {
+    if (!fo.more_timer && fo.view && fo.cov && fo_next_load() >= 0)
+        fo.more_timer = timer_add(fo_on_load, (void *)0, FO_LOAD_MS);
+}
+
 static void fo_paint_rows(void *canvas) {
-    int r0, r1, r, off = fo_off(), tx = fo_tx(), room = FO_TEXT_END - tx;
+    int r0, r1, r, off = fo_off(), tx = fo_tx(), rh = ROW;
     unsigned playing = 0; /* bit r - r0 */
     fo_span(&r0, &r1);
     if (r1 - r0 >= FO_PLAYING_MAX) r1 = r0 + FO_PLAYING_MAX - 1;
     for (r = r0; r <= r1; ++r) {
         int rec = fo.vis[r], type = fo_type(rec), y = fo_row_y(r) - off;
+        grid_tile_t *t = fo.cov ? fo_tile(r) : (grid_tile_t *)0;
         if (fo_playing(rec)) playing |= 1u << (r - r0);
-        if (fo.press == r + 1 && !fo.select) az_fill(canvas, 0, y, y + ROW - 1, FO_W, LIST_PRESS);
+        if (fo.press == r + 1 && !fo.select) az_fill(canvas, 0, y, y + rh - 1, FO_W, LIST_PRESS);
         if (fo.select && fo.mark[0] && fo_markable(type)) {
             void *m = fo.mark[fo_is_sel(rec)];
-            int src[4], dst[4], top = y + (ROW - SG_MARK) / 2;
+            int src[4], dst[4], top = y + (rh - SG_MARK) / 2;
             if (top >= 0 && top + SG_MARK <= GRID_VIEW_H) {
                 src[0] = 0, src[1] = 0, src[2] = SG_MARK, src[3] = SG_MARK;
                 dst[0] = (SG_SEL_COL - SG_MARK) / 2, dst[1] = top, dst[2] = SG_MARK, dst[3] = SG_MARK;
                 canvas_draw_image(canvas, m, src, dst);
             }
         }
-        fo_blit(canvas, fo_glyph(rec), FO_ICON, FO_ICON, FO_ICON_X + fo_shift(), y + FO_ICON_Y);
-        if ((playing >> (r - r0)) & 1) fo_blit(canvas, fo.ic[FO_I_WAVE], FO_ICON, FO_ICON, FO_MARK_X, y + FO_ICON_Y);
-        if (type != T_FILE) fo_blit(canvas, fo.chev, POD_CHEV_W, POD_CHEV_H, FO_CHEV_X, y + (ROW - 1 - POD_CHEV_H) / 2);
-        az_fill(canvas, tx, y + ROW - 1, y + ROW, FO_W - 10 - tx, LIST_HAIR);
+        if (t && t->art == 1) /* the cover, its corners cut in the bitmap */
+            fo_blit(canvas, t->bmp, FO_COVER, FO_COVER, FO_COVER_X + fo_shift(), y + FO_COVER_Y);
+        else
+            fo_blit(canvas, fo_glyph(rec), FO_ICON, FO_ICON, FO_ICON_X + fo_shift(), y + FO_ICON_Y);
+        if ((playing >> (r - r0)) & 1)
+            fo_blit(canvas, fo.ic[FO_I_WAVE], FO_ICON, FO_ICON, type != T_FILE ? FO_MARK_X_CHEV : FO_MARK_X,
+                    y + FO_ICON_Y);
+        if (type != T_FILE) fo_blit(canvas, fo.chev, POD_CHEV_W, POD_CHEV_H, FO_CHEV_X, y + (rh - 1 - POD_CHEV_H) / 2);
+        az_fill(canvas, tx, y + rh - 1, y + rh, FO_W - 10 - tx, LIST_HAIR);
     }
     widget_prepare_text_style(fo.st_title, canvas);
-    for (r = r0; r <= r1; ++r)
-        grid_text(canvas, fo_tile(r), 0, tx, fo_row_y(r) - off + FO_TEXT_Y, room, LIST_TITLE_H, 0);
+    for (r = r0; r <= r1; ++r) {
+        int narrow = fo_type(fo.vis[r]) != T_FILE && ((playing >> (r - r0)) & 1);
+        int end = narrow ? FO_TEXT_END_CHEV : FO_TEXT_END;
+        grid_tile_t *t = fo_tile(r);
+        if (!(t->fit & FO_FIT_NARROW) !=
+            !narrow) /* the width changed with the wave: the name is cut again from the record */
+            fo_prep(t, fo.vis[r]), t->fit = narrow ? FO_FIT_NARROW : 0;
+        grid_text(canvas, t, 0, tx, fo_row_y(r) - off + (rh - LIST_TITLE_H) / 2, end - tx, LIST_TITLE_H, 0);
+    }
 }
 
 static int fo_on_paint(void *ctx, void *e) {
@@ -481,6 +607,7 @@ static int fo_on_scroll(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (fo.view) fo_title_update();
+    fo_kick();
     return RET_OK;
 }
 
@@ -507,6 +634,9 @@ static void fo_load(int keep) {
     unsigned i;
     void *list = *(void **)PDEQ_SHOWLIST;
     grid_drop(&fo.g);
+    fo.cov =
+        fo.g.tiles && *(unsigned char *)FOLDER_COVER != 0; /* stock's Folder cover switch, read as each level is read */
+    m1_timer_stop(&fo.more_timer);
     free(fo.vis);
     free(fo.sel);
     free(fo.mt);
@@ -549,6 +679,7 @@ static void fo_load(int keep) {
         fo_select(0); /* the root has nothing to select: the mode ends (and the capsule is made again) */
     else
         fo_cap();
+    fo_kick();
 }
 
 /* Another query replaced the stock list under a page that is on top (a paint found it): the level is read again (the stock folder_reload: the card's directory). A page behind
@@ -918,7 +1049,11 @@ static int fo_on_fg(void *ctx, void *e) {
         fo_select(0);
         folder_reload();
         fo_load(1);
-    } else if (!fo_valid()) { /* (a dialog or Now Playing closing leaves the list as it was: the marks stay) */
+    } else if (
+        !fo_valid() ||
+        fo.cov !=
+            (*(unsigned char *)FOLDER_COVER !=
+             0)) { /* (a dialog or Now Playing closing leaves the list as it was: the marks stay; the switch changed: the rows are made again) */
         folder_reload();
         fo_load(1);
     }
@@ -932,6 +1067,8 @@ static int fo_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     m1_timer_stop(&fo.stale_timer);
+    m1_timer_stop(&fo.more_timer);
+    cc_cmap_free(fo.cmap);
     grid_free(&fo.g);
     for (i = 0; i < 2; ++i)
         if (fo.mark[i]) bitmap_destroy(fo.mark[i]);
@@ -1032,13 +1169,15 @@ static int fo_open_page(void) {
     widget_on(fo.view, EVT_POINTER_UP, fo_on_up, (void *)0);
     widget_on(fo.view, EVT_POINTER_ABORT, fo_on_abort, (void *)0);
     widget_on(fo.view, EVT_AFTER_PAINT, fo_on_paint, (void *)0);
-    if (!grid_init(&fo.g, fo.win, GRID_TILES, LIST_ART, 0)) {
+    if (!grid_init(&fo.g, fo.win, GRID_TILES, FO_COVER, 0)) {
         grid_free(&fo.g);
         m1_show(fo.view, 0);
         m1_show(fo.status, 1);
         widget_set_tr_text(fo.status, "Not enough memory");
         return 0;
     }
+    grid_shape(&fo.g, FO_COVER, LIST_R,
+               1); /* the covers: LIST_R corners cut in the alpha (used with stock's Folder cover switch on) */
     folder_enter(-1, 0); /* as the stock folder_page_init: the root list of storages, layer 1 */
     *(int *)G_CLASS_TYPE = FO_CLASS; /* as folder_page_init leaves it (@0x5334b4: 1) */
     fo_load(0);

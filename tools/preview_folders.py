@@ -5,7 +5,10 @@ files (Play / Shuffle pills, the wave on what plays), the list scrolled past the
 folder with long names and an empty one.
 Not pixel-exact AWTK (the text is the project's own text model).
 
-  preview_folders.py WORKDIR OUT.png [--lang CODE] [--accent NAME]
+  preview_folders.py WORKDIR OUT.png [--lang CODE] [--accent NAME] [--covers]
+
+--covers draws the page as it is with stock's Folder cover switch on: the same 52 px rows and text column, a 40 px cover at x 8 with 4 px corners in place of the glyph on a row where the library has one
+(swatches here), the 24 px glyph at x 16 where it has none.
 
 WORKDIR is a built tree (work/mod-release).
 """
@@ -47,7 +50,20 @@ def chevron(im, x, y):
 def rows_top(rows): return O['SG_TOP'] if any(r[0] == T_FILE for r in rows) else F['FO_TOP_PLAIN']
 
 
-def content(s, title, rows, select=None, playing=()):
+COVER_RGB = {}   # name -> the swatch colour of a row with a cover (--covers)
+
+
+def cover_swatch(rgb):
+    """A 40 px cover stand-in: a vertical gradient of rgb with the list covers' 4 px corners cut."""
+    n, r = F['FO_COVER'], O['LIST_R']
+    im = Image.new('RGBA', (n, n)); d = ImageDraw.Draw(im)
+    for y in range(n): d.line((0, y, n, y), fill=tuple(int(c * (1.15 - 0.5 * y / n)) for c in rgb) + (255,))
+    mask = Image.new('L', (n, n), 0); ImageDraw.Draw(mask).rounded_rectangle((0, 0, n - 1, n - 1), r, fill=255)
+    im.putalpha(mask)
+    return im
+
+
+def content(s, title, rows, select=None, playing=(), covers=False):
     """The whole list as one tall image (window x, content y): the large title, the pills when the folder holds a file, the rows. select: the set of marked names (a mark column
     on audio files, the pills dim); playing: the names of the rows that carry the wave."""
     top = rows_top(rows)
@@ -67,10 +83,13 @@ def content(s, title, rows, select=None, playing=()):
             mk = on if name in select else off
             im.alpha_composite(mk, ((O['SG_SEL_COL'] - mk.width) // 2, y + (ROW_H - mk.height) // 2))
         icon = 'pod_ic_cdripper' if name == 'CD Library' else ICON[type]
-        im.alpha_composite(s.img(icon), (F['FO_ICON_X'] + shift, y + F['FO_ICON_Y']))
-        if name in playing: im.alpha_composite(s.img('pod_ic_nowplaying'), (F['FO_MARK_X'], y + F['FO_ICON_Y']))
-        if type != T_FILE: chevron(im, F['FO_CHEV_X'], y + (ROW_H - 16) // 2)
-        s.text(im, tx, y + F['FO_TEXT_Y'] + O['LIST_TITLE_H'] / 2, s.clip(name, 21, TEXT_END - tx), 21)
+        if covers and name in COVER_RGB: im.alpha_composite(cover_swatch(COVER_RGB[name]), (F['FO_COVER_X'] + shift, y + F['FO_COVER_Y']))
+        else: im.alpha_composite(s.img(icon), (F['FO_ICON_X'] + shift, y + F['FO_ICON_Y']))
+        chev = type != T_FILE   # a playing row with a chevron: the wave 8 px before it and the name cut at 248
+        if name in playing: im.alpha_composite(s.img('pod_ic_nowplaying'), (F['FO_MARK_X_CHEV'] if chev else F['FO_MARK_X'], y + F['FO_ICON_Y']))
+        if chev: chevron(im, F['FO_CHEV_X'], y + (ROW_H - 1 - 16) // 2)
+        text_end = F['FO_TEXT_END_CHEV'] if chev and name in playing else TEXT_END
+        s.text(im, tx, y + F['FO_TEXT_Y'] + O['LIST_TITLE_H'] / 2, s.clip(name, 21, text_end - tx), 21)
     return im, end
 
 
@@ -82,8 +101,8 @@ def card(s, im, current=0, rev=False):
     PI.view_card(s, im, rows, 'vs_glass4', (1,))
 
 
-def page(s, title, rows, scroll=0, select=None, playing=(), empty=False, root=False, menu=None, direct=False):
-    tall, end = content(s, title, rows, select, playing)
+def page(s, title, rows, scroll=0, select=None, playing=(), empty=False, root=False, menu=None, direct=False, covers=False):
+    tall, end = content(s, title, rows, select, playing, covers)
     im = Image.new('RGBA', (W, WIN), (0, 0, 0, 255))
     scroll = max(0, min(scroll, end - (WIN - NAV)))
     if empty:
@@ -133,6 +152,7 @@ def extras_panel(s):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('workdir'); ap.add_argument('out'); ap.add_argument('--lang', default='en_US')
+    ap.add_argument('--covers', action='store_true', help="stock's Folder cover switch on: the 40 px covers")
     ap.add_argument('--accent', default='neutral', help='an accent (red, orange, ...): every image through palette.render_image, so the pod_ic_ / fo_ic_ glyphs are the accent')
     a = ap.parse_args()
     s = PI.Side(a.workdir, True, a.lang)
@@ -143,7 +163,16 @@ def main():
     asset = awtk_ui.parse(open(os.path.join(a.workdir, PI.RAW, 'ui', 'm1plus_folders.bin'), 'rb').read())
     assert asset.find('folders_scrollview') is not None and asset.find('btn_more') is not None and asset.find('vs_card') is not None, 'not the Folders asset'
     root = PS.tr(s, 'Folders')
-    panels = [('Extras (the menu rows: glyph x 16, text x 56), for comparison', extras_panel(s)),
+    if a.covers:
+        COVER_RGB.update({'Artwork': (0x7a, 0x4a, 0x2a), 'Live 1964': (0x2a, 0x4a, 0x7a), '01 So What.flac': (0x2a, 0x6a, 0x5a), '02 Freddie Freeloader.flac': (0x2a, 0x6a, 0x5a), '03 Blue in Green.flac': (0x2a, 0x6a, 0x5a),
+                          'Disc 1 - The Complete Columbia Studio Recordings 1955-1961': (0x6a, 0x2a, 0x5a), '東京の夜.mp3': (0x5a, 0x5a, 0x2a)})
+        panels = [('Covers on: the storages', page(s, root, ROOT_ROWS, playing={'SD'}, root=True, covers=True)),
+                  ('A folder: covers, glyphs', page(s, 'Kind of Blue', ALBUM_ROWS, playing={'03 Blue in Green.flac'}, covers=True)),
+                  ('Scrolled', page(s, 'Kind of Blue', ALBUM_ROWS * 2, scroll=120, playing={'03 Blue in Green.flac'}, covers=True)),
+                  ('Select', page(s, 'Kind of Blue', ALBUM_ROWS, select={'Live 1964', '01 So What.flac'}, covers=True)),
+                  ('Long names, CJK', page(s, 'Disc 1 - The Complete Columbia Studio Recordings', LONG_ROWS, covers=True))]
+    else:
+      panels = [('Extras (the menu rows: glyph x 16, text x 56), for comparison', extras_panel(s)),
               ('Root: the storages (the SD card plays), no \"...\"', page(s, root, ROOT_ROWS, playing={'SD'}, root=True)),
               ('A folder with audio files: pills, the wave', page(s, 'Kind of Blue', ALBUM_ROWS, playing={'03 Blue in Green.flac'})),
               ('Scrolled past the large title: the small one, the fade', page(s, 'Kind of Blue', ALBUM_ROWS * 2, scroll=120, playing={'03 Blue in Green.flac'})),

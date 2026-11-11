@@ -15,6 +15,7 @@ ROW, VIEW_H, TOP = pod_ui.ROW_H, O['GRID_VIEW_H'], O['SG_TOP']
 # expected draw output, written out (patch/folders.c FO_*): the tests check the drawing, so they must not read the constants back
 TOP_PLAIN = 60                       # the first row with no pills: under the large title (SG_PILL_Y 52 + 8)
 TEXT_X, TEXT_END, ICON, ICON_X, ICON_Y, TEXT_Y, MARK_X, CHEV_X = 56, 256, 24, 16, 14, 14, 262, 288
+MARK_X_CHEV, TEXT_END_CHEV = 254, 248   # a row with a chevron that plays: the wave and the name's end (a file row keeps 262 / 256)
 SC_YOFF = O['SC_YOFF']
 LAYER, TITLE, M3U = (pod.DATA[k][0] for k in ('FOLDER_LAYER', 'FOLDER_TITLE', 'FOLDER_M3U'))
 SHOWLIST, G_CLASS, SEL_VEC, NAV_TITLE = (pod.DATA[k][0] for k in ('PDEQ_SHOWLIST', 'G_CLASS_TYPE', 'SEL_VEC', 'NAV_TITLE'))
@@ -249,7 +250,9 @@ def asset_tests(ctx):
            and F['FO_CHEV_X'] == O['LIST_CHEV_X'] == 288 and F['FO_ICON_Y'] == (ROW - 24) // 2 and set(mod_icons.FOLDER_ROWS) <= set(ICONS)
            and {'pod_ic_folders', 'pod_ic_playlists', 'pod_ic_cdripper', 'pod_ic_nowplaying'} <= {v[0] for v in mod_icons.POD_ROWS.values()} | {'pod_ic_cdripper'},
            'the menu rows\' numbers: a 24 px glyph at x 16, the text at x 56, the 52 px pitch, the stock chevron\'s place; the glyphs are theirs')
-    expect(F['FO_TOP_PLAIN'] >= O['SG_PILL_Y'] and F['FO_TEXT_END'] <= F['FO_MARK_X'] + 8 and F['FO_MARK_X'] + F['FO_ICON'] - 4 <= F['FO_CHEV_X'] + 4 and F['FO_TEXT_Y'] == (ROW - O['LIST_TITLE_H']) // 2,
+    expect(F['FO_TOP_PLAIN'] >= O['SG_PILL_Y'] and F['FO_TEXT_END'] <= F['FO_MARK_X'] + 8 and F['FO_MARK_X'] + F['FO_ICON'] - 4 <= F['FO_CHEV_X'] + 4
+           and (F['FO_MARK_X_CHEV'], F['FO_TEXT_END_CHEV']) == (MARK_X_CHEV, TEXT_END_CHEV) and F['FO_TEXT_END_CHEV'] <= F['FO_MARK_X_CHEV'] and F['FO_MARK_X_CHEV'] + F['FO_ICON'] + 8 <= F['FO_CHEV_X'] + 2
+           and (F['FO_COVER'], F['FO_COVER_X'], F['FO_COVER_Y']) == (40, 8, 6) and F['FO_TEXT_Y'] == (ROW - O['LIST_TITLE_H']) // 2,
            'the geometry: the plain list starts under the large title, the names end before the wave, the wave before the chevron')
     expect(all(f(n) is None for n in ('label_row_sub',)) and f('sg_title').x == O['SG_TITLE_X'] == 12 and f('btn_play').x == O['SG_PILL_X0'] == 10,
            'one line a row: no second text style; the large title and the pills are at the Songs page\'s x (12, 10)')
@@ -312,8 +315,24 @@ def rows_tests(ctx):
     m = opened(); m.playing_dir = '/mnt/mmc/Music/x.flac'
     enter(m, 'SD')
     blits, texts, fills = paint(m)
-    wave = [b for b in blits if b[2][0] == MARK_X]
-    expect(len(wave) == 1 and wave[0][2][1] == TOP + ROW + ICON_Y, 'the folder that holds the playing file carries the wave')
+    wave = [b for b in blits if b[2][0] == MARK_X_CHEV]
+    expect(len(wave) == 1 and wave[0][2][1] == TOP + ROW + ICON_Y and not [b for b in blits if b[2][0] == MARK_X], 'the folder that holds the playing file carries the wave, 8 px clear of its chevron (x 254)')
+    ttl = {t: r for (t, r), s in texts if s == 'label_row_title'}
+    expect(ttl['Music'][2] == TEXT_END_CHEV - TEXT_X and ttl['Blank'][2] == TEXT_END - TEXT_X, f'a playing folder\'s name ends at 248, the others at 256 ({ttl["Music"]}, {ttl["Blank"]})')
+    # the wave comes and goes while the level is open: the name is cut again for the width it gets (the tile keeps a cut name)
+    long = 'ABCDEFGHIJKLMNOPQRSTUVWXY'   # 25 chars at 8 px: 200 px, the row's whole width
+    root = TREE['/mnt/mmc']
+    TREE['/mnt/mmc'] = root[:5] + [(T_DIR, 'Tall')] + root[5:]; TREE['/mnt/mmc/Tall'] = [(T_DIR, long)]; TREE['/mnt/mmc/Tall/' + long] = []   # (after Sort: the listing's place is the shown one)
+    try:
+        m = opened(); enter(m, 'SD'); enter(m, 'Tall')
+        name = lambda: [t for (t, r), s in paint(m)[1] if s == 'label_row_title']
+        first = name()
+        m.playing_dir = f'/mnt/mmc/Tall/{long}/x.flac'; cut = name()
+        m.playing_dir = None; back = name()
+        expect(first == [long] and cut == [long[:22] + '\u2026'] and back == [long], f'a folder that starts to play has its name cut to 192 px, and whole again when it stops ({first}, {cut}, {back})')
+    finally:
+        TREE['/mnt/mmc'] = root
+        for k in ('/mnt/mmc/Tall', '/mnt/mmc/Tall/' + long): TREE.pop(k, None)
     # press fill
     m = opened()
     touch(m, 'down', 100, SCREEN_Y0 + TOP_PLAIN + 20, 'fo_on_down')
@@ -695,4 +714,178 @@ def cue_tests(ctx):
     finally: TREE['/mnt/mmc'] = root
 
 
-SECTIONS = [asset_tests, open_tests, rows_tests, levels_tests, play_tests, select_tests, stale_tests, order_tests, cue_tests]   # tools/check.py runs each as its own task
+COVER_FLAG = pod.DATA['FOLDER_COVER'][0]
+COV = dict(row=52, art=40, art_x=8, art_y=6, text_x=56, glyph_x=16, glyph_y=14, sel=30)   # the rows with stock's Folder cover switch on (patch/folders.c): the 52 px row and its text column, a 40 px cover at x 8, written out
+LIB = [('/mnt/mmc/Music/01 So What.flac', 'Miles', 'Kind of Blue'), ('/mnt/mmc/Music/Kind of Blue/a.flac', 'Miles', 'Kind of Blue'),
+       ('/mnt/mmc/Nested/Deep/x.flac', 'Band', 'Deep Album'), ('/mnt/mmc/Sort/b.mp3', 'Other', 'No Cover Album'), ('/mnt/mmc/Sort/A.flac', 'Other', 'No Cover Album'),
+       ("/mnt/mmc/Sort/zeta/it's.flac", 'Quote', 'Quoted'), ('/mnt/mmc/Music/Mix.m3u8', 'Miles', 'Kind of Blue')]
+COVERED = {'Kind of Blue': 'Miles', 'Deep Album': 'Band', 'Quoted': 'Quote'}   # the albums whose cache file holds a picture
+PIX = {'Kind of Blue': 0xff112233, 'Deep Album': 0xff445566, 'Quoted': 0xff778899}
+
+
+def cover_machine(flag=1, lib=LIB, covered=COVERED):
+    """The folders machine over a library of tracks (the song rows of the query by path, the album rows of the cover map) with cache files for some albums."""
+    m = folder_machine()
+    m.u.mem_write(COVER_FLAG, bytes([flag]))
+    m.class_lists[0xf001] = [m.record(album=al, artist=ar, path=p, name=p.rsplit('/', 1)[1]) for p, ar, al in lib]
+    seen = []
+    for _, ar, al in lib:
+        if (ar, al) not in seen: seen.append((ar, al))
+    m.class_lists[O['CLASS_ALBUMS']] = [m.record(album=al, artist=ar, path=f'/mnt/mmc/lib/{i}.flac', rid=900 + i) for i, (ar, al) in enumerate(seen)]
+    for al, ar in covered.items():
+        f = art_file(album_key(ar, al)); m.present.add(f); m.files[f] = 4096
+        m.images['file://' + f] = (8, 8, struct.pack('<I', PIX[al]) * 64)
+    m.cover_urls = {al: 'file://' + art_file(album_key(ar, al)) for al, ar in covered.items()}
+    return m
+
+
+def settle_covers(m, limit=200):
+    """The loader's timer fires until it stops re-arming (one row a tick)."""
+    for n in range(limit):
+        m.calls.clear(); m.call(PSYMS['fo_on_load'], count=80000000)
+        if not any(c[0] == 'timer_add' and c[1] == PSYMS['fo_on_load'] for c in m.calls): return n + 1
+    return limit
+
+
+def enter64(m, name):
+    """Tap the shown row called name on a level with covers (the rows are 52 px apart)."""
+    recs = sorted((r for r in m.shown if not m.read_cstr(m.word(r + O['REC_NAME'])).startswith('.')), key=lambda r: (m.s32(r + O['REC_TYPE']) in (T_FILE, T_LIST), m.read_cstr(m.word(r + O['REC_NAME'])).lower()))
+    names = [m.read_cstr(m.word(r + O['REC_NAME'])) for r in (m.shown if m.layer <= 1 else recs)]   # (the storages keep their order)
+    top = TOP if any(m.s32(r + O['REC_TYPE']) == T_FILE for r in m.shown) else TOP_PLAIN
+    m.calls.clear()
+    y = top + names.index(name) * COV['row'] + 20
+    off = max(0, y - VIEW_H + 40)   # (a row below the view: the list is scrolled first)
+    if off: scroll_to(m, off)
+    return tap(m, 100, y - off)
+
+
+def cover_tests(ctx):
+    """9. Folder / file covers (stock's Folder cover switch): off = the rows as before, no query; on = the same rows with a 40 px cover in place of the glyph, a file's album cover, a folder's cover from the first library
+    track under it (a folder of sub-folders too), the glyph in the cover's box for the rest, storages and playlist files with glyphs, select mode, a library that cannot be read."""
+    expect = ctx.expect
+    root = TREE['/mnt/mmc']
+    TREE['/mnt/mmc'] = root[:1] + [(T_DIR, 'Nested')] + root[1:]
+    TREE['/mnt/mmc/Nested'] = [(T_DIR, 'Deep')]
+    TREE['/mnt/mmc/Nested/Deep'] = [(T_FILE, 'x.flac')]
+    TREE['/mnt/mmc/Sort/zeta'] = [(T_FILE, "it's.flac")]
+    try:
+        # off: the rows are the old ones, the library is never asked, no timer
+        m = cover_machine(flag=0)
+        open_page(m); enter(m, 'SD'); enter(m, 'Sort')
+        blits, texts, fills = paint(m)
+        ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
+        expect(ttl[0] == ('Alpha', (TEXT_X, TOP + TEXT_Y, TEXT_END - TEXT_X, O['LIST_TITLE_H'])) and [b[2][:2] for b in blits if b[2][2] == ICON][:2] == [(ICON_X, TOP + ICON_Y), (ICON_X, TOP + ROW + ICON_Y)],
+               'the switch off: the rows are the 52 px rows with the glyph at x 16 and the name at x 56')
+        expect(not [c for c in m.calls if c[0] == 'toolsQueryDbTable'] and not [b for b in blits if b[2][2] == COV['art']] and not any(c[0] == 'timer_add' and c[1] == PSYMS['fo_on_load'] for c in m.calls),
+               'the switch off: no library query, no cover, no loader timer')
+        expect(not any(q for q in m.__dict__.get('queries', [])), 'the switch off: the database is not asked')
+
+        # on: the SD level (Music has a track under it, Nested holds only a sub-folder, Blank / Podcasts / Sort have no cover)
+        m = cover_machine()
+        open_page(m); enter(m, 'SD')
+        rows = ['Blank', 'Music', 'Nested', 'Podcasts', 'Sort', 'readme.mp3']
+        inview = [i for i in range(len(rows)) if TOP + i * COV['row'] < VIEW_H - COV['row']]   # (the rows in view are the ones looked up)
+        n = settle_covers(m)
+        expect(n <= len(inview) + 1 and len(inview) >= 4, f'one row a tick: {n} ticks for {len(inview)} rows in view')
+        blits, texts, fills = paint(m)
+        art = {tuple(b[2][:2]): b for b in blits if b[2][2] == COV['art'] and b[2][3] == COV['art']}
+        glyph = {tuple(b[2][:2]) for b in blits if b[2][2] == ICON}
+        want_art = {'Music': PIX['Kind of Blue'], 'Nested': PIX['Deep Album']}
+        for i, name in enumerate(rows):
+            y = TOP + i * COV['row']
+            if i not in inview: continue
+            if name in want_art:
+                expect((COV['art_x'], y + COV['art_y']) in art and (COV['glyph_x'], y + COV['glyph_y']) not in glyph, f'{name}: the 40 px cover at x 8, no glyph')
+            else:
+                expect((COV['art_x'], y + COV['art_y']) not in art and (COV['glyph_x'], y + COV['glyph_y']) in glyph, f'{name}: no cover, the glyph where the switch off draws it (x 16)')
+        expect(len(art) == 2, f'two covers ({len(art)})')
+        loads = [u for u in m.loads if u.startswith('file://')]
+        expect(sorted(loads) == sorted([m.cover_urls['Kind of Blue'], m.cover_urls['Deep Album']]), f'the album\'s cache file, nothing else decoded ({loads})')
+        ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
+        expect(ttl[1] == ('Music', (COV['text_x'], TOP + COV['row'] + (COV['row'] - O['LIST_TITLE_H']) // 2, TEXT_END - COV['text_x'], O['LIST_TITLE_H'])), f'the name at x 56, centred in the 52 px row ({ttl[1]})')
+        hair = [f_ for f_ in fills if f_[0] == O['LIST_HAIR']]
+        expect(hair[0][1:] == (COV['text_x'], TOP + COV['row'] - 1, 320 - 10 - COV['text_x'], 1), f'the hairline from the text, at the 52 px row\'s foot ({hair[0]})')
+        chev = [b for b in blits if b[2][2] == PF.O.get('POD_CHEV_W', 10) and b[2][3] == 16]
+        expect(len(chev) >= 4 and chev[0][2][1] == TOP + (COV['row'] - 1 - 16) // 2, 'the chevron of each folder, centred in the row')
+        expect(m.props.get((m.sv, 'virtual_h')) == TOP + len(rows) * COV['row'] + 24, 'the content is as tall as with the switch off')
+        qs = [q for q in m.queries if q.startswith('select * ')]
+        want_qs = [f"select * from songtable where fileurl>='/mnt/mmc/{d}/' and fileurl<'/mnt/mmc/{d}0' order by fileurl limit 1" for d in ('Blank', 'Music', 'Nested', 'Podcasts', 'Sort')]
+        want_qs.append("select * from songtable where fileurl='/mnt/mmc/readme.mp3' limit 1")   # (every row is in view: the 52 px rows)
+        expect(sorted(qs) == sorted(want_qs)
+               and sum(1 for q in m.queries if q == pod.ALBUM_SQL) == 1,
+               f'one lookup a row in view (a folder by the first path of its range) and ONE album query for the page ({qs})')
+        expect(m.word(SHOWLIST) == m.shown_h, 'the page\'s list is untouched by the lookups')
+        # a tap still enters a folder
+        m.calls.clear(); tap(m, 100, TOP + 1 * COV['row'] + 30)
+        expect(('folder_enter', 3, 0) in m.calls, f'a tap on the second row enters Music ({[c for c in m.calls if c[0] == "folder_enter"]})')
+        # Music: a file's cover (its album), the folder under it, the playlist file and a file the library lacks
+        settle_covers(m)
+        blits, texts, fills = paint(m)
+        names = [t for (t, r), s in texts if s == 'label_row_title']
+        art = {tuple(b[2][:2]) for b in blits if b[2][2] == COV['art']}
+        top = TOP
+        got = [(COV['art_x'], top + i * COV['row'] + COV['art_y']) in art for i, nm in enumerate(names)][:len(inview)]
+        expect(got == [True, True, False, False, False][:len(inview)],
+               f'Music: the folder and the file in the library have covers; files the library lacks and the playlist file have the glyph ({got})')
+        # a path with a quote; the folder of one file
+        m = cover_machine(); open_page(m); enter64(m, 'SD'); enter64(m, 'Sort'); enter64(m, 'zeta'); settle_covers(m)
+        expect("select * from songtable where fileurl='/mnt/mmc/Sort/zeta/it''s.flac' limit 1" in getattr(m, 'queries', []) or any("it''s" in q for q in getattr(m, 'queries', [])), 'a quote in a path is doubled')
+        # storages and playlist files: no lookup
+        m = cover_machine(); open_page(m)
+        settle_covers(m)
+        blits, texts, fills = paint(m)
+        expect([b[2][:2] for b in blits if b[2][2] == ICON][:3] == [(COV['glyph_x'], TOP_PLAIN + i * COV['row'] + COV['glyph_y']) for i in range(3)] and not [b for b in blits if b[2][2] == COV['art']],
+               'the storages: the glyphs at x 16 as with the switch off')
+        expect(not [q for q in getattr(m, 'queries', []) if 'songtable' in q], 'the storages are never looked up')
+        # select mode: the covers and glyphs move right by the mark column, the text with them
+        m = cover_machine(); open_page(m); enter64(m, 'SD'); settle_covers(m)
+        open_select(m)
+        blits, texts, fills = paint(m)
+        art = {tuple(b[2][:2]) for b in blits if b[2][2] == COV['art']}
+        expect({(COV['art_x'] + COV['sel'], TOP + COV['row'] + COV['art_y']), (COV['art_x'] + COV['sel'], TOP + 2 * COV['row'] + COV['art_y'])} == art, f'select mode: the covers move right by the mark column ({art})')
+        ttl = [(t, r) for (t, r), s in texts if s == 'label_row_title']
+        expect(ttl[0][1][0] == COV['text_x'] + COV['sel'], 'and the names with them')
+        marks = [b for b in blits if b[2][2] == O['SG_MARK']]
+        expect(len(marks) >= 4 and marks[0][2][1] == TOP + (COV['row'] - O['SG_MARK']) // 2, f'the marks are centred in the row ({[b[2] for b in marks[:2]]})')
+        # the playing wave and the press fill keep their places
+        m = cover_machine(); m.playing_dir = '/mnt/mmc/Music/x.flac'; open_page(m); enter(m, 'SD'); settle_covers(m)
+        touch(m, 'down', 100, SCREEN_Y0 + TOP + COV['row'] + 20, 'fo_on_down')
+        blits, texts, fills = paint(m)
+        wave = [b for b in blits if b[2][0] == MARK_X_CHEV]
+        expect(len(wave) == 1 and wave[0][2][1] == TOP + COV['row'] + (COV['row'] - ICON) // 2, f'the wave of the folder that plays, at x 254, centred in the row ({wave})')
+        expect([f_ for f_ in fills if f_[0] == O['LIST_PRESS']] == [(O['LIST_PRESS'], 0, TOP + COV['row'], 320, COV['row'] - 1)], 'the press fill covers the row')
+        # the switch turned on while the page is behind: back in front, the rows are made again
+        m = cover_machine(flag=0); open_page(m); enter(m, 'SD')
+        m.u.mem_write(COVER_FLAG, bytes([1]))
+        fn, ctxp = m.bound[(m.window, O['EVT_WINDOW_TO_FG'])]; m.call(fn, a0=ctxp, a1=0, count=900000000); settle_covers(m)
+        expect(len([b for b in paint(m)[0] if b[2][2] == COV['art']]) == 2, 'the switch turned on elsewhere: the covers show when the page is in front again')
+        # memory short / no library: the glyphs, no crash
+        m = cover_machine(); open_page(m); enter64(m, 'SD'); m.calloc_fail = True; settle_covers(m)
+        blits, texts, fills = paint(m)
+        expect(not [b for b in blits if b[2][2] == COV['art']] and len([b for b in blits if b[2][2] == ICON]) >= 4, f'no memory for the cover map: every row keeps its glyph ({len([b for b in blits if b[2][2] == ICON])})')
+        m = cover_machine(lib=[], covered={}); open_page(m); enter(m, 'SD'); settle_covers(m)
+        expect(not [b for b in paint(m)[0] if b[2][2] == COV['art']], 'no library: the glyphs')
+        m = cover_machine(); m.album_query_fails = True; open_page(m); enter(m, 'SD'); settle_covers(m)
+        expect(not [b for b in paint(m)[0] if b[2][2] == COV['art']], 'the album query fails: the glyphs')
+        # the longest path looked up, all apostrophes: the query holds it twice with every apostrophe doubled
+        q = "'" * (F['FO_SQL_PATH'] - 1 - len('/mnt/mmc/Q/'))
+        TREE['/mnt/mmc/Q'] = [(T_DIR, q)]; TREE['/mnt/mmc/Q/' + q] = []
+        TREE['/mnt/mmc'] = TREE['/mnt/mmc'] + [(T_DIR, 'Q')]
+        m = cover_machine(lib=LIB + [(f'/mnt/mmc/Q/{q}/t.flac', 'Quote', 'Quoted')]); open_page(m); enter64(m, 'SD'); enter64(m, 'Q'); settle_covers(m)
+        esc = ('/mnt/mmc/Q/' + q).replace("'", "''")
+        expect(f"select * from songtable where fileurl>='{esc}/' and fileurl<'{esc}0' order by fileurl limit 1" in m.queries, f'a {len(q) + 11} byte path of apostrophes is asked whole ({[len(x) for x in m.queries]})')
+        expect(len([b for b in paint(m)[0] if b[2][2] == COV['art']]) == 1, 'and its cover shows')
+        # a library of 20000 tracks, a level of 2000 entries: a tick looks up one row, never the whole level
+        big = [(f'/mnt/mmc/Big/d{i % 2000:04d}/t{i}.flac', f'A{i % 50}', f'B{i % 50}') for i in range(2000)]
+        TREE['/mnt/mmc/Big'] = [(T_DIR, f'd{i:04d}') for i in range(2000)]
+        TREE['/mnt/mmc'] = TREE['/mnt/mmc'] + [(T_DIR, 'Big')]
+        m = cover_machine(lib=big, covered={}); open_page(m); enter64(m, 'SD'); enter64(m, 'Big')
+        settle_covers(m, limit=400)
+        nq = len([q for q in m.queries if 'fileurl' in q])
+        expect(nq <= 20, f'a 2000 entry level looks up only the rows in view ({nq} lookups)')
+    finally:
+        TREE['/mnt/mmc'] = root
+        for k in [k for k in TREE if k.startswith(('/mnt/mmc/Nested', '/mnt/mmc/Sort/zeta', '/mnt/mmc/Big', '/mnt/mmc/Q'))]: TREE.pop(k, None)
+
+
+SECTIONS = [asset_tests, open_tests, rows_tests, levels_tests, play_tests, select_tests, stale_tests, order_tests, cue_tests, cover_tests]   # tools/check.py runs each as its own task

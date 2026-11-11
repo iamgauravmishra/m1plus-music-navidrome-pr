@@ -1305,6 +1305,7 @@ DATA.update({
     'FOLDER_LAYER':       (0xa0554c, None),
     'FOLDER_TITLE':       (0xa0533c, None),
     'FOLDER_M3U':         (0xa0483c, None),
+    'FOLDER_COVER':       (0xa05a67, 'foldercover_flag'),   # byte: stock's Folder cover switch ([PLAYSET] FOLDERCOVER; patch/folders.c reads it, docs/modules/folders.md)
 })
 FOLDER_PINS = (   # (address, stock word, what it proves)
     (0x4db978, 0x3c1c0053, 'folder_enter prologue'), (0x4db97c, 0x279c8558, 'folder_enter prologue'), (0x4db980, 0x0399e021, 'folder_enter prologue'),
@@ -1319,6 +1320,7 @@ FOLDER_PINS = (   # (address, stock word, what it proves)
     (0x4dbdbc, 0x8f84b820, 'folder_enter: a0 = the m3u path buffer (GOT 0xa0483c, FOLDER_M3U)'),
     (0x4db7ec, 0x3c1c0053, 'folder_reload prologue'), (0x4db7f0, 0x279c86e4, 'folder_reload prologue'), (0x4db7f4, 0x0399e021, 'folder_reload prologue'),
     (0x4db810, 0x28420002, 'folder_reload: layer < 2 loads the root list'),
+    (0x532b60, 0x8f93ae70, 'the stock folder row: lw s3, GOT foldercover_flag (FOLDER_COVER, 0xa05a67), the flag that shows /mnt/mmc/.downpic/fd_<md5>.jpg in place of the icon'),
     (0x5329d8, 0x3c1c004d, 'is_folderplaying prologue'), (0x5329dc, 0x279c14f8, 'is_folderplaying prologue'), (0x5329e0, 0x0399e021, 'is_folderplaying prologue'),
     (0x532b94, 0x8e020034, 'the stock folder row: type = record + 0x34'), (0x532b98, 0x2442fffe, '... - 2'), (0x532b9c, 0x2c420003, '... < 3 (types 2, 3, 4: a folder)'),
     (0x532ba8, 0x0411ff8b, 'the stock folder row: bal is_folderplaying'), (0x532bac, 0x8e04000c, '... with a0 = the record url (+0xc)'),
