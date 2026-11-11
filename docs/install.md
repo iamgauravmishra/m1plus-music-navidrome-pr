@@ -35,7 +35,7 @@ The boot guard also falls back to stock Home after a failed custom startup.
 Download the official M1 Plus firmware from [Shanling](https://en.shanling.com/download/118),
 unzip it, copy its `update.bin` to the card root and install it through the same TF-card menu.
 
-If M1+ Music fails to open, try disabling it with `m1plus-off` first. Do not assume the Q2's
-recovery buttons work on the M1 Plus.
+If M1+ Music fails to open, try disabling it with `m1plus-off` first. A recovery button
+combination for the M1 Plus is not known.
 
 Package builders: see [build and restore instructions](workflow.md#integration-and-restore).

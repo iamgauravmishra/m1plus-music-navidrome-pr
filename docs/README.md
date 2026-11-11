@@ -15,7 +15,6 @@
 | [Architecture](architecture.md) | Payload, build pipeline, hooks and feature source maps |
 | [UI](ui.md) | Preview, layout rules, fonts, assets and rendering |
 | [Firmware](firmware.md) | Stock hashes, updater behaviour, partitions and space recovery |
-| [Device checks](modules/device-checks.md) | Hardware validation checklist |
 | [History](history.md) | Recorded milestones, device findings and lessons |
 | [Subsonic / Navidrome](modules/subsonic.md) | Remote library, raw streaming, SD downloads and validation limits |
 

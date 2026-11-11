@@ -9,7 +9,7 @@ Recently Played / Added, Hi-Res, Favourites; whatever `sg.cls` covers). Not in t
 `tools/mod_icons.py` (`RM_MENU_ICONS`, `RM_DOTS`, `GLASS_ROWMENU`), `patch/offsets.inc` (`RM_*`), `tools/pod_i18n.py`.
 **Tests:** `test/pod/rowmenu.py` (five sections; `fav_info_tests`: the toggle, its label and glyph, the toasts, a failed add, Get Info); the pages' own tests keep their old numbers with no menu assets (`test/pod/songs.py`, `albumpage.py`).
 **Preview:** `uv run python -I tools/preview/preview_rowmenu.py work/mod-release out/preview/rowmenu.png` (also `tools/preview/preview_songs.py`).
-Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unicorn), **[U]** untested on the device. Nothing here has been on the device: **[E]** or **[U]** throughout.
+Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unicorn), **[U]** untested on the device.
 
 ## What the user sees
 
@@ -87,20 +87,3 @@ the bitmap's pixels), `touch_tests` (tap in the zone, one pixel left of it, firs
 `menu_tests` (the sheet shown in the asset's place for rows on both pages, nothing moved or resized; every label of the 13 locales fits 250 px with the real font; Play Next / Play After with every status:
 the call, the one-row deque, destroy, close, toast and nothing else opened; Add to Playlist with our picker and with the stock fallback: class, count and exactly one mark, a second Add carries only its own row; the
 menu closing with the page). `upnext_add` and `picker_open` are trapped there: their own tests are `test/pod/upnext.py` and `picker.py`.
-
-## Device checklist (all [U])
-
-Use Songs (a library with sections and the rail), a playlist, Favourites and an album page.
-1. **Tap target**: the "..." on the real touchscreen is hit with a thumb at 44 px wide; the rail's side (x 240..284; a tap at 284 or right of it is the rail) and the right edge (266..310) both. Taps just left of the zone play the song.
-2. **No accidental opens**: scroll the list starting your finger on a "...": the list scrolls, no menu opens, no song starts. A slow slide off the zone and a double tap behave.
-3. **Look**: the dots are neutral grey (not too faint), the title and artist never run under them (try a long title), the Songs rail does not touch the zone.
-4. **Menu**: the sheet rises from the screen's foot for any row (top, middle, bottom, the album page) and looks like Now Playing's More sheet (glass, glyph size, hairlines); the scrim
-   dims the page and a tap on it closes the menu; a long language (German, Russian) is not cut.
-5. **Play Next**: with a song playing, "Playing Next" shows, the song is first under Up Next on the Queue page and plays after the current one; **Play After**: "Added to Queue", last under Up Next
-   ([queue](queue.md) device checklist for gapless, Shuffle and Repeat).
-6. **Nothing playing** (after a reboot): Play Next starts the song with no toast and the page stays.
-7. **Refusals**: while a stream, a folder play, a podcast or with the DLNA switch on and Wi-Fi connected: the toast of each; nothing changes in the queue.
-8. **Add to Playlist**: the picker opens for that song alone (the playlist gets only it; a duplicate is skipped), returns to the page, the list is the same.
-9. **Select mode**: no "..." and the text wide again; tapping rows still marks them. Leaving it brings the "..." back.
-10. A long list: the menu on the 1st and the 500th row; scroll with the menu closed after use (no stuck press fill).
-11. **Favorite**: the star fills and the row reads "Undo Favorite" the next time; the song shows under Playlists > Favorites and Now Playing's star is on for it; Undo removes it. **Get Info**: the page shows the right format, rate, depth, duration and size for a FLAC, an MP3 and an M4A (rate and depth rows absent), a long path wraps, Back returns to the list.

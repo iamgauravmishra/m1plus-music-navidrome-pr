@@ -5,7 +5,7 @@
 `ringnav_image_add`, `ui_ink`; `README.md`).
 
 The Accent feature lets the user pick the system accent colour, as the stock OS once had (its pressed row was `#362221`, from orange). It is built on **one palette layer**: every colour the painter gets
-goes through `pal_map(colour)`, which takes the **background** (Black, or Light: Light Mode's neutral flip) and the **accent**. Phase 1 built the layer and brought Light Mode onto it; phase 2 added the accent mapping and its saved setting, phase 3 the picker, the pressed glyph and the previews. The Light Mode row is hidden from Settings. Black + Neutral is the identity: every hook is a plain pass-through and the
+goes through `pal_map(colour)`, which takes the **background** (Black, or Light: Light Mode's neutral flip) and the **accent**. The layer also carries Light Mode, the accent mapping and its saved setting, the picker, the pressed glyph and the previews. The Light Mode row is hidden from Settings. Black + Neutral is the identity: every hook is a plain pass-through and the
 device renders as before.
 
 The stock theme1 is forced off (`tools/themeoff.py`, [theme](theme.md) "theme1 is off"): the palette maps the modded default theme only.
@@ -31,18 +31,18 @@ Roles (Neutral keeps today's colour for every one):
 Pages whose background is the album/cover tint (Now Playing, the album page, the Podcasts Show page, the Daily Mix page, Radio Now Playing (`m1plus_radionp_page`, `PAL_COVER_RN`; its window colour goes through `pal_tone`)) keep that background exactly; their controls (the progress fill, ...) may take
 the accent.
 
-## What phase 1 did
+## The palette layer and Light Mode
 
-- Brought in Light Mode (commit `7edddccf` of `feat/light-mode`, single commit on `22352999`, not device-tested) and rebased it onto main: the settings file follows the settings folder
-  (`/mnt/data/m1plus/appearance-light`, `LIGHT_FILE` in `patch/home.h`; read and written through `home_write_atomic`, the directory fsync is the folder's); its ids and hook numbers have since moved (now
+- Light Mode is part of the layer: the settings file is in the settings folder
+  (`/mnt/data/m1plus/appearance-light`, `LIGHT_FILE` in `patch/home.h`; read and written through `home_write_atomic`, the directory fsync is the folder's); its ids and hook numbers are
   `ACT_BG` 46 / `ACT_BGSET` 47, hooks 10 - 12 after main's battery and time-zone hooks; the pages are appended after `RELNOTES`: `BG_PAGE_INDEX` 38 .. `APPEARANCE_PAGE_INDEX` 40).
-- Generalised the flip into the palette layer (`patch/palette.c`, former `light.c`): `pal_map` (below), `pal_active`, `pal_background`, `pal_accent`. The hooks test `pal_active` (was `light_on`) and
+- The flip is generalised into the palette layer (`patch/palette.c`, former `light.c`): `pal_map` (below), `pal_active`, `pal_background`, `pal_accent`. The hooks test `pal_active` (was `light_on`) and
   call `pal_map` (was `light_flip`); `ui_ink` / `ui_fill_color` too. Renames: `light_on` -> `pal_light`, `light_mode` / `light_set` -> `pal_bg_mode` / `pal_bg_set`, `light_tone` -> `pal_tone`,
   `tools/light.py` -> `tools/palette.py`, `test/pod/light.py` -> `test/pod/palette.py`. `LIGHT_*` constants and the Light flip functions (`light_flip`, `light_is_neutral`, `light_image`) keep their names:
   they are the Light background's mapping.
-- Hid the Light Mode row from Settings > System (the picker page, its actions and strings stay; `test/pod/palette.py` opens the picker through a row it builds itself).
-- Merged the mock-up (`feat/accent-mockup`: `tools/preview/preview_accent.py`, `preview_settings.draw_page(pal=..., pressed=...)`).
-- No visible change with the defaults; no golden changed beyond what the cherry-pick needed (the new payload symbols and the new page).
+- The Light Mode row is hidden from Settings > System (the picker page, its actions and strings stay; `test/pod/palette.py` opens the picker through a row it builds itself).
+- The mock-up (`tools/preview/preview_accent.py`, `preview_settings.draw_page(pal=..., pressed=...)`).
+- No visible change with the defaults.
 
 ### The palette API
 
@@ -56,7 +56,7 @@ unsigned pal_map(unsigned c);                               /* THE entry point: 
 unsigned ui_ink(unsigned c);  ui_fill_color(canvas, c)      /* the payload's own drawing: pal_map unless inactive or clear (alpha 0) */
 int pal_light(void);  unsigned pal_tone(unsigned tone);     /* background is Light; the cover-tinted pages' tone (neutral in Light; never a role colour: pal_not_role) */
 int pal_bg_mode(void);  int pal_bg_set(int mode);           /* the Light setting 0 Off, 1 On, 2 Auto: saved atomically, applied at once */
-int pal_accent_set(int i);   /* THE phase 3 setter: saves 0..6 atomically, applies at once; returns i, or -1 (bad index / failed save: nothing changes) */
+int pal_accent_set(int i);   /* THE setter: saves 0..6 atomically, applies at once; returns i, or -1 (bad index / failed save: nothing changes) */
 int pal_accent_saved(void);  /* the saved index (what a picker checks; pal_accent() is the effective one) */
 unsigned pal_accent_color(int i);  /* accent i as an opaque color_t word (swatches; Neutral: #EEEEEC) */
 unsigned pal_fill(void);     /* the fills' colour now: the effective accent's, or #EEEEEC (pages that bake it into a bitmap) */
@@ -66,10 +66,10 @@ Python model (`tools/palette.py`): `map_colour(c, bg='black', ac='neutral')` wit
 and Light's image rule), the name lists `ACCENT_FILL` / `ACCENT_SWITCH` / `ACCENT_PRESS`, the Light helpers (`flip`, `ink`, `image_flips`, `flip_image`). `test/pod/palette.py` runs the
 compiled `pal_map` against it.
 
-## What phase 2 did (the mapping, no UI)
+## The accent mapping
 
-Built the accent into the palette layer. There is no picker and no Settings row yet, and the Light row stays hidden; with the saved accent Neutral (the default, no file) every hook is a pass-through and the
-device renders as on main, apart from the one-level role-colour tweaks below.
+The accent is part of the palette layer. With the saved accent Neutral (the default, no file) every hook is a pass-through and the
+device renders as stock, apart from the one-level role-colour tweaks below.
 
 - **Role colours are unique** (`ROLE_*`, `ACC_*` in `patch/offsets.inc`, read by `tools/palette.py`). A pressed row is `#333334` (was `#333333`): `PRESSED` in `tools/mod_theme.py` (the list rows, the table rows,
   the two keyboard keys, and the page style files that copy them: Playlists' row, the Search tabs), `LIST_PRESS` `0xff343333` (every payload list: Songs, Artists, Albums list, Folders, Queue, Search, Podcasts,
@@ -78,7 +78,7 @@ device renders as on main, apart from the one-level role-colour tweaks below.
   unique colour. `roles_tests` scans every built style and page (default theme) and the payload/tool sources: the role colours are only where they are defined; a grid of dark cover tones and the neutral tone
   are not role colours (the cover-tinted backgrounds are untouched).
 - **`pal_map`** looks for a role colour first (rgb compared, alpha kept) and, if it is one, returns the accent's: pressed row `mix(black, accent, 22 %)` (Red: `#380F0D`), progress fill = the accent. Otherwise the
-  background (Light's flip) as before. Order differs from phase 1's "background, then accent": a role colour is neutral, and Light's flip would change it before the accent could find it. Model `map_colour`/`role`.
+  background (Light's flip) as before. Order is role colour first, not "background, then accent": a role colour is neutral, and Light's flip would change it before the accent could find it. Model `map_colour`/`role`.
 - **The setting** `/mnt/data/m1plus/appearance-accent` (`ACCENT_FILE`/`ACCENT_TMP` in `patch/home.h`): one digit 0..6 (`set_read`; anything else or missing = Neutral), written by `pal_accent_set` through
   `home_write_atomic`. The state is `pal.acc` (saved) and `pal.acc_on` (effective: 0 under the kill switch `/mnt/mmc/m1plus-off`, the flash one or `/mnt/data/m1plus-bad`). One `pal_refresh` computes both
   that and Light's `pal.on`; a change goes through `pal_apply` (cached images dropped, tinted pages relit, window manager repainted). The one UI-thread timer (a minute) now lives while the background is not
@@ -93,8 +93,8 @@ device renders as on main, apart from the one-level role-colour tweaks below.
   global: none of the accent names is in `KEEP`, and those pages do not use them.
 - **Cover-tinted pages** are unchanged (their window colour is the cover tone, never a role colour); their progress fill (Now Playing) and wave (album page) take the accent. The Show and Daily Mix pages have
   no control the accent changes yet (no progress fill; their pressed rows are `LIST_PRESS`).
-- **Not done in phase 2 (phase 3 did it, below)**: the pressed row's **glyph in the accent**. The build has no `_down` twin of a row glyph (the `_down` images are navbar/pill glyphs, which never take the accent, and the
-  Home grid's discs); a settings row's `pod_icon` is one image in every state. The phase 3 picker work (or a later pass) needs a press handler that swaps the glyph, plus images that the hook tints.
+- **Pressed row glyph (see Row glyphs below)**: the pressed row's **glyph in the accent**. The build has no `_down` twin of a row glyph (the `_down` images are navbar/pill glyphs, which never take the accent, and the
+  Home grid's discs); a settings row's `pod_icon` is one image in every state. The glyph therefore needs a press handler that swaps it, plus images that the hook tints.
   Chevrons, secondary text, navbar, body text, card and page backgrounds are not touched.
 - **Cost** (Unicorn instruction counts, `test/pod/palette.py`): the style hook, a role colour with an accent on 646 instructions, any other colour 558 (stock's own part included; Light on is under 900,
   Black + Neutral about 600 with no work of ours); the image hook on a name it does not tint 1165 (the three name lists, once per decoded image); a tint is once per decode: `datetime_back` 5.4 M (280 x 150),
@@ -132,7 +132,7 @@ An audit found six kinds of element that took the accent on some pages and not o
 
 Models: `tools/palette.py` (`ROLE_FILL`, `ROLE_SHEET_PRESS`, `SHEET_A`, `ring_pixel`, `dl_ring_pixel`), `tools/peq_graph.py render_accent`, `tools/tenband_model.py` (`thumb_px_acc`, `apx`, `cmix`). A cover colour equal to either new role moves one blue level off it (`pal_not_role`). Not changed on purpose (still neutral): the on-states drawn as light grey (Queue Shuffle / Repeat lit, the Search and Online Art selected chip, the segmented control's thumb, the keyboard shift), the navbar glyphs, chevrons, text, hairlines, card backgrounds, the keyboard, lyrics, the Wi-Fi bars and spinner, the stock pages' 40 px icons, the EQ cards' tracks, grid and labels, the band page's thumb and ring, and the exempt windows. Not verified on the device.
 
-## What phase 3 did (picker, row glyphs, previews)
+## Picker, row glyphs, previews
 
 - **Picker.** Settings > System > **Appearance** (`ACT_PAGE`, a link row with glyph `palette`, between Display and Keyboards where the hidden Light row sat) opens `m1plus_appearance` (`APPEARANCE_PAGE`, page index 40, the last of
   `PAGES`): one card with the **Accent** value row (`ACT_ACCENT` 48, the accent's name, glyph `palette`; the shared value refresh sets it on whichever page it sits). The hidden Light row will become a "Background" row on this page. The Accent row opens `m1plus_accent`
@@ -168,7 +168,7 @@ Models: `tools/palette.py` (`ROLE_FILL`, `ROLE_SHEET_PRESS`, `SHEET_A`, `ring_pi
 - **Not covered by the row-glyph tint:** payload-painted lists (Songs, Albums, Artists, Folders, Queue, Search, Podcasts, Playlists, Online Art; their rows have a cover or no glyph), the Home grid, the
   stock pages (Display, All Settings, Wi-Fi), the More sheets and dialogs, the navbar buttons, the stock Settings pages' 40 px disc icons.
 
-## What the Background step did (Tinted, menu glyphs)
+## Background: Tinted, menu glyphs
 
 - **Setting.** `/mnt/data/m1plus/appearance-background` (`BG_FILE`, replaces the never-shipped `appearance-light`): `0` Black, `1` Tinted, `2` Light, `3` Light Auto; others Black. Picker `m1plus_background` (`BG_PAGE`, `ACT_BG` 46 / `ACT_BGSET` 47) offers Black and Tinted, opened from the Background row of Appearance (above Accent). Light is only reachable by editing the file.
 - **Tinted** (`pal_wash`, model `wash`): in `pal_map`, after the role step, a dark neutral colour (channels within `LIGHT_SPREAD`, none above `ACC_DARK` 0x40) takes `ACC_WASH` 12 % of the accent: page black Teal `#08181B`, Red `#1F0807`, Purple `#170B1D`, Champagne `#18140D`; card `#1C1C1E` -> `mix(card, accent, 12 %)`. The pressed role is `mix(tinted surface, accent, 22 %)` (row, and `pod_cd_*_down` via `accent_image`). Images: `TINT_SURFACE` (the `WHOLE` list without `np_tint`, `np_scrim`, `ah_tint`) get the same per-pixel wash (`tint_image`, premultiplied handled); covers (names with `/` or `:`), KEEP and the exempt windows are untouched. Tinted + Neutral is Black (`tint_on` needs an accent). Slider/switch/disc images keep their own tint rules.
@@ -177,11 +177,10 @@ Models: `tools/palette.py` (`ROLE_FILL`, `ROLE_SHEET_PRESS`, `SHEET_A`, `ring_pi
 - **Menu glyphs.** The `pod_ic_*`, `fo_ic_*` and `pod_ci_*` glyphs are all tinted at decode (see Row glyphs).
 - **Cost** (Unicorn): style hook with Tinted 752 instr on a dark neutral, 623 on any other (Light on 916, was under 900; Black + Neutral about 650); image hook 2075 on a non-surface name; tint once per decode: `pod_cd_mid` 2.25 M, `mb_glass` 2.30 M, `nb_fade` 0.74 M, `pc_sheet`/`pc_sheet5` up to 13.6 M, pressed pieces 1.65 M; glyph tint 64.6 k per 24 x 24 decode.
 - **Previews:** `tools/preview/preview_accent.py` draws through the model; `accent-tinted.png` (Tinted x accents: menu, Settings, Appearance, songs, pull-down, Now Playing). The mock-up sheets were removed. Contrast (8C grey on page / card, Teal) 5.40 / 4.03.
-- **Not covered / risks:** device untested; the at-rest glyph tint is device untested (open the menu right after boot; leave it behind another page and come back); the navbar fade `nb_fade` is global, so on a cover-tinted page it is a tinted black over the cover tone; slider/progress tracks (`#333`) stay neutral; Tinted + Light is not a combination.
+- **Not covered / risks:** the navbar fade `nb_fade` is global, so on a cover-tinted page it is a tinted black over the cover tone; slider/progress tracks (`#333`) stay neutral; Tinted + Light is not a combination.
 
 ## Open / later
 
-- Device: nothing of the Accent has run on hardware ([device checks](device-checks.md), ACCENT-01..04); the Settings glyphs' tint at decode (ACCENT-06) is untested on hardware.
 - Graphite and Light in the picker; Light + an accent (the pressed card piece mixes with the dark card colour, so it is wrong on Light).
 - Stock pages using `btn_tab_style` / `btn_tablerow_style` press in the accent; the one-minute timer exists whenever an accent is saved.
 
@@ -189,7 +188,7 @@ Models: `tools/palette.py` (`ROLE_FILL`, `ROLE_SHEET_PRESS`, `SHEET_A`, `ring_pi
 
 The Light background is the former Light Mode, hidden for now. Its setting: Off (default, Black), On, Auto; the picker is `m1plus_light` (three check rows, `ACT_LIGHT` / `ACT_LIGHTSET`), saved atomically
 in `/mnt/data/m1plus/appearance-light` (`1` On, `2` Auto, optional newline; anything else or missing Off) and applied at once. Auto is light from 07:00 to 18:59 by the device clock (`localtime`), dark
-otherwise. Not verified on the device. The hooks below serve both backgrounds and the accent.
+otherwise. The hooks below serve both backgrounds and the accent.
 
 The UI is dark by construction (stock theme edits, our own pages), so Light Mode flips colours at the three places the painter gets them, instead of editing assets.
 
@@ -225,9 +224,9 @@ each falls back to stock (the trampolines run stock's own code; the gradient hoo
 kill switch, or `/mnt/data/m1plus-bad`, the bad-boot note that sends the next boot to stock). The setting is read at the first call (the first paint), the kill switch again at each tick. A crash in a hook before the boot
 guard arms is not covered by the guard: the SD kill switch is the way out.
 
-## Limits and device checks
+## Limits
 
-- Not verified on the device. Check: Settings and its pages, Home (menu, Recently Played, Daily Mix card whose text sits on art), Songs / Albums / Artists / Playlists lists, the keyboard, Cover Flow (portrait and landscape),
+- Check: Settings and its pages, Home (menu, Recently Played, Daily Mix card whose text sits on art), Songs / Albums / Artists / Playlists lists, the keyboard, Cover Flow (portrait and landscape),
   Now Playing and its More sheet, the album and Show pages, the lock screen (must stay dark), the pull-down, dialogs, stock Settings pages, the Auto switch at 07:00 / 19:00 with a page open.
 - Stock pages with colours of their own (Tidal, Hi-Res store, guides) keep their hues; their neutral parts flip.
 - The mini player's backdrop blur and the Daily Mix card's text over art are drawn from white label styles: in Light Mode their text is ink over art.

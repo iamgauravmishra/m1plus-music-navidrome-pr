@@ -219,7 +219,7 @@ and the built assets.
 
 ## Not verified
 
-- Anything on a device ([device checks](device-checks.md) KEYS-01 .. 03): that the lock gates and the countdowns take the stores live,
+- Anything on a device: that the lock gates and the countdowns take the stores live,
   and that a Control Center tile tap shows on the open page after the pull-down closes.
 - Which value `PA02` has on the M1 Plus, and whether the touch IC wakes on one tap or two; what `ges_control`'s two commands do in the IC.
 - `to_poweroptions`'s guard list was read only as far as the play status, car mode and the two counters; `poweroff_page` and

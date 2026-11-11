@@ -100,7 +100,7 @@ runs the compiled code against it.
   which invalidates the pill in the same frame, so the frame is row + pill and is blurred. A row wholly under the pill takes no touch (the pill does). Frames that can still be sharp:
   a partial repaint from stock code not listed here (a toast, a dialog's close, the status bar over it does not reach the pill); the next tick (500 ms at most) invalidates the pill once.
 - **Not verified on a device**: the lcd type and the double-buffer behaviour (the model is the AWTK sources and the disassembly), the cost, and how the blur looks (the model drives the
-  preview's third panel and the crops under `out/peek`). `docs/modules/device-checks.md` lists what to look at; `m1plus-noblur` is the escape hatch.
+  preview's third panel and the crops under `out/peek`). `m1plus-noblur` is the escape hatch.
 
 ## Recording and the shelf
 
@@ -166,7 +166,7 @@ Cover: the station's cached logo (`rd_logo_file`; the logo worker is started whe
 `widget_set_style`, `value_set_uint32`, `bitmap_*`, `canvas_draw_image`, `timer_add` / `timer_remove` and the rest were pinned already (Now
 Playing, Albums). **Verified in emulation only** (`test/pod/minibar.py` mocks the three stock calls and checks the call, its arguments and what
 the bar does after it): that `mclGetPlayStatus` 2 means playing in every source (local files, DLNA, AirPlay, Tidal) and that a click handler's
-`e` carries the time stock expects need the device (`docs/modules/device-checks.md`).
+`e` carries the time stock expects need the device.
 
 ## Failure behaviour (every one is the plain menu)
 

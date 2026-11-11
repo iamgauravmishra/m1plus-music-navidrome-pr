@@ -11,7 +11,7 @@ Firmware mods for the Shanling M1 Plus, built from official V2.1 and packaged as
 | Runtime changes and safety boundaries | [Payload safety](docs/modules/safety.md), [architecture](docs/architecture.md) |
 | Binary searches or patches | [Payload](docs/modules/payload.md), [pinned addresses](docs/modules/addresses.md) |
 | UI changes | [UI reference](docs/ui.md), [UI rules](docs/modules/ui-rules.md), the feature's module |
-| Testing and hardware evidence | [Validation](docs/modules/validation.md), [device checks](docs/modules/device-checks.md) |
+| Testing and hardware evidence | [Validation](docs/modules/validation.md) |
 | Installation, restore and firmware facts | [Install](docs/install.md), [firmware](docs/firmware.md) |
 
 The [documentation index](docs/README.md) lists the remaining guides.

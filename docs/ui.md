@@ -13,7 +13,7 @@ states and an enlarged battery. Feature tools (`preview_icons.py`, `preview_stoc
 
 Previews are approximate PIL mock-ups with sample data, not AWTK captures. Text uses the built
 tree's `default.ttf` via stb_truetype (`tools/preview/preview_font.py`, `tools/stb_raster.py`). See
-[workflow](workflow.md) and [device checks](modules/device-checks.md) for validation.
+[workflow](workflow.md) for validation.
 
 ## Before changing the UI
 

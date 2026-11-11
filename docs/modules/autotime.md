@@ -67,5 +67,4 @@ without the key reads the code default `"0"`, off. The mod does not touch `confi
 
 `test/demo_diff.py` checks stock and new bytes of each slot and its neighbour and that nothing
 else changed; `test/pod/rows.py` allows only those words; `test/tools.py` checks slot lengths and
-that a changed stock byte or neighbour is refused without writing. Untested on hardware; see
-[device checks](device-checks.md) (TIME-01).
+that a changed stock byte or neighbour is refused without writing.

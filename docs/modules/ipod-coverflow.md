@@ -79,15 +79,3 @@ pace), `ip_pop` (closes Cover Flow), `ip_step` (the `K_CF` branch), `ip_select` 
 - The flip of the cover to the track list (above). No click sound (`docs/modules/ipod.md`). No search-by-letter; no artist or sort setting (the stock album order). The cache is not
   built here. Landscape: the screen is the iPod's 320 x 240.
 - The wheel's tiers move the cursor, the slide only follows (a 34-album step shows the last four albums slide in, not 34 covers flying by).
-
-## Device checklist
-
-- iPod > Cover Flow: a white screen with the iPod title bar (Cover Flow), the centre cover, three covers either side tilted, overlapping and paler with distance, their reflections, the album and the artist centred under it;
-  the first frame may show the placeholder for a moment, then the real covers fill in nearest first (about 0.25 s). Albums with no cached cover show the placeholder.
-- Wheel: one album per 15 degrees, the slide eases (about 150 ms, no stutter, the covers do not tear or flicker), the caption changes as the cover passes the middle; on a long
-  library a sustained fast turn speeds up (the tiers); at the first and last album the wheel does nothing (no bounce); reversing does not jump. The music does not stutter
-  during the slide or while covers decode (the decode is one cover per 33 ms tick: if it does, make it every other tick).
-- Frame time: the slide must look smooth; if it stutters, lower `IPCF_ART` or lengthen `IPCF_FRAME_MS`.
-- Centre button: the album's tracks as an iPod list; a track plays and Now Playing shows; MENU returns through the tracks to Cover Flow on the same album with its covers, then to the
-  main menu; MENU there closes the page and the status bar returns. `|<<` `>>|` `>||` work in Cover Flow. Memory: open and close it ten times; nothing grows.
-- If the heap is tight (`calloc` refused), the row opens the old full-screen Cover Flow page.

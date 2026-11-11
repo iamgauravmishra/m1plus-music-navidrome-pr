@@ -17,17 +17,17 @@
 
 ## Features
 
-- **Browse:** Cover Flow, album grids/lists, Artists, an A–Z Songs list and Playlists.
+- **Browse:** Cover Flow, album grids/lists, Artists with photos, an A–Z Songs list, Playlists and Folders with covers.
 - **Search:** find music and podcasts with an on-screen QWERTY keyboard.
 - **Home:** Daily Mix, Recently Played and a floating mini player.
 - **Now Playing:** cover-colour backgrounds, rounded artwork and remaining time.
 - **Podcasts:** local episodes, top shows and episodes for your region, directory search, feed subscriptions and episode downloads.
 - **Extras:** album/folder shuffle, internet radio, a virtual iPod, Cassette Mode, Vinyl Mode and an online cover and lyrics lookup.
 - **Subsonic:** browse a Subsonic server (Navidrome, Gonic, Airsonic) in the player's own Albums, Artists, Playlists and Songs pages, search it, stream over Wi-Fi, and download songs to the card for offline play. Based on a pull request by Gaurav Mishra and the work of shivaluma.
-- **Appearance:** an accent colour, a translucent lock screen, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
+- **Appearance:** an accent colour, a lock screen with a mini player, minimal theme, Lucide icons and Inter + Source Han Sans fonts.
 - **Equalizer:** a 10-band EQ editor, AutoEq headphone corrections downloaded over Wi-Fi, parametric presets from the card and a separate EQ for headphones, line out and USB DACs.
 - **Wi-Fi:** a new Wi-Fi page with WPA3 and Enhanced Open, and a redesigned Wi-Fi Transfer page to browse, upload, download and organise the card from a browser.
-- **Settings:** choose menu items, pull-down tiles, startup behaviour, Cover Flow orientation.
+- **Settings:** choose menu items, pull-down tiles, startup behaviour, Cover Flow orientation, display, buttons and power, and a charge limit.
 - **Languages:** the added UI follows the player's language setting, with 13 translations.
 
 Stock settings and Tidal remain accessible. See the [user guide](docs/guide.md) for controls and options.

@@ -165,7 +165,7 @@ golden, a local tag on another commit and an already published release. The rest
 ## Device checks
 
 Follow [Install](install.md) for card preparation, update confirmation and restore. Use
-[device checks](modules/device-checks.md) and the feature's module doc to validate a build. Record the tag,
+the feature's module doc to validate a build. Record the tag,
 pass/fail/untested status and captures. Emulation does not certify hardware timing or appearance.
 
 **Settings → Developer → Screenshot** asks first, then captures after five seconds.

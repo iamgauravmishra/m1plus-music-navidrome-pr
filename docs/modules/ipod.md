@@ -218,7 +218,7 @@ Pinned in `tools/pod.py`: `prev_quick_click` `0x4cccb0` (the twin of `next_quick
 
 ## Known limits
 
-- Not run on a device: the canvas calls, the fullscreen window (the status bar must be hidden by `fullscreen`, as for the lock screen), the touch feel (the 15 degree step, the chord dead zone, the reversal and tier constants, the 12 px tap slop are guesses to tune), the cover pane's pan and cross-fade (the repaint cost, the mix of 38 K pixels at 15 fps) and Cover Flow's frame rate are only proven under emulation and with demo's own AWTK code (`test/awtk_fill.py`).
+- Open: the canvas calls, the fullscreen window (the status bar must be hidden by `fullscreen`, as for the lock screen), the touch feel (the 15 degree step, the chord dead zone, the reversal and tier constants, the 12 px tap slop are guesses to tune), the cover pane's pan and cross-fade (the repaint cost, the mix of 38 K pixels at 15 fps) and Cover Flow's frame rate are only proven under emulation and with demo's own AWTK code (`test/awtk_fill.py`).
 - The page timer's interval is set in one place (`ip_want_ms`: `IPCF_FRAME_MS` while a page slides, row art prepares/decodes or Cover Flow is busy; `IP_DRIFT_MS` while the cover pane pans or the owned row-art worker runs; else `IP_TICK_MS`) and changed in place
   with `timer_modify`; the timer is never removed or added while the page lives.
 - No sound (above). No rotation action on Now Playing (above), no scrubber. No cover flip in Cover Flow (the centre opens the tracks as a list). No search, no Genres,
@@ -226,26 +226,3 @@ Pinned in `tools/pod.py`: `prev_quick_click` `0x4cccb0` (the twin of `next_quick
 - No clock in the title bar (the iPod's has none); long translated labels are cut with an ellipsis to the 130 px root text box (Spanish, Russian and Ukrainian Shuffle Songs; the Settings rows French Shuffle and Appearance, German Repeat and Appearance, Polish Repeat, Spanish Shuffle and Repeat values, Russian Shuffle and Appearance, Ukrainian Shuffle: `test/pod/ipod.py` i18n_tests lists them).
 - Albums are in the stock query's order, not the album order of the Albums "..." card.
 - The play queue is the stock one: `start_player` copies the shown list; a Songs list of thousands of rows is copied once per play, as the Songs page does.
-
-## Device checklist
-
-- Appearance: Settings > Appearance changes only the case and the wheel (the screen stays white). MENU and reopening retain it.
-- Artwork: start with no cover cache; Albums and Songs fill their visible thumbnails without visiting another page. Playlists show a full cover or a four-quadrant mosaic. Scroll rapidly, remove the card, background and reopen; no stale covers, crash or growing heap.
-- Page slides: enter Music, Settings, library lists and Now Playing; MENU reverses the slide. Text and cover pixels stay sharp, no outgoing fragments remain, quick input settles immediately and playback stays smooth. Check memory by repeatedly opening/closing Cover Flow during transitions. Now Playing and Cover Flow open with the split (menu half left, pane right, the page uncovered) and MENU closes it; a held MENU (0.5 s) goes to the main menu. Check the 280 ms pace feels like the reference.
-- Menu: Settings > Main Menu > Pod on; the Pod row opens the page; the status bar is gone (the page is 480 tall: nothing under the bottom edge); MENU closes it and the bar returns.
-- Wheel: drag round the ring: one row per 15 degrees, both ways, the selection stops at the ends and never wraps, a hard stop with no bump (the music does not stutter); the window scrolls with the cursor in a long list; a drag across
-  12 o'clock does not jump; a drag that starts on the centre button does nothing; a tap on the centre selects; taps on MENU / `|<<` / `>>|` / `>||` act; a touch in the square's corners does nothing.
-- Feel (tune `IP_STEP` first): a slow turn is one row per 15 degrees (neither too jumpy nor too heavy; try 12 / 18); turning round at the end of a drag does not flicker the cursor
-  (8 degrees of hysteresis; if the first reverse step feels late lower `IP_REVERSE`); a finger that crosses the centre does not jump the list; on Songs a fast sustained turn
-  speeds up after about half a second (1, 2, 3, 5, 8, 13, 21, 34 rows), slowing or stopping brings one row back at once, a pause or turning back resets; a list of 16 rows or fewer never
-  accelerates; at the first and last row the cursor stops dead (no bump, no wrap).
-- Lists: Albums -> an album -> a track plays and Now Playing shows title, artist, album, `n / N`, the bar moves, the time counts; MENU returns to the tracks (same cursor); Artists -> albums
-  -> tracks; Songs; Playlists -> tracks; Cover Flow and Settings open and Back returns; Shuffle Songs plays.
-- Title bar: the title on the left, no clock; the battery agrees with the real one (charge it); the blue play glyph next to it follows play / pause.
-- Cover pane: the cover fills the pane edge to edge and pans about 3 px a second with **no jiggle**; every 6 s the next random cached cover cross-fades in over 1.5 s (check the fade is smooth, not choppy, and the wheel stays responsive during it: if it is too slow, raise `IP_FADE_TICK_MS` or cut instead); it is the playing album's cover (play a track from a
-  cached album, MENU back: it changes and stays), else the random rotation, new after MENU back to the main menu; the wheel and music stay responsive; with no cover cache (never opened Cover Flow / Albums)
-  the placeholder, still; the pane stops moving on every other level (the timer slows to 500 ms) and in a message box.
-- Shuffle Songs: playback starts at a random song with shuffle on, the iPod's Now Playing shows it, Next picks another random song. Settings: Shuffle and Repeat values change on the centre press and agree with
-  Settings > Playback; MENU returns to the root.
-- Idle: nothing queued shows `Not Playing`; the placeholder in Now Playing; sleep / wake and the lock screen do not leave the page broken; a language change re-draws in the new language.
-- Music keeps playing (no glitch) while the wheel turns; the page leaves no timer (go to Home and back).

@@ -33,4 +33,4 @@ literal is untouched, so:
 refuses on any mismatch. `test/demo_diff.py` checks the word, that the literal bytes are unchanged and
 that nothing else in `.text` changed. `update_firmware` is not reachable from boot (`tools/reach.py`).
 
-Device-tested (2026-11-01): the official V2.1 package installs over the mod and restores stock.
+The official V2.1 package installs over the mod and restores stock.

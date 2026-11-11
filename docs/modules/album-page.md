@@ -142,5 +142,4 @@ shared wave marker and a 20 px navbar title. See [Queue](queue.md) and [rows](ro
 `SONGS_PINS` checks `is_playing` (`0x4d9d64`) and album row-builder calls
 at `0x524c40..0x524ca4`. This page adds no hook.
 Tests cover layout, tint contrast, tone-cache bounds/LRU, playback mode changes, stack
-navigation and failures; `test/pod/durations.py` covers the table, CUE math, measuring and the line. Hardware appearance and input remain unverified by those models;
-use [device checks](device-checks.md).
+navigation and failures; `test/pod/durations.py` covers the table, CUE math, measuring and the line. Hardware appearance and input remain unverified by those models.

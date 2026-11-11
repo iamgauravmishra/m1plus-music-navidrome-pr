@@ -162,21 +162,3 @@ carry on from where they were.
 ## Not implemented
 
 Seek by dragging the arm, a scratch / cue gesture, picture-disc records, a speed (45 rpm) choice, a lock-screen skin, hardware Back handling.
-
-## Device checklist
-
-Now Playing on a playing track, More: six rows (Look up album, Look up artist, Add to playlist, Cassette Mode, **Vinyl Mode**, More), the sheet 300 px with a
-clean rounded top. Tap Vinyl Mode: the sheet closes and the turntable appears, the status bar gone.
-- Is the cover on the label, turning smoothly clockwise (about 20 frames a second)? Any tearing, shimmer or lag? Does it slow to a stop on pause and speed up on
-  play? Is the 50 ms tick warm (relax `VN_PLAY_MS` if so)?
-- Does the arm sit on the record while playing and creep inward over the track, swing out to its park on pause and back in on play, jump back to the outer
-  groove on a track change? Is its shadow right?
-- Title (with weight), artist, times, status line readable; long titles cut with an ellipsis; the status line updates with the volume keys.
-- Keys: pressed look while held; play / pause, previous, next work (a second press within 1 s is ignored by stock). A tap on the record pauses / resumes (closes the page when it was opened by the Now Playing timer); a
-  drag does nothing; the chevron closes; a pull-down from the top edge still opens the control centre.
-- A track with no cover: the grey label; an album with a cover cached: its cover at once; a track whose cover demo extracts: the label changes within a few
-  seconds.
-- Record colour Cover (Settings > Now Playing > Vinyl Mode > Record, then open Vinyl Mode): with a colourful cover the record takes its colour (mock: `out/preview/vinyl-emu-rec-cover.png`),
-  with no white line at the edge and only a faint highlight; the fine groove rings show. A new track of another cover changes it (watch for a hitch of a few tens of ms on the
-  change: 15 M instructions); a grey or missing cover leaves it black, and back to black is exactly the installed look. Turning, the arm and the tick are as smooth as with Black.
-- The screen still sleeps with the page open, wakes and catches up; back to Now Playing, Vinyl again: opens every time.

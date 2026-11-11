@@ -17,7 +17,7 @@ the same page-init dispatcher as the battery hook). Each site is pinned with its
 `dropdown_dialog.bin` are identical (`test/pod/assets.py` compares them). The group's layouter skips an invisible child, so the pill takes the label's place at the same width and the digital-out glyph does not move. Image `pod_bar_lo` (`tools/mod_icons.py` `lo_pill`, committed PNG): amber `#FFD60A` fully rounded pill, black "LO" in Inter Medium 12 px with a 0.33 px stroke, 8x supersampled. It is not the Accent Orange `#FF9F0A`; the accent never tints it
 (not in `ACCENT_*` or the glyph prefixes) and Light Mode's flip leaves it (it has colour). `tools/preview/preview.py` writes `lineout.png` (bar off, bar on, the pull-down's bar on).
 
-**Limits.** Device untested ([device checks](device-checks.md) LO-01). The pill is an asset swap, so the pull-down's bar shows it up to a second after Line Out changes, as stock's text did.
+**Limits.** The pill is an asset swap, so the pull-down's bar shows it up to a second after Line Out changes, as stock's text did.
 
 ## Sync icon
 
@@ -34,4 +34,4 @@ end (ink x 35..47), so the slot left of the box lies over the clock text. Shown,
 
 **Priority.** The worker runs at nice 10, see [Home cover build](homecover.md).
 
-**Limits.** Device untested ([device checks](device-checks.md) HOME-05).
+**Limits.** Hardware behaviour is not covered by emulation.

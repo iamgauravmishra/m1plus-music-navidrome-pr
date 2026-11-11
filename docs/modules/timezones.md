@@ -72,7 +72,7 @@ width, ellipsis and scroll behaviour are unchanged. The page builder gives each 
 hit-testing follow. `list_item_style` is a flat colour with a 1 px bottom border (no image), so the
 pressed and separator drawing is height independent. Only zone rows change: the auto time switch and
 header rows, and every other page, keep their words. Preview: `tools/preview/preview_timezones.py WORKDIR OUT.png`
-(stock 64 px beside the build). Device check: scroll, tap and the ticked row at 48 px.
+(stock 64 px beside the build).
 
 ## Limits
 
@@ -86,5 +86,4 @@ header rows, and every other page, keep their words. Preview: `tools/preview/pre
 
 `test/pod/timezones.py` runs the three payload functions in Unicorn for every index and row, checks
 the stock and built words, the manifest, the zoneinfo names, the order, and that a changed pinned word
-refuses the build. `test/demo_diff.py` and `test/pod/rows.py` allow exactly these words. Untested on
-hardware; see [device checks](device-checks.md) (TZ-01).
+refuses the build. `test/demo_diff.py` and `test/pod/rows.py` allow exactly these words.

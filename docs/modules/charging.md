@@ -76,7 +76,7 @@ q2-pod ([q2pod](q2pod.md), `patch/system.c` `charge_poll` at `75843484`) stops a
 
 ## Validation limits
 
-Needs the device (CHG-01 in [device checks](device-checks.md)): that `charger` `0` stops battery
+Needs the device: that `charger` `0` stops battery
 current while USB powers playback (readback and the icon prove neither), the stop and resume
 levels, cable reinsertion, USB DAC with charging on and off, screen-off and standby, the kill
 switch, reboot and shutdown.

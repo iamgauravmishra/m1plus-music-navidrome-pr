@@ -177,7 +177,7 @@ clock and canvas services.
 
 Device checks cover card changes, flash-write avoidance without a card, panel appearance,
 AWTK title rendering, large-library query cost and playback resume after reboot.
-See [device checks](device-checks.md); emulation does not establish those results.
+Emulation does not establish those results.
 
 ## The page (`dp_*` in `patch/dailymix.c`, `ui/m1plus_dailymix.bin`, `tools/pod_ui.py build_dailymix_page`, `tools/pod_dailymix.py` DP_*, `patch/offsets.inc` DP_*, `test/pod/dmpage.py`, previews `tools/preview/preview_dmpage.py` -> `out/dailymix-page/`)
 

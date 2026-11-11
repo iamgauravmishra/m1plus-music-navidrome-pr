@@ -125,13 +125,9 @@ Our page `m1plus_lockwall` (`LOCKWALL_PAGE`, page 63, kind `lockwall`, built by 
 - **Pins.** The list builder (`get_screensaver_image` words), the grid numbers, the cell builder's draw type and mark size, the tap handler (no-op test, the style / mark / format / config strings in order), `config_init` and the lock screen visitor are pinned in `LOCKSCREEN_PINS`; a mismatch fails the build. The code relies on the list builder, the global and the config writer only (declared `get_screensaver_image`, `toolsWriteConfig`, `LOCK_PICTURE`, `LOCK_LIST`).
 - **Ids.** `ACT_LOCKWP` 84, page 63 (`LOCKWALL_PAGE_INDEX`); see the id list above.
 - **Tests.** `wallpaper_tests` in `test/pod/lockscreen.py`: the row and page, the asset geometry against the pinned stock numbers, open (stock's list first, shown cells, marks, one picture per tick), taps (the writes and their order, no other write), stock's own tap handler `0x4ab52c` run on the same state and compared (global, config write, marks, styles), a chosen picture that is no longer listed, empty / missing folder, an unreadable chosen picture, more entries than cells, refusals (window, widget, handler, timer), background / foreground / destroy, the Lock Screen page's row. The list builder and config writer are modelled in the test (`WP`); the folder scan and picture checks are stock code.
-- Device checks: LOCK-02 in [device checks](device-checks.md).
 
-## What is left
+## Open items
 
-Not device-tested; everything below is emulation and preview only.
-
-- **Device checks:** LOCK-01 (Lock Screen page, Player Style, Show Time, the Custom Wallpaper page), LOCK-02 (wallpaper picker) and LOCK-03 (the Display row opens our page, stock's with the kill switch) in [device checks](device-checks.md).
 - **Decode cost** of the wallpaper thumbnails (five 320 x 480 decodes at one per 40 ms tick): measure on the device; if the page stalls, add a non-square reduction helper (a 90 x 135 bitmap, about 49 KB each instead of 614 KB; `cc_decode` reduces to a square only) or drop to fewer cells decoded at once.
 - A hint under the grid when the folder is empty (stock has none; the Custom Wallpaper page explains the folder for now).
 - Renumber `ACT_*` ids and page indices at merge (other branches use 77 / 78 / 79 / 82 and the last page slots).

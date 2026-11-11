@@ -59,7 +59,7 @@ package and full test scope (not the current source or environment: a built pack
 or matching retained evidence.
 
 Emulation proves only the modelled paths. Playback, real frame timing, panel appearance and
-hardware behaviour still need [device checks](device-checks.md). A preview is approximate;
+hardware behaviour still need the device. A preview is approximate;
 a successful golden comparison proves byte identity, not hardware correctness.
 
 ## Harness performance

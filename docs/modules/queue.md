@@ -111,7 +111,7 @@ Pinned stock (`tools/pod.py` `SONGS_PINS`; Clear's `mclSetGaplessMode` words are
 ## Up Next: Play Next / Play After
 
 **Sources:** `patch/upnext.c` + `upnext.h` (`upnext_add`: refusals, the start of a queue; called by the row menu, [rowmenu](rowmenu.md)), `pod_queue_insert` in `patch/shuffle.c` (the insert, declared in `patch/home.h`), `tools/pod.py` (`mclSetGaplessMode`, `MCL_PRELOAD`, `MCL_GAPLESS`, the pins in `SHUFFLE_PINS`), tests `test/pod/upnext.py`, `test/pod/shuffle.py`.
-Evidence tags: **[S]** static (disassembly of `bin/demo`), **[E]** emulated (Unicorn, the stock calls modelled as read), **[U]** untested on the device. The Phase 0 probe (device V2.1zMLVMAAAB) proved on the device that a row copied into `*PLAY_QUEUE` at pos+1 or at the end works in List play, Repeat and (stock) Shuffle (Next, Prev, a song ending, the Queue page and the counts behaved), and that it fails with Gapless on when the add is made in the last ~5 s of a song (the old next song plays).
+Evidence tags: **[S]** static (disassembly of `bin/demo`), **[E]** emulated (Unicorn, the stock calls modelled as read), **[U]** untested on the device. A device probe proved that a row copied into `*PLAY_QUEUE` at pos+1 or at the end works in List play, Repeat and (stock) Shuffle (Next, Prev, a song ending, the Queue page and the counts behaved), and that it fails with Gapless on when the add is made in the last ~5 s of a song (the old next song plays).
 Stock never runs in Shuffle mode 2 now ([shuffle](shuffle.md)): the mode word is 0, 1 or 3 and stock plays the queue in order, so a row in the queue plays when its turn comes in every mode, with no pool, pending list or `mclNextSong` hook.
 
 ### What is built
@@ -126,7 +126,7 @@ Stock never runs in Shuffle mode 2 now ([shuffle](shuffle.md)): the mode word is
 - **Nothing playing** (no queue, an empty one, no valid position): the rows become the queue as the repo's other play paths start one: `*G_CLASS_TYPE` = the first row's class (`0xf001` when it has none), `start_player(rows, 0, class, PLAY_MODE)` (`patch/ipod.c`), `force_refreshflag` = 1, answer `UPNEXT_STARTED`; the rows deque stays the caller's. The Shuffle flag and the repeat mode are **kept** (no `pod_set_*_for_queue`: those change the flag, and an add must not): with Shuffle on `sh_load_playlist` shuffles the rows with the first row first. The play type is not looked at (a stale one would refuse). The caller may open Now Playing (`ip_push(K_NOW)`).
 - **Not persisted**: `save_memoryplay_info` `0x4e3340` writes one record (the playing row, the play type, the position and the time) [S]; after a reboot the queue is the class's own, resumed at the song that was playing. `dmrActoinPLInsertTrack` `0x4f0a70` is not an insert (the DLNA callback builds a new queue and loads it) [S]; the in-place edit is the mechanism.
 
-### The caller's contract (Phase 1b, done: the row "..." menu, [rowmenu](rowmenu.md))
+### The caller's contract (the row "..." menu, [rowmenu](rowmenu.md))
 
 ```c
 #include "upnext.h"
@@ -155,19 +155,3 @@ int upnext_add(void *rows, int after);   /* rows: a deque_t of stSongInfo (the c
 ### What is tested
 
 [E] `test/pod/upnext.py`: the insert in List play, Repeat one / all and Shuffle with Repeat off / all / one (order, stacking, multi-row, class, copies); `sh.orig` a permutation after each add; Shuffle off after Play Next, stacked Play Nexts, Play After and their mix (original order, play position on the playing song, also after the position moved); the gapless cancel (the exact setter calls, no `mclSetPlayMode`, under the lock, not for Play After mid-queue, state 0 / -1, an off setting, Shuffle); every refusal (queue, `sh.orig`, preload, mode unchanged; allocation failure whole and exact-size; `SHUFFLE_MAX` and the cap exactly); nothing playing (Shuffle off / on, the load hook, flag and repeat kept); the lock (balanced, once, nothing hooked inside, three interleavings with a reorder, a load and a clear); insert with Clear (`clear_tests`: insert then Clear then Shuffle off, Clear then insert then Shuffle off, Play Next then Clear with a preload open, the DLNA refusal and its release); the pinned addresses. The row menu's own tests are `test/pod/rowmenu.py`. `test/pod/shuffle.py` pins the shared cancel for the reorders and the setter's words. The stock functions are modelled as read from the disassembly, so a wrong reading shows only on the device.
-
-### Device checklist (all [U]; Play Next / Play After from a track row's "..." menu, [rowmenu](rowmenu.md); no log file now: read the Queue page's Up Next, Now Playing's and the lock screen's "n of size")
-
-Use a library queue of 20+ songs (Songs > a song) and Songs or an album page for the menu. After each add: `size` +1, the position unchanged, the toast ("Playing Next" / "Added to Queue").
-1. **List play**, Gapless **off**: play song 3, Play Next on another song, open Queue: the new song is first under Up Next. Next plays it; Prev returns to song 3; Next, Next: song 4. Lock screen and Now Playing show the same counts. Play After: it is last.
-2. **Gapless on, an add in the last ~3 s** (the risk): wait until ~3 s remain, Play Next, let the song end: the **new** song must play (before: the old next song), **with a gap** (expected, no re-preload). Repeat with the tap at ~15 s before the end: the new song plays **gapless**.
-   Also Repeat all on the last song with Gapless on: Play After in the last seconds: the appended song plays after it.
-3. **Shuffle on, Play Next, then Shuffle off**: Shuffle on, Play Next; Queue page: the song is first under Up Next. Shuffle off: the original (library) order is back, the added song **right after the playing song**, the playing song unchanged. Play Next twice: the newest first.
-4. **Shuffle + Repeat all, Play After**: Queue page, Shuffle and Repeat all on, Play After: the song is last in Up Next and plays at the end of the shuffled queue; the wrap to the first song follows (Repeat all); Shuffle off: the song is last in the original order.
-5. **Repeat one**: Play Next, the song repeats on its own end; Next plays the new song. **Repeat all**: the new song is played before the wrap.
-6. **Counts**: Now Playing and the lock screen show "n of size" with size +1 after each add (also in Shuffle), no crash or frozen UI right after a tap (the in-place swap touches every row after the target, up to 65536 rows on the UI thread).
-7. **Refusals**: while a stream, a folder play or a podcast plays, the menu toasts the refusal and nothing changes. Nothing playing (after a reboot, before any play): Play Next starts the song with no toast (the page stays), with Shuffle on too.
-8. **Reboot / resume**: power off with an inserted song playing: the resume plays it if it is in the class (else the stock memory file's song); the other inserted rows are gone.
-9. **Play Next, then Clear**: with Gapless on and a few songs queued, Play Next, then Clear on the Queue page: the playing song plays on (no restart, no repeat), Up Next shows "No upcoming songs", the song ends and the next one that follows is the stock one for an empty tail. Also Shuffle on first: Play Next, Clear, Shuffle off: the queue is the playing song and the songs before it, nothing comes back.
-10. **DLNA**: with the DLNA switch on and Wi-Fi connected, the menu toasts "Not available while DLNA is on"; with DLNA off it works.
-11. Report what each case showed; a crash right after a tap is the top finding.

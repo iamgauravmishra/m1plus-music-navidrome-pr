@@ -120,4 +120,4 @@ Runtime work is page-scoped, with no new thread or lock. Widgets/styles use stoc
 fallbacks preserve stock behavior. Only the cover widget has paint-time payload work.
 Tests check lifecycle, tone/corner models, cover caching, time formatting, translated info,
 contrast and stock hit targets. Real repaint behavior, slider rounding, corner blending,
-intro dots and frame timing require [device checks](device-checks.md).
+intro dots and frame timing need the device.

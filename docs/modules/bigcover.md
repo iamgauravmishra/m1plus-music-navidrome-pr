@@ -26,10 +26,6 @@ Not done: the page keeps stock's behaviour for art under 320 px (no upscale filt
 
 `test/pod/bigcover.py` (`make test TEST=bigcover/<section>`): `hook_tests` (words, `$gp`, trampoline, manifest, pins of the dispatcher and the timed open, kill switch, failed init, null window, missing widget, failed binds or timer); `job_tests` (the request with its source word (2, 3), polling, the 320 x 320 bitmap equal to the file's pixels, non-square and small and big sources, no art, corrupt file, no memory, busy worker, orphan, add/start failures, a hung job, cover source, stream, empty queue, dark screen); `life_tests` (track change with a stale result, destroy during extraction, repeated open/close, a page that never ended). `test/coverflow.py` covers `cc_fit` on the host. `test/pod/coverart.py` section 8b runs the real worker (`cc_build_add_aspect`) on 320 x 240, 240 x 320 and 320 x 100 originals (embedded and folder: kept in shape), a square 320 (a copy), 640 x 480, a 300 px original (no file), source 2 with a small or unsupported embedded picture beside a valid folder cover (no file, the folder is never looked at), source 3 with a different embedded picture present (the folder only) and checks the pane's `cc_build_add_file` is unchanged (stretches at exactly its size). `job_tests` also has source 5 (no job, nothing drawn), a source that turns into 5 or 1 or the other of 2 / 3 mid-job (dropped, asked again with the new source) and the parser's path buffer empty, another track's or a prefix (no request); `life_tests` track changes 3 -> 2 and 2 -> 3 with the parser still on the last track (no request until its path buffer is the new track's).
 
-## Device checks (not done)
-
-Sharpness of a 600 px embedded and a folder cover on the timed page; a non-square cover's bars against the page; the first seconds of a track change on the page (stock's 264 px picture, then ours); that the page still closes on tap; Wi-Fi/Albums builds running at the same time (the picture then waits, or stays stock after 6 s).
-
 ## Idle view
 
 **Sources:** `patch/bigcover.c` (`bc_timed_open`, `idle_view`, `idle_choice`, `idle_set`), `patch/m1plus.c` (`ACT_IDLE`, `ACT_IDLESET`), `tools/pod.py` (`IDLE_SITE`, `IDLE_PINS`, `COVER_MODE`), `tools/pod_pages.py` (`IDLE_PAGE`); tests `test/pod/bigcover.py` `idle_tests`, `idle_setting_tests`.
@@ -44,8 +40,8 @@ Settings > Now Playing > **Idle Display** chooses where the timed view goes: **O
 - **Fallback.** Everything off the happy path ends in stock's call; the kill switch is read at the hook (one `access`); no state, thread or timer of its own.
 - **Not done:** Lyrics as a destination (Lyrics is the slide view's second pane of Now Playing; switching it needs `slide_view_set_active` on the window's `slide_view`, which is not pinned or called anywhere, the lyrics pane's own state and, because stock resets the countdown to 20 after every timed open, would pull the user back from any other pane every ten seconds) and a delay choice (stock resets the countdown at `0x97ccd0` to 20 from several sites).
 
-Device checks (not done): the Settings row and picker on the device; Cassette and Vinyl opening about ten seconds after Now Playing with the matching choice; Back and the pages' close on tap returning to Now Playing and the next open ten seconds later; stock's Cover mode row and ours agreeing after either changes; the kill switch.
+On the device: the Settings row and picker on the device; Cassette and Vinyl opening about ten seconds after Now Playing with the matching choice; Back and the pages' close on tap returning to Now Playing and the next open ten seconds later; stock's Cover mode row and ours agreeing after either changes; the kill switch.
 
-## Handover
+## Open items
 
-None: the Lyrics and delay choices above are the open ideas.
+The Lyrics and delay choices above.

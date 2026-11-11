@@ -8,7 +8,7 @@ are Sony's NW-A100/NW-ZX500 cassette screen and FiiO Tape mode.
 Sources: `patch/tape.c`, `tools/tape_art.py`, `tools/pod_ui.py` (`build_tape_page`),
 `tools/mod_icons.py`, and `TP_*` in `offsets.inc`. Tests: `test/pod/tape.py`; preview:
 `tools/preview/preview_tape.py`. Emulated frames are written to `out/preview/tape-emu-*.png`.
-The release status records flashed builds; use the final checklist for validation of a new build.
+Use the final checklist for validation of a new build.
 
 ## Themes and assets
 
@@ -136,7 +136,7 @@ owns the PCM).
 `tp_first` (a 50 ms one-shot, armed at open) makes the first look and starts `tp_tick` at **70 ms while playing, 500 ms paused** (`TP_PLAY_MS`, `TP_IDLE_MS`); `tp_retime` changes the one timer's
 interval in place with `timer_modify` (never a second timer, `IPOD_PINS` pin it). The timer is removed on `EVT_WINDOW_TO_BG` (another window over the page: the More sheet, a dialog, the
 lock screen) and added again on `TO_FG`; destroy removes it, frees the five bitmaps and the distance table and clears the state; a destroy of another window leaves the page alone.
-**Nothing here stops the stock screen-off**: the page sets no idle state, holds no wake lock and reads no input but its own touches; a repaint or a timer is not input, so the stock idle path is not reset by them (this is by construction, **not yet seen on the device**: it is on the checklist).
+**Nothing here stops the stock screen-off**: the page sets no idle state, holds no wake lock and reads no input but its own touches; a repaint or a timer is not input, so the stock idle path is not reset by them (this is by construction; it is on the checklist).
 
 ### Idle power
 
@@ -181,7 +181,7 @@ rate in Hz at 4, the codec's name at 0x10, the bits a sample at 0x30 (1 for DSD)
 - **The tape's colour** follows the theme too (`theme_pack`, `THEMES[..]['pack']`): ferric brown for Normal (#22150E to #6C4F38, as before), a darker, greyer brown for Chrome
   (#1A1412 to #5A4C46), blue-black for Metal (#121215 to #505058), the same sheen and windings.
 
-Not verified on a device: how soon after a track starts the player's record is the new track's (the 600 ms wait is a guess), what name it gives an ALAC or AAC `.m4a`, and how
+Open: how soon after a track starts the player's record is the new track's (the 600 ms wait is a guess), what name it gives an ALAC or AAC `.m4a`, and how
 long the tick that changes the tape takes on the panel.
 
 ## Themes
@@ -234,26 +234,7 @@ fields dropped in this order when it does not fit: the clock, then the format (`
 1 Normal, near the start, playing; 2 Chrome, mid-track, repeat on; 3 Metal, near the end, paused; 4 Chrome with the tap control strip (not built). The page shows frame 1's look
 (`out/preview/tape-emu-*.png` are the emulated device frames).
 
-## Device checklist
-
-Open Now Playing on a playing track, More (page 1), tap **Cassette Mode**: the sheet closes and the cassette appears, readable when the player is held with its **right edge up**.
-- Is the sheet's top edge right now on both pages (page 1 five rows with its own 250 px glass, page 2 four rows, 200 px, rounded corners and rim)?
-- Is the picture the right way up (title at the top, the label's text readable, not mirrored)? If it is upside down, the rotation sign is wrong (`tp_pix` / the touch map).
-- Do the reels turn smoothly while playing (about 14 frames a second; the left one slower at the start, the right one faster) and **stop** when paused? Any shimmer, tearing or lag? Does the tape pack grow on the right and shrink on the left as the track plays, and does its sheen (a bow tie from the upper left to the lower right, the lower right fainter, fine 2 px windings, a darker rim) stay still while the reel turns, without shimmer in the windings?
-- Is the text readable rotated: title 22 px, artist 16, album 13, times 12, status 12 (11)? Any clipped descender or leftover glyph when the track changes?
-- Tap the middle: pause / play, with the pause bars shown at once? Tap the top left screw: does it darken and turn while held, and close the page on release? Is a swipe from the top edge still opening
-  the control centre (pull-down) with the page open, playing and paused? Does a long drag do nothing? Is 14 px too easy / too hard for a tap, is the 50 px screw area right?
-- Material: is the knurl crisp (4 px cells, no moire), the arrow and the Metal hairlines read as printed ink (not glossy), the shell's light falling off from the top left, the label's grain and frame shadow, the smoked window with its scratches and fading reflection, the lit hubs with their shadow, the screws' different slot angles, and the reels still smooth at 24 frames?
-- Settings > Now Playing > Theme: the picker has Normal, Chrome, Metal, Auto; reopen the page: the new look (shell, hubs, ink, fine print, the bias line at the right of the artist's line, the tape's colour)? It survives a reboot?
-- Auto: an MP3 shows the Normal tape and `MP3 320`; a CD-quality FLAC the Chrome tape and `FLAC 16/44.1`; a 24 bit or 96 kHz file the Metal tape, `FLAC 24/96` and the gold `HI-RES` sticker at the shell's lower left; a DSD file Metal, `DSD64` and the `DSD` sticker. An ALAC and an AAC `.m4a`: Chrome and Normal?
-- Auto, from a lossy track to a hi-res one (next track, and by itself at the track's end): the title changes at once, the tape within about a second; how long does the picture stand still while it changes? Never the wrong tape for a moment (the last track's figures on the new track)?
-- A chosen theme with a hi-res track: the tape stays, the sticker and the format show.
-- Battery number, `+` while charging, volume (change it with the keys: the line follows within half a second while paused), the format (file extension), the clock?
-- Does the screen still sleep after the usual idle time with the page open (playing and paused)? Does it wake and keep going, the reels on the right turn and the text current at once (no jump)? Battery: leave it playing with the screen off for an hour (screen-off ticks are 1 s and draw nothing) and compare the drain with Now Playing; is the lit 70 ms tick warm?
-- Back to Now Playing, More again, Tape again: opens every time, no leaked state. Does the page keep playing through a track change and a phone-style lock / unlock?
-Open questions: the cost of the 70 ms tick on battery (relax `TP_PLAY_MS` to 100 if warm); whether to drop 5 degree frames for fewer redraws; whether 24 h time is wanted.
-
-## The pack (material pass, phase 2)
+## The pack (materials)
 
 The tape packs are drawn at run time per pixel by `tp_pack` (`patch/tape.c`), the arithmetic being `pack_rgb` in `tools/tape_art.py` (the test's `py_pack` and the preview's `packs()` call it,
 so the emulated frame and the preview are the payload to the bit). Visual target: `packs2` of the approved scratch mock (the pixels agree with its float version within 1 - 2 levels almost

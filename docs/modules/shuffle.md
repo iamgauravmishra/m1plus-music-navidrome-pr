@@ -199,15 +199,10 @@ context `{int kind; int ms; char text[0x200]; char text2[0x200]}` (`dialog_msgin
 the audiobook filter, the multi-disc folder merge, and Shuffle Folder from inside the folder browser
 (it needs a second hook).
 
-## Handover
+## Limits and notes
 
-Nothing here has been run on the device. Open gaps, in the order worth checking:
-
-1. **Device checks:** gapless after a reorder (turn Shuffle on / off near the end of a song; the next song starts without a gap and is the one the
-   Queue page shows); reboot resume with Shuffle on (the resumed song plays first, the rest is reshuffled, no stock Shuffle behaviour, Next / Previous
-   follow the Queue page); DLNA / SyncLink (a remote asking for Shuffle gets the flag; remotes read Shuffle back); Now Playing's button through
-   all four steps and with Shuffle + Repeat all from the Queue page; stock lists' playing-row marker (stock pages that map the queue position back to
-   the library row would now point at the wrong row in a shuffled queue: only our own pages were checked in emulation).
+1. **Device:** stock pages that map the queue position back to
+   the library row would point at the wrong row in a shuffled queue; only our own pages were checked in emulation.
 2. **Silent failures in the hooks:** over 65536 songs or no memory at a stock-made request or a queue load turns the flag off without a message
    (the Queue page's button and the Shuffle page do show one). A message there would need a UI-thread hand-off (a pending notice shown by a page tick).
 3. **DLNA's thread vs. stock's load: fixed.** `sh_load_playlist` holds the payload lock across stock's `mclLoadPlayList` (see Locking: it cannot re-enter a
@@ -217,4 +212,4 @@ Nothing here has been run on the device. Open gaps, in the order worth checking:
    queue: it reshuffles with that position first.
 5. The order is not saved; Shuffle off after a size change of the queue (a song deleted from it) cannot restore it. Play Next / Play After keep `orig` in step
    (`pod_queue_insert`, above); no other writer may change the queue's size without `drop_order`.
-6. The gapless cancel is one helper (Gapless above); a late Play Next / reorder joins without gapless in that song (device check in [queue](queue.md)).
+6. The gapless cancel is one helper (Gapless above); a late Play Next / reorder joins without gapless in that song).

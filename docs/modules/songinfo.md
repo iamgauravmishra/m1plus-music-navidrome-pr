@@ -32,4 +32,4 @@ No file is read for an undownloaded track and TagLib is never used. Tests: `song
 no tag and after tags of 300, 5000 and 70000 bytes, a sync with no next frame skipped, an unreadable header, an M4A holding MPEG-like bytes (no rate), a missing file, no or a folder-only extension, no title, CUE tracks, long path and title; geometry, scroll and the fade; no record, second
 open, window and asset failures, destroy (bitmaps and tables freed), a replaced page. Preview: `uv run python -I tools/preview/preview_songinfo.py work/mod-release out/preview/songinfo.png`.
 
-**Handover:** to add the action rows, append blocks after `Path` in `gi_build` and give them hit tests in a touch handler on `gi_view`; nothing there takes touches yet.
+**Extending:** to add the action rows, append blocks after `Path` in `gi_build` and give them hit tests in a touch handler on `gi_view`; nothing there takes touches yet.

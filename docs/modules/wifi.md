@@ -5,7 +5,7 @@ OWE, so WPA-Enterprise, WPA3-only and Enhanced Open networks cannot join. This f
 only that script (`tools/mod_wpa.py`, sources in `assets/wpa/`) and replaces Settings > Wi-Fi with a page of our own that speaks to the
 supplicant over its control socket (`patch/wifictl.c`, `patch/wifipage.c`, `tools/pod_ui.py build_wifi_page`; [The Wi-Fi page](#the-wi-fi-page)).
 The stock binaries and the stock Wi-Fi page are untouched (the stock page is the fallback; see Start-up choice). Enterprise networks
-(certificates, identity) and captive portals are later phases (see Later phases).
+(certificates, identity) and captive portals are not supported yet (see Not supported yet).
 
 ## Stock facts
 
@@ -77,7 +77,7 @@ WEP network, which hostap 2.12 built without `CONFIG_WEP` rejects) the script st
 ## The Wi-Fi page
 
 Settings > Wi-Fi is the `ACT_STOCK` row (`STOCK_WIFI`, arg 0, its On / Off value from `wififlag`; no action id was added): the tap calls `wifipage_open()` (`patch/m1plus.c`) and only when that returns -1 (window or
-asset that will not open) `navigator_to("systemset/wifi_page")` runs as before. The stock All System Settings hub opens the same page: its Wi-Fi row (the thunk `0x4b1440`) calls `navigator_to("systemset/wifi_page")` at `0x4b1460`, and that `jalr` is hooked ([payload](payload.md) hook 21): `wifi_hub_open(name)` (`patch/wifipage.c`) opens our page and returns 0, and otherwise opens the stock page with stock's `navigator_to(name)` when `/mnt/mmc/m1plus-off` exists or `wifipage_open()` returns -1 (stock's delay slot still loads the argument, the thunk's return value is unused). The stock page is always opened afresh, never restacked: its init scans (`wifi_scan`, `0x4b115c`) on every open, while a restack runs no init (the `EVT_WINDOW_TO_FG` handler `0x4b0a34` only rebuilds the list from the old results and restores the poll timer, and the `EVT_WINDOW_TO_BG` handler `0x4afec8` clears the scan countdown and removes the timer), so a reopened page would show old networks. The site is pinned (the thunk's prologue, both GOT loads, the call, its delay slot and the `move v0, zero`), runs on a tap only and is not on the boot path (`tools/reach.py` with the page-init dispatcher `0x4d00c0` as the cut: not reached). It reads the kill switch although the safety rule would not require it for a tap-only site, so that the stock page stays reachable for WEP. Networks can no longer be added on the stock page while ours runs (device check WIFI-12), except under the kill switch, where stock's supplicant reads the real file.
+asset that will not open) `navigator_to("systemset/wifi_page")` runs as before. The stock All System Settings hub opens the same page: its Wi-Fi row (the thunk `0x4b1440`) calls `navigator_to("systemset/wifi_page")` at `0x4b1460`, and that `jalr` is hooked ([payload](payload.md) hook 21): `wifi_hub_open(name)` (`patch/wifipage.c`) opens our page and returns 0, and otherwise opens the stock page with stock's `navigator_to(name)` when `/mnt/mmc/m1plus-off` exists or `wifipage_open()` returns -1 (stock's delay slot still loads the argument, the thunk's return value is unused). The stock page is always opened afresh, never restacked: its init scans (`wifi_scan`, `0x4b115c`) on every open, while a restack runs no init (the `EVT_WINDOW_TO_FG` handler `0x4b0a34` only rebuilds the list from the old results and restores the poll timer, and the `EVT_WINDOW_TO_BG` handler `0x4afec8` clears the scan countdown and removes the timer), so a reopened page would show old networks. The site is pinned (the thunk's prologue, both GOT loads, the call, its delay slot and the `move v0, zero`), runs on a tap only and is not on the boot path (`tools/reach.py` with the page-init dispatcher `0x4d00c0` as the cut: not reached). It reads the kill switch although the safety rule would not require it for a tap-only site, so that the stock page stays reachable for WEP. Networks can no longer be added on the stock page while ours runs, except under the kill switch, where stock's supplicant reads the real file.
 
 **Design.** The page is the Settings pages' grouped cards ([settings](settings.md) "Cards": 52 px rows, cards 10..310 in `#1C1C1E` with 12 px corners, hairlines from x 24, the stock switch image, the same picture pieces
 `pod_cd_single` / `top` / `mid` / `bot` and their pressed twins) in the stock list under our navbar (Back and Now Playing, title Wi-Fi). Layout (`tools/pod_ui.py build_wifi_page`, numbers of `tools/pod_settings.py`):
@@ -108,7 +108,7 @@ asset that will not open) `navigator_to("systemset/wifi_page")` runs as before. 
   | `WPA..-PSK` (WPA / WPA2) | WPA/WPA2 | either | password page, `psk "<pass>"` (a 64 digit hex key unquoted; the page cannot type one), `key_mgmt WPA-PSK` |
   | `PSK+SAE` | WPA2/WPA3 | either | newer: `psk`, `key_mgmt WPA-PSK SAE`, `ieee80211w 1`; stock: as WPA2 |
   | `SAE` only | WPA3 | newer only | `sae_password "<pass>"`, `key_mgmt SAE`, `ieee80211w 2` |
-  | `EAP` (also Suite B) | Enterprise | not yet | toast "Enterprise isn't supported yet" (phase 2b) |
+  | `EAP` (also Suite B) | Enterprise | not yet | toast "Enterprise isn't supported yet" |
 
   "Newer only" with stock's supplicant (a fallback) gives the toast "This network isn't supported" and no dialog. A saved network of any security joins without asking.
 - **Connect** a new network: our password page ([below](#the-password-page)) for a secured one (the join is sent from it), then `ADD_NETWORK`, the `SET_NETWORK` lines, `priority` (minutes since the epoch, so the
@@ -134,7 +134,7 @@ Rows are pooled and placed in display order like the list's (`wp_put`, `virtual_
 - **Info card** (`WI_FIELDS` = 4 pooled label / value rows, the fourth is room for the enterprise rows of mockup screen 4: Username, Password, Certificate): **Security** (`wf_sec_label` and the `pod_i18n` texts Open, Enhanced Open, WEP, WPA/WPA2, WPA2/WPA3, WPA3, Enterprise: one label for every EAP network, not "WPA2 Enterprise"),
   **IP Address** (`STATUS` `ip_address`, kept in `wf_status.ipaddr`) and **Router** (`wf_parse_route` on `/proc/net/route`: wlan0's default route, up and with a gateway; the 32 bit gateway printed as hex in host order, little endian here), both only while the page's network is the connected one and has an address; no gateway = no Router row.
 - **Auto-Join:** `ENABLE_NETWORK id` / `DISABLE_NETWORK id`, then `SAVE_CONFIG` + split. `disabled` is in `wf_split`'s stock keys, so `disabled=1` stays with its block: a WPA-PSK / open network in the real file (stock's 2.9 reads `disabled` as its own supplicant writes it), a WPA3 / OWE / enterprise one in `wifi-networks` (hostap 2.12 reads it back from the copy).
-  hostap disconnects when the network it is on is disabled; the page does not work around that (device check WIFI-13).
+  hostap disconnects when the network it is on is disabled; the page does not work around that.
 - **Refresh:** no timer of its own. The list's timer reads `STATUS` / `LIST_NETWORKS` and the scan; `wp_merge` ends with `wi_refresh`, which finds the network by its name bytes in the merged list and re-lays the page only when something it shows changed (a hash of saved / Auto-Join / security / connected / address / gateway).
   A network that left the scan stays as it was (a saved one is still in the list, an unsaved one keeps Join), a network forgotten elsewhere becomes an unsaved one, the supplicant not answering changes nothing, Wi-Fi turned off (the list's timer notices) goes back to the list.
 - **Windows:** the list stays under the info page (its timer runs, no scan while it is not in front); the info page's destroy handler frees only its own state, so Back and Now Playing (popping both) end in either order. Taps are ignored under a dialog (`wp.modal`).
@@ -226,14 +226,14 @@ EAP, WPS and PMF with the RTL8733BS driver; 2.12 reading a config written by 2.9
 (`networkGetSsidList`); the `wpa_cli` 2.9 `scan_result` format against 2.12's flags column; BusyBox ash running the script (its
 syntax is plain POSIX).
 
-## Later phases: enterprise form, captive portals
+## Not supported yet: enterprise form, captive portals
 
-Stages 1 to 5 (the supplicant, the list in the iOS layout, the info page, the password page, the Other Network flow: mockup `out/mockups/wifi/sheet.png`, values in `out/mockups/wifi/mock.py`) are what this branch ships; what is left:
+The supplicant, the list in the iOS layout, the info page, the password page and the Other Network flow are described above; not done:
 
 - **Enterprise** joins the Security page's rows (the Other Network flow, above) and the info page's rows:
-  The info page's pooled field rows (`WI_FIELDS`, `wi_f0..3`) are where the enterprise rows (Username, Password, Certificate with a chevron, mockup screen 4) go; its Join row exists. The enterprise form (mockup screen 9) follows with phase 2b and can reuse the password page's pieces
+  The info page's pooled field rows (`WI_FIELDS`, `wi_f0..3`) are where the enterprise rows (Username, Password, Certificate with a chevron, mockup screen 4) go; its Join row exists. The enterprise form (mockup screen 9) would reuse the password page's pieces
   (`wk_open`'s field, eye and error line; `KB_PASSWORD` for the password row, a plain `keyboard_attach` for the username) with the keyboard attached to whichever field is tapped.
-- **Enterprise form (2b).** `wp_can` (`patch/wifipage.c`) answers an `WF_EAP` row with a toast; replace that with a form page of our own (identity, anonymous identity, password, EAP method, phase 2) opened from the row, using the stock keyboard
+- **Enterprise form.** `wp_can` (`patch/wifipage.c`) answers an `WF_EAP` row with a toast; replace that with a form page of our own (identity, anonymous identity, password, EAP method, phase 2) opened from the row, using the stock keyboard
   dialogs or our keyboard page ([keyboard](keyboard.md)). EAP: PEAP + MSCHAPV2 most common; TTLS + PAP / MSCHAPV2; TLS needs a client certificate and key from the card. `wp_join` already has the shape (`ADD_NETWORK`, `SET_NETWORK`
   lines, `priority`, `ENABLE_NETWORK`, save, select); add the keys `key_mgmt WPA-EAP` (`WPA-EAP-SUITE-B-192` for 192 bit), `eap`, `identity`, `anonymous_identity`, `password`, `phase2`, `ieee80211w` and the certificate keys. `wf_split` already sends
   every block with an `eap` / `identity` / `ca_cert` ... key to `wifi-networks` (they are not in its stock key list). Gate the row on the `eap` list of `GET_CAPABILITY eap` (`PEAP`, `TTLS`, `TLS`: stock 2.9 has only `WSC`) like SAE / OWE.
