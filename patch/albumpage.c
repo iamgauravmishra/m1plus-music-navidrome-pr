@@ -1184,6 +1184,9 @@ int album_open_src(const lib_src_t *src, unsigned cls, void *row) {
     return ab_open(src == &lib_stock ? (const lib_src_t *)0 : src, cls, row);
 }
 
+/* 1 while the page's window is not destroyed yet: also after it was closed, until stock's idle destroys it (album_open answers -1 until then; patch/playmore.c waits for it). */
+int album_page_up(void) { return ab.win != (void *)0; }
+
 int album_open(unsigned cls, void *row) {
     return album_open_src((const lib_src_t *)0, cls, row);
 } /* (this also keeps album_open_src linked until a page calls it) */

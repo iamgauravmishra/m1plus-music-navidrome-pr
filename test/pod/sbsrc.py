@@ -397,7 +397,28 @@ def play(ctx):
            'sbs_playing(id): the stock player is on the Navidrome track with that id')
     F_PLAYING = 40   # lib_src_t.playing, the last member (after complete at 36)
     expect([call(m, F_PLAYING, LIB, r_) for r_ in m.deques[h][:5]] == [0, 0, 0, 1, 0], 'lib_nd.playing(rec): the page row whose server id the player is on (row 3, id t4), not a REC_PATH compare')
+    # Now Playing's Look up album / artist: the playing track's album and artist as records of the source (patch/playmore.c opens the source's pages on them)
+    def one(fn):
+        hh = m.call(PSYMS[fn], count=1 << 40)
+        return rows(m, hh)[0] if hh else None, (rid(m, deque_row(m, hh, 0)) if hh else None)
+    expect(m.call(PSYMS['sbs_playing_ours'], count=2000000) == 1, 'sbs_playing_ours: the player is on a track a Navidrome page queued')
+    r_, i_ = one('sbs_playing_album')
+    expect(r_ and i_ == 'al1' and r_['title'] == 'Album 1' and r_['artist'] == 'An Artist' and r_['year'] == 2001 and r_['meta'].split('\t')[:3] == ['a', 'cv-al1', 'r1'],
+           f'sbs_playing_album: the cached album row of the track\'s album id ({i_}, {r_})')
+    r_, i_ = one('sbs_playing_artist')
+    expect(r_ and i_ == 'r1' and r_['title'] == 'An Artist', f'sbs_playing_artist: no Artists list yet, the row is the album\'s artist id and name ({i_}, {r_})')
+    seed(m, 'artists.idx', 'artist', [dict(id='r0', name='Other', albums=1), dict(id='r1', name='An Artist (list)', cover='ar-r1', albums=2)])
+    r_, i_ = one('sbs_playing_artist')
+    expect(i_ == 'r1' and r_['title'] == 'An Artist (list)' and r_['meta'].split('\t')[:3] == ['r', 'ar-r1', '2'], f'with the Artists list: its row of that id (picture, album count) ({i_}, {r_})')
+    # an album the sync does not have: a row made of what the queue and the player's record know; the artist by the track's artist name, or none
+    del m.fs[f'{ND}/albums.idx']
+    r_, i_ = one('sbs_playing_album')
+    expect(r_ and i_ == 'al1' and r_['title'] == 'An Album' and r_['artist'] == 'An Artist' and r_['meta'].split('\t')[1] == 'cv-t4', f'no albums cache: the album row is the id with the player\'s texts and the track\'s cover ({i_}, {r_})')
+    expect(one('sbs_playing_artist') == (None, None), 'no albums cache and no artist of that name in the list: no artist')
+    seed(m, 'artists.idx', 'artist', [dict(id='r7', name='AN ARTIST', albums=1)])
+    expect(one('sbs_playing_artist')[1] == 'r7', 'the Artists list\'s row of the track\'s artist name, without case')
     m.play_pos = -1
+    expect(m.call(PSYMS['sbs_playing_ours'], count=2000000) == 0 and one('sbs_playing_album') == (None, None) and one('sbs_playing_artist') == (None, None), 'nothing playing: not ours, no album, no artist')
     expect(m.call(PSYMS['sbs_playing'], a0=m.cstr('t4'), count=2000000) == 0, 'nothing playing: 0')
     expect(call(m, F_PLAYING, LIB, m.deques[h][3]) == 0, 'lib_nd.playing: nothing playing, 0')
     # Play and Shuffle set the mode; a row tap keeps it

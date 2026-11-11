@@ -562,6 +562,76 @@ int sbs_playing_server(void) {
     return rec && sba_rec_track(I(rec, REC_ID))[0] && sbn_http_url(P(rec, REC_PATH));
 }
 
+int sbs_playing_ours(void) {
+    void *rec = cc_playing();
+    return rec && sba_rec_track(I(rec, REC_ID))[0];
+}
+
+/* The album of the track the player is on, as a list of one album record: the cached album row (albums.idx) when the sync has it, else a row made of what the queue and the player's record know (the id,
+ * the name, the artist, the cover), which is all the album page needs to read the tracks. *artist_id (NULL: not asked; SBA_ID bytes) is the cached row's artist id, "" unknown. */
+static void *nl_playing_album(char *artist_id) {
+    void *rec = cc_playing(), *q;
+    sba_track_t *t;
+    sba_album_t *one;
+    sba_albums_t a;
+    int i, found = -1;
+    if (artist_id) artist_id[0] = 0;
+    if (!rec || !(t = (sba_track_t *)calloc(1, sizeof *t))) return (void *)0;
+    if (!sba_rec_row(I(rec, REC_ID), t) || !t->album_id[0]) {
+        free(t);
+        return (void *)0;
+    }
+    sba_albums(&a);
+    for (i = 0; i < a.n && found < 0; ++i)
+        if (!strcmp(a.v[i].id, t->album_id)) found = i;
+    q = nl_new();
+    if (q && found >= 0) {
+        if (artist_id) snprintf(artist_id, SBA_ID, "%s", a.v[found].artist_id);
+        nl_push_album(q, &a.v[found]);
+    } else if (q && (one = (sba_album_t *)calloc(1, sizeof *one)) != 0) {
+        snprintf(one->id, sizeof one->id, "%s", t->album_id);
+        snprintf(one->name, sizeof one->name, "%s", cc_str(rec, REC_ALBUM));
+        snprintf(one->artist, sizeof one->artist, "%s", cc_str(rec, REC_ARTIST));
+        snprintf(one->cover, sizeof one->cover, "%s", t->cover);
+        nl_push_album(q, one);
+        free(one);
+    }
+    sba_free_albums(&a);
+    free(t);
+    return nl_done(q);
+}
+
+void *sbs_playing_album(void) { return nl_playing_album((char *)0); }
+
+/* Its artist, as a list of one artist record: the artist of the cached album row (by id; the Artists list's row when it has one, else a row of the id and the album's artist name), or, for an album the
+ * sync does not have, the Artists list's row of the track's artist name (ASCII case-insensitive). NULL when neither is known. */
+void *sbs_playing_artist(void) {
+    void *rec = cc_playing(), *al, *q = (void *)0;
+    char aid[SBA_ID];
+    sba_artists_t r;
+    sba_artist_t *one;
+    const char *name;
+    int i, found = -1;
+    if (!rec || !sbs_playing_ours()) return (void *)0;
+    al = nl_playing_album(aid);
+    name = aid[0] && al ? cc_str(deque_at(al, 0), REC_ARTIST) : cc_str(rec, REC_ARTIST);
+    sba_artists(&r);
+    for (i = 0; i < r.n && found < 0; ++i)
+        if (aid[0] ? !strcmp(r.v[i].id, aid) : (name[0] && !cc_nocase(r.v[i].name, name))) found = i;
+    if (found >= 0 || aid[0]) q = nl_new();
+    if (q && found >= 0)
+        nl_push_artist(q, &r.v[found]);
+    else if (q && (one = (sba_artist_t *)calloc(1, sizeof *one)) != 0) {
+        snprintf(one->id, sizeof one->id, "%s", aid);
+        snprintf(one->name, sizeof one->name, "%s", name);
+        nl_push_artist(q, one);
+        free(one);
+    }
+    sba_free_artists(&r);
+    if (al) deque_destroy(al);
+    return nl_done(q);
+}
+
 int sbs_playing(const char *id) {
     void *rec = cc_playing();
     return id && id[0] && rec && !strcmp(sba_rec_track(I(rec, REC_ID)), id);

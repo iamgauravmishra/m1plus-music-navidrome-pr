@@ -32,7 +32,7 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 | Playlists | Open a playlist (Play, Shuffle, or tap a track); the list-plus button creates, imports, exports or deletes; the **…** switches grid/list and the name order |
 | Shuffle | Shuffle songs, albums or folders from Extras |
 
-In Now Playing, tap **…** for playback options, Look up album, Cassette Mode and Vinyl Mode.
+In Now Playing, tap **…** for playback options, Look up album, Look up artist, Cassette Mode and Vinyl Mode. For a song playing from Subsonic the two Look up rows open the server's album and the server's artist.
 Open its **More** page for **Sleep Timer** (opens Settings > Power, where the timer is set) and the
 online cover and lyrics lookup (Wi-Fi required).
 

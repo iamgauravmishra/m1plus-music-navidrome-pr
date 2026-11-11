@@ -61,6 +61,12 @@ class PM(pulldown.SM):
         self.handlers[PSYMS['coverflow_artist']] = 'coverflow_artist'
         self.am_ret = 0                 # what albums_open_artist returns (patch/albums.c, trapped here: test/pod/artists.py runs it); -1 = the window will not open
         self.handlers[PSYMS['albums_open_artist']] = 'albums_open_artist'
+        self.src_rec = {'album': None, 'artist': None}   # what sbs_playing_album / sbs_playing_artist answer (patch/sbsrc.c, trapped here: test/pod/sbsrc.py runs them): a record, None = not known
+        self.src_ret = 0                # what album_open_src / albums_open_src return (trapped: albumpage.py and albums.py run them)
+        self.src_busy = 0               # the next n calls of them answer -1: the page that was closed is not destroyed yet (stock destroys a closed window from an idle, 0x692960)
+        for n in ('sbs_playing_album', 'sbs_playing_artist', 'album_open_src', 'albums_open_src'): self.handlers[PSYMS[n]] = n
+        self.ab_up = 0                  # album_page_up (patch/albumpage.c, trapped): our album page's window is not destroyed yet for the next n asks (a huge n: it never goes)
+        self.handlers[PSYMS['album_page_up']] = 'album_page_up'
         self.init_ret = 0
         self.nav_ret = 0                # what navigator_to returns (the stock Power page, trapped; 0 = RET_OK)
         self.navs = []                 # the navigator's stack: (name, window)
@@ -170,6 +176,21 @@ class PM(pulldown.SM):
             self.calls.append(('podcasts_go',)); u.reg_write(UC_MIPS_REG_V0, self.ep_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'vinyl_open':
             self.calls.append(('vinyl_open',)); u.reg_write(UC_MIPS_REG_V0, self.vinyl_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+        if name in ('sbs_playing_album', 'sbs_playing_artist'):
+            r = self.src_rec[name[12:]]
+            self.calls.append((name,)); u.reg_write(UC_MIPS_REG_V0, self.new_deque([r]) if r else 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+        if name in ('album_open_src', 'albums_open_src'):   # (src, cls, row) / (src, artist)
+            row = a2 if name == 'album_open_src' else a1
+            self.calls.append((name, a0, self.read_cstr(self.word(row + O['REC_TITLE']))))
+            if self.src_busy:
+                self.src_busy -= 1
+                u.reg_write(UC_MIPS_REG_V0, 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+            if self.src_ret == 0 and not self.no_window: self.page('m1plus_album_page' if name == 'album_open_src' else 'm1plus_albums_page')
+            u.reg_write(UC_MIPS_REG_V0, self.src_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+        if name == 'album_page_up':
+            up = 1 if self.ab_up else 0
+            if self.ab_up: self.ab_up -= 1
+            self.calls.append(('album_page_up', up)); u.reg_write(UC_MIPS_REG_V0, up); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'sba_rec_track':
             rid = a0 - (1 << 32) if a0 >= 1 << 31 else a0
             u.reg_write(UC_MIPS_REG_V0, self.cstr(self.sbtrack.get(rid, ''))); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
@@ -857,6 +878,104 @@ def run(ctx):
     expect(flag(m) == 0 and opened(m) == [(O['CLASS_ALBUMS'], 1)], f'no album page window to watch after the open: the flag is not left set ({flag(m)})')
     m = PM(); lib(m); m.widget_on_fail = frozenset({DESTROY}); ret = lookup(m)
     expect(ret == RET_STOP and flag(m) == 0, f'the destroy watch refused: the page is open and the flag is not left set ({ret}, {flag(m)})')
+
+    # our album page already in the stack: its window is destroyed from stock's idle after the close, so the open waits for it (else album_open answers -1 and stock's page would open instead)
+    def ltick(m):
+        m.call(PSYMS['pm_local_tick'], count=4000000); m.sync()
+        return list(m.calls)
+    def larmed(calls): return [c for c in calls if c[0] == 'timer_add' and c[1] == PSYMS['pm_local_tick']]
+    m = PM(); lib(m); m.navs.insert(0, ('m1plus_album_page', m.alloc(0x80))); m.sync_stack(); m.ab_up = 3   # (the tap's ask, then two ticks see it still there)
+    ret = lookup(m); first = list(m.calls)
+    expect(ret == RET_STOP and ('window_close', m.dialog) in first and ('navigator_close', 'm1plus_album_page') in first and not opened(m) and 'album_open' not in [c[0] for c in first] and len(larmed(first)) == 1 and flag(m) == 0,
+           f'our album page in the stack: the sheet and the page close, nothing opens yet, a timer waits for the destroy ({ret}, {flag(m)})')
+    second = ltick(m); third = ltick(m)
+    expect(len(larmed(second)) == 1 and len(larmed(third)) == 1 and not [c for c in second + third if c[0] in ('album_open', 'navigator_to_with_context')], 'while the old window is there: armed again, nothing opened')
+    fourth = ltick(m)
+    expect(not larmed(fourth) and [c[0] for c in fourth].count('album_open') == 1 and flag(m) == 1 and m.navs[-1][0] == 'albuminfo_page', f'once it is destroyed the album opens (album_open first), with the flag set ({flag(m)}, {[n for n, _ in m.navs]})')
+    expect(not [c for c in ltick(m) if c[0] in ('album_open', 'timer_add')], 'a late tick does nothing')
+    m = PM(); lib(m); m.navs.insert(0, ('m1plus_album_page', m.alloc(0x80))); m.sync_stack(); m.ab_up = 3; lookup(m); m.page('m1plus_songs_page')
+    calls = ltick(m)
+    expect(not larmed(calls) and 'album_open' not in [c[0] for c in calls] and flag(m) == 0, 'the user left Now Playing meanwhile: the pending open is dropped')
+    m = PM(); lib(m); m.navs.insert(0, ('m1plus_album_page', m.alloc(0x80))); m.sync_stack(); m.ab_up = 10 ** 6; lookup(m)
+    n = 0
+    while larmed(m.calls) and n < 200: ltick(m); n += 1
+    expect(n == 40 and opened(m) == [(O['CLASS_ALBUMS'], 1)] and flag(m) == 1, f'a window that never goes: after 40 ticks the open is made anyway (stock\'s page, as before) ({n}, {opened(m)})')
+    m = PM(); lib(m); lookup(m)
+    expect(not larmed(m.calls) and opened(m) == [(O['CLASS_ALBUMS'], 1)], 'no album page of ours in the stack: opened at once, no timer (as before)')
+
+    # -- 7b2. On a Subsonic track both rows open the source's pages (pm_lookup_src), never the card's library ------------------------------
+    LIB_ND = PSYMS['lib_nd']
+    def nd(m, album='Kind of Blue', artist='Miles Davis', stack=()):
+        """An open sheet over Now Playing, the player on a track a Subsonic page queued (REC_ID -77), a card library that has an album and an artist of the same names."""
+        m.open()
+        m.class_lists[O['CLASS_ALBUMS']] = [m.record(album='Kind of Blue', rid=1)]
+        m.class_lists[O['CLASS_ARTISTS']] = [m.record(title='Miles Davis', rid=1)]
+        m.sbtrack[-77] = 'tr-9'
+        m.play([m.record(album='Kind of Blue', artist='Miles Davis', rid=-77)], 0)
+        m.src_rec = {'album': m.record(title=album, rid=-5) if album else None, 'artist': m.record(title=artist, rid=-6) if artist else None}
+        m.u.mem_write(FLAG, bytes([0]))
+        for n in stack: m.page(n)
+        m.page('playing_page')
+    def src_tap(m, row):
+        fn, c = m.bound[(m.rows[row], CLICK)]
+        ret = m.call(fn, a0=c, a1=0, count=4000000); m.sync()
+        return ret
+    m = PM(); nd(m); ret = src_tap(m, GO_ALBUM)
+    names = [c[0] for c in m.calls]
+    expect(ret == RET_STOP and ('album_open_src', LIB_ND, 'Kind of Blue') in m.calls and 'navigator_to_with_context' not in names and 'loadLocalClassList' not in names,
+           f'a Subsonic track, Look up album: the source\'s album page on the track\'s album record, the card\'s library is not asked (a same-named album there is not opened) ({ret}, {[c for c in m.calls if c[0].startswith("album")]})')
+    expect(('window_close', m.dialog) in m.calls and names.index('window_close') < names.index('album_open_src') and flag(m) == 1 and [n for n, _ in m.navs] == ['playing_page', 'm1plus_album_page'],
+           f'the sheet closes first, songerinfoflag is set, the page is above Now Playing ({[n for n, _ in m.navs]})')
+    page = m.navs[-1][1]
+    expect(m.bound.get((page, DESTROY), (0,))[0] == PSYMS['pm_on_album_gone'], 'the source album page\'s destroy is watched')
+    m.call(m.bound[(page, DESTROY)][0], a0=page, a1=0, count=200000)
+    expect(flag(m) == 0, 'and clears songerinfoflag')
+    m = PM(); nd(m, stack=('m1plus_albums_page', O['AB_WINDOW'] if isinstance(O.get('AB_WINDOW'), str) else 'm1plus_album_page')); src_tap(m, GO_ALBUM)
+    expect([n for n, _ in m.navs] == ['m1plus_albums_page', 'playing_page', 'm1plus_album_page'], f'the album page the play came from is closed, the Albums page under it stays ({[n for n, _ in m.navs]})')
+    m = PM(); nd(m, stack=('m1plus_albums_page',)); ret = src_tap(m, GO_ARTIST)
+    names = [c[0] for c in m.calls]
+    expect(ret == RET_STOP and ('albums_open_src', LIB_ND, 'Miles Davis') in m.calls and 'albums_open_artist' not in names and 'loadLocalClassList' not in names,
+           f'a Subsonic track, Look up artist: the source\'s Albums page of the artist record, not the card\'s Artists list ({ret})')
+    expect(('navigator_close', 'm1plus_albums_page') in m.calls and names.index('navigator_close') < names.index('albums_open_src') and [n for n, _ in m.navs] == ['playing_page', 'm1plus_albums_page'] and flag(m) == 1,
+           f'an Albums page of ours in the stack is closed first (the page is one window); the new one is above Now Playing with the flag set ({[n for n, _ in m.navs]})')
+    page = m.navs[-1][1]
+    m.call(m.bound[(page, DESTROY)][0], a0=page, a1=0, count=200000)
+    expect(flag(m) == 0, 'its destroy clears songerinfoflag')
+    for row, key in ((GO_ALBUM, 'album'), (GO_ARTIST, 'artist')):
+        m = PM(); nd(m, **{key: None}); before = list(m.navs); ret = src_tap(m, row)
+        toasts = [struct.pack('<II', *c[3:5]) for c in m.calls if c[0] == 'navigator_to_with_context' and c[1] == 'dialog/msginfo_dialog']   # (pod_toast: stock's message dialog, the text's first bytes)
+        gone = [c for c in m.calls if c[0] in ('window_close', 'navigator_close', 'album_open_src', 'albums_open_src', 'albums_open_artist') or (c[0] == 'navigator_to_with_context' and c[1] != 'dialog/msginfo_dialog')]
+        expect(ret == RET_STOP and not gone and toasts == [b'Not foun'] and flag(m) == 0 and m.navs == before,
+               f'{key} not known to the cache: the toast "Not found", the sheet stays, the stock handler does not run (it would search the card) ({ret}, {gone}, {toasts})')
+        m = PM(); nd(m); m.src_ret = -1; ret = src_tap(m, row)
+        expect(ret == RET_STOP and flag(m) == 0 and not [c for c in m.calls if c[0] == 'timer_add' and c[1] == PSYMS['pm_pend_tick']],
+               f'{key}: a page that will not open, with no page of ours closed before: no flag set, no retry ({ret}, {flag(m)})')
+    # the page that was closed is destroyed from an idle, later: the opener answers -1 until then, and the open is made again from a timer
+    def tick(m):
+        m.call(PSYMS['pm_pend_tick'], count=4000000); m.sync()
+        return list(m.calls)
+    def armed(calls): return [c for c in calls if c[0] == 'timer_add' and c[1] == PSYMS['pm_pend_tick']]
+    for row, opener, own, top in ((GO_ALBUM, 'album_open_src', ('m1plus_albums_page', 'm1plus_album_page'), 'm1plus_album_page'), (GO_ARTIST, 'albums_open_src', ('m1plus_albums_page', 'm1plus_album_page'), 'm1plus_albums_page')):
+        m = PM(); nd(m, stack=own); m.src_busy = 2; ret = src_tap(m, row)
+        first = list(m.calls)
+        expect(ret == RET_STOP and len([c for c in first if c[0] == opener]) == 1 and len(armed(first)) == 1 and flag(m) == 0 and m.navs[-1][0] == 'playing_page' and 'deque_destroy' not in [c[0] for c in first],
+               f'{opener}: the closed page still holds its window: the first open answers -1, a timer is armed, the record is kept, no flag yet ({flag(m)}, {[n for n, _ in m.navs]})')
+        second = tick(m)
+        expect(len([c for c in second if c[0] == opener]) == 1 and len(armed(second)) == 1 and flag(m) == 0, f'{opener}: still not destroyed at the first tick: asked again, armed again')
+        third = tick(m)
+        expect(len([c for c in third if c[0] == opener]) == 1 and not armed(third) and flag(m) == 1 and m.navs[-1][0] == top and 'deque_destroy' in [c[0] for c in third]
+               and m.bound.get((m.navs[-1][1], DESTROY), (0,))[0] == PSYMS['pm_on_album_gone'],
+               f'{opener}: once the old page is gone the page opens above Now Playing, the flag is set and watched, the record is freed ({flag(m)}, {[n for n, _ in m.navs]})')
+        expect(not [c for c in tick(m) if c[0] in (opener, 'timer_add')], f'{opener}: a late tick does nothing')
+        # the user left Now Playing meanwhile: nothing opens over the other page
+        m = PM(); nd(m, stack=own); m.src_busy = 5; src_tap(m, row); m.page('m1plus_songs_page')
+        calls = tick(m)
+        expect(not [c for c in calls if c[0] == opener] and not armed(calls) and 'deque_destroy' in [c[0] for c in calls] and flag(m) == 0, f'{opener}: another window on top at the tick: the pending open is dropped')
+        # it never goes: the tries end
+        m = PM(); nd(m, stack=own); m.src_busy = 1000; src_tap(m, row)
+        n = 0
+        while armed(m.calls) and n < 200: tick(m); n += 1
+        expect(n == 40 and flag(m) == 0 and m.navs[-1][0] == 'playing_page' and 'deque_destroy' in [c[0] for c in m.calls], f'{opener}: a window that never goes: 40 ticks (1.2 s), then nothing and the record is freed ({n})')
 
     # -- 7c. Look up artist opens our Cover Flow artist page (patch/playmore.c pm_on_lookup_artist) ------------------------------------
     CLS_ART = O['CLASS_ARTISTS']

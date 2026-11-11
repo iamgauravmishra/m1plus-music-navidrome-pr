@@ -36,6 +36,8 @@
 #include "covercache.h"
 #include "podcasts.h"
 #include "sbapi.h"
+#include "libsrc.h"
+#include "sbsrc.h"
 
 #define PM_ROWS 14 /* listitem0..6, then pod_more, pod_back, pod_tape, pod_vinyl, pod_goep, pod_art, pod_sleep */
 #define PM_MORE 7
@@ -50,6 +52,10 @@
 #define GO_ALBUM 4 /* listitem4, Look up album */
 #define PM_DELETE 6 /* listitem6, Delete song */
 #define GO_ARTIST 5 /* listitem5, Look up artist */
+extern int album_open_src(const lib_src_t *src, unsigned cls, void *row); /* patch/albumpage.c */
+extern int albums_open_src(const lib_src_t *src, void *artist); /* patch/albums.c */
+extern int album_page_up(void); /* patch/albumpage.c: its window is not destroyed yet */
+#define PM_ALBUMS_WINDOW "m1plus_albums_page" /* our Albums page's window (tools/pod_pages.py ALBUMS) */
 extern int coverflow_artist(void *artists, unsigned index,
                             unsigned scope); /* patch/coverflow.c: 0 once the page is up */
 extern int albums_open_artist(void *artists, unsigned index,
@@ -250,23 +256,98 @@ static int pm_is_album(void *win) {
     return !strcmp(name, "albuminfo_page") || !strcmp(name, AB_WINDOW);
 }
 
-static int pm_on_lookup_album(void *ctx, void *e) {
-    void *track, *top;
-    int row;
-    unsigned char prev;
-    (void)e;
-    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
-    track = cc_playing();
-    if (!track) return RET_OK;
-    row = cc_find_album(cc_str(track, REC_ALBUM));
-    if (row < 0) return RET_OK;
-    window_close(ctx);
+/* The page just opened above `below` holds songerinfoflag until it ends (pm_on_album_gone); a page that cannot be watched does not keep the flag. */
+static void pm_flag_hold(void *below, unsigned char prev) {
+    void *top = window_manager_get_top_window(window_manager());
+    if (top && top != below && widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
+        if (!pm_flag_owner) pm_flag_prev = prev; /* an older owner still pending keeps the byte from before it */
+        pm_flag_owner = top;
+    } else
+        *(unsigned char *)SONGER_FLAG = prev;
+}
+
+/* Look up album / Look up artist while the player is on a Subsonic track (sbs_playing_ours): the source's own album page / the source's Albums page of the artist, never the card's library (which
+ * does not have the album, or has another of the same name). The stock handler never runs (RET_STOP). An album or artist the cache does not know is the toast "Not found" with the sheet left open.
+ * The rest is the library path's: the sheet and an album page in the stack close, songerinfoflag is set until the new page ends. An Albums page of ours in the stack (the one the play came from) is
+ * closed for the artist's: the page is one window.
+ * A page of ours that was closed is still there when navigator_close returns: stock's close (0x692960) takes the window out of the manager and destroys it from an idle (idle_add 0x68f6b8), and only
+ * the destroy clears the page's state, so the opener answers -1 until then. The open is therefore tried at once and, when it answers -1 after a close, again from a timer (PM_PEND_MS, at most
+ * PM_PEND_TRIES times) while Now Playing is still the window on top; the record waits in pm_pend. A second lookup, or another window on top, drops a pending one. */
+#define PM_PEND_MS 30
+#define PM_PEND_TRIES 40
+#define PM_PEND_NAME 256
+static struct {
+    void *d, *below; /* the list of one record to open; the window that was on top (Now Playing) */
+    int artist, tries;
+    unsigned timer;
+    int local; /* the library's Look up album waits for our album page to go (pm_local_tick): the album's name */
+    char name[PM_PEND_NAME];
+} pm_pend __attribute__((section(".scratch")));
+
+static void pm_pend_drop(void) {
+    m1_timer_stop(&pm_pend.timer);
+    if (pm_pend.d) deque_destroy(pm_pend.d);
+    memset(&pm_pend, 0, sizeof pm_pend);
+}
+
+/* The source's page on d's record, with songerinfoflag held by it; the opener's result (0 up, -1 the window would not open). */
+static int pm_src_open(void *d, int artist, void *below) {
+    unsigned char prev = *(unsigned char *)SONGER_FLAG;
+    int r;
+    *(unsigned char *)SONGER_FLAG = 1;
+    r = artist ? albums_open_src(&lib_nd, deque_at(d, 0)) : album_open_src(&lib_nd, 0, deque_at(d, 0));
+    if (r != 0)
+        *(unsigned char *)SONGER_FLAG = prev;
+    else
+        pm_flag_hold(below, prev);
+    return r;
+}
+
+static int pm_pend_tick(const void *unused) {
+    (void)unused;
+    pm_pend.timer = 0;
+    if (!pm_pend.d) return RET_OK;
+    if (window_manager_get_top_window(window_manager()) == pm_pend.below &&
+        pm_src_open(pm_pend.d, pm_pend.artist, pm_pend.below) == -1 && ++pm_pend.tries < PM_PEND_TRIES) {
+        pm_pend.timer = timer_add(pm_pend_tick, (void *)0, PM_PEND_MS); /* the closed page is not destroyed yet */
+        if (pm_pend.timer) return RET_OK;
+    }
+    pm_pend_drop(); /* opened, given up, or the user is somewhere else */
+    return RET_OK;
+}
+
+static int pm_lookup_src(void *dlg, int artist) {
+    void *d = artist ? sbs_playing_artist() : sbs_playing_album(), *below;
+    int closed;
+    if (!d) {
+        pod_toast(TR("Not found"));
+        return RET_STOP;
+    }
+    pm_pend_drop();
+    closed = navigator_window_is_exist(AB_WINDOW) || (artist && navigator_window_is_exist(PM_ALBUMS_WINDOW));
+    window_close(dlg);
     pm_close_albums();
-    prev = *(unsigned char *)SONGER_FLAG;
+    if (artist && navigator_window_is_exist(PM_ALBUMS_WINDOW)) navigator_close(PM_ALBUMS_WINDOW);
+    below = window_manager_get_top_window(window_manager());
+    if (pm_src_open(d, artist, below) == -1 &&
+        closed) { /* the page just closed still holds its window: once it is destroyed */
+        pm_pend.d = d, pm_pend.below = below, pm_pend.artist = artist;
+        pm_pend.timer = timer_add(pm_pend_tick, (void *)0, PM_PEND_MS);
+        if (pm_pend.timer) return RET_STOP;
+        pm_pend.d = (void *)0;
+    }
+    deque_destroy(d);
+    return RET_STOP;
+}
+
+/* The library album's page on the Albums row `row` (ours, or stock's when ours will not open: cc_open_album), with songerinfoflag held by it. */
+static void pm_local_open(int row) {
+    void *top;
+    unsigned char prev = *(unsigned char *)SONGER_FLAG;
     *(unsigned char *)SONGER_FLAG = 1;
     if (cc_open_album((void *)0, 0, row) < 0) {
         *(unsigned char *)SONGER_FLAG = prev;
-        return RET_STOP; /* the list changed between the two reads: the sheet is closed, nothing opened */
+        return; /* the list changed between the two reads: the sheet is closed, nothing opened */
     }
     top = window_manager_get_top_window(window_manager());
     if (top && pm_is_album(top) && widget_on(top, EVT_DESTROY, pm_on_album_gone, top)) {
@@ -274,6 +355,50 @@ static int pm_on_lookup_album(void *ctx, void *e) {
         pm_flag_owner = top;
     } else
         *(unsigned char *)SONGER_FLAG = prev; /* cannot tell when it ends: do not leave the flag set */
+}
+
+/* Our album page was in the stack and has been closed: its window is destroyed from stock's idle (pm_lookup_src's note), and until then album_open answers -1 and cc_open_album would open stock's
+ * albuminfo_page instead. The open waits for the destroy (album_page_up), at most PM_PEND_TRIES ticks; after them it is made anyway (stock's page, as before). Another window on top drops it. */
+static int pm_local_tick(const void *unused) {
+    int row;
+    (void)unused;
+    pm_pend.timer = 0;
+    if (!pm_pend.local) return RET_OK;
+    if (window_manager_get_top_window(window_manager()) == pm_pend.below) {
+        if (album_page_up() && ++pm_pend.tries < PM_PEND_TRIES) {
+            pm_pend.timer = timer_add(pm_local_tick, (void *)0, PM_PEND_MS);
+            if (pm_pend.timer) return RET_OK;
+        }
+        row = cc_find_album(pm_pend.name); /* (the row again: the list may have moved meanwhile) */
+        if (row >= 0) pm_local_open(row);
+    }
+    pm_pend_drop();
+    return RET_OK;
+}
+
+static int pm_on_lookup_album(void *ctx, void *e) {
+    void *track;
+    const char *name;
+    int row, wait;
+    (void)e;
+    if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    track = cc_playing();
+    if (!track) return RET_OK;
+    if (sbs_playing_ours()) return pm_lookup_src(ctx, 0);
+    name = cc_str(track, REC_ALBUM);
+    row = cc_find_album(name);
+    if (row < 0) return RET_OK;
+    pm_pend_drop();
+    wait = album_page_up() && snprintf(pm_pend.name, sizeof pm_pend.name, "%s", name) < (int)sizeof pm_pend.name;
+    window_close(ctx);
+    pm_close_albums();
+    if (wait) { /* our album page is in the stack: the new one opens once that window is destroyed */
+        pm_pend.local = 1, pm_pend.below = window_manager_get_top_window(window_manager());
+        pm_pend.timer = timer_add(pm_local_tick, (void *)0, PM_PEND_MS);
+        if (pm_pend.timer) return RET_STOP;
+        pm_pend.local = 0;
+    }
+    pm_local_open(row);
     return RET_STOP;
 }
 
@@ -295,6 +420,7 @@ static int pm_on_lookup_artist(void *ctx, void *e) {
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
     track = cc_playing();
     if (!track) return RET_OK;
+    if (sbs_playing_ours()) return pm_lookup_src(ctx, 1);
     name = cc_str(track, REC_ARTIST);
     if (!*name) return RET_OK;
     if (loadLocalClassList(CLASS_ARTISTS) <= 0) return RET_OK;

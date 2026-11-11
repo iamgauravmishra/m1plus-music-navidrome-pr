@@ -33,6 +33,12 @@ void *sbs_playlist_scan(
     const lib_src_t *s,
     void *
         rec); /* a playlist row's tracks like src->list, but a cached playlist is not asked for again (the Playlists page's scan of all of them) */
+/* Now Playing's Look up album / Look up artist (patch/playmore.c) for a track of ours. sbs_playing_ours: 1 when the player is on a track a Navidrome page queued (a stream or its downloaded file; a
+ * downloaded file played from the card's own library is the card's, 0). sbs_playing_album / sbs_playing_artist: that track's album / artist as a list of one record of lib_nd (the caller destroys it) for
+ * album_open_src / albums_open_src; NULL when it is not known (a track without an album id; an artist the sync has not listed). Files only, no request. */
+int sbs_playing_ours(void);
+void *sbs_playing_album(void);
+void *sbs_playing_artist(void);
 int sbs_playing_server(
     void); /* 1 when the player is on a Navidrome track streaming from the server (a downloaded file does not count) */
 /* The full track a record stands for (Get Info, a download, a star): the record's own data, completed from the album's cache file when that has the track (sizes, bit rate). 1 for a track record, else 0. */
