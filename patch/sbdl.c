@@ -1297,3 +1297,94 @@ int sba_downloaded(sba_tracks_t *out) {
         free(v);
     return (int)cnt;
 }
+
+/* ---- the queue as a list (the Downloaded page's "Downloading" section) ---- */
+
+/* Whether slot i still has a download to come: waiting, running (and not cancelled), or stopped at a fault a later start may cure. The caller holds lock. */
+static int sbd_pending_locked(int i) {
+    return sbd.q[i].state == SBA_DL_WAIT || (sbd.q[i].state == SBA_DL_ACTIVE && !sbd.stop) ||
+           (sbd.q[i].state == SBA_DL_FAILED && sbd_later(sbd.q[i].code));
+}
+
+unsigned sba_dl_rows(void) {
+    unsigned sig;
+    int i;
+    sbd_ensure();
+    sbd_lock();
+    sig = (unsigned)sbd.nix * 0x9e3779b1u;
+    for (i = 0; sbd.q && i < SBA_DLMAX; ++i)
+        if (sbd_pending_locked(i)) sig += (sbd.q[i].seq + 1u) * 2654435761u;
+    sbd_unlock();
+    return sig;
+}
+
+int sba_dl_queue(sba_tracks_t *out) {
+    typedef struct {
+        char id[SBA_ID];
+        unsigned seq;
+        unsigned char run, have;
+    } ent_t;
+    ent_t *e, tmp;
+    sba_track_t *v = (sba_track_t *)0, *t = (sba_track_t *)0;
+    unsigned n = 0, fsize;
+    int cnt = 0, i, j, k, bad = 0, got = 0;
+    char *text = (char *)0, rid[SBA_ID], file[8];
+    const char *p, *end, *ls, *le;
+    out->n = 0;
+    out->v = (sba_track_t *)0;
+    sbd_ensure();
+    if (!sbd.q) return 0;
+    e = (ent_t *)calloc(SBA_DLMAX, sizeof *e);
+    if (!e) return -1;
+    sbd_lock();
+    for (i = 0; i < SBA_DLMAX; ++i)
+        if (sbd_pending_locked(i)) {
+            sbd_set(e[cnt].id, sizeof e[cnt].id, sbd.q[i].id);
+            e[cnt].seq = sbd.q[i].seq;
+            e[cnt].run = sbd.q[i].state == SBA_DL_ACTIVE;
+            ++cnt;
+        }
+    sbd_unlock();
+    for (i = 1; i < cnt; ++i) { /* the running one first, then the order the worker takes them in (seq) */
+        tmp = e[i];
+        for (j = i; j > 0 && (tmp.run > e[j - 1].run || (tmp.run == e[j - 1].run && (int)(tmp.seq - e[j - 1].seq) < 0));
+             --j)
+            e[j] = e[j - 1];
+        e[j] = tmp;
+    }
+    if (cnt) {
+        v = (sba_track_t *)calloc((unsigned)cnt, sizeof *v);
+        t = (sba_track_t *)calloc(1, sizeof *t);
+        sbd_qf_lock();
+        text = sbd_slurp_st(SBD_Q, &n, &bad);
+        sbd_qf_unlock();
+    }
+    if (v && t && text && !bad) {
+        p = text;
+        end = p + n;
+        while (sbd_next(
+            &p, end, &ls,
+            &le)) { /* the last row of a track is the track's; a cancel's line after it leaves none (sbd_q_row) */
+            int row = sbd_q_line(ls, le, rid, sizeof rid), gone = !row && sbd_q_gone(ls, le, rid, sizeof rid);
+            if (!row && !gone) continue;
+            for (k = 0; k < cnt && !sbd_same(e[k].id, rid); ++k) {
+            }
+            if (k == cnt) continue;
+            e[k].have = (unsigned char)(row && sbd_parse_row(ls, le, t, file, sizeof file, &fsize));
+            if (e[k].have) memcpy(&v[k], t, sizeof *t);
+        }
+        for (k = 0; k < cnt; ++k)
+            if (e[k].have) {
+                if (got != k) memcpy(&v[got], &v[k], sizeof *v);
+                ++got;
+            }
+    }
+    free(text);
+    free(t);
+    free(e);
+    if (got)
+        out->v = v, out->n = got;
+    else
+        free(v);
+    return got;
+}

@@ -33,6 +33,11 @@ typedef struct {
         rail_i; /* a finger holds the rail; it has set a letter (the disc and the bubble show); the letter's section */
     int hdr_h; /* the section header's height: SG_HDR_H, 0 with Section Headers off (az_prefs sets it: the page calls it when it opens) */
     int norail; /* Index Rail off (az_prefs): no rail, no bubble; the rows keep the full list-row width (az_inset 0) */
+    /* A page whose sections are named, not lettered (the Downloaded page: Downloading / Downloaded): sec_text[s] is section s's header as a TR key, drawn in place of the letter (NULL: letters; such a
+     * page sets norail). sec_act, with it, is a TR key drawn at the right end of section 0's header in st_act's style (a text button: az_act_hit is its touch test). */
+    const char *const *sec_text;
+    const char *sec_act;
+    void *st_act;
 } az_t;
 
 /* The rail's footprint on the rows: SG_RAIL_INSET while the rail is shown (sections and the Index Rail switch on), else 0. Every row of an A-Z page subtracts it from the list-row spec's
@@ -69,6 +74,8 @@ void az_fill(void *canvas, int x, int y0, int y1, int w, unsigned c);
 void az_fill_h(void *canvas, int x, int y0, int y1, int w, unsigned c,
                int view_h); /* the same in a window view_h rows high (the album page's list is the whole 450 px) */
 void az_paint_heads(az_t *az, void *canvas);
+/* Whether content point (x, y) is on section 0's text button (sec_act), where its header is drawn now: in the flow, or pinned at the window's top. */
+int az_act_hit(const az_t *az, int x, int y);
 
 /* The rail. */
 int az_rail_plan(const az_t *az, int *sec); /* the letters drawn, as section numbers in sec[]; the return is how many */

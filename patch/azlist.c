@@ -11,6 +11,12 @@
 #include "home.h"
 #include "palette.h"
 #include "azlist.h"
+#include "i18n.h"
+
+#define AZ_TEXT 48 /* wide characters of a named header or its text button, the NUL included */
+#define AZ_TEXT_W 200 /* a named header's text box */
+#define AZ_ACT_PAD \
+    16 /* the text button takes a touch this far left of its text (and to the screen's edge on the right) */
 
 #define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define I(w, off) (*(int *)((char *)(w) + (off)))
@@ -160,13 +166,43 @@ void az_fill(void *canvas, int x, int y0, int y1, int w, unsigned c) {
 }
 
 /* The header letter of section s with its top at window y (only when it lies wholly inside the window, as every text). */
+/* A TR key as wide text; the characters. */
+static unsigned az_wide(const char *key, unsigned *w, unsigned cap) {
+    const char *t = TR(key);
+    unsigned n = 0, len = 0;
+    w[0] = 0;
+    if (!t) return 0;
+    while (t[len]) ++len;
+    tk_utf8_to_utf16_ex(t, len, w, cap - 1);
+    while (n < cap - 1 && w[n]) ++n;
+    w[n] = 0;
+    return n;
+}
+
+/* The text button's width (its text measured in st_act's style, 0 for none). */
+static int az_act_w(const az_t *az) {
+    unsigned w[AZ_TEXT];
+    if (!az->sec_text || !az->sec_act || !az->st_act || !az_wide(az->sec_act, w, AZ_TEXT)) return 0;
+    return m1_text_w(az->st_act, w);
+}
+
 static void az_letter_text(const az_t *az, void *canvas, int s, int y) {
-    unsigned w[2];
-    int rect[4];
+    unsigned w[AZ_TEXT], n = 1;
+    int rect[4], aw;
     if (y < 0 || y + az->hdr_h > GRID_VIEW_H) return;
     w[0] = az->sec_letter[s], w[1] = 0;
     rect[0] = SG_HDR_X, rect[1] = y, rect[2] = 100, rect[3] = az->hdr_h - 1;
-    canvas_draw_text_in_rect(canvas, w, 1, rect);
+    if (az->sec_text) n = az_wide(az->sec_text[s], w, AZ_TEXT), rect[2] = AZ_TEXT_W;
+    canvas_draw_text_in_rect(canvas, w, n, rect);
+    if (s == 0 &&
+        (aw = az_act_w(az)) >
+            0) { /* the text button, right aligned at the rows' end; the header style is put back for the headers that follow */
+        n = az_wide(az->sec_act, w, AZ_TEXT);
+        widget_prepare_text_style(az->st_act, canvas);
+        rect[0] = az_end(az) - aw, rect[2] = aw;
+        canvas_draw_text_in_rect(canvas, w, n, rect);
+        widget_prepare_text_style(az->st_hdr, canvas);
+    }
 }
 
 /* The pinned header: the section the window's top is in, at the top; the next header, as it arrives, pushes it up. Returns its section (-1 for none)
@@ -178,6 +214,13 @@ static int az_pinned(const az_t *az, int *y) {
     if (k < 0) return -1;
     *y = k + 1 < az->nsec && az_hdr_y(az, k + 1) - s < az->hdr_h ? az_hdr_y(az, k + 1) - s - az->hdr_h : 0;
     return k;
+}
+
+int az_act_hit(const az_t *az, int x, int y) {
+    int aw = az_act_w(az), py = 0, top;
+    if (aw <= 0 || !az->nsec || !az->hdr_h) return 0;
+    top = az_pinned(az, &py) == 0 ? az_off(az) + py : az_hdr_y(az, 0);
+    return x >= az_end(az) - aw - AZ_ACT_PAD && y >= top && y < top + az->hdr_h;
 }
 
 /* The letters of the headers, then the pinned band (the page's black over the rows scrolling under it: the headers in the flow have no band) and its letter. */

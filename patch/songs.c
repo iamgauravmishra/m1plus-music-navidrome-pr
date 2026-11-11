@@ -174,6 +174,9 @@ static struct {
     int which; /* the source's list: LS_SONGS, LS_FAVORITES or LS_DOWNLOADED */
     int part; /* the source's list is a part that grows (lib_src_t.complete): no sections, no rail */
     unsigned sgen, srows; /* the source's gen and gen_rows when the list was read */
+    unsigned dlsig; /* LS_DOWNLOADED: the source's dl_rows when the list was read */
+    int dlq,
+        down_act; /* LS_DOWNLOADED: the rows at the top that are downloads still to come (the Downloading section); a press began on its Clear */
     unsigned gen_timer; /* the source's gen poll */
     ls_cpoll_t
         cp; /* the shared cover poll (patch/libsrc.c ls_cover_poll): the retry of the covers the source was asked for */
@@ -819,7 +822,8 @@ static const char *sg_name_text(void) { return sg.key ? TR(sg.key) : sg.name; } 
 /* The song count under the last row: "25 songs" (the key by n == 1, the number where the translation has its %d). */
 static void sg_foot_text(void) {
     char buf[64];
-    m1_fmt(buf, sizeof buf, TR(sg.count == 1 ? "%d song" : "%d songs"), (int)sg.count);
+    m1_fmt(buf, sizeof buf, TR(sg.count - (unsigned)sg.dlq == 1 ? "%d song" : "%d songs"),
+           (int)sg.count - sg.dlq); /* (the downloads still to come are not songs of the list yet) */
     widget_set_text_utf8(sg.foot, buf);
     widget_move(sg.foot, SG_HDR_X, sg_rows_end() + SG_FOOT_GAP);
 }
@@ -888,6 +892,14 @@ static void sg_spinner(int on) {
     ls_spin(sg.spin, on);
 }
 
+/* The Downloaded page of a source that lists its downloads still to come (lib_src_t.dl_rows). */
+static int sg_dl(void) { return sg.src && sg.which == LS_DOWNLOADED && sg.src->dl_rows; }
+/* The source's rows as last read are still the rows: gen_rows did not move, nor (the Downloaded page) the download rows. */
+static int sg_rows_same(void) {
+    return ls_gen_rows(sg.src) == sg.srows && (!sg_dl() || sg.src->dl_rows(sg.src, (int *)0) == sg.dlsig);
+}
+static const char *const sg_dl_heads[2] = {"Downloading", "Downloaded"};
+
 static void sg_pills(void);
 static void sg_load(int keep) {
     unsigned i;
@@ -917,6 +929,7 @@ static void sg_load(int keep) {
     if (sg.src) { /* gen and completeness are read before the list: a list read after "complete" is the whole one */
         sg.sgen = sg.src->gen(sg.src);
         sg.srows = ls_gen_rows(sg.src);
+        if (sg_dl()) sg.dlsig = sg.src->dl_rows(sg.src, (int *)0);
         sg.part = !sg.scope_d && sg.src->complete &&
                   !sg.src->complete(sg.src,
                                     sg.which); /* (a scoped list is read whole; the paging is of the unscoped Songs) */
@@ -925,6 +938,12 @@ static void sg_load(int keep) {
         list = *(void **)PDEQ_SHOWLIST;
     if (list && sg_flipped()) sg_reverse(list);
     if (list) sg.count = deque_size(list);
+    sg.dlq = 0, sg.al.sec_text = (const char *const *)0, sg.al.sec_act = (const char *)0;
+    if (sg_dl()) {
+        az_prefs(&sg.al); /* (the last read may have had the section: the switches' own values again) */
+        if (list) sg.src->dl_rows(sg.src, &sg.dlq);
+        if (sg.dlq < 0 || sg.dlq > (int)sg.count) sg.dlq = 0;
+    }
     if (sg.src && !list && sg.src->state)
         st = sg.src->state(sg.src, sg.which, sg.scope_d ? deque_at(sg.scope_d, 0) : (void *)0);
     sg.wait = st == LS_ST_LOADING;
@@ -956,6 +975,12 @@ static void sg_load(int keep) {
                     int t = sg.al.sec_letter[i] == '#' ? 0 : sg.al.sec_letter[i] - 'A' + 1;
                     sg.al.sec_letter[i] = (unsigned char)(t == 26 ? '#' : 'Z' - t);
                 }
+        }
+        if (sg.dlq) { /* the downloads still to come are a section of their own with a Clear, the finished ones the second: named headers whatever the Section Headers switch says, no rail */
+            sg.al.nsec = sg.dlq < (int)sg.count ? 2 : 1;
+            sg.al.sec_start[0] = 0, sg.al.sec_start[1] = (unsigned)sg.dlq;
+            sg.al.sec_text = sg_dl_heads, sg.al.sec_act = "Clear", sg.al.st_act = sg.st_sub;
+            sg.al.hdr_h = SG_HDR_H, sg.al.norail = 1;
         }
     }
     /* The same rows as before (count and every sig; the tiles hold their texts and covers by row): the tiles and the placeholder stay, so a list read again
@@ -1018,8 +1043,7 @@ static int sg_on_gen(const void *unused) {
     if (!sg.src || !sg.view) return RET_OK;
     if (sg.src->gen(sg.src) != sg.sgen && !sg.select && !sg.menu && !sg.down && !grid_moving(sg.sv) &&
         m1_is_top(sg.win)) {
-        if (ls_gen_rows(sg.src) ==
-            sg.srows) { /* only a download's progress moved: the rows are the same, the visible ones are painted again (their state is read while painting) */
+        if (sg_rows_same()) { /* only a download's progress moved: the rows are the same, the visible ones are painted again (their state is read while painting) */
             sg.sgen = sg.src->gen(sg.src);
             sg_redraw();
         } else if (sg.rm.open)
@@ -1362,6 +1386,15 @@ static void sg_open_menu(int a) {
     rowmenu_open_src(&sg.rm, a, deque_at(sg.list, (unsigned)a), sg_add_one, sg.src);
 }
 
+/* The press or release is on the Downloading header's Clear (patch/azlist.c az_act_hit). */
+static int sg_on_act(void *e) {
+    int pt[2];
+    if (!sg.dlq) return 0;
+    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
+    widget_to_local(sg.view, pt);
+    return az_act_hit(&sg.al, pt[0], pt[1]);
+}
+
 static int sg_on_down(void *ctx, void *e) {
     int a;
     (void)ctx;
@@ -1376,6 +1409,8 @@ static int sg_on_down(void *ctx, void *e) {
     }
     if (!e || !sg.view || !sg.count || !sg_valid()) return RET_OK;
     a = sg_item_of(e);
+    sg.down_act = !sg.select && sg_on_act(e);
+    if (sg.down_act) a = -1; /* (the pinned header lies over a row: the press is the button's) */
     sg.down = a + 1, m1_tap_at(&sg.tap, e);
     sg.down_more = a >= 0 && sg_in_zone(e);
     if (!sg.select && !sg.down_more) sg_set_press(a + 1);
@@ -1383,10 +1418,16 @@ static int sg_on_down(void *ctx, void *e) {
 }
 
 static int sg_on_up(void *ctx, void *e) {
-    int a = sg.down - 1, more = sg.down_more;
+    int a = sg.down - 1, more = sg.down_more, act = sg.down_act;
     (void)ctx;
-    sg.down = sg.down_more = 0;
+    sg.down = sg.down_more = sg.down_act = 0;
     sg_set_press(0);
+    if (act && e && sg.view && sg.dlq && m1_tap_near(&sg.tap, e) &&
+        sg_on_act(e)) { /* Clear: every download still to come leaves the queue; the finished ones stay */
+        sg.src->act(sg.src, (void *)0, LS_ACT_CANCEL_ALL_DL);
+        sg_load(1);
+        return RET_OK;
+    }
     if (a < 0 || !e || !sg.view) return RET_OK;
     if (sg.rv) { /* an album: our album page, as the Albums page's tap opens it (cc_open_album takes the stock row) */
         int pt[2];
@@ -1410,7 +1451,7 @@ static int sg_on_up(void *ctx, void *e) {
 static int sg_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    sg.down = sg.down_more = 0;
+    sg.down = sg.down_more = sg.down_act = 0;
     sg_set_press(0);
     return RET_OK;
 }
@@ -1531,7 +1572,7 @@ static int sg_on_fg(void *ctx, void *e) {
         sg_load(1);
     } else if (sg.src) {
         if (sg.src->gen(sg.src) != sg.sgen) {
-            if (ls_gen_rows(sg.src) == sg.srows)
+            if (sg_rows_same())
                 sg.sgen = sg.src->gen(sg.src), sg_redraw();
             else
                 sg_load(1);

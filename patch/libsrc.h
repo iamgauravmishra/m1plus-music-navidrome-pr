@@ -51,7 +51,8 @@ enum {
     LS_ACT_FAVORITE,
     LS_ACT_CANCEL_DL,
     LS_ACT_UNFAVORITE, /* Undo Favorite: LS_ACT_FAVORITE sets the star, this clears it (the caller's wish, not a toggle of what the source thinks) */
-    LS_ACT_DOWNLOAD_ALL /* Download Album: `rec` is not a record but the page's list (a deque of records, list order); every track not on the card and not already queued is queued, and the one toast is the source's */
+    LS_ACT_DOWNLOAD_ALL, /* Download Album: `rec` is not a record but the page's list (a deque of records, list order); every track not on the card and not already queued is queued, and the one toast is the source's */
+    LS_ACT_CANCEL_ALL_DL /* the Downloaded page's Clear: every waiting and running download leaves the queue (rec is not read) */
 }; /* (cancel: a waiting or running download) */
 
 /* The controls a source's pages offer in their navbar and cards (lib_src_t.caps): a page shows one only when the source has it. The stock library (a NULL source, or &lib_stock) has them
@@ -109,6 +110,9 @@ struct lib_src {
      * otherwise repaints the rows it shows (a download's progress changes how a row is painted, never which rows there are). Read it after gen (gen may act on the change). NULL = every gen move
      * is a list change. Read it with ls_gen_rows. Appended last. */
     unsigned (*gen_rows)(const lib_src_t *s);
+    /* LS_DOWNLOADED only: a number that moves when that list's rows do (a download queued, finished, cancelled or removed; gen_rows does not move with those), and in *queued (NULL: not asked) how many
+     * rows at the top of the list last made by list(LS_DOWNLOADED) are downloads still to come (the page's "Downloading" section; the finished ones follow). NULL = the source has no such list. Appended last. */
+    unsigned (*dl_rows)(const lib_src_t *s, int *queued);
 };
 enum {
     LS_ST_READY = 0,

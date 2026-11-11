@@ -69,6 +69,9 @@ class SongsMachine(ListMachine):
             return self.new_deque([self.record(album='Album', artist='Artist', path=f'http://nd.example/stream?id={title}', title=title, name=f'{title}.flac', rid=-1000 - len(f['queued']))])
         if name == 'fake_sg_gen': return f['gen']
         if name == 'fake_sg_gen_rows': return f.get('gen_rows', f['gen'])
+        if name == 'fake_sg_dl_rows':   # (s, queued): the Downloaded list's own counter; *queued the rows at the top that are still to come
+            if a1: self.setword(a1, f.get('dlq', 0))
+            return f.get('dl_sig', 0)
         if name == 'fake_sg_state':   # (s, which, scope): LS_ST_*
             f.setdefault('states', []).append((a1, a2)); return f.get('state', 0)
         if name == 'fake_sg_complete': return f['complete'].get(a1, 1)
@@ -1843,8 +1846,8 @@ def fake_source(m, lists, complete=None, ask=False, rows=None, caps=7):
     """A lib_src_t of Python-handled members in m (names fake_sg_*): lists is {which: [records]}, complete {which: 0/1}, ask: a missing cover is "asked" (0), else none (-1);
     caps: lib_src_t.caps (the stock-only controls the page may show: 7 is all of them). Returns its address."""
     m.fake = dict(lists=lists, complete=complete or {}, asked=[], plays=[], covers=[], gen=1, ask=ask, rows=rows or {}, acts=[], acts_dd=[], queued=[])
-    src = m.alloc(0x40)
-    m.u.mem_write(src, bytes(0x40)); m.setword(src, m.cstr('fake_sg')); m.setword(src + 48, caps)
+    src = m.alloc(0x48)
+    m.u.mem_write(src, bytes(0x48)); m.setword(src, m.cstr('fake_sg')); m.setword(src + 48, caps)
     for i, n in enumerate(('list', 'rec_id', 'play', 'cover', 'seconds', 'row', 'act', 'gen', 'complete')):
         block = m.alloc(16)   # nop; the trap at its address answers
         m.u.mem_write(block, bytes(16))
@@ -1859,6 +1862,9 @@ def fake_source(m, lists, complete=None, ask=False, rows=None, caps=7):
     block = m.alloc(16)   # lib_src_t.gen_rows (offset 60, after state)
     m.u.mem_write(block, bytes(16)); m.handlers[block] = 'fake_sg_gen_rows'
     m.setword(src + 60, block)
+    block = m.alloc(16)   # lib_src_t.dl_rows (offset 64, after gen_rows)
+    m.u.mem_write(block, bytes(16)); m.handlers[block] = 'fake_sg_dl_rows'
+    m.setword(src + 64, block)
     return src
 
 
@@ -2290,4 +2296,77 @@ def src_dsd_tests(ctx):
             expect(not [c for c in m.calls if c[0] == 'confirm'] and not m.fake['acts'], f'{what}: the source answering {ret} shows no dialog')
 
 
-SECTIONS = [asset_tests, open_and_paint_tests, touch_tests, rail_tests, switch_tests, order_search_and_stale_tests, collapse_and_select_tests, loader_tests, big_library_tests, lists_tests, src_tests, src_marks_tests, src_ring_accent_tests, src_dsd_tests]   # tools/check.py runs each as its own task
+def src_dlqueue_tests(ctx):
+    """The Downloaded page's Downloading section (lib_src_t.dl_rows): the downloads still to come are the first rows under a named header with a Clear, the finished ones follow under Downloaded;
+    no section while nothing waits; the list is read again when the download rows move; Clear asks the source to cancel them all."""
+    expect = ctx.expect
+    OPEN = PSYMS['songs_open_src']
+    LS_DOWNLOADED, CANCEL_ALL = 5, 7
+    titles = ['Wait A', 'Wait B', 'Done C', 'Done D', 'Done E']
+    def page(dlq, names=titles):
+        m = list_machine(['Stock'])
+        m.top_main = m.window
+        src = fake_source(m, {LS_DOWNLOADED: src_records(m, names)}, caps=0)
+        m.fake['dlq'] = dlq; m.fake['dl_sig'] = 1; m.fake['gen_rows'] = 1
+        m.call(OPEN, a0=src, a1=LS_DOWNLOADED, a2=m.cstr('Downloaded'), count=900000000)
+        return m
+    # nothing waits: the plain list of today
+    m = page(0)
+    blits, texts, styles, fills = settle(m)
+    shown = [t for t, rc in texts]
+    expect(m.word(m.sv + SC_VH) == Layout(['A'] * 5, sections=False).content() and 'Downloading' not in shown and 'Clear' not in shown and m.wtext[m.widgets['sg_foot']] == '5 songs',
+           f'no download waits: a plain list, no header, no Clear ({shown})')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    # two wait: two named sections, Clear at the right of the first header, the footer counts the finished ones
+    m = page(2)
+    blits, texts, styles, fills = settle(m)
+    by = {t: rc for t, rc in texts}
+    two = TOP + 2 * HDR + 5 * ROW + FOOT
+    expect(m.word(m.sv + SC_VH) == two and vis(m, 'sg_rail')[0] == 0, f'two downloads wait: two headers above the five rows, no rail ({m.word(m.sv + SC_VH)} {two})')
+    expect('Downloading' in by and 'Downloaded' in by and 'Clear' in by and by['Downloading'][1] == by['Clear'][1] == TOP and by['Downloaded'][1] == TOP + HDR + 2 * ROW
+           and by['Downloading'][0] == O['SG_HDR_X'] and by['Clear'][0] + by['Clear'][2] == O['LIST_HAIR_END'],
+           f'the headers read Downloading (with Clear at the rows\' right end) and Downloaded ({ {k: by.get(k) for k in ("Downloading", "Clear", "Downloaded")} })')
+    expect(m.wtext[m.widgets['sg_foot']] == '3 songs', f'the footer counts the finished downloads ({m.wtext[m.widgets["sg_foot"]]})')
+    # a row tap still plays the row under it (the headers shift the rows)
+    tap(m, 100, TOP + HDR + ROW + 10)
+    expect(m.fake['plays'] and m.fake['plays'][-1][1] == 1, f'a tap on the second waiting row plays row 1 ({m.fake["plays"]})')
+    tap(m, 100, TOP + 2 * HDR + 2 * ROW + 10)
+    expect(m.fake['plays'][-1][1] == 2, f'a tap under the Downloaded header plays row 2 ({m.fake["plays"][-1]})')
+    # the download rows move (one finished): the list is read again, although gen_rows stood still
+    n = len(m.fake['asked'])
+    m.fake['gen'] = 2
+    m.call(PSYMS['sg_on_gen'], count=900000000)
+    expect(len(m.fake['asked']) == n, 'progress alone (gen moved, dl_rows not): the list is not read again')
+    m.fake['gen'] = 3; m.fake['dl_sig'] = 2; m.fake['dlq'] = 1
+    m.call(PSYMS['sg_on_gen'], count=900000000)
+    blits, texts, styles, fills = settle(m)
+    by = {t: rc for t, rc in texts}
+    expect(len(m.fake['asked']) == n + 1 and by['Downloaded'][1] == TOP + HDR + ROW and m.wtext[m.widgets['sg_foot']] == '4 songs', 'dl_rows moved: the list is read again, one row waits, four are finished')
+    # a tap beside Clear (on the header's title) does nothing; a tap on Clear cancels them all and reads the list again
+    m.fake['acts'] = []
+    tap(m, 40, TOP + HDR // 2)
+    expect(m.fake['acts'] == [] and len(m.fake['asked']) == n + 1, 'a tap on the header\'s title does nothing')
+    m.fake['dlq'] = 0
+    tap(m, 300, TOP + HDR // 2)
+    expect(m.fake['acts'] == [(0, CANCEL_ALL)] and len(m.fake['asked']) == n + 2, f'Clear: the source is asked to cancel every download still to come, and the list is read again ({m.fake["acts"]})')
+    blits, texts, styles, fills = settle(m)
+    shown = [t for t, rc in texts]
+    expect('Downloading' not in shown and 'Clear' not in shown and m.word(m.sv + SC_VH) == Layout(['A'] * 5, sections=False).content(), 'after it the page is the plain list again')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+    # only downloads still to come: one section, "0 songs"; the pinned header keeps Clear in reach while the rows scroll
+    many = [f'Wait {i}' for i in range(30)]
+    m = page(30, many)
+    settle(m)
+    expect(m.word(m.sv + SC_VH) == TOP + HDR + 30 * ROW + FOOT and m.wtext[m.widgets['sg_foot']] == '0 songs', 'every row waits: one header')
+    scroll_to(m, TOP + 10 * ROW)
+    blits, texts, styles, fills = paint(m)
+    by = {t: rc for t, rc in texts}
+    expect(by.get('Downloading', (0, -1))[1] == 0 and by.get('Clear', (0, -1))[1] == 0, f'scrolled: the header is pinned at the top with its Clear ({by.get("Downloading")}, {by.get("Clear")})')
+    m.fake['acts'] = []; m.fake['dlq'] = 0; m.fake['lists'][LS_DOWNLOADED] = []
+    view = m.widgets['view_grid']; m.setword(view + 4, (m.s32(view + 4) - off_of(m)) & 0xffffffff)   # (the stock scroll_view moves its child's points by the offset through its vtable, which the widget structs here do not have)
+    tap(m, 300, HDR // 2)
+    expect(m.fake['acts'] == [(0, CANCEL_ALL)], f'Clear works on the pinned header ({m.fake["acts"]})')
+    m.call(PSYMS['sg_on_destroy'], count=4000000)
+
+
+SECTIONS = [asset_tests, open_and_paint_tests, touch_tests, rail_tests, switch_tests, order_search_and_stale_tests, collapse_and_select_tests, loader_tests, big_library_tests, lists_tests, src_tests, src_marks_tests, src_ring_accent_tests, src_dsd_tests, src_dlqueue_tests]   # tools/check.py runs each as its own task

@@ -56,6 +56,7 @@ static struct {
     unsigned sc_ms, sc_need,
         sc_at; /* how long it has played, how long counts as a play (ms), when the last tick saw it playing */
     int sc_run, sc_sent; /* it was playing at the last tick; the play was reported */
+    int dlq; /* the rows at the top of the last LS_DOWNLOADED list that are downloads still to come */
     struct {
         unsigned key, at;
     } ring[NL_RING];
@@ -444,13 +445,26 @@ static void *nd_list(const lib_src_t *s, int which, void *scope) {
         q = nl_tracks(t.v, t.n);
         sba_free_tracks(&t);
         return q;
-    case LS_DOWNLOADED:
+    case LS_DOWNLOADED: { /* the downloads still to come (the page's "Downloading" section: nd_dl_rows tells how many), then the finished ones */
+        sba_tracks_t w;
+        int i;
         if (scope) return (void *)0;
+        nl.dlq = 0;
+        sba_dl_queue(&w);
+        sba_hearts(w.v, w.n);
         sba_downloaded(&t); /* the manifest: no network, works offline */
         sba_hearts(t.v, t.n); /* (the manifest's flag is the day of the download's) */
-        q = nl_tracks(t.v, t.n);
+        q = w.n || t.n ? nl_new() : (void *)0;
+        for (i = 0; q && i < w.n; ++i) {
+            if (!nl_push_track(q, &w.v[i])) break;
+            ++nl.dlq;
+        }
+        for (i = 0; q && i < t.n; ++i)
+            if (!nl_push_track(q, &t.v[i])) break;
+        sba_free_tracks(&w);
         sba_free_tracks(&t);
-        return q;
+        return nl_done(q);
+    }
     }
     return (void *)0;
 }
@@ -748,6 +762,10 @@ static int nd_act(const lib_src_t *s, void *rec, int what) {
     sba_track_t t;
     (void)s;
     if (what == LS_ACT_DOWNLOAD_ALL) return nl_download_all(rec);
+    if (what == LS_ACT_CANCEL_ALL_DL) {
+        sba_dl_cancel_all();
+        return 0;
+    }
     if (what == LS_ACT_CANCEL_DL) {
         const char *id = nd_rec_id(s, rec);
         if (!id[0]) return -1;
@@ -792,6 +810,12 @@ static unsigned nd_gen_rows(const lib_src_t *s) {
     (void)s;
     return sba_gen() +
            nl.epoch; /* (the data layer's counter and the retry epoch; a download's progress changes no list) */
+}
+
+static unsigned nd_dl_rows(const lib_src_t *s, int *queued) {
+    (void)s;
+    if (queued) *queued = nl.dlq;
+    return sba_dl_rows();
 }
 
 /* A playlist's row count before its tracks are cached (the Playlists page's tiles): the sync's songCount from the row's own data. A list the server answered as empty is final: 0. */
@@ -1121,8 +1145,9 @@ int ls_dsd_confirm(const lib_src_t *src, void *list, int at) {
     return (int)n;
 }
 
-const lib_src_t lib_nd = {"navidrome",   nd_list,  nd_rec_id, nd_play,     nd_cover,   nd_seconds,
-                          nd_row,        nd_act,   nd_gen,    nd_complete, nd_playing, nd_queue_row,
-                          LS_CAP_SEARCH, nd_count, nd_state,  nd_gen_rows}; /* caps: Search only (no Cover Flow or Select on its pages yet) */
+const lib_src_t
+    lib_nd = {"navidrome",   nd_list,  nd_rec_id, nd_play,     nd_cover,   nd_seconds,
+              nd_row,        nd_act,   nd_gen,    nd_complete, nd_playing, nd_queue_row,
+              LS_CAP_SEARCH, nd_count, nd_state,  nd_gen_rows, nd_dl_rows}; /* caps: Search only (no Cover Flow or Select on its pages yet) */
 
 const lib_src_t *lib_navidrome(void) { return sba_configured() ? &lib_nd : (const lib_src_t *)0; }

@@ -356,6 +356,11 @@ unsigned sba_dl_gen(void); /* moves with every state change and about every 2 % 
 int sba_dl_busy(void); /* the download worker runs */
 int sba_dl_pending(
     void); /* UI thread: the downloads not done yet: the running one, the waiting ones and the one a stopped worker left to try again (sba_dl_resume); reads the queue the card kept */
+/* The downloads still to come as tracks (sba_free_tracks): the running one first, then the waiting ones in the order the worker takes them, and the one a stopped worker left to try again; their rows are
+ * read from the queue the card kept. The number of tracks; 0 none (or the card would not read), -1 no memory. UI thread. */
+int sba_dl_queue(sba_tracks_t *out);
+/* A number that moves when the rows of the Downloaded list do (a track joins or leaves the queue, a download lands in the manifest or leaves it), never with a transfer's progress. Memory only. */
+unsigned sba_dl_rows(void);
 /* The path of a finished download of track id (a stat), 1 when there is one. A file deleted by hand is dropped from the manifest. */
 int sba_dl_path(const char *id, char *path, unsigned cap);
 int sba_dl_delete(const char *id); /* the file and its manifest row: 0 gone or never there, -1 could not be removed */

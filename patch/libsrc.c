@@ -238,7 +238,8 @@ const lib_src_t lib_stock = {"stock",
                              LS_CAP_ALL,
                              (int (*)(const lib_src_t *, int, void *))0,
                              (int (*)(const lib_src_t *, int, void *))0,
-                             (unsigned (*)(const lib_src_t *))0};
+                             (unsigned (*)(const lib_src_t *))0,
+                             (unsigned (*)(const lib_src_t *, int *))0};
 
 static int ls_same_str(const char *a, const char *b) {
     while (*a && *a == *b) ++a, ++b;

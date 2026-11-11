@@ -262,6 +262,26 @@ def lists(ctx):
     expect([r['title'] for r in rs] == ['One', 'Two'] and asked == [], f'Downloaded: the manifest rows, read with Wi-Fi off and no request: {[r["title"] for r in rs]}')
     expect(rs[0]['meta'].split('\t')[2] == 'flac' and rs[0]['year'] == 2020 and rid(m, deque_row(m, h, 1)) == 'd2', 'with the track\'s own data')
     expect([r['meta'].split('\t')[3] for r in rs] == ['0', '1'], f'Downloaded: the hearts are the Favorites list\'s, not the manifest\'s of the day of the download ({[r["meta"].split(chr(9))[3] for r in rs]})')
+    # the downloads still to come are the list's first rows (the page's Downloading section); dl_rows tells how many and moves with them; the Clear action empties the queue
+    F_DL_ROWS, CANCEL_ALL = 64, 7
+    m = machine()
+    dl_two_tracks(m, [SD.track('d1', 'One', 'flac'), SD.track('d2', 'Two', 'mp3')])
+    m.put(SD.QUEUE, 'i=w1\tt=Wait One\ta=An Artist\tb=An Album\tx=flac\tp=\ni=w2\tt=Wait Two\ta=An Artist\tb=An Album\tx=flac\tp=\n'.encode())
+    m.wifi = -1
+
+    def dl_rows():
+        q = m.alloc(4)
+        sig = m.call(member(m, F_DL_ROWS), a0=LIB, a1=q, count=1 << 40)
+        return sig, S32(m.word(q))
+    h, rs, asked = listing(m, LS_DOWNLOADED)
+    sig, n = dl_rows()
+    expect([r['title'] for r in rs] == ['Wait One', 'Wait Two', 'One', 'Two'] and n == 2 and asked == [] and m.thread is None,
+           f'Downloaded: the downloads the card kept come first, then the finished ones; dl_rows counts the two; reading starts no worker ({[r["title"] for r in rs]}, {n})')
+    expect(rid(m, deque_row(m, h, 0)) == 'w1' and dl_rows()[0] == sig, 'the waiting rows are tracks with their ids; dl_rows stands still while nothing changes')
+    expect(call(m, F_ACT, LIB, 0, CANCEL_ALL) == 0 and SD.QUEUE not in m.fs, 'the Clear action (no record): every download to come is cancelled, the queue file goes')
+    sig2 = dl_rows()[0]
+    h, rs, asked = listing(m, LS_DOWNLOADED)
+    expect([r['title'] for r in rs] == ['One', 'Two'] and dl_rows()[1] == 0 and sig2 != sig, 'after it the list is the finished downloads alone, and dl_rows moved')
     # an artist's all songs: the albums' tracks that are cached, the other albums asked for
     m = machine(site=quiet_site(getAlbum={'body': SA.ok_json(album={'id': 'al2', 'song': [{'id': 'x', 'title': 'x'}]})}))
     seed(m, 'artists.idx', 'artist', [dict(id='r1', name='An Artist', albums=2)])

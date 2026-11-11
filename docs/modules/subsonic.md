@@ -231,7 +231,16 @@ The manifest `dl.idx` holds one line per finished track (the whole row, plus fil
 never touches the card. A file deleted by hand is dropped when `sba_dl_path` or `sba_downloaded` finds it gone. **Downloads are in the local library too.** The worker calls stock's
 `scanSpecFolder(<the album's folder>, 0)` (as the PR did after a DSD file) once a folder: when it moves on to a file of another folder, when the queue drains and when it stops
 (`sbd_scan`, always before the worker is seen to have ended, so two scans never run together). The files are the server's originals with their tags, so they show under the local
-Albums, Artists and Songs like copied music, and in Subsonic > Downloaded as well. Not done: Remove Download does not take the track out of stock's library (it stays listed there
+Albums, Artists and Songs like copied music, and in Subsonic > Downloaded as well.
+
+**Download queue on the Downloaded page.** `nd_list(LS_DOWNLOADED)` puts the downloads still to come first (`sba_dl_queue`: the running one, then the waiting ones in the worker's `seq` order, and the track a stopped
+worker left for `sba_dl_resume`; their rows are the last row of each track in `dlq.idx`, a cancel's line after it leaves none; a queue file that will not read lists none) and the manifest's rows after them.
+`lib_src_t.dl_rows` (appended last; `nd_dl_rows`) tells the page how many leading rows those are and returns `sba_dl_rows`, a number made from the manifest's row count and the `seq` of every pending slot: it moves
+when a track joins or leaves the queue or a download lands or is removed, never with progress, so `gen_rows` stays what it was for every other page and only the Downloaded page reads its list again (`sg_rows_same`).
+With rows to come the Songs page shows two named sections through the A-Z furniture (`az_t.sec_text`: "Downloading", "Downloaded"; headers on whatever the Section Headers switch says, no rail) and a grey text
+button "Clear" at the right end of the first header (`az_t.sec_act`, the grey row line's style; `az_act_hit` is its touch test, in the flow and on the pinned header, where it wins over the row under it):
+`LS_ACT_CANCEL_ALL_DL` → `sba_dl_cancel_all`, then the list is read again. The footer counts the finished downloads only. With nothing to come the page is the plain list as before. Play and Shuffle take the
+whole list (a waiting row plays as a stream, as on any other page). Not done: no reorder, no pressed state on Clear, a cancelled running track's `.part` stays as before. Not done: Remove Download does not take the track out of stock's library (it stays listed there
 until the next library scan). The transfer-info hook that `sbn_init` takes returns `sba_dl_xfer(...)` first; `sbapi.c` supplies the
 guard, the login (`sba_net_open`) and `sba_is_dsd`.
 

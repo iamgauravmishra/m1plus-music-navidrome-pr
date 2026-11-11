@@ -202,6 +202,15 @@ def listing(m):
     return [unpack(bytes(m.u.mem_read(v + i * SIZE, SIZE))) for i in range(n)]
 
 
+def waiting(m):
+    """sba_dl_queue: the tracks still to come, as rows."""
+    out = m.alloc(8)
+    n = m.call(PSYMS['sba_dl_queue'], a0=out, count=1 << 40)
+    v = m.word(out + 4)
+    assert n == m.word(out)
+    return [unpack(bytes(m.u.mem_read(v + i * SIZE, SIZE))) for i in range(n)]
+
+
 def sleeps(calls): return [c for c in calls if c[0] == 'sleep']
 
 
@@ -918,6 +927,66 @@ def qlast_tests(ctx):
     expect(p and p.endswith('New Title.flac'), f'the worker downloads the track as its last row says ({p})')
 
 
+def qlist_tests(ctx):
+    """sba_dl_queue and sba_dl_rows (the Downloaded page's Downloading section): the tracks still to come with their whole rows in the worker's order, and a number that moves with the rows of
+    that page (the queue's and the manifest's) and never with a transfer's progress."""
+    expect = ctx.expect
+    t1, t2, t3 = track(), track('tr-2', 'Song Two'), track('tr-3', 'Song Three')
+    m = machine(); m.curl_site = server(m)
+    expect(waiting(m) == [] and QUEUE not in m.fs, 'nothing queued: no rows (and no file made)')
+    s0 = fn(m, 'sba_dl_rows')
+    r, th = add(m, t1)
+    s1 = fn(m, 'sba_dl_rows')
+    add(m, t2); add(m, t3)
+    s3 = fn(m, 'sba_dl_rows')
+    expect(waiting(m) == [t1, t2, t3], f'three queued: their whole rows, in the order asked ({[t["id"] for t in waiting(m)]})')
+    expect(len({s0, s1, s3}) == 3 and fn(m, 'sba_dl_rows') == s3, 'sba_dl_rows moves with every track that joins, and stands still otherwise')
+    # a cancel takes the row out; the same track added again goes to the end
+    cancel(m, 'tr-2')
+    s4 = fn(m, 'sba_dl_rows')
+    expect([t['id'] for t in waiting(m)] == ['tr-1', 'tr-3'] and s4 != s3, 'a cancelled track is not listed, and the number moved')
+    add(m, t2)
+    expect(waiting(m) == [t1, t3, t2], 'added again: at the end, its row whole')
+    # a reboot: the list is the card's
+    m = reboot(m)
+    expect(waiting(m) == [t1, t3, t2] and m.thread is None, 'after a reboot the rows the card kept are listed (no worker is started by the read)')
+    # while the first runs: it is still the first row and progress does not move the number; when it lands the number moves and the row leaves
+    seen = []
+    site = server(m)
+
+    def watch(url, o):
+        if not seen: seen.append(([t['id'] for t in waiting_in(m)], m.nested(PSYMS['sba_dl_rows'])))
+        return site(url, o)
+    def waiting_in(m):
+        out = m.alloc(8)
+        n = m.nested(PSYMS['sba_dl_queue'], out)
+        v = m.word(out + 4)
+        return [unpack(bytes(m.u.mem_read(v + i * SIZE, SIZE))) for i in range(n)]
+    m.curl_site = watch
+    before = fn(m, 'sba_dl_rows')
+    r, th = resume(m)
+    work(m, th)
+    expect(seen and seen[0][0] == ['tr-1', 'tr-3', 'tr-2'] and seen[0][1] == before, f'the running download is the first row, and starting it does not move the number ({seen})')
+    expect(waiting(m) == [] and fn(m, 'sba_dl_rows') != before and [t['id'] for t in listing(m)] == ['tr-1', 'tr-3', 'tr-2'], 'all landed: no rows wait, the number moved, the manifest has the three')
+    # a delete of a finished download moves the number too (the Downloaded rows changed)
+    s5 = fn(m, 'sba_dl_rows')
+    m.call(PSYMS['sba_dl_delete'], a0=m.cstr('tr-3'), count=1 << 40)
+    expect(fn(m, 'sba_dl_rows') != s5, 'a removed download moves the number')
+    # the worker stopped at a lost Wi-Fi: the track it stopped at and the ones behind it are still to come
+    m = machine(); m.curl_site = lambda url, o: {'rc': 6}
+    r, th = add(m, t1); add(m, t2)
+    work(m, th)
+    expect(state(m)[0] == DL['FAILED'] and [t['id'] for t in waiting(m)] == ['tr-1', 'tr-2'] and not fn(m, 'sba_dl_busy'), f'a stopped worker: both tracks are still listed ({state(m)}, {[t["id"] for t in waiting(m)]})')
+    # cancel all: none
+    fn(m, 'sba_dl_cancel_all')
+    expect(waiting(m) == [] and QUEUE not in m.fs, 'sba_dl_cancel_all: nothing waits, the queue file is gone')
+    # a queue file that cannot be read: no rows (the tracks still wait)
+    m = machine(); m.curl_site = server(m)
+    add(m, t1)
+    m.fail.add(('read', QUEUE))
+    expect(waiting(m) == [] and state(m)[0] == DL['WAIT'], 'a queue file that will not read: no rows listed, the track still waits')
+
+
 def manifest_tests(ctx):
     """dl.idx: replaced whole, tolerant of bad lines, rows with tabs and odd text."""
     expect = ctx.expect
@@ -956,4 +1025,4 @@ def manifest_tests(ctx):
     expect(m.fs.get(IDX) == big, 'an oversized manifest is kept, not replaced by one row')
 
 
-SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, scan_tests, layout_tests, persist_tests, qread_tests, qlast_tests, manifest_tests]
+SECTIONS = [queue_tests, transfer_tests, resume_tests, validator_tests, failure_tests, report_tests, control_tests, collision_tests, scan_tests, layout_tests, persist_tests, qread_tests, qlast_tests, qlist_tests, manifest_tests]
