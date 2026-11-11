@@ -30,13 +30,26 @@ There is no additional hook: `np_start` calls `ly_start`, the 500 ms `np_work`
 tick calls `ly_tick`, and `np_stop` calls `ly_stop`. A row signature (count,
 first and last handles and times) detects replacement lyrics; at most 400 rows are read.
 
-A row's text is read with `m1_text_utf8` (`patch/common.c`) into `LY_BUF` (256) bytes: a longer line is cut at a character, and at most `LY_LINES_MAX` rows of it are drawn anyway.
+A row's text is read with `m1_text_utf8` (`patch/common.c`) into `LY_BUF` (256) bytes: a longer line is cut at a character, and at most `LY_LINES_MAX` (6) rows of it are drawn anyway.
 Stock `widget_get_text_utf8` ignores its size for a wide text and wrote a ~350 byte line over this stack buffer (the player rebooted; see [payload](payload.md)), so the payload never calls it.
 
 ## Layout and appearance
 
 - The current line's top is anchored at 85 px (0.35 of the 244 px view).
-  Labels have up to three wrapped rows, 34 px per row and a 12 px gap.
+  Labels have up to six wrapped rows (`LY_LINES_MAX`), 34 px per row and a 12 px gap.
+- A line of more than three rows is anchored higher (`ly_anchor`): its top sits where the next
+  line's first row still ends 8 px (`LY_ANCHOR_ROOM`) above the view's bottom, but not above
+  20 px (`LY_ANCHOR_MIN`): 85 px up to three rows, 54 for four, 20 for five and six (six rows end
+  at 224 of 244 and the next line is out of the view). Why: LRC files that put several sentences
+  under one time stamp (1.3.2 report, The Lie Eternal from LRCLIB: 11 of 22 lines need four rows,
+  one six) lost everything after the third row. `ly.man` counts from the anchored line's own
+  anchor: `ly_move` adds the two anchors' difference to the move's distance and `ly_rebase` picks
+  the line nearest the 85 px anchor, so nothing jumps in a move or a drag. The layout keeps
+  lines up to `LY_OFF_MAX` (976 px, 4 x the view, also the cap of a spring's offset) outside the
+  view laid out: the longest move that does not snap, four lines of six rows, is 929 px, and a
+  line that was on the screen must stay laid out until its spring has taken it out (with the
+  former 400 px the old current line vanished at the start of such a move). With the intro dots a
+  first line of six rows starts 46 px lower and its last row is clipped until the dots go.
 - Row height follows AWTK's font size plus `spacer`: 30 + 4 px. The page breaks lines itself
   (`ly_break`) and sets the label's text with explicit `\n`s, and the rows, the label height and the
   breaks come from that one result (cached per line, `ly.brk`). Why: the style sets no margin, so
@@ -51,10 +64,13 @@ Stock `widget_get_text_utf8` ignores its size for a wide text and wrote a ~350 b
 - `ly_break`: a line measuring at most `LY_FIT_W` (260, the content width) is one row and left to
   stock (its last character may reach 260, its ink ends before the label's edge). Otherwise greedy
   at spaces with rows at most `LY_ROW_W` (259: stock's check adds 1 px), a word wider than a row
-  (or a text without spaces, CJK) by code point, at most three rows; the text beyond them is cut.
+  (or a text without spaces, CJK) by code point, at most six rows; the text beyond them is cut
+  and the last row ends in `…` (`LY_MARK`). The last row keeps the mark's width free: what does
+  not fit beside it is cut, unless the whole rest of the line fits the row without the mark (one
+  more measure, of the rest).
   A space at a break becomes the `\n`, else the `\n` is inserted (`ly_wrapped`; the label text
-  is at most `LY_BUF` + 1 bytes). Widths add up (no kerning): one measure of the line, one of a
-  space, and for a wrapped line one per word (per code point of a long word), at most the three
+  is at most `LY_BUF` + 7 bytes). Widths add up (no kerning): one measure of the line, one of a
+  space and one of the mark, and for a wrapped line one per word (per code point of a long word), at most the six
   rows' worth, once per line. Each line is measured once and kept, except a measure of 0 for
   non-empty text (any piece): that line stays one row, is not cached, and later page ticks measure
   it again and redo the layout (after the first failed measure a layout measures nothing more; at

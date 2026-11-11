@@ -73,6 +73,11 @@ in [history](../history.md); feature modules retain their detailed edge cases.
 - **PLAY-01 — Now Playing/lock screen:** sharp rounded covers, tint changes, neutral missing
   art, remaining time, transport/favorite/More controls, translucent card and swipe behaviour.
   Check idle/no-queue and charging states. [Now Playing](nowplaying.md), [lock screen](lockscreen.md)
+- **LYR-01 — Long lyric lines:** a song whose LRC puts several sentences under one time stamp
+  (Poets of the Fall, The Lie Eternal, LRCLIB). Lines of four to six rows show whole, the current
+  one higher than a short line (the next line still shows under four and five rows); the moves
+  into and out of a tall line are smooth, a drag through them does not jump, and a line of more
+  than six rows ends in `…`. [Details](lyrics.md)
 - **NEXT-01 — Continue Playing:** Settings > Playback > Continue Playing > Next Albums (the row then shows Albums). Albums (Artist order): Play an
   album with 2 to 3 short tracks, let it end: the next album in the list plays after a short gap (not
   gapless), the Queue page shows both albums, Now Playing shows the new album. Repeat the chain two

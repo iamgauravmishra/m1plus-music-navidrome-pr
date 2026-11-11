@@ -9,6 +9,14 @@ WIN = nowplaying.WIN
 POOL, ANCHOR, LINE_H, GAP, VIEW_H, W = (O[k] for k in ('LY_POOL', 'LY_ANCHOR', 'LY_LINE_H', 'LY_GAP', 'LY_VIEW_H', 'LY_W'))
 PITCH = LINE_H + GAP
 FIT, ROW, SNAP, FRAME, SPRING, OFF_MAX = O['LY_FIT_W'], O['LY_ROW_W'], O['LY_SNAP_LINES'], O['LY_FRAME_MS'], O['LY_SPRING_MS'], O['LY_OFF_MAX']
+MAXR, AMIN, AROOM, MARK = O['LY_LINES_MAX'], O['LY_ANCHOR_MIN'], O['LY_ANCHOR_ROOM'], '\u2026'
+
+
+def anchor(rows):
+    """The model of ly_anchor: where the top of an anchored line of `rows` rows sits. ANCHOR up to three rows; a taller line higher, the next line's first row ending
+    AROOM px above the view's bottom, but not above AMIN."""
+    a = VIEW_H - AROOM - LINE_H - (rows * LINE_H + GAP)
+    return ANCHOR if a >= ANCHOR else max(a, AMIN)
 FADE, BROWSE = O['LY_FADE'], O['LY_BROWSE_OP']
 DOT, DPITCH, DX, DPAD, DMIN, DMS, DDIM, DFADE, DBR, DBRMIN = (O[k] for k in ('LY_DOT', 'LY_DOT_PITCH', 'LY_DOT_X', 'LY_DOT_PAD', 'LY_DOT_MIN_S', 'LY_DOT_MS', 'LY_DOT_DIM', 'LY_DOT_FADE_MS', 'LY_DOT_BREATH_MS', 'LY_DOT_BREATH_MIN'))
 OPACITY = (255, 115, 82, 61, 46)   # 1.0, 0.45, 0.32, 0.24, 0.18 by distance from the current line (4 and further: the last)
@@ -137,10 +145,10 @@ class LyMachine(nowplaying.NowMachine):
     def label_text(self, h): return self.texts[h].encode('latin-1').decode('utf-8')
 
     def source_of(self, t):
-        """The stock row text a label text is made from: the same without its breaks (a space or a newline), or a prefix of it (a line cut at three rows)."""
+        """The stock row text a label text is made from: the same without its breaks (a space or a newline), or a prefix of it (a line cut at MAXR rows, the mark after it)."""
         flat = lambda x: x.replace(' ', '').replace('\n', '')
         rows = [self.texts[h].encode('latin-1').decode('utf-8') for h in self.children[self.src_w]]
-        return next((r for r in rows if r == t), next((r for r in rows if flat(r) == flat(t)), next((r for r in rows if flat(r).startswith(flat(t))), t)))
+        return next((r for r in rows if r == t), next((r for r in rows if flat(r) == flat(t)), next((r for r in rows if flat(r).startswith(flat(t.removesuffix(MARK)))), t)))
 
     def shown(self):
         """text -> (y, opacity, style, height) of every visible label."""
@@ -171,25 +179,34 @@ class LyMachine(nowplaying.NowMachine):
 
 
 def break_rows(text, measure):
-    """The model of ly_break: the rows (strings) a line is broken into. The line measures at most FIT: one row. Else greedy at the spaces, rows at most ROW wide, a word wider than a
-    row by character, at most three rows (the rest is cut). Widths add up; `measure` is the width of a string."""
+    """The model of ly_break and ly_wrapped: the rows (strings) a line is broken into. The line measures at most FIT: one row. Else greedy at the spaces, rows at most ROW wide,
+    a word wider than a row by character, at most MAXR rows. The last of MAXR rows keeps room for MARK: what does not fit beside it is cut and MARK ends the row, unless the
+    whole rest of the line fits the row without it. Widths add up (words, spaces, characters); `measure` is the width of a string."""
     if measure(text) <= FIT: return [text]
-    rows, cur = [], None    # cur: the row being made, None when it has no word yet
+    sp, mk = measure(' '), measure(MARK)
+    rows, cur, x, pos = [], None, 0, 0    # cur: the row being made, None when it has no word yet; x its width; pos the word's place in the text
+    lim = lambda: ROW - mk if len(rows) == MAXR - 1 else ROW
     for wd in text.split(' '):
-        cand = wd if cur is None else cur + ' ' + wd
-        if measure(cand) <= ROW: cur = cand; continue
-        if cur is not None:
-            rows.append(cur)
-            if len(rows) == 3: return rows
-            cur = None
-            if measure(wd) <= ROW: cur = wd; continue
-        cur = ''
-        for ch in wd:
-            if cur and measure(cur + ch) > ROW:
-                rows.append(cur)
-                if len(rows) == 3: return rows
-                cur = ''
-            cur += ch
+        tw = measure(wd) if wd else 0
+        if cur is not None and x + sp + tw > lim():
+            if len(rows) == MAXR - 1:
+                rest = text[pos:]
+                return rows + [cur + ' ' + rest if x + sp + measure(rest) <= ROW else cur + MARK]
+            rows.append(cur); cur, x = None, 0
+        if cur is not None: x += sp
+        if x + tw <= lim():
+            cur = wd if cur is None else cur + ' ' + wd; x += tw
+        else:
+            cur = ''
+            for j, ch in enumerate(wd):
+                cw = measure(ch)
+                if x and x + cw > lim():
+                    if len(rows) == MAXR - 1:
+                        rest = text[pos + j:]
+                        return rows + [cur + rest if x + measure(rest) <= ROW else cur + MARK]
+                    rows.append(cur); cur, x = '', 0
+                cur += ch; x += cw
+        pos += len(wd) + 1
     rows.append(cur)
     return rows
 
@@ -214,15 +231,15 @@ def stock_rows(t, measure, content=FIT):
 
 
 def expect_layout(lines, cur, rem, measure):
-    """The model of ly_layout: {text: (y, opacity, style, height)} for the lines that touch the view, the current line's top at ANCHOR + rem."""
+    """The model of ly_layout: {text: (y, opacity, style, height)} for the lines that touch the view, the current line's top at its anchor + rem."""
     base = max(cur, 0); out = {}
     rows = [rows_of(s, measure) for _, s in lines]
-    y = ANCHOR + rem
+    y = anchor(rows[base]) + rem
     for i in range(base, min(len(lines), base + POOL)):
         if y >= VIEW_H: break
         if y + rows[i] * LINE_H > 0: out[lines[i][1]] = i, y
         y += rows[i] * LINE_H + GAP
-    y = ANCHOR + rem
+    y = anchor(rows[base]) + rem
     for i in range(base - 1, max(base - POOL, -1), -1):
         y -= rows[i] * LINE_H + GAP
         if y + rows[i] * LINE_H <= 0: break
@@ -320,7 +337,7 @@ class Model:
         if abs(nb - self.base) > SNAP:
             self.o0 = {k: 0 for k in self.o0}; self.gd = 0
         else:
-            d = self.man + self.pad - pad + sum(self.pitch(i) for i in range(self.base, nb)) - sum(self.pitch(i) for i in range(nb, self.base))
+            d = self.man + self.pad - pad + anchor(self.rows[self.base]) - anchor(self.rows[nb]) + sum(self.pitch(i) for i in range(self.base, nb)) - sum(self.pitch(i) for i in range(nb, self.base))
             for i in self.o0:
                 self.o0[i] = max(-4 * VIEW_H, min(4 * VIEW_H, self.off(i, now) + d)); self.ts[i] = now + delay(i, nb)
             self.gd, self.gt, self.gcur = d, now, nb
@@ -330,15 +347,15 @@ class Model:
         """{text: (y, opacity, style, height)} of the lines whose place (nominal + spring) touches the view."""
         out, np_ = {}, {}
         lo0 = max(self.base - POOL // 2 + 1, 0); lo, hi = lo0, min(self.base + POOL // 2, self.n - 1)
-        y = ANCHOR + self.man + self.pad; np_[self.base] = y
+        y = anchor(self.rows[self.base]) + self.man + self.pad; np_[self.base] = y
         for i in range(self.base, hi):
             y += self.pitch(i)
             if y > VIEW_H + OFF_MAX: hi = i; break
             np_[i + 1] = y
-        y = ANCHOR + self.man + self.pad
+        y = anchor(self.rows[self.base]) + self.man + self.pad
         for i in range(self.base - 1, lo0 - 1, -1):
             y -= self.pitch(i)
-            if y < -OFF_MAX - 3 * LINE_H: lo = i + 1; break
+            if y < -OFF_MAX - MAXR * LINE_H: lo = i + 1; break
             np_[i] = y
         ref = -1 if self.cur < 0 else self.cur
         for i in range(lo, hi + 1):
@@ -400,14 +417,18 @@ def asset_tests(ctx):
     meas = lambda t: StbText(fonts[face(t)], O['LY_FONT']).layout(t)[1]
     # the room: a three-row current line at the anchor leaves the next line a full row under it
     fits = lambda px: ANCHOR + 3 * (px + mn.LYR_SPACER) + GAP + (px + mn.LYR_SPACER) <= VIEW_H - 8   # 8 px to spare under the next line
-    expect(ANCHOR + 3 * LINE_H + GAP + LINE_H <= VIEW_H - 8 and O['LY_LINES_MAX'] == 3, f'a three-row current line ({ANCHOR}..{ANCHOR + 3 * LINE_H}) and the next line\'s row end at {ANCHOR + 3 * LINE_H + GAP + LINE_H} <= {VIEW_H - 8}')
+    expect(ANCHOR + 3 * LINE_H + GAP + LINE_H <= VIEW_H - 8 and AROOM == 8, f'a three-row current line ({ANCHOR}..{ANCHOR + 3 * LINE_H}) and the next line\'s row end at {ANCHOR + 3 * LINE_H + GAP + LINE_H} <= {VIEW_H - 8}')
+    # a taller current line is anchored higher: four and five rows still show the next line's row, the tallest (MAXR rows) is whole in the view from the lowest anchor
+    expect([anchor(r) for r in (1, 2, 3, 4, 5, 6)] == [85, 85, 85, 54, 20, 20] and MAXR == 6 and AMIN == 20, f'the anchors by rows: {[anchor(r) for r in range(1, MAXR + 1)]}')
+    expect(all(anchor(r) + r * LINE_H + GAP + LINE_H <= VIEW_H - AROOM for r in (4, 5)) and AMIN + MAXR * LINE_H <= VIEW_H - AROOM and edge(AMIN, MAXR) == 255,
+           f'four and five rows keep the next line\'s row {AROOM} px inside the view; {MAXR} rows from {AMIN} end at {AMIN + MAXR * LINE_H} <= {VIEW_H - AROOM}, not faded by the top edge')
     expect(fits(O['LY_FONT']) and not fits(O['LY_FONT'] + 1), f'{O["LY_FONT"]} px is the largest size (with the {mn.LYR_SPACER} px spacer) whose three-row line and next row keep 8 px in the view')
     samples = {'Latin, one row': ('Be what you want', 1), 'Latin, 263 px': ('Be what you want to be', 2), 'Latin, 61 characters': ('I got a feeling that tonight is going to be the night that I', 3),
-               'Chinese, 26 characters': ('我想要有一天能够和你一起走遍这个世界上所有美丽的地方看遍所', 3),
+               'Chinese, 26 characters': ('我想要有一天能够和你一起走遍这个世界上所有美丽的地方看遍所', 4),
                'Japanese, 26 characters': ('あなたと一緒に歩いた道を今でも覚えているよ夢のように', 3), 'Latin with one CJK character': ('Hello 你好 there', 1)}
     for name, (s, want) in samples.items():
         rows = rows_of(s, meas)
-        expect(rows == want and (want == 1) == (meas(s) <= FIT), f'{name} ({face(s)}) at {O["LY_FONT"]} px: {meas(s)} px = {rows} rows (cap 3)')
+        expect(rows == want and (want == 1) == (meas(s) <= FIT), f'{name} ({face(s)}) at {O["LY_FONT"]} px: {meas(s)} px = {rows} rows (cap {MAXR})')
     # contrast: the current line over every tone under the tint and scrim; the falling-off lines at their opacity (white at a lower opacity: neutral, no accent)
     grid = [(r, g, b) for r in range(0, 256, 51) for g in range(0, 256, 51) for b in range(0, 256, 51)] + [(255, 255, 255)]
     col = lambda s: tuple(int(s[k:k + 2], 16) for k in (1, 3, 5))
@@ -697,8 +718,8 @@ def overflow_tests(ctx):
             decoded = None
         longest = max(len(s) for s in sets)
         flat = lambda x: x.replace(' ', '').replace('\n', '')
-        expect(decoded is not None and longest <= O['LY_BUF'] + 1 and any('\n' in d for d in decoded) and all(flat(want(text, O['LY_BUF'])).startswith(flat(d)) or d in ('first', 'last', '') or d[0] == '-' for d in decoded),
-               f'{kind}: a line of {len(text.encode("utf-8"))} bytes is set on the labels cut on a character, from the first {O["LY_BUF"] - 1} bytes and with its breaks at most {O["LY_BUF"] + 1} bytes ({longest} bytes)')
+        expect(decoded is not None and longest <= O['LY_BUF'] + MAXR + 2 and any('\n' in d for d in decoded) and all(flat(want(text, O['LY_BUF'])).startswith(flat(d.removesuffix(MARK))) or d in ('first', 'last', '') or d[0] == '-' for d in decoded),
+               f'{kind}: a line of {len(text.encode("utf-8"))} bytes is set on the labels cut on a character, from the first {O["LY_BUF"] - 1} bytes and with its breaks and the mark at most {O["LY_BUF"] + MAXR + 2} bytes ({longest} bytes)')
 
 
 def touch_tests(ctx):
@@ -820,13 +841,16 @@ def wrap_tests(ctx):
     fonts = {BOLD: Ttf(os.path.join(raw, 'fonts', 'lyrics.ttf')), CJKF: Ttf(os.path.join(raw, 'fonts', 'default.ttf'))}
     real = lambda s: StbText(fonts[face(s)], O['LY_FONT']).layout(s)[1] if s else 0   # in the face the payload picks
     # the row estimate: 10 px a character
-    for n, rows in ((1, 1), (26, 1), (27, 2), (50, 2), (51, 3), (75, 3), (200, 3)):
+    for n, rows in ((1, 1), (26, 1), (27, 2), (50, 2), (51, 3), (75, 3), (76, 4), (125, 5), (126, 6), (150, 6), (151, 6), (200, 6)):
         text = 'x' * n
         lines = [(0, 'a'), (1, text), (2, 'b')]
         m = LyMachine(lines); m.init(); m.at(1); m.frame(10000)
         s = m.shown()
-        expect(s[text][3] == rows * LINE_H == expect_layout(lines, 1, 0, m.measure_fn)[text][3] and s['b'][0] == s[text][0] + rows * LINE_H + GAP,
-               f'{n} chars = {n * 10} px: {rows} row(s), the next line {rows * LINE_H + GAP} px down ({s[text]})')
+        lab = next(m.label_text(h) for h in m.pool() if h in m.texts and m.source_of(m.label_text(h)) == text)
+        expect(s[text][3] == rows * LINE_H == expect_layout(lines, 1, 0, m.measure_fn)[text][3] and s[text][0] == anchor(rows) and ('b' not in s if rows == MAXR else s['b'][0] == s[text][0] + rows * LINE_H + GAP),
+               f'{n} chars = {n * 10} px: {rows} row(s) from y {anchor(rows)}, the next line {rows * LINE_H + GAP} px down{" (out of the view)" if rows == MAXR else ""} ({s[text]})')
+        expect(lab == '\n'.join(break_rows(text, m.measure_fn)) and lab.endswith(MARK) == (n > 150) and (n <= 150 or lab == '\n'.join(['x' * 25] * 5 + ['x' * 24 + MARK])),
+               f'{n} chars: the label text is the model\'s rows, {"cut with the mark after 149 characters" if n > 150 else "whole, no mark"}')
     # the final-glyph clip (report: "time is a valueble thing") and every other way a row can overflow: the label text the page sets is drawn the way stock's wrap does it
     # (stock_rows: explicit newlines, the overflow check, the last character stays) and has to fit the rows the page gave the line, each row the content width (W less 2 x 2 px)
     sentence = 'Everybody knows that the time is a valuable thing so we all keep watching the clock '
@@ -838,7 +862,7 @@ def wrap_tests(ctx):
         lab = next(h for h in m.pool() if h in m.texts and m.source_of(m.label_text(h)) == text)
         got, alloc = stock_rows(m.label_text(lab), real), m.props[(lab, 'h')] // LINE_H
         fits = real(text) <= FIT
-        expect(len(got) <= alloc == min(3, len(break_rows(text, real))) and all(real(r) <= FIT for r in got) and (rows_want is None or got == rows_want) and (alloc > 1 or fits),
+        expect(len(got) <= alloc == len(break_rows(text, real)) <= MAXR and got == break_rows(text, real) and all(real(r) <= FIT for r in got) and (rows_want is None or got == rows_want) and (alloc > 1 or fits),
                f'{text[:28]!r} ({real(text)} px): stock draws {len(got)} row(s) of {[real(r) for r in got]} px in the {alloc} allocated, none beyond {FIT} px ({got})')
         if text == 'time is a valueble thing': expect(real(text) <= FIT and alloc == 1, 'the 260 px form fits one row and is given as it is')
     expect(real('time is a beautiful thing') > FIT and real('time is a beautiful thing') <= W, 'time is a beautiful thing: 264 px, inside the label but over the content width, takes two rows')
@@ -847,11 +871,12 @@ def wrap_tests(ctx):
         t = 'x' * n
         m = LyMachine([(0, t)], measure=lambda u: 10 * len(u)); m.init(); m.at(0)
         expect(m.label_text(m.pool()[0]) == t.replace('x' * 25, 'x' * 25 + '\n') if rows == 2 else m.label_text(m.pool()[0]) == t, f'{n * 10} px: {rows} row(s), the label text {m.label_text(m.pool()[0])!r}')
-    # a full buffer (255 bytes) of words: three rows, cut there, every row inside the content width
+    # a full buffer (255 bytes) of words: MAXR rows, cut there with the mark, every row inside the content width
     full = ('word ' * 60)[:255]
     m = LyMachine([(0, full)], measure=real); m.init(); m.at(0)
     got = stock_rows(m.label_text(m.pool()[0]), real)
-    expect(len(got) == 3 and m.shown()[full][3] == 3 * LINE_H and all(real(r) <= FIT for r in got), 'a 255 byte line is cut at three rows, each inside the content width')
+    expect(len(got) == MAXR and m.shown()[full][3] == MAXR * LINE_H and all(real(r) <= FIT for r in got) and got[-1].endswith('word' + MARK) and got == break_rows(full, real),
+           f'a 255 byte line is cut at {MAXR} rows, each inside the content width, the last ending in the mark ({got[-1]!r})')
     # a measured line keeps its height: the probe measures once
     m = LyMachine(SONG); m.init()
     m.at(5); m.frame(10000); m.at(0); m.frame(10000)
@@ -891,7 +916,7 @@ def wrap_tests(ctx):
         m = LyMachine(lines, measure=real); m.init(); m.at(0)
         s = m.shown()
         r = rows_of(long_line[1], real)
-        expect(s[long_line[1]][3] // LINE_H == r >= 2 and s['Hello'][3] == LINE_H and s['Hello'][0] == ANCHOR + r * LINE_H + GAP,
+        expect(s[long_line[1]][3] // LINE_H == r >= 2 and s['Hello'][3] == LINE_H and s[long_line[1]][0] == anchor(r) and s['Hello'][0] == anchor(r) + r * LINE_H + GAP,
                f'a long {kind} line takes {r} rows ({real(long_line[1])} px of {W}) and pushes the next line down by its height')
         expect(s == expect_layout(lines, 0, 0, real), f'{kind}: the layout is the model\'s')
     # the page opened mid-song (a 1.3.0 report, Wake Up): the hook's tick lays out the lines round the playing one before the window resolves the probe's style; they
@@ -918,6 +943,120 @@ def wrap_tests(ctx):
     m = LyMachine(SONG); m.init()
     expect(sum(c[0] == 'label_set_line_wrap' and c[2] == 1 for c in m.calls) == POOL + 1 and sum(c[0] == 'widget_set_prop_bool' and c[2] == 'word_wrap' and c[3] == 1 for c in m.calls) == POOL + 1,
            'every label wraps (line_wrap and word_wrap)')
+
+
+def tall_tests(ctx):
+    """Lines of more than three rows (a 1.3.2 report, The Lie Eternal from LRCLIB: several sentences under one time stamp were cut after three rows): up to MAXR rows are
+    shown and the anchored line sits higher (anchor), in the layout, the moves and the drag."""
+    expect = ctx.expect
+    raw = os.path.join(WORK, 'rootfs', 'release/assets/default/raw')
+    from awtk_text import Ttf, StbText
+    fonts = {BOLD: Ttf(os.path.join(raw, 'fonts', 'lyrics.ttf')), CJKF: Ttf(os.path.join(raw, 'fonts', 'default.ttf'))}
+    real = lambda s: StbText(fonts[face(s)], O['LY_FONT']).layout(s)[1] if s else 0
+    lie = [(18, "I'm here tonight, the passion of your life."),
+           (24, 'To up the stakes, you will be like me in time. So let me come inside, your heart, your mind.'),
+           (40, 'Hell, I dare you to see yourself in a different light, where my hungry desire finds oblivion in your embrace'),
+           (58, 'All mistakes forgiven in your embrace.'),
+           (65, "I'm here, I'm now, arrived I fell in to your love, I fell in to your lie eternal.")]
+    flat = lambda x: x.replace(' ', '').replace('\n', '')
+    for pos, i, rows in ((24, 1, 4), (40, 2, 6), (65, 4, 4)):
+        m = LyMachine(lie, measure=real); m.init(); m.at(pos); m.frame(10000)
+        text = lie[i][1]; s = m.shown()
+        lab = next(m.label_text(h) for h in m.pool() if h in m.texts and m.props.get((h, 'visible')) and m.source_of(m.label_text(h)) == text)
+        got = stock_rows(lab, real)
+        expect(flat(lab) == flat(text) and MARK not in lab and len(got) == rows == s[text][3] // LINE_H and all(real(r) <= FIT for r in got),
+               f'{text[:24]!r}... ({real(text)} px): the whole line in {rows} rows, none beyond {FIT} px, nothing cut ({got})')
+        expect(s[text][0] == anchor(rows) and s[text][1] == 255 and s[text][0] + rows * LINE_H <= VIEW_H - AROOM and s == expect_layout(lie, i, 0, real),
+               f'it is current from y {s[text][0]} to {s[text][0] + rows * LINE_H}, whole in the view, opacity 1.0; the layout is the model\'s')
+        if rows < MAXR and i + 1 < len(lie):
+            nxt = s[lie[i + 1][1]]
+            expect(nxt[0] == anchor(rows) + rows * LINE_H + GAP and nxt[0] + LINE_H <= VIEW_H - AROOM and nxt[1] > 0, f'the next line\'s first row is in the view under it (y {nxt[0]})')
+    # the moves between lines of different anchors: every line starts where it was and the model agrees at every frame
+    song = [(0, 'Short a'), (5, 'x' * 100), (10, 'Short b'), (15, 'x' * 140), (20, 'y' * 110), (25, 'Short c')]
+    rws = [rows_of(t, lambda u: 10 * len(u)) for _, t in song]
+    expect(rws == [1, 4, 1, 6, 5, 1], f'a song of 1, 4, 1, 6, 5 and 1 rows ({rws})')
+    m = LyMachine(song); m.init(); mdl = Model(song, m.measure_fn); mdl.cur = 0; m.at(0); mdl.layout(m.clock)
+    okm, okc, rest = True, True, []
+    for k in list(range(1, len(song))) + [4, 3, 2, 1, 0]:
+        before = m.shown(); m.at(song[k][0]); mdl.cur = k; mdl.move(k, m.clock)
+        after = m.shown()
+        okc = okc and {a: v[0] for a, v in before.items() if a in after} == {a: v[0] for a, v in after.items() if a in before}
+        okm = okm and after == mdl.layout(m.clock)
+        for _ in range(60):
+            r = m.frame(40)
+            okm = okm and m.shown() == mdl.layout(m.clock)
+            if r == 0: break
+        rest.append(m.shown()[song[k][1]][0])
+    expect(okc, 'a new current line: at the move\'s start every line is on the pixel it was on, whatever the two lines\' anchors')
+    expect(okm, 'and the moves are the model\'s at every frame (the distance has the two anchors\' difference)')
+    expect(rest == [anchor(rws[k]) for k in list(range(1, len(song))) + [4, 3, 2, 1, 0]], f'each current line rests at its own anchor ({rest})')
+    # the longest moves that do not snap (SNAP lines of MAXR rows, both ways): a line that was on the screen is still there, on its pixel, when the move starts and
+    # leaves by scrolling (the layout's bounds, OFF_MAX, hold the whole distance)
+    far = SNAP * (MAXR * LINE_H + GAP) + ANCHOR - AMIN
+    expect(OFF_MAX >= far and OFF_MAX <= 4 * VIEW_H, f'the layout keeps lines up to {OFF_MAX} px outside the view: a move of {SNAP} lines of {MAXR} rows is {far} px, an offset is cut at {4 * VIEW_H}')
+    six = [(5 * k, chr(97 + k) * 140) for k in range(2 * SNAP + 1)]
+    for a, b in [(0, n) for n in range(1, SNAP + 1)] + [(2 * SNAP, 2 * SNAP - n) for n in range(1, SNAP + 1)] + [(1, 0), (SNAP, 1)]:
+        m = LyMachine(six); m.init(); m.at(six[a][0]); m.frame(10000)
+        mdl = Model(six, m.measure_fn); mdl.cur = mdl.base = a; mdl.layout(m.clock)
+        before = m.shown(); m.at(six[b][0]); mdl.cur = b; mdl.move(b, m.clock); after = m.shown()
+        ok = set(before) <= set(after) and all(after[t][0] == before[t][0] for t in before) and after == mdl.layout(m.clock)
+        # the old current line by its own arithmetic (not the layout's bounds): its spring from where it was to its new place, shown while that touches the view
+        t0, end, ys = m.clock, anchor(MAXR) + (a - b) * (MAXR * LINE_H + GAP), []
+        for _ in range(60):
+            r = m.frame(40); s = m.shown()
+            ok = ok and s == mdl.layout(m.clock)
+            y = end + spring(before[six[a][1]][0] - end, m.clock - t0 - delay(a, b))
+            vis = y + MAXR * LINE_H > 0 and y < VIEW_H and fade(OPACITY[min(abs(a - b), 4)], y, MAXR) > 0
+            ok = ok and (six[a][1] in s) == vis and (not vis or s[six[a][1]][0] == y)
+            if vis: ys.append(y)
+            if r == 0: break
+        expect(ok and ys and m.shown()[six[b][1]][0] == anchor(MAXR),
+               f'six-row lines, line {a} to line {b} ({abs(b - a) * (MAXR * LINE_H + GAP)} px): the old current line stays on its pixel at the start and scrolls out along its spring ({len(ys)} frames in the view), the model\'s at every frame')
+    # a drag across them: every line follows the finger by exactly its distance, also when the anchored line changes to one of another anchor
+    m = LyMachine(song); m.init(); m.at(5); m.frame(10000)
+    m.down(100, 230); m.move(100, 215); prev, y, ok, seen = m.shown(), 215, True, set()
+    while y > 20:
+        y -= 7; m.move(100, y); s = m.shown()
+        ok = ok and all(s[a][0] == prev[a][0] - 7 for a in s if a in prev)
+        seen |= set(s); prev = s
+    m.up(100, y)
+    expect(ok and song[3][1] in seen, 'dragged up through the four-row and the six-row line: every line moves 7 px a step, no jump')
+    m.down(100, 20); m.move(100, 35); prev, y = m.shown(), 35
+    while y < 230:
+        y += 7; m.move(100, y); s = m.shown()
+        ok = ok and all(s[a][0] == prev[a][0] + 7 for a in s if a in prev)
+        prev = s
+    m.up(100, y)
+    expect(ok, 'and back down the same way')
+    m.clock += O['LY_IDLE_MS'] + 100; m.at(5); m.frame(10000)
+    expect(m.shown() == expect_layout(song, 1, 0, m.measure_fn) and m.shown()[song[1][1]][0] == anchor(4), 'three seconds later the lines rest with the current four-row line at its anchor')
+    # the bounds with tall lines: the first and the last line stop at their own anchors
+    tall = [(0, 'x' * 140), (5, 'Middle'), (10, 'y' * 110)]
+    m = LyMachine(tall); m.init(); m.at(0)
+    m.down(100, 100); m.move(100, 120); m.move(100, 240)
+    expect(m.shown()[tall[0][1]][0] == anchor(6), 'dragged down past the start a six-row first line stops at its anchor')
+    m.up(100, 240)
+    m = LyMachine(tall); m.init(); m.at(10); m.frame(10000)
+    m.down(100, 240); m.move(100, 220); m.move(100, 20)
+    expect(m.shown()[tall[2][1]][0] == anchor(5), 'dragged up past the end a five-row last line stops at its anchor')
+    # a tap on a row of a tall line seeks to it
+    m = LyMachine(song); m.init(); m.at(10); m.frame(10000)
+    y3 = m.shown()[song[3][1]][0]; m.clock += 1000
+    m.down(50, y3 + 20); m.up(50, y3 + 20); m.frame(10000)
+    expect(m.seeks == [15] and m.shown()[song[3][1]][0] == anchor(6), 'a tap on the six-row line under the current one seeks there and the line comes to its anchor')
+    # the cut: more than MAXR rows end in the mark inside the last row; a last word that fits only without the mark is kept
+    lim = lambda u: 10 * len(u)
+    for text, last in ((' '.join(['w' * 24] * 6), 'w' * 24), (' '.join(['w' * 24] * 5 + ['w' * 25]), 'w' * 25), (' '.join(['w' * 24] * 5 + ['w' * 20, 'abc']), 'w' * 20 + ' abc'),
+                       (' '.join(['w' * 24] * 5 + ['w' * 20, 'abcd']), 'w' * 20 + ' abcd'), (' '.join(['w' * 24] * 5 + ['w' * 20, 'abc', 'd']), 'w' * 20 + ' abc' + MARK),
+                       (' '.join(['w' * 24] * 5 + ['w' * 20, 'ab', 'cd', 'ef']), 'w' * 20 + ' ab' + MARK), (' '.join(['w' * 24] * 5) + ' ' + 'v' * 60, 'v' * 24 + MARK),
+                       (' '.join(['w' * 24] * 5) + ' ' + 'v' * 25 + ' z', 'v' * 24 + MARK)):
+        m = LyMachine([(0, text)], measure=lim); m.init(); m.at(0)
+        lab = m.label_text(m.pool()[0]).split('\n')
+        expect(len(lab) == MAXR and lab[-1] == last and lab == break_rows(text, lim) and lim(lab[-1]) <= ROW, f'{len(text)} characters ending {text[-12:]!r}: the last row is {lab[-1]!r} ({lim(lab[-1])} px)')
+    cjk = '歌' * 60
+    m = LyMachine([(0, cjk)], measure=lambda u: 30 * len(u)); m.init(); m.at(0)
+    lab = m.label_text(m.pool()[0]).split('\n')
+    expect(lab == ['歌' * 8] * 5 + ['歌' * 7 + MARK] and m.shown()[cjk][2] == CJKF, f'60 CJK characters of 30 px: five rows of 8 and one of 7 with the mark ({lab[-1]})')
 
 
 def cost_tests(ctx):
@@ -1200,4 +1339,4 @@ def font_tests(ctx):
     expect(not any(c[0] == 'font_manager_get_font' for c in m.calls) and m.shown(), 'no font manager: no font is asked for, the page still works')
 
 
-SECTIONS = [asset_tests, start_tests, follow_tests, dots_tests, face_tests, touch_tests, wrap_tests, overflow_tests, cost_tests, font_tests]
+SECTIONS = [asset_tests, start_tests, follow_tests, dots_tests, face_tests, touch_tests, wrap_tests, tall_tests, overflow_tests, cost_tests, font_tests]

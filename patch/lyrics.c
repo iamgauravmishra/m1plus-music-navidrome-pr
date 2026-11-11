@@ -13,7 +13,8 @@
  * their names and stock keeps filling and scrolling them. label_lyricmsg ("No lyrics") stays stock's.
  *
  * Layout: line i has LY_LINE_H pixels a text row (1..LY_LINES_MAX rows, estimated from the line's measured width) and LY_GAP below.
- * The anchored line's top sits at LY_ANCHOR (0.35 of the view) plus `man`, the manual scroll; the other lines follow from it up and down.
+ * The anchored line's top sits at LY_ANCHOR (0.35 of the view) plus `man`, the manual scroll; the other lines follow from it up and down. A line of more
+ * than three rows is anchored higher (ly_anchor), so that it and, while there is room, the next line's first row stay in the view.
  * Opacity by distance from the current line: 1.0, 0.45, 0.32, 0.24, 0.18 (ly_opacity) times an edge factor that takes a line to 0 over the last LY_FADE px at the top and bottom
  * of the view (ly_edge); while the user has scrolled, every other line is LY_BROWSE_OP. Every line is white; the current one is only the most opaque. Face: a line of
  * Latin, Greek and Cyrillic only is drawn in the bold font file lyrics.ttf (style np_lyric_style), any other in the default font (np_lyric_cjk_style): AWTK picks a glyph from one font.
@@ -58,8 +59,8 @@ static struct {
     unsigned sig; /* what the stock rows were when we last read them */
     int n; /* the rows, at most LY_MAX */
     int cur; /* the highlighted line, -1 before the first */
-    int base; /* the line anchored at LY_ANCHOR + man */
-    int man; /* the manual scroll: where the anchored line's top is, from LY_ANCHOR (px) */
+    int base; /* the line anchored at ly_anchor(base) + man */
+    int man; /* the manual scroll: where the anchored line's top is, from its anchor (px) */
     int gd, gcur; /* the latest move: its distance and its target line (a line new to a slot moves with it) */
     unsigned gt; /* and when it started */
     unsigned timer; /* the animation timer, 0 none */
@@ -77,8 +78,9 @@ static struct {
     unsigned ck_t, dtimer;
     unsigned char ht[LY_MAX]; /* rows of each line, 0 not measured yet */
     unsigned char fc[LY_MAX]; /* face of each measured line */
-    unsigned char brk[LY_MAX]
-                     [3]; /* a wrapped line's break offsets in its text and the offset it is cut at (ly_break) */
+    unsigned char brk
+        [LY_MAX]
+        [LY_LINES_MAX]; /* a wrapped line's break offsets in its text and, last, the offset it is cut at (ly_break) */
     unsigned char miss, redo,
         skip; /* page ticks whose layout could not measure a line (since the lyrics loaded); whether the layout must run again for that; a measure failed in this layout */
 } ly __attribute__((section(".scratch")));
@@ -210,29 +212,39 @@ static int ly_span(const char *s, int n) {
  * Stock's label wrap would break a row at its first character past the content width (LY_W less the style's 2 px margins), but leaves an overflowing LAST character on
  * its row, clipped at the label's edge, and its row count would then differ from ours. Every row here is at most LY_ROW_W wide: stock's check (0x62ddf0: the row so far +
  * the character + 1 px over the content width) never fires and our '\n's are its only breaks. A line that fits in LY_FIT_W is left to stock (a last character may then
- * reach LY_FIT_W, its ink ends before the label's edge). ly.brk[i] gets the break offsets (a space there becomes the '\n', else the '\n' is put before the byte) and
- * after LY_LINES_MAX rows the offset the text is cut at. Returns the rows, 0 when something could not be measured. Widths add up (no kerning): one measure of the
- * line, then one per word (and per code point of a long word), at most the LY_LINES_MAX rows' worth, and one of a space; the result is cached with the rows. */
+ * reach LY_FIT_W, its ink ends before the label's edge). ly.brk[i] gets the break offsets (a space there becomes the '\n', else the '\n' is put before the byte) and,
+ * in its last byte, the offset the text is cut at when it has more than LY_LINES_MAX rows: ly_wrapped puts LY_MARK ("...", one character) there. The last row keeps
+ * room for the mark: what does not fit beside it is cut, unless the whole rest of the line fits the row without it (one more measure, of the rest). Returns the rows,
+ * 0 when something could not be measured. Widths add up (no kerning): one measure of the line, then one per word (and per code point of a long word), at most the
+ * LY_LINES_MAX rows' worth, one of a space and one of the mark; the result is cached with the rows. */
 static int ly_break(int i, const char *s) {
     unsigned char *bk = ly.brk[i];
-    int len = 0, w, sp, rows = 1, rs = 0, x = 0, p = 0;
+    int len = 0, w, sp, mk, rows = 1, rs = 0, x = 0, p = 0, k;
     while (s[len]) ++len;
-    bk[0] = bk[1] = bk[2] = 0;
+    for (k = 0; k < LY_LINES_MAX; ++k) bk[k] = 0;
     w = ly_span(s, len);
     if (!w) return 0;
     if (w <= LY_FIT_W) return 1;
     sp = ly_span(" ", 1);
     if (!sp) return 0;
+    mk = ly_span(LY_MARK, sizeof LY_MARK - 1); /* (a face without the character: no room is kept) */
+#define LY_LIM (rows == LY_LINES_MAX ? LY_ROW_W - mk : LY_ROW_W)
     for (;;) {
         int e = p, tw = 0;
         while (s[e] && s[e] != ' ') ++e;
         if (e > p && !(tw = ly_span(s + p, e - p))) return 0;
-        if (p > rs && x + sp + tw > LY_ROW_W) { /* the word starts the next row (the space before it is the break) */
-            if (rows == LY_LINES_MAX) return bk[2] = (unsigned char)(p - 1), rows;
+        if (p > rs && x + sp + tw > LY_LIM) { /* the word starts the next row (the space before it is the break) */
+            if (rows ==
+                LY_LINES_MAX) { /* there is none: the rest fits the row without the mark, or the line is cut here */
+                int rest = ly_span(s + p, len - p);
+                if (!rest) return 0;
+                if (x + sp + rest > LY_ROW_W) bk[LY_LINES_MAX - 1] = (unsigned char)(p - 1);
+                return rows;
+            }
             bk[rows++ - 1] = (unsigned char)(p - 1), rs = p, x = 0;
         }
         if (p > rs) x += sp;
-        if (x + tw <= LY_ROW_W) {
+        if (x + tw <= LY_LIM) {
             x += tw;
         } else { /* wider than a row: by code point */
             int q = p;
@@ -240,8 +252,13 @@ static int ly_break(int i, const char *s) {
                 int n = 1, cw;
                 while (q + n < e && (s[q + n] & 0xc0) == 0x80) ++n;
                 if (!(cw = ly_span(s + q, n))) return 0;
-                if (x && x + cw > LY_ROW_W) {
-                    if (rows == LY_LINES_MAX) return bk[2] = (unsigned char)q, rows;
+                if (x && x + cw > LY_LIM) {
+                    if (rows == LY_LINES_MAX) {
+                        int rest = ly_span(s + q, len - q);
+                        if (!rest) return 0;
+                        if (x + rest > LY_ROW_W) bk[LY_LINES_MAX - 1] = (unsigned char)q;
+                        return rows;
+                    }
                     bk[rows++ - 1] = (unsigned char)q, rs = q, x = 0;
                 }
                 x += cw, q += n;
@@ -250,6 +267,7 @@ static int ly_break(int i, const char *s) {
         if (!s[e]) return rows;
         p = e + 1;
     }
+#undef LY_LIM
 }
 
 /* The rows line i takes (ly_break), 1 when it fits one row, at most LY_LINES_MAX. Its face is chosen here (ly_latin). Cached, except a
@@ -277,10 +295,11 @@ __attribute__((noinline)) int ly_rows(int i) {
     return rows;
 }
 
-/* The text of line i for its label: ly_text with the breaks of ly_break (rows is ly_rows(i)). out holds LY_BUF + 2 bytes and the NUL. */
+/* The text of line i for its label: ly_text with the breaks of ly_break (rows is ly_rows(i)) and, when the line is cut, LY_MARK at its end. out holds LY_OUT bytes. */
+#define LY_OUT (LY_BUF + LY_LINES_MAX + (int)sizeof LY_MARK)
 static void ly_wrapped(int i, int rows, char *out) {
     char buf[LY_BUF];
-    int p, o = 0, k = 0, cut = rows > 1 ? ly.brk[i][2] : 0;
+    int p, o = 0, k = 0, cut = rows > 1 ? ly.brk[i][LY_LINES_MAX - 1] : 0;
     ly_text(i, buf);
     for (p = 0; buf[p] && !(cut && p == cut); ++p) {
         if (k < rows - 1 && p == ly.brk[i][k]) {
@@ -289,11 +308,20 @@ static void ly_wrapped(int i, int rows, char *out) {
         }
         out[o++] = buf[p];
     }
+    if (cut)
+        for (p = 0; p < (int)sizeof LY_MARK - 1; ++p) out[o++] = LY_MARK[p];
     out[o] = 0;
 }
 
 /* The pixels line i occupies, its gap included. */
 static int ly_pitch(int i) { return ly_rows(i) * LY_LINE_H + LY_GAP; }
+
+/* Where line i's top sits when it is the anchored one: LY_ANCHOR for up to three rows; a taller line higher, so that the next line's first row still ends
+ * LY_ANCHOR_ROOM px above the view's bottom, but not above LY_ANCHOR_MIN (LY_LINES_MAX rows from there end inside the view). */
+__attribute__((noinline)) int ly_anchor(int i) {
+    int a = LY_VIEW_H - LY_ANCHOR_ROOM - LY_LINE_H - ly_pitch(i);
+    return a >= LY_ANCHOR ? LY_ANCHOR : a < LY_ANCHOR_MIN ? LY_ANCHOR_MIN : a;
+}
 
 /* Opacity (0..255) of a line `dist` lines from the current one: 1.0, 0.45, 0.32, 0.24, then 0.18. */
 __attribute__((noinline)) unsigned ly_opacity(int dist) {
@@ -414,7 +442,7 @@ static void ly_place(int i, int y) {
         return;
     }
     if (ly.line[slot] != i || ly.rows[slot] != rows) { /* (a line placed before it was measured has no breaks yet) */
-        char buf[LY_BUF + 3];
+        char buf[LY_OUT];
         ly_wrapped(i, rows, buf);
         widget_set_text_utf8(w, buf);
         ly.line[slot] = i;
@@ -453,7 +481,7 @@ static void ly_layout(void) {
         if (lo0 < 0) lo0 = 0;
         lo = lo0, hi = ly.base + LY_POOL / 2;
         if (hi > ly.n - 1) hi = ly.n - 1;
-        y = LY_ANCHOR + ly.man + ly.pad;
+        y = ly_anchor(ly.base) + ly.man + ly.pad;
         np[ly.base - lo0] = y;
         for (i = ly.base; i < hi; ++i) {
             y += ly_pitch(i);
@@ -463,7 +491,7 @@ static void ly_layout(void) {
             }
             np[i + 1 - lo0] = y;
         }
-        y = LY_ANCHOR + ly.man + ly.pad;
+        y = ly_anchor(ly.base) + ly.man + ly.pad;
         for (i = ly.base - 1; i >= lo0; --i) {
             y -= ly_pitch(i);
             if (y < -LY_OFF_MAX - LY_LINES_MAX * LY_LINE_H) {
@@ -520,6 +548,7 @@ static void ly_move(int nb) {
     unsigned now = time_now_ms();
     if (nb < 0) nb = 0;
     if (ly.n > 0 && nb > ly.n - 1) nb = ly.n - 1;
+    d += ly_anchor(ly.base) - ly_anchor(nb);
     if (nb - ly.base > LY_SNAP_LINES || ly.base - nb > LY_SNAP_LINES) {
         for (s = 0; s < LY_POOL; ++s) ly.o0[s] = 0;
         ly.gd = 0;
@@ -529,8 +558,8 @@ static void ly_move(int nb) {
         for (s = 0; s < LY_POOL; ++s)
             if (ly.mv[s] >= 0) {
                 int o = ly_off(s, now) + d;
-                if (o > 4 * LY_VIEW_H) o = 4 * LY_VIEW_H;
-                if (o < -4 * LY_VIEW_H) o = -4 * LY_VIEW_H;
+                if (o > LY_OFF_MAX) o = LY_OFF_MAX; /* (what the layout keeps laid out) */
+                if (o < -LY_OFF_MAX) o = -LY_OFF_MAX;
                 ly.o0[s] = (short)o;
                 ly.ts[s] = now + (unsigned)ly_delay(ly.mv[s], nb);
             }
@@ -546,16 +575,19 @@ static void ly_move(int nb) {
 /* The anchored line is the current one's (or the first): the song moved on, or the user stopped scrolling. */
 static void ly_follow(void) { ly_move(ly.cur < 0 ? 0 : ly.cur); }
 
-/* After a manual move: the anchored line is the one nearest the anchor again (|man| under half a pitch), and the first / last line stop at the anchor. */
+/* After a manual move: the anchored line is the one nearest LY_ANCHOR again (its top under half a pitch from it), and the first / last line stop at their anchor.
+ * t is the anchored line's top from LY_ANCHOR; man is counted from the line's own anchor (ly_anchor), so nothing jumps when the anchored line changes. */
 static void ly_rebase(void) {
-    while (ly.base > 0 && ly.man > ly_pitch(ly.base - 1) / 2) {
+    int t = ly.man + ly_anchor(ly.base) - LY_ANCHOR;
+    while (ly.base > 0 && t > ly_pitch(ly.base - 1) / 2) {
         ly.base -= 1;
-        ly.man -= ly_pitch(ly.base);
+        t -= ly_pitch(ly.base);
     }
-    while (ly.base < ly.n - 1 && ly.man < -ly_pitch(ly.base) / 2) {
-        ly.man += ly_pitch(ly.base);
+    while (ly.base < ly.n - 1 && t < -ly_pitch(ly.base) / 2) {
+        t += ly_pitch(ly.base);
         ly.base += 1;
     }
+    ly.man = t - (ly_anchor(ly.base) - LY_ANCHOR);
     if (ly.base == 0 && ly.man > 0) ly.man = 0;
     if (ly.base >= ly.n - 1 && ly.man < 0) ly.man = 0;
 }

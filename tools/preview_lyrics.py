@@ -59,7 +59,12 @@ def wrap_text(text, st, width=ROW_W):
     rows.append(cur.rstrip())
     return rows
 
-def wrap_rows(text, st, width=ROW_W, cap=3): return min(len(wrap_text(text, st, width)), cap)
+def wrap_rows(text, st, width=ROW_W, cap=O['LY_LINES_MAX']): return min(len(wrap_text(text, st, width)), cap)
+
+def anchor(rows):
+    """patch/lyrics.c ly_anchor: a current line of more than three rows sits higher."""
+    a = VIEW_H - O['LY_ANCHOR_ROOM'] - O['LY_LINE_H'] - (rows * O['LY_LINE_H'] + O['LY_GAP'])
+    return ANCHOR if a >= ANCHOR else max(a, O['LY_ANCHOR_MIN'])
 
 def edge(y, rows, p):
     top, bot = y + rows * p['line_h'] - p['line_h'] // 2, VIEW_H - (y + p['line_h'] // 2)
@@ -77,10 +82,11 @@ def render(bg, lines, cur, p, fonts, pad=0, ref=None):
     def rows(t):
         f = face(t)[1]
         return wrap_rows(t, StbText(f, p['font']))
-    ys, y = {}, ANCHOR + pad
+    top = (anchor(rows(lines[cur])) if p['bold'] else ANCHOR) + pad
+    ys, y = {}, top
     for i in range(cur, len(lines)):
         ys[i] = y; y += rows(lines[i]) * p['line_h'] + p['gap']
-    y = ANCHOR + pad
+    y = top
     for i in range(cur - 1, -1, -1):
         y -= rows(lines[i]) * p['line_h'] + p['gap']; ys[i] = y
     for i, y in sorted(ys.items()):
