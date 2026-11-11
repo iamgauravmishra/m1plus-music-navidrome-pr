@@ -138,7 +138,7 @@ DAILY = DAILY + VINYL
 # chevron (Lucide chevron-right fitted to 9 x 15, #777777, stroke 2) and the picker's check (20 px, white).
 CARD_GLYPH_PX, CARD_CHEVRON, CARD_CHECK = 20, ('pod_chev', 10, 16, (0x8A,) * 3), ('pod_check', 20)
 CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house', 'Library': 'disc-3', 'Now Playing': 'audio-lines',
-               'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun', 'Appearance': 'palette', 'Accent': 'palette', 'Background': '+contrast',
+               'EQ': 'sliders-vertical', 'All Playback Settings': 'headphones', 'Display': 'sun', 'Screen Timeout': 'timer', 'LED Light': 'lightbulb', 'Follow Screen': 'smartphone', 'Appearance': 'palette', 'Accent': 'palette', 'Background': '+contrast',
                'Control Center': 'layout-grid', 'Lock Screen': 'lock', 'Wallpaper': 'image', 'Enable': 'lock', 'Show Time': 'clock', 'Player Style': 'square-play', 'Custom Wallpaper': 'info',
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw',
@@ -163,7 +163,7 @@ CARD_TALL_IMAGES = [f'pod_cdl_{p}{d}' for p in CARD_PIECES for d in ('', '_down'
 # The Accent picker's swatches (docs/modules/accent.md): a round disc of accent i (tools/palette.py ACCENTS' order; Neutral is today's #EEEEEC fill) where a row's glyph goes, SWATCH_PX in the glyph's canvas.
 SWATCH_PX = 20
 SWATCHES = [f'pod_sw{i}' for i in range(7)]
-CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + CARD_TALL_IMAGES + SWATCHES
+CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + CARD_TALL_IMAGES + SWATCHES + ['pod_sl_thumb']
 # Find Cover & Lyrics' empty and failed states (docs/modules/onlineart.md): a muted grey glyph, ES_PX px, stroke 2, over the state's title (tools/pod_ui.py oa_es_icon; patch/onlineart.c names them)
 ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'image', 'pod_es_wifi': 'wifi-low', 'pod_es_calendar': 'calendar', 'pod_es_lock': 'lock', 'pod_es_plug': 'plug',
             'pod_es_info': 'info', 'pod_es_card': 'memory-stick', 'pod_es_drive': 'hard-drive', 'pod_es_download': 'download', 'pod_es_check': 'badge-check'}
@@ -592,6 +592,24 @@ def swatch(i):
     im = Image.new('RGBA', (POD_ICON,) * 2, tuple(rgb) + (0,)); im.putalpha(big.resize((POD_ICON,) * 2, Image.LANCZOS)); return im
 
 
+SLIDER_THUMB = ('pod_sl_thumb', 38, 24, 46, 34)   # the settings slider's thumb (name, the capsule's width and height, the canvas)
+
+
+def slider_thumb():
+    """The thumb of a slider on a Settings card (the Display page's brightness card, tools/pod_ui.py cards_brightness): a white capsule, antialiased (8 x 8 samples per pixel), over a soft
+    shadow one pixel lower, centred in its canvas. Never tinted: the fill left of it takes the accent (drop_fg)."""
+    from PIL import Image, ImageDraw, ImageFilter
+    _, w, h, cw, ch = SLIDER_THUMB
+    ss = 8; x, y = (cw - w) // 2, (ch - h) // 2
+
+    def capsule(dy):
+        big = Image.new('L', (cw * ss, ch * ss), 0)
+        ImageDraw.Draw(big).rounded_rectangle((x * ss, (y + dy) * ss, (x + w) * ss - 1, (y + dy + h) * ss - 1), h * ss // 2, fill=255)
+        return big.resize((cw, ch), Image.LANCZOS)
+    im = Image.new('RGBA', (cw, ch), (0, 0, 0, 0)); im.putalpha(capsule(1).filter(ImageFilter.GaussianBlur(2)).point(lambda a: a * 110 // 255))
+    top = Image.new('RGBA', (cw, ch), WHITE + (0,)); top.putalpha(capsule(0)); im.alpha_composite(top); return im
+
+
 def card_icon(g):
     """A Settings card row's glyph: the glyph at CARD_GLYPH_PX (stroke 2) centred in a POD_ICON canvas; a badge and the Shanling mark keep their size."""
     from PIL import Image
@@ -776,6 +794,7 @@ def generate_all(sizes):
     f[name] = pod_chevron(rgb)
     f[CARD_CHECK[0]] = glyph_fit('check', CARD_CHECK[1], CARD_CHECK[1])
     for i, n in enumerate(SWATCHES): f[n] = swatch(i)
+    f[SLIDER_THUMB[0]] = slider_thumb()
     for n, (g, px, rgb) in WIFI_GLYPHS.items(): f[n] = glyph_fit(g, px, px, rgb, 1, 2.0 if px >= 22 else 1.5)
     for n in range(4): f[f'wf_sig{n}'] = wifi_signal(n)
     for i in range(8): f[f'wf_spin{i}'] = wifi_spinner(i); f[f'wf_spinL{i}'] = wifi_spinner(i, WIFI_SPIN_L_PX)

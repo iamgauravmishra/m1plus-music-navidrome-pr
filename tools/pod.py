@@ -41,7 +41,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
+SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'display.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'libsrc.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'pcnet.c', 'podcasts.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'charging.c', 'nextalbum.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c', 'sbnet.c', 'sbparse.c', 'sbdl.c', 'sbapi.c', 'sbsrc.c', 'ndserver.c', 'ndroot.c',
            'tidalkb.c', 'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
 
@@ -161,6 +161,34 @@ LOCKSCREEN_PINS = (   # (address, stock word, what it proves)
     (0x4ab9e8, 0x0320f809, 'show time handler: jalr write_int_config(new, "SYSSET", "SSAVERTIMESHOW")'), (0x4ab9ec, 0xa2240000, 'show time handler: sb a0, (s1) in the delay slot: the byte first, then the save'),
     (0x4e6190, 0x24c6877c, 'config_init: toolsReadConfig(.., "SYSSET", "SSAVERTIMESHOW")'), (0x4e61ac, 0x2c430002, 'config_init: sltiu v1, v0, 2'), (0x4e61b0, 0x0003100a, 'config_init: movz v0, zero, v1: above 1 is 0'),
     (0x4e61b8, 0x8f83b000, 'config_init: lw v1, GOT screensaver_timeshow'),
+    # Screen Timeout (Settings > Display, patch/display.c disp_light_set; docs/modules/settings.md "Display"): stock's systemset/lighttime_page. Each of its five rows has a click handler
+    # (0x4a8708 row 1 = index 0 .. 0x4a8578 row 5 = index 4) that does nothing when the index is the word backlighttime_mode already, else calls the shared 0x4a8410 (the row images, then the word
+    # stored in the delay-slot position before write_int_config(index, "SYSSET", "LIGHTTIME")) and then reset_poweroptions_timer(0, 0, 1), which sets the screen's countdown from the new word.
+    (0x4a84b8, 0x8f82afb8, 'backlight time 0x4a8410: lw v0, GOT backlighttime_mode (0xa05a7c)'), (0x4a84bc, 0x8c520000, 'backlight time: lw s2, (v0): the current index'),
+    (0x4a84c0, 0x12500023, 'backlight time: beq s2, s0: the same index saves nothing'),
+    (0x4a8540, 0x24c68108, 'backlight time: a2 = "LIGHTTIME"'), (0x4a8544, 0xae700000, 'backlight time: sw s0, (s3): the word first'),
+    (0x4a8548, 0x0320f809, 'backlight time: jalr write_int_config(index, "SYSSET", "LIGHTTIME")'), (0x4a854c, 0x24a54540, 'backlight time: a1 = "SYSSET"'),
+    (0x4a85b4, 0x24060001, 'backlight time row handler 0x4a8578: a2 = 1 (the screen countdown)'), (0x4a85bc, 0x00002825, 'backlight time row handler: a1 = 0'),
+    (0x4a85c4, 0x0320f809, 'backlight time row handler: jalr reset_poweroptions_timer'), (0x4a85c8, 0x00002025, 'backlight time row handler: a0 = 0'),
+    (0x4e60d4, 0x24c68108, 'config_init: toolsReadConfig(.., "SYSSET", "LIGHTTIME")'), (0x4e60f0, 0x2c430005, 'config_init: sltiu v1, v0, 5: the saved index is 0 .. 4'),
+    # Brightness (Settings > Display, patch/display.c disp_opened): stock's systemset/brightness_page binds two handlers to slider_brightness with the window as their context: 0x4a4744 on EVT_VALUE_CHANGING (0x11d: the
+    # word lightness, backlight_changeflag 1, the refresh 0x4a4450, reset_poweroptions_timer(1, 1, 1)) and 0x4a4678 on EVT_VALUE_CHANGED (0x11c: the flag 0, the word, toolSetBackLight(value + 1), [SYSSET] LIGHTNESS,
+    # the refresh, the timers). Both read the slider's value from the event's target and take 0 .. 100 only; the refresh looks up label_brightness and slider_brightness in the window and does nothing without both.
+    # Our page binds the same two handlers to its own slider of that name and calls the refresh; none of this is repeated in the payload.
+    (0x4a4450, 0x3c1c0056, 'brightness refresh 0x4a4450: prologue'), (0x4a4678, 0x3c1c0056, 'brightness changed handler 0x4a4678: prologue'), (0x4a4744, 0x3c1c0056, 'brightness changing handler 0x4a4744: prologue'),
+    (0x4a43ac, 0x2405011d, 'brightness page: widget_on(slider, 0x11d, ..)'), (0x4a43bc, 0x24c64744, '... the changing handler 0x4a4744'),
+    (0x4a43c0, 0x2405011c, 'brightness page: widget_on(slider, 0x11c, ..)'), (0x4a43d0, 0x24c64678, '... the changed handler 0x4a4678'),
+    (0x4a46b8, 0x2c430065, 'brightness changed handler: sltiu v1, v0, 0x65: 0 .. 100'), (0x4a4780, 0x2c430065, 'brightness changing handler: sltiu v1, v0, 0x65'),
+    # LED Light and Follow Screen (patch/display.c disp_led_set, disp_follow_toggle): stock's systemset/atmosphereled_page. The byte atmosphereled_mode is 0 off, 1 orange, 2 blue. The navbar switch 0x4a1c30 stores 0
+    # (from non-zero) or 1 (from 0); img_orange 0x4a1e14 stores 1 and img_blue 0x4a1d8c stores 2 unless it is the mode already; each then saves [SYSSET] ATMOSPHERELEDMODE and calls reset_atmosphereled_rgb.
+    # Follow Screen 0x4a1940 stores the byte ledfollowscreen_flag xor 1 (as 0 / 1) in the delay slot of write_int_config(new, "SYSSET", "LEDFOLLOWSCREEN") and calls nothing else. config_init keeps 0 .. 2 and 0 .. 1.
+    (0x4a1ca8, 0x82220000, 'led switch 0x4a1c30: lb v0, (s1): atmosphereled_mode'), (0x4a1cbc, 0xa2200000, 'led switch: sb zero, (s1): off'), (0x4a1d60, 0xa2220000, 'led switch: sb v0 (1), (s1): on is orange'),
+    (0x4a1d04, 0x24c67820, 'led switch: a2 = "ATMOSPHERELEDMODE"'), (0x4a1d18, 0x0320f809, 'led switch: jalr reset_atmosphereled_rgb after the save'),
+    (0x4a1db8, 0x10830011, 'led blue 0x4a1d8c: beq a0, v1 (2): the same mode does nothing'), (0x4a1dd0, 0xa0430000, 'led blue: sb v1 (2), (v0) before the save'),
+    (0x4a1e40, 0x10830011, 'led orange 0x4a1e14: beq a0, v1 (1): the same mode does nothing'), (0x4a1e58, 0xa0430000, 'led orange: sb v1 (1), (v0) before the save'),
+    (0x4a1964, 0x24c677ec, 'follow screen 0x4a1940: a2 = "LEDFOLLOWSCREEN"'), (0x4a197c, 0x38420001, 'follow screen: xori v0, v0, 1'), (0x4a1980, 0x0002202b, 'follow screen: sltu a0, zero, v0: the new state, 0 or 1'),
+    (0x4a1984, 0x0320f809, 'follow screen: jalr write_int_config'), (0x4a1988, 0xa0640000, 'follow screen: sb a0, (v1) in the delay slot: the byte first'),
+    (0x4e6718, 0x2c440003, 'config_init: sltiu a0, v0, 3: the saved lamp mode is 0 .. 2'), (0x4e6b9c, 0x3c1c0052, 'reset_atmosphereled_rgb: prologue'),
     (0x53f32c, 0x8f82b000, 'lock screen visitor: lw v0, GOT screensaver_timeshow'), (0x53f330, 0x90420000, 'lock screen visitor: lbu v0, (v0): view_timeinfo is shown (and enabled) from the byte'), (0x53f334, 0x1040000b, 'lock screen visitor: beqz v0: hidden'),
 )
 
@@ -493,6 +521,7 @@ FUNCTIONS.update({
     'mclSetPlaySpeed':         ('int', 'int', 0x5d281c),
     # Podcast downloads (patch/podcasts.c pg_awake_tick): stock's reset_poweroptions_timer(standby, auto_off, screen): a non-zero argument sets that countdown again (standby via setstandby_time, auto power-off via setsavepower_time, the screen's light via setlight_time); the page passes (1, 1, 0)
     'reset_poweroptions_timer': ('void', 'int, int, int', 0x4d7874),
+    'reset_atmosphereled_rgb': ('void', 'void', 0x4e6b9c),   # Settings > Display > LED Light (patch/display.c): the lamp follows the byte atmosphereled_mode
 })
 # Settings (patch/m1plus.c, docs/modules/settings.md "Stock pages", "Stock state"): navigator_to opens the stock pages; the EQ preset's name is stock's table lookup (a tr key).
 FUNCTIONS.update({
@@ -560,7 +589,7 @@ SETTINGS_PINS = (   # (address, stock word, what it proves)
     (0x4b1450, 0x8f848020, 'the Wi-Fi hub row: lw a0, GOT page 0x750000'), (0x4b1454, 0x8f99a704, 'the Wi-Fi hub row: lw t9, GOT navigator_to'),
     (WIFIHUB_SITE, 0x0320f809, 'the Wi-Fi hub row (0x4b1440): jalr navigator_to'), (0x4b1464, 0x24848f1c, 'its delay slot: a0 = "systemset/wifi_page"'), (0x4b1468, 0x00001025, 'the Wi-Fi hub row: move v0, zero (the result is not used)'),
     (0x4b1428, 0x0320f809, 'the Bluetooth hub row (0x4b1410): jalr navigator_to'), (0x4b142c, 0x24848f00, 'its delay slot: a0 = "systemset/bluetooth_page"'),
-    (0x4ad830, 0x0320f809, 'the Settings rows\' shared call: jalr navigator_to'), (0x4ada74, 0x24848ab4, 'Settings row 3: a0 = "systemset/display_page"'),
+    (0x4ad830, 0x0320f809, 'the Settings rows\' shared call: jalr navigator_to'), (0x4ada74, 0x24848ab4, 'Settings row 3: a0 = "systemset/display_page" (our Display page takes its place)'),
     (0x4ada38, 0x24848a68, 'Settings row 1: a0 = "systemset/fwupdate_page"'),
     # About: the stock page's values (the widget walk's callback inside what the symbol table calls on_sn_qrcode_onclick, @0x4a1240..0x4a170c; the init 0x4a170c-): the model and firmware version literals, the card
     # numbers (access /tmp/mmc_add, then getDiskMemoryInfo("/mnt/mmc", &cap 0xa03e74, &rem 0xa03e70)), the serial number and the Wi-Fi MAC strings, the IP address
@@ -1199,7 +1228,15 @@ DATA.update({
     'TIME_ZONE':          (0xa05ab4, 'time_zone'),   # int: [SYSSET] TIMEZONE, the saved zone index (patch/timezones.c)
     'LOCK_ON':            (0xa05aa3, 'screensaver_mode'),   # byte: stock's lock screen switch ([SYSSET] SCREENSAVER; patch/lockscreen.c lk_enabled)
     'LOCK_TIMESHOW':      (0xa05aa2, 'screensaver_timeshow'),   # byte: stock's lock screen "show time" switch ([SYSSET] SSAVERTIMESHOW; patch/lockscreen.c lk_time)
-    'LOCK_PICTURE':       (0xa0473c, 'screensaver_picture'),   # char[256]: the chosen wallpaper, the resource name screensaver_default or a path ("file://" is added where it is shown; [SYSSET] SCREENSAVERPATH)
+    'LIGHT_MODE':         (0xa05a7c, 'backlighttime_mode'),   # int: stock's backlight time index, 0 never .. 4 five minutes ([SYSSET] LIGHTTIME; patch/display.c disp_light)
+    'LED_MODE':           (0xa05a75, 'atmosphereled_mode'),   # byte: stock's lamp mode, 0 off, 1 orange, 2 blue ([SYSSET] ATMOSPHERELEDMODE; patch/display.c disp_led)
+    'LED_FOLLOW':         (0xa05a74, 'ledfollowscreen_flag'),   # byte: stock's Follow Screen switch ([SYSSET] LEDFOLLOWSCREEN; patch/display.c disp_follow)
+    # stock's brightness page code, bound to our slider (patch/display.c; no symbols: the entries and stock's own bindings are pinned, LOCKSCREEN_PINS)
+    'BRIGHT_REFRESH':     (0x4a4450, None),   # int (window): label_brightness and slider_brightness from the word lightness
+    'BRIGHT_CHANGED':     (0x4a4678, None),   # int (window, event): the slider's EVT_VALUE_CHANGED handler
+    'BRIGHT_CHANGING':    (0x4a4744, None),   # int (window, event): its EVT_VALUE_CHANGING handler
+    'LIGHTNESS':          (0x97caf0, 'lightness'),   # int: stock's brightness, 0 .. 100 ([SYSSET] LIGHTNESS; written by stock's own handlers only, test/pod/display.py reads it)
+    'LOCK_PICTURE':     (0xa0473c, 'screensaver_picture'),   # char[256]: the chosen wallpaper, the resource name screensaver_default or a path ("file://" is added where it is shown; [SYSSET] SCREENSAVERPATH)
     'LOCK_LIST':          (0xa045cc, 'pdeq_screensaverlist'),   # void *: the deque the wallpaper grid lists (strings: the Default name first, then up to five paths)
     'FOLDER_LAYER':       (0xa0554c, None),
     'FOLDER_TITLE':       (0xa0533c, None),
@@ -1601,6 +1638,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_EXTRASCFG_PAGE {pod_pages.EXTRASCFG_PAGE_INDEX}')
     h.append(f'#define POD_DEVELOPER_PAGE {pod_pages.DEVELOPER_PAGE_INDEX}')
     h.append(f'#define POD_CACHE_PAGE {pod_pages.CACHE_PAGE_INDEX}')
+    h.append(f'#define POD_DISPLAY_PAGE {pod_pages.DISPLAY_PAGE_INDEX}')
     h.append(f'#define POD_FILES_PAGE {pod_pages.FILES_PAGE_INDEX}')
     h.append(f'#define POD_PULLDOWN_PAGE {pod_pages.PULLDOWN_PAGE_INDEX}')
     h.append(f'#define POD_PEQ_PAGE {pod_pages.PEQ_PAGE_INDEX}')

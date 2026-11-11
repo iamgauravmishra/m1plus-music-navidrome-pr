@@ -189,7 +189,7 @@ def run(ctx):
                 if pod_pages.row_kind(r) not in ('check', 'info') and r.action not in (pod_pages.ACT_CCLIST, pod_pages.ACT_SFOLD, pod_pages.ACT_UPDATE, pod_pages.ACT_REGION): expect(r.label in cg, f'{page.key}: {r.label} has a card glyph')
     for n in mod_icons.CARD_IMAGES:
         im = Image.open(os.path.join(mod_icons.PNG, n + '.png')).convert('RGBA')
-        expect(im.size == {'pod_chev': (mod_icons.CARD_CHEVRON[1], mod_icons.CARD_CHEVRON[2]), 'pod_check': (20, 20), **{p: (320, 52) for p in mod_icons.CARD_PIECE_IMAGES}, **{p: (320, mod_icons.CARD_TALL) for p in mod_icons.CARD_TALL_IMAGES}}.get(n, (24, 24)) and im.getchannel('A').getbbox(), f'{n} is a drawn image of its size')
+        expect(im.size == {'pod_chev': (mod_icons.CARD_CHEVRON[1], mod_icons.CARD_CHEVRON[2]), 'pod_check': (20, 20), mod_icons.SLIDER_THUMB[0]: mod_icons.SLIDER_THUMB[3:], **{p: (320, 52) for p in mod_icons.CARD_PIECE_IMAGES}, **{p: (320, mod_icons.CARD_TALL) for p in mod_icons.CARD_TALL_IMAGES}}.get(n, (24, 24)) and im.getchannel('A').getbbox(), f'{n} is a drawn image of its size')
     lock_imgs = {n: open(os.path.join(img_dir, n + '.png'), 'rb').read() for n in ('screens_battery', 'screens_charge', 'screens_lowbattery')}
     expect(all(lock_imgs[n] == battery_art.png(battery_art.LOCK, s) for n, s in
                (('screens_battery', 'normal'), ('screens_charge', 'charge'), ('screens_lowbattery', 'low'))),

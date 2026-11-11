@@ -123,23 +123,28 @@ ACT_LOCKINFO = 87   # link row (Settings > Lock Screen): Custom Wallpaper, the i
 ACT_NEXTALBUM = 90  # value row (Settings > Playback): Continue Playing, Off (the default) or Next Albums; opens its picker page (arg = the page index; patch/nextalbum.c na_setting). Next Albums plays the next album of the list an album was opened from when its queue ends (/mnt/data/m1plus/playback-next-album)
 ACT_NASET = 91      # picker row (Continue Playing): choose the mode (arg = 0 Off, 1 Next Albums; 2 Auto Mix is planned); a check shows on the chosen row (patch/nextalbum.c na_set)
 ACT_LOCKTIME = 86   # switch row (Settings > Lock Screen): Show Time, stock's lock screen clock switch, the byte screensaver_timeshow saved as [SYSSET] SSAVERTIMESHOW (patch/lockscreen.c lk_time_toggle)
+ACT_LIGHT = 97      # value row (Settings > System > Display): Screen Timeout, stock's backlight time (Never, 15s, 30s, 1min, 5min: the word lighttime_index saved as [SYSSET] LIGHTTIME); opens its picker page (arg = the page index; patch/display.c disp_light)
+ACT_LIGHTSET = 98   # picker row (Screen Timeout): choose the time (arg = stock's index, 0 Never .. 4 5min); a check shows on the chosen row (patch/display.c disp_light_set)
+ACT_LED = 99        # value row (Settings > System > Display): LED Light, stock's lamp mode (Off, Orange, Blue: the byte atmosphereled_mode saved as [SYSSET] ATMOSPHERELEDMODE); opens its picker page (arg = the page index; patch/display.c disp_led)
+ACT_LEDSET = 100    # picker row (LED Light): choose the mode (arg = stock's value, 0 off, 1 orange, 2 blue); a check shows on the chosen row (patch/display.c disp_led_set)
+ACT_LEDFOLLOW = 101 # switch row (Settings > System > Display): Follow Screen, stock's switch of the same name (the byte ledfollowscreen_flag saved as [SYSSET] LEDFOLLOWSCREEN; patch/display.c disp_follow_toggle)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
-SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS)
+SWITCH_ACTIONS = (ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: ''}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
-STOCK_WIFI, STOCK_BLUETOOTH, STOCK_DISPLAY = range(3)
+STOCK_WIFI, STOCK_BLUETOOTH = range(2)
 # (navigator path, value shown, window name): the window name is the asset's root widget name, which m1_open_stock restacks an opened window of instead of stacking a second one; None: always a new window.
-# Only a page whose init does nothing that a restack would not redo has one (docs/modules/settings.md "Stock pages"): Display (nothing started). Wi-Fi: its init scans (wifi_scan) on every open and the foreground handler only rebuilds the list from the old results.
+# Only a page whose init does nothing that a restack would not redo has one (docs/modules/settings.md "Stock pages"); none has now. Wi-Fi: its init scans (wifi_scan) on every open and the foreground handler only rebuilds the list from the old results.
 # Bluetooth: its background handler stops discovery (btStopSearch) and the foreground handler does not restart it, only init does.
-STOCK_PAGES = (('systemset/wifi_page', 'wifi', None), ('systemset/bluetooth_page', 'bluetooth', None),
-               ('systemset/display_page', None, 'display_page'))
+# Stock's Display list (systemset/display_page) and its four pages are not linked: Settings > Display is our own page (DISPLAY_PAGE); they stay under All System Settings.
+STOCK_PAGES = (('systemset/wifi_page', 'wifi', None), ('systemset/bluetooth_page', 'bluetooth', None))
 STOCK_VALUES = ('wifi', 'bluetooth', 'eq')   # the VK_* of patch/m1plus.c, in this order ('eq': the EQ row's value, ACT_PEQ)
 
 # ACT_SHUFFLE arguments (mirror the enum in patch/shuffle.c)
@@ -196,6 +201,10 @@ class Graph:
 
 class Segment:
     """The band page's Peak / Low shelf / High shelf control (a view the payload paints: patch/peqband.c; tools/pod_settings.py SEG_H high)."""
+
+
+class Brightness:
+    """The Display page's brightness card: a card of one row's height holding a stock slider between a small and a large sun (stock's own handlers are bound to it: patch/display.c)."""
 
 
 class HSliders:
@@ -275,7 +284,10 @@ LOCKINFO_PAGE_INDEX = 65  # the Lock Screen's Custom Wallpaper instructions
 NEXTALBUM_PAGE_INDEX = 66   # Settings > Playback > Continue Playing picker: the Navidrome pages follow
 NDLOGIN_PAGE_INDEX = 67  # the Navidrome Sign In page
 NDSERVER_PAGE_INDEX = 68 # the Navidrome Server page
-NDROOT_PAGE_INDEX = 69   # the Navidrome root: the last of PAGES
+NDROOT_PAGE_INDEX = 69   # the Navidrome root
+DISPLAY_PAGE_INDEX = 70   # Settings > System > Display, then its Screen Timeout picker
+LIGHTTIME_PAGE_INDEX = 71
+LED_PAGE_INDEX = 72       # ... and its LED Light picker
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -402,13 +414,13 @@ SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layo
     Row('Continue Playing', ACT_NEXTALBUM, NEXTALBUM_PAGE_INDEX),
     Row('All Playback Settings', ACT_HOME, HOME_PLAYSET),
     Hdr('System'),
-    Row('Display', ACT_STOCK, STOCK_DISPLAY),
+    Row('Display', ACT_PAGE, DISPLAY_PAGE_INDEX),
     Row('Appearance', ACT_PAGE, APPEARANCE_PAGE_INDEX),
     Row('Keyboards', ACT_PAGE, KEYBOARDS_PAGE_INDEX),
     Row('Battery', ACT_PAGE, BATTERY_PAGE_INDEX),
     Row('About', ACT_PAGE, ABOUT_PAGE_INDEX),
-    Row('All System Settings', ACT_HOME, HOME_SYSSET),
     GAP,
+    Row('All System Settings', ACT_HOME, HOME_SYSSET),
     Row('Developer', ACT_PAGE, DEVELOPER_PAGE_INDEX),
 ])
 
@@ -745,10 +757,10 @@ LOCKWALL_PAGE = Page('m1plus_lockwall', 'm1plus_lockwall_page', 'Wallpaper', kin
 # The Custom Wallpaper instructions: a Release Notes page (the same asset, tools/pod_ui.py build_relnotes_page, and painter, patch/relnotes.c lockinfo_open): the heading "Add Your Own Pictures" and three paragraphs.
 LOCKINFO_PAGE = Page('m1plus_lockinfo', 'm1plus_lockinfo_page', 'Custom Wallpaper', kind='relnotes')
 
-# Settings > System > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name), each opening its picker; then a card with the Lock Screen link row (LOCK_PAGE) and a card
+# Settings > System > Appearance: one card with the Background value row (Black or Tinted) and the Accent value row (the accent's name), each opening its picker; then a card
 # with the Control Center link row (the pull-down's tiles, PULLDOWN_PAGE).
 APPEARANCE_PAGE = Page('m1plus_appearance', 'm1plus_appearance_page', 'Appearance', layout=[Row('Background', ACT_BG, BG_PAGE_INDEX), Row('Accent', ACT_ACCENT, ACCENT_PAGE_INDEX),
-                                                                                         GAP, Row('Lock Screen', ACT_PAGE, LOCK_PAGE_INDEX), GAP, Row('Control Center', ACT_PAGE, PULLDOWN_PAGE_INDEX)])
+                                                                                         GAP, Row('Control Center', ACT_PAGE, PULLDOWN_PAGE_INDEX)])
 
 # Settings > System > Battery (patch/charging.c, docs/modules/charging.md): the Charge Limit value row and its note; the picker lists the limits, a check on the chosen one
 # (100%, the default, is no limit). The labels are numbers, shown as they are (tools/pod_i18n.py BRANDS).
@@ -762,6 +774,22 @@ BATTERY_PAGE = Page('m1plus_battery', 'm1plus_battery_page', 'Battery', layout=[
 CHGLIMIT_PAGE = Page('m1plus_chargelimit', 'm1plus_chargelimit_page', 'Charge Limit', layout=[Row(f'{p}%', ACT_CHGLIMSET, p) for p in CHGLIMIT_VALUES] + [Note('Resumes a little below the limit')])
 
 # Settings > Playback > Continue Playing (patch/nextalbum.c, docs/modules/nextalbum.md): Off or Next Albums, a check on the chosen one; Auto Mix is planned as a third (file value '2').
+# Settings > System > Display (patch/display.c, docs/modules/settings.md "Display"): our page in place of stock's systemset/display_page list and its four pages. A brightness card (a slider, stock's own handlers);
+# Screen Timeout, stock's backlight time (a value row and its picker: stock's five choices in stock's order, the index is stock's), and Lock Screen (LOCK_PAGE) in a card; LED Light (a value row and its picker: stock's lamp mode,
+# off or one of its two colours) and Follow Screen (stock's switch) in a card. Every state is stock's own.
+LIGHTTIME_VALUES = ('Never', '15s', '30s', '1min', '5min')   # stock's systemset/lighttime_page rows: its first is the key powerm_lighton, the others are these plain texts in every language
+DISPLAY_PAGE = Page('m1plus_display', 'm1plus_display_page', 'Display', layout=[
+    Brightness(),
+    GAP,
+    Row('Screen Timeout', ACT_LIGHT, LIGHTTIME_PAGE_INDEX),
+    Row('Lock Screen', ACT_PAGE, LOCK_PAGE_INDEX),
+    GAP,
+    Row('LED Light', ACT_LED, LED_PAGE_INDEX),
+    Row('Follow Screen', ACT_LEDFOLLOW),
+])
+LED_VALUES = ('Off', 'Orange', 'Blue')   # stock's atmosphereled_mode 0, 1, 2
+LED_PAGE = Page('m1plus_ledlight', 'm1plus_ledlight_page', 'LED Light', layout=[Row(v, ACT_LEDSET, i) for i, v in enumerate(LED_VALUES)])
+LIGHTTIME_PAGE = Page('m1plus_lighttime', 'm1plus_lighttime_page', 'Screen Timeout', layout=[Row(v, ACT_LIGHTSET, i) for i, v in enumerate(LIGHTTIME_VALUES)])
 NEXTALBUM_PAGE = Page('m1plus_nextalbum', 'm1plus_nextalbum_page', 'Continue Playing', layout=[Row('Off', ACT_NASET, 0), Row('Next Albums', ACT_NASET, 1),
                                                                                         Note('Plays the next album in the order of Albums, the artist or Cover Flow', lines=2)])
 
@@ -893,7 +921,7 @@ NDLOGIN_PAGE = Page('m1plus_ndlogin', 'm1plus_ndlogin_page', 'Sign In', kind='nd
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE]
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -907,5 +935,6 @@ assert PAGES[PULLDOWN_PAGE_INDEX] is PULLDOWN_PAGE and PAGES[REGION_PAGE_INDEX] 
 assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] is CHGLIMIT_PAGE and PAGES[LOCK_PAGE_INDEX] is LOCK_PAGE and PAGES[LOCKWALL_PAGE_INDEX] is LOCKWALL_PAGE and PAGES[LOCKSTYLE_PAGE_INDEX] is LOCKSTYLE_PAGE and PAGES[LOCKINFO_PAGE_INDEX] is LOCKINFO_PAGE 
 assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
 assert PAGES[NEXTALBUM_PAGE_INDEX] is NEXTALBUM_PAGE and NEXTALBUM_PAGE_INDEX == PAGES.index(NDLOGIN_PAGE) - 1
-assert PAGES[NDLOGIN_PAGE_INDEX] is NDLOGIN_PAGE and PAGES[NDSERVER_PAGE_INDEX] is NDSERVER_PAGE and PAGES[NDROOT_PAGE_INDEX] is NDROOT_PAGE and NDROOT_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[NDLOGIN_PAGE_INDEX] is NDLOGIN_PAGE and PAGES[NDSERVER_PAGE_INDEX] is NDSERVER_PAGE and PAGES[NDROOT_PAGE_INDEX] is NDROOT_PAGE
+assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 1
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

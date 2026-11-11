@@ -351,7 +351,7 @@ def run(ctx):
                     if need > room + ST.TEXT_X - ST.CM - ST.PAD: cards_over.append((page.key, r.label, '99999', loc, need, room))
                     continue
                 if pod_pages.row_kind(r) != 'value': continue
-                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else pod_pages.IDLE_VALUES if r.action == pod_pages.ACT_IDLE else ('Large Cover', 'Mini Player') if r.action == pod_pages.ACT_LOCKSTYLE else ('Off', 'Albums') if r.action == pod_pages.ACT_NEXTALBUM else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
+                vkeys = stock_values[pod_pages.STOCK_PAGES[r.arg][1]] if r.action == pod_pages.ACT_STOCK else pod_pages.BG_VALUES if r.action == pod_pages.ACT_BG else pod_pages.ACCENT_VALUES if r.action == pod_pages.ACT_ACCENT else pod_pages.IDLE_VALUES if r.action == pod_pages.ACT_IDLE else ('Large Cover', 'Mini Player') if r.action == pod_pages.ACT_LOCKSTYLE else ('Off', 'Albums') if r.action == pod_pages.ACT_NEXTALBUM else pod_pages.LIGHTTIME_VALUES if r.action == pod_pages.ACT_LIGHT else () if r.action == pod_pages.ACT_REGION else ('Normal', 'Chrome', 'Metal')
                 vals = [(vk, tr_text(loc, vk)) for vk in vkeys] if r.action != pod_pages.ACT_REGION else [('Automatic', tr_text(loc, 'Automatic'))] + [(n, n) for n in pcregion.NAMES]   # (the Podcast Region's value: Automatic, or a storefront's English name)
                 for vk, vt in vals:
                     need = width(tr_text(loc, pod_i18n.key_for(r.label)), row_px) + ST.VALUE_LABEL_GAP + min(width(vt, ST.VALUE_PX) + 6, ST.VALUE_MAX)

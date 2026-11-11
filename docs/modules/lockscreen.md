@@ -79,9 +79,9 @@ The stock battery props are restored on `pgbar_battery` (no text readout).
 - **Not possible asset-only:** the cover instead of the wallpaper (`img_screensaver` gets its image once,
   in the init visitor).
 
-## Setting (Settings > System > Appearance > Lock Screen)
+## Setting (Settings > System > Display > Lock Screen)
 
-A **Lock Screen** link row (a plain `ACT_PAGE` row like Control Center: lock glyph, label, chevron, no value text; zh 锁屏) is the Appearance page's second card, between the Background + Accent card and the Control Center card. It opens **our Lock Screen page** `m1plus_lockscreen` (`LOCK_PAGE`, page `LOCK_PAGE_INDEX` 61), which replaces stock's `systemset/screensaver_page` completely; stock's own Lock Screen entry (the Display page's row) opens it too ("The Display row"). Four cards:
+A **Lock Screen** link row (a plain `ACT_PAGE` row like Control Center: lock glyph, label, chevron, no value text; zh 锁屏) is on our Display page (`DISPLAY_PAGE`, [settings](settings.md#display)), under Screen Timeout in the same card. It opens **our Lock Screen page** `m1plus_lockscreen` (`LOCK_PAGE`, page `LOCK_PAGE_INDEX` 61), which replaces stock's `systemset/screensaver_page` completely; stock's own Lock Screen entry (the Display page's row) opens it too ("The Display row"). Four cards:
 
 1. **Enable** (a switch, lock glyph) - stock's own lock screen switch, `ACT_LOCKON` 79.
 2. **Wallpaper** (image glyph, chevron, no value; `ACT_LOCKWP` 84, opens the picker, see "Wallpaper picker") and **Show Time** (clock glyph, a switch; `ACT_LOCKTIME` 86, see "Show Time"). The Show Time label is our own short text in all 13 languages (stock's `scrlabel_time` text, the key `screenlock_timeshow` "Lockscreen Time Display", does not fit a switch row, and the page already says Lock Screen) (stock itself leaves it English in 10 of the 12 other languages, only zh_CN and zh_HK are translated).

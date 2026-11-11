@@ -1978,6 +1978,35 @@ assert BD['BD_SEG_ITEM_H'] == _ST.SEG_H and BD['BD_HSL_H'] == _ST.HSL_H == BD['B
 BD_LABEL_PX, BD_SEG_PX = 18, 14
 
 
+BRIGHT_SUN, BRIGHT_SLIDER_W = 20, 200   # the pull-down's suns (drop_lighticon0 / 1) and its slider's width (dialog/dropdown_dialog slider_backlight)
+
+
+def cards_brightness():
+    """The Display page's brightness card (patch/display.c): one card of a row's height with the pull-down's brightness control in it, the small sun in the glyph column, the slider from the label column and the
+    large sun at the card's right padding. The slider is the iOS Settings kind: the pull-down slider's 6 px track and fill (drop_bg, drop_fg: the fill takes the accent) under a white capsule thumb of our own
+    (pod_sl_thumb, tools/mod_icons.py slider_thumb). It has the name and range of stock's systemset/brightness_page slider (slider_brightness, 0 .. 100), because stock's two handlers are
+    bound to it and look it up by name; label_brightness is the percentage they also write: hidden and insensitive, it is there because stock's refresh does nothing without it."""
+    import pod_settings as ST
+    v = Widget('view', 0, 0, ST.LIST_W, ST.ROW_H, [('name', 'pod_bright')])
+    for st in STATES:
+        styled(v, (st,), 'bg_color', '#00000000')
+        styled(v, (st,), 'bg_image', ST.piece_images('single')[0])
+        styled(v, (st,), 'bg_image_draw_type', 'default')
+    y = (ST.ROW_H - BRIGHT_SUN) // 2
+    v.children.append(Widget('image', ST.CM + ST.PAD, y, BRIGHT_SUN, BRIGHT_SUN, [('name', 'pod_bright_lo'), ('image', 'drop_lighticon0'), ('draw_type', 'default'), ('sensitive', 'false')]))
+    s = Widget('slider', ST.TEXT_X, 1, BRIGHT_SLIDER_W, 50, [('name', 'slider_brightness'), ('max', '100'), ('step', '1'), ('slide_with_bar', 'true'), ('bar_size', '6'), ('dragger_size', '50'), ('dragger_adapt_to_icon', 'true'), ('value', '0')])
+    for st in ('normal', 'pressed', 'over', 'disable', 'focused'):
+        styled(s, (st,), 'bg_color', '#00000000'); styled(s, (st,), 'fg_color', '#00000000')
+        styled(s, (st,), 'icon', 'pod_sl_thumb'); styled(s, (st,), 'bg_image', 'drop_bg'); styled(s, (st,), 'fg_image', 'drop_fg')
+    styled(s, ('normal',), 'round_radius', '6')
+    v.children.append(s)
+    v.children.append(Widget('image', ST.CM + ST.CARD_W - ST.PAD - BRIGHT_SUN, y, BRIGHT_SUN, BRIGHT_SUN, [('name', 'pod_bright_hi'), ('image', 'drop_lighticon1'), ('draw_type', 'default'), ('sensitive', 'false')]))
+    lab = Widget('label', 0, 0, 1, 1, [('name', 'label_brightness'), ('text', ''), ('visible', 'false'), ('sensitive', 'false')])
+    for st in STATES: styled(lab, (st,), 'text_color', '#FFFFFF')   # (never shown; the contrast scan reads every label)
+    v.children.append(lab)
+    return v
+
+
 def cards_segment():
     """The band page's Peak / Low shelf / High shelf control (patch/peqband.c): a sensitive transparent view (the payload blits the container and the selected pill in its EVT_BEFORE_PAINT and takes the touch) with the three labels pod_seg_l<k> over it
     (white; the selected one is black on its pill, set by the payload), none sensitive."""
@@ -2073,6 +2102,7 @@ def build_cards_page(page):
         elif isinstance(it, pod_pages.Sliders): sv.children.append(cards_sliders())
         elif isinstance(it, pod_pages.Segment): sv.children.append(cards_segment())
         elif isinstance(it, pod_pages.HSliders): sv.children.append(cards_hsliders())
+        elif isinstance(it, pod_pages.Brightness): sv.children.append(cards_brightness())
         elif isinstance(it, pod_pages.Hdr): sv.children.append(cards_text(f'pod_sec{n_hdr}', ST.HDR_LABEL_Y, ST.HDR_LABEL_H, it.text, ST.HDR_PX, ST.HDR_H)); n_hdr += 1
         elif isinstance(it, pod_pages.Note):
             sv.children.append(cards_text(f'pod_note{n_note}', ST.NOTE_LABEL_Y, ST.NOTE_LABEL_H + (it.lines - 1) * ST.WRAP_LINE, it.text, ST.NOTE_PX, ST.item_h(it), it.lines > 1)); n_note += 1

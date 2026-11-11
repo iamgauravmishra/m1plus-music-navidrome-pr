@@ -176,9 +176,9 @@ def page_tests(ctx):
     sysrows = [r.label for r in P.SETTINGS_PAGE.rows]
     a_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.APPEARANCE_PAGE_INDEX)
     expect(P.SETTINGS_PAGE.rows[a_i].label == 'Appearance' and sysrows[sysrows.index('Display') + 1] == 'Appearance' and sysrows[sysrows.index('Display') + 2] == 'Keyboards'
-           and P.PAGES[P.APPEARANCE_PAGE_INDEX] is P.APPEARANCE_PAGE and P.APPEARANCE_PAGE.title == 'Appearance' and [r.label for r in P.APPEARANCE_PAGE.rows] == ['Background', 'Accent', 'Lock Screen', 'Control Center']
+           and P.PAGES[P.APPEARANCE_PAGE_INDEX] is P.APPEARANCE_PAGE and P.APPEARANCE_PAGE.title == 'Appearance' and [r.label for r in P.APPEARANCE_PAGE.rows] == ['Background', 'Accent', 'Control Center']
            and P.PAGES[P.PULLDOWN_PAGE_INDEX] is P.PULLDOWN_PAGE and P.PULLDOWN_PAGE.title == 'Control Center' and P.PULLDOWN_PAGE.rows == [] and P.PULLDOWN_PAGE.kind == 'pdcfg',
-           'Settings > System has an Appearance link row right after Display; its page has Background, Accent and Lock Screen, then the Control Center row in a card of its own, which opens the page of that title')
+           'Settings > System has an Appearance link row right after Display; its page has Background and Accent, then the Control Center row in a card of its own, which opens the page of that title (Lock Screen is on Display)')
     arrow = lambda m, i: m.click(f'pod_row{i}', x=ZX + ZW // 2)
 
     def open_page(data=None):
@@ -527,11 +527,9 @@ def stockopen_tests(ctx):
 
     kinds = lambda m: [c for c in m.calls if c[0] in ('navigator_to', 'switch_to', 'to_fg')]
     names = [(path, window) for path, _, window in P.STOCK_PAGES]
-    expect(len(names) == 3 and all(window is None or path.split('/')[-1] == window for path, window in names) and [w for _, w in names].count(None) == 2
-           and dict(names)['systemset/bluetooth_page'] is None and dict(names)['systemset/wifi_page'] is None
-           and dict(names)['systemset/display_page'] == 'display_page',
-           'Display names its window (the last component of the path); Bluetooth (its background handler stops discovery and only init restarts it) and Wi-Fi (init scans on every open, the foreground handler only rebuilds the list) are opened afresh each time')
-    for path, window in names:
+    expect(len(names) == 2 and all(window is None for path, window in names) and {p for p, _ in names} == {'systemset/bluetooth_page', 'systemset/wifi_page'},
+           'both stock pages a Settings row opens are opened afresh each time: Bluetooth (its background handler stops discovery and only init restarts it) and Wi-Fi (init scans on every open, the foreground handler only rebuilds the list)')
+    for path, window in names + [('systemset/display_page', 'display_page')]:   # (a page that names its window, the last component of its path: stock\'s Display list, which no row of ours opens now, as the model of the restack)
         if window is None: continue
         m = SF([H, PL])
         for cycle in range(5):
@@ -575,7 +573,7 @@ def stockopen_tests(ctx):
 
     # -- every page: what init does per open (STOCK_LIFE: wifi_scan with Wi-Fi on, btStartSearch with Bluetooth on) has happened again after open, Now Playing button, reopen,
     #    whether through a fresh init or through the foreground handler
-    per_open = {'wifi_page': 'wifi_scan', 'bluetooth_page': 'bt_search', 'display_page': None}
+    per_open = {'wifi_page': 'wifi_scan', 'bluetooth_page': 'bt_search'}
     for path, _, window in P.STOCK_PAGES:
         page = path.split('/')[-1]
         m = SF([H, PL]); m.bt_on = True

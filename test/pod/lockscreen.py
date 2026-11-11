@@ -433,16 +433,15 @@ def bar_tests(ctx):
 
 
 def setting_tests(ctx):
-    """Settings > System > Appearance > Lock Screen (m1plus_appearance, the picker m1plus_lockscreen): the same pattern as the Background row, saved with home_write_atomic."""
+    """Settings > System > Display > Lock Screen (m1plus_display, the picker m1plus_lockscreen): the same pattern as the Background row, saved with home_write_atomic."""
     expect, P = ctx.expect, pod_pages
-    A_, L = P.APPEARANCE_PAGE, P.LOCK_PAGE
+    A_, L = P.DISPLAY_PAGE, P.LOCK_PAGE
     ai = next(i for i, r in enumerate(A_.rows) if r.label == 'Lock Screen')
-    cc = next(i for i, r in enumerate(A_.rows) if r.label == 'Control Center')
     expect(P.ACT_LOCKSET == 88 and not hasattr(P, 'ACT_LOCK') and P.ACT_LOCKSET in P.CHECK_ACTIONS and P.LOCK_PAGE_INDEX == 62 and P.PAGES[62] is L
-           and A_.rows[ai].action == P.ACT_PAGE and A_.rows[ai].arg == P.LOCK_PAGE_INDEX and P.row_kind(A_.rows[ai]) == P.row_kind(A_.rows[cc]) and cc == ai + 1,
-           'the Lock Screen link row (Appearance, a plain page row like Control Center, no value) opens the Lock Screen page 62')
-    lay = [x.label if hasattr(x, 'label') else x for x in A_.layout]
-    expect(lay == ['Background', 'Accent', P.GAP, 'Lock Screen', P.GAP, 'Control Center'], f'Appearance cards: Background + Accent, Lock Screen, Control Center ({lay})')
+           and A_.rows[ai].action == P.ACT_PAGE and A_.rows[ai].arg == P.LOCK_PAGE_INDEX and P.row_kind(A_.rows[ai]) == 'link' and A_.rows[ai - 1].label == 'Screen Timeout',
+           'the Lock Screen link row (Display, a plain page row under Screen Timeout, no value) opens the Lock Screen page 62')
+    lay = [x.label if hasattr(x, 'label') else x for x in P.APPEARANCE_PAGE.layout]
+    expect(lay == ['Background', 'Accent', P.GAP, 'Control Center'], f'Appearance cards: Background + Accent, Control Center; Lock Screen is on Display ({lay})')
     expect(mod_icons.CARD_GLYPHS['Lock Screen'] == 'lock' and mod_icons.card_name('lock') in mod_icons.CARD_IMAGES, 'the Lock Screen row has the lock glyph')
     SP = P.LOCKSTYLE_PAGE
     expect([(r.label, r.action, r.arg) for r in L.rows] == [('Enable', P.ACT_LOCKON, 0), ('Wallpaper', P.ACT_LOCKWP, 0), ('Show Time', P.ACT_LOCKTIME, 0), ('Player Style', P.ACT_LOCKSTYLE, P.LOCKSTYLE_PAGE_INDEX),
@@ -457,14 +456,14 @@ def setting_tests(ctx):
            'the Player Style picker (page 64): Large Cover, Mini Player (checks) and the note')
     expect((P.ACT_LOCKSTYLE, P.ACT_LOCKTIME) == (85, 86) and P.ACT_LOCKSTYLE in P.VALUE_ACTIONS and P.ACT_LOCKTIME in P.SWITCH_ACTIONS and P.VALUE_INIT[P.ACT_LOCKSTYLE] == 'Large Cover', 'Player Style is action 85 (a value row), Show Time 86 (a switch row)')
     IP = P.LOCKINFO_PAGE
-    expect(len(P.STOCK_PAGES) == 3 and not any('screensaverabout' in n for n, *_ in P.STOCK_PAGES) and not hasattr(P, 'STOCK_LOCKINFO') and P.LOCKINFO_PAGE_INDEX == 65 and P.PAGES[65] is IP and P.LOCKINFO_PAGE_INDEX == P.NEXTALBUM_PAGE_INDEX - 1
+    expect(len(P.STOCK_PAGES) == 2 and not any('screensaverabout' in n for n, *_ in P.STOCK_PAGES) and not hasattr(P, 'STOCK_LOCKINFO') and P.LOCKINFO_PAGE_INDEX == 65 and P.PAGES[65] is IP and P.LOCKINFO_PAGE_INDEX == P.NEXTALBUM_PAGE_INDEX - 1
            and IP.key == 'm1plus_lockinfo' and IP.title == 'Custom Wallpaper' and IP.kind == 'relnotes' and P.row_kind(L.rows[4]) == 'link',
            'the instructions row is a link (ACT_LOCKINFO 87) to our own Release Notes page 65 (just before the Continue Playing picker, titled like the row); stock\'s screensaverabout_page is no longer a stock row')
     expect([mod_icons.CARD_GLYPHS[k] for k in ('Show Time', 'Player Style', 'Custom Wallpaper')] == ['clock', 'square-play', 'info'] and all(mod_icons.card_name(g) in mod_icons.CARD_IMAGES for g in ('clock', 'square-play', 'info')),
            'glyphs: clock, square-play, info')
     expect(pod_i18n.key_for('Show Time') == 'Show Time' and pod_i18n.key_for('Custom Wallpaper') == 'Custom Wallpaper' and pod_i18n.key_for('Player Style') == 'Player Style' and 'screenlock_about' not in pod_i18n.STOCK, 'Show Time and Custom Wallpaper are our own short keys (stock\'s texts did not fit)')
     expect(P.SETTING_FILES.index('lockscreen-layout') == P.SETTING_FILES.index('appearance-background') + 1 and P.SETTING_FILES.count('lockscreen-layout') == 1, 'the Settings Files page lists lockscreen-layout after appearance-background')
-    rows_a = PSYMS[f'pod_rows_{P.APPEARANCE_PAGE_INDEX}']
+    rows_a = PSYMS[f'pod_rows_{P.DISPLAY_PAGE_INDEX}']   # the page that has the Lock Screen row
     rows_l = PSYMS[f'pod_rows_{P.LOCK_PAGE_INDEX}']
     LOCK_W = ['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(5)] + ['pod_switch0', 'pod_switch2', 'pod_value3', 'pod_label3']
     STYLE_W = ['btn_return', 'btn_backtoplayer', 'pod_row0', 'pod_row1', 'pod_check0', 'pod_check1']
@@ -833,7 +832,7 @@ def wallpaper_tests(ctx):
     expect(('window_open', 'm1plus_lockwall') in m.calls, 'and the picker opens again afterwards')
     # -- the Lock Screen page's row opens it
     m = WP([A]); m.widgets.update({f'pod_row{i}': 0x30000000 + 0x100 * i for i in range(5)}); m.widgets['pod_switch0'] = 0x30001000
-    m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.APPEARANCE_PAGE_INDEX}'] + 12 * next(i for i, r in enumerate(P.APPEARANCE_PAGE.rows) if r.label == 'Lock Screen'), count=3000000)
+    m.call(PSYMS['on_row'], a0=PSYMS[f'pod_rows_{P.DISPLAY_PAGE_INDEX}'] + 12 * next(i for i, r in enumerate(P.DISPLAY_PAGE.rows) if r.label == 'Lock Screen'), count=3000000)
     m.calls = []; m.click('pod_row1')
     expect(('window_open', 'm1plus_lockwall') in m.calls and any(c[0] == 'get_screensaver_image' for c in m.calls), 'the Lock Screen page\'s Wallpaper row opens the picker')
 

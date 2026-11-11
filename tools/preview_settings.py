@@ -23,6 +23,9 @@ STATE = {
     'm1plus_accent': {'shown': {'pod_check0'}},
     'm1plus_battery': {'values': {'pod_value1': '80%'}, 'switches': {'pod_switch0': True}},
     'm1plus_chargelimit': {'shown': {'pod_check0'}},
+    'm1plus_display': {'values': {'pod_value0': '30s', 'pod_value2': 'Orange'}, 'switches': {'pod_switch3': True}},
+    'm1plus_lighttime': {'shown': {'pod_check2'}},
+    'm1plus_ledlight': {'shown': {'pod_check1'}},
     'm1plus_nextalbum': {'shown': {'pod_check0'}},
     'm1plus_lockscreen': {'switches': {'pod_switch0': True, 'pod_switch2': True}, 'values': {'pod_value3': 'Large Cover'}},
     'm1plus_lockstyle': {'shown': {'pod_check0'}},
@@ -76,7 +79,8 @@ def draw_page(s, key, full=False, state=None, lit=False, pal=None, pressed=None,
         if c.type == 'list_item':
             lab = next(t for t in c.children if t.name.startswith('pod_label'))
             draw_row(s, im, d, c, y, values, switches, shown, ink, img, pal, pal is not None and pressed is not None and s.shown(lab) == pressed)
-        draw_text_item(s, im, c, y, ink)
+        if c.name == 'pod_bright': draw_brightness(im, c, y, img, st.get('brightness', 60))
+        else: draw_text_item(s, im, c, y, ink)
         y += c.h
     d.rectangle((0, 0, W - 1, NAV - 1), fill=base)   # the list is under the navbar: it clips at its top
     lt = next(w for w in root.walk() if w.name == 'label_title'); tpx = PI.title_px(s.tree)
@@ -86,6 +90,22 @@ def draw_page(s, key, full=False, state=None, lit=False, pal=None, pressed=None,
     if full and im.height > SCREEN:
         for x in range(0, W, 8): d.line((x, SCREEN, x + 3, SCREEN), fill=(0xFF, 0x50, 0x50))
     return im
+
+
+def draw_brightness(im, c, y, img, value):
+    """The Display page's brightness card (tools/pod_ui.py cards_brightness): the card piece, the two suns and the slider at `value` (0 .. 100): its bar images stretched to the slider's width,
+    the fill up to the thumb, the thumb's image centred on the value (approximate: AWTK's slider draws the bar bar_size high in the middle)."""
+    im.alpha_composite(img(c.get('style:normal:bg_image')), (0, y))
+    for t in c.children:
+        if t.type == 'image' and t.get('visible') != 'false':
+            g = img(t.get('image')); im.alpha_composite(g, (t.x + (t.w - g.width) // 2, y + t.y + (t.h - g.height) // 2))
+        elif t.type == 'slider':
+            bar, dot = int(t.get('bar_size')), img(t.get('style:normal:icon'))
+            by, travel = y + t.y + (t.h - bar) // 2, t.w - dot.width
+            x = t.x + dot.width // 2 + travel * value // int(t.get('max'))
+            im.alpha_composite(img(t.get('style:normal:bg_image')).resize((t.w, bar)), (t.x, by))
+            if x > t.x: im.alpha_composite(img(t.get('style:normal:fg_image')).resize((x - t.x, bar)), (t.x, by))
+            im.alpha_composite(dot, (x - dot.width // 2, y + t.y + (t.h - dot.height) // 2))
 
 
 def draw_text_item(s, im, c, y, ink=lambda c: c):
@@ -357,6 +377,9 @@ def main():
            ('Wallpaper, Default only (empty folder)', draw_lockwall(s, entries=1, chosen=0)),
            ('Settings > Battery', draw_page(s, 'm1plus_battery')),
            ('Settings > Battery > Charge Limit', draw_page(s, 'm1plus_chargelimit')),
+           ('Settings > Display', draw_page(s, 'm1plus_display')),
+           ('Settings > Display > Screen Timeout', draw_page(s, 'm1plus_lighttime')),
+           ('Settings > Display > LED Light', draw_page(s, 'm1plus_ledlight')),
            ('Settings > Playback > Continue Playing', draw_page(s, 'm1plus_nextalbum')),
            ], out)
     # Light Mode (docs/modules/accent.md): the same pages with the hooks' colours and images (tools/palette.py); the Settings page with Light Mode On, and the picker

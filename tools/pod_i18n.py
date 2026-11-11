@@ -537,6 +537,19 @@ TEXT = dict([
     _t('Resumes a little below the limit', '略低于上限时恢复充电', '略低於上限時恢復充電', '上限を少し下回ると再開', '한도보다 조금 낮아지면 재개',
        'Reprend un peu sous la limite', 'Lädt knapp unter dem Limit weiter', 'Se reanuda algo por debajo del límite', 'Riprende poco sotto il limite',
        'ชาร์จต่อเมื่อต่ำกว่าขีดจำกัดเล็กน้อย', 'Wznawia nieco poniżej limitu', 'Возобновится чуть ниже предела', 'Відновиться трохи нижче межі'),
+    # Settings > System > Display (patch/display.c, docs/modules/settings.md "Display"): our page's rows and the pickers' rows that are new. Our own short labels: stock's English for the backlight time is
+    # "Screen Off" with the choice "Off", its LED row is "Atmosphere Lamp Settings", and its Follow Screen is English in every table but the Chinese ones. The other four backlight choices (15s .. 5min) are
+    # stock's plain texts, the same in every language (BRANDS). (Lock Screen, Off and Orange are above.)
+    _t('Follow Screen', '跟随屏幕', '跟隨螢幕', '画面に連動', '화면과 연동', 'Suivre l’écran', 'Bildschirm folgen',
+       'Seguir pantalla', 'Segui schermo', 'ตามหน้าจอ', 'Jak ekran', 'Как экран', 'Як екран'),
+    _t('Blue', '蓝色', '藍色', 'ブルー', '블루', 'Bleu', 'Blau',
+       'Azul', 'Blu', 'น้ำเงิน', 'Niebieski', 'Синий', 'Синій'),
+    _t('Screen Timeout', '背光时间', '背光時間', '画面消灯', '화면 꺼짐', 'Mise en veille', 'Bildschirm aus',
+       'Apagar pantalla', 'Spegni schermo', 'ปิดหน้าจอ', 'Wygaszanie', 'Откл. экрана', 'Вимк. екрана'),
+    _t('LED Light', '氛围灯', '氛圍燈', 'LEDライト', 'LED 조명', 'Voyant LED', 'LED-Licht',
+       'Luz LED', 'Luce LED', 'ไฟ LED', 'Dioda LED', 'Светодиод', 'Світлодіод'),
+    _t('Never', '常亮', '常亮', 'しない', '안 함', 'Jamais', 'Nie',
+       'Nunca', 'Mai', 'ไม่เลย', 'Nigdy', 'Никогда', 'Ніколи'),
     # A-Z lists (patch/azlist.c, docs/modules/settings.md): Settings > Library, the Index Rail and Section Headers switches
     _t('Index Rail', '索引栏', '索引欄', '索引バー', '색인 막대', 'Index latéral', 'Index-Leiste',
        'Índice lateral', 'Indice laterale', 'แถบดัชนี', 'Indeks boczny', 'Указатель', 'Покажчик'),
@@ -1476,7 +1489,7 @@ def english(key):
 
 
 import pod_pages
-BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',) + tuple(f'{p}%' for p in pod_pages.CHGLIMIT_VALUES)   # shown as they are, no key (the Settings Files labels are file names)
+BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',) + tuple(f'{p}%' for p in pod_pages.CHGLIMIT_VALUES) + pod_pages.LIGHTTIME_VALUES[1:]   # shown as they are, no key (the Settings Files labels are file names)
 
 
 def key_for(english):

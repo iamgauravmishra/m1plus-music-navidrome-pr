@@ -64,6 +64,7 @@
 #define EVT_DESTROY 0x0c        /* widget_destroy_sync: event_init(e, 0xc) @0x670600 */
 #define EVT_AFTER_PAINT 0x120   /* widget_paint dispatches it after children+border @0x66de3c */
 #define EVT_VALUE_CHANGED 0x11c /* slide_menu commit dispatches 0x11b then 0x11c @0x61213c */
+#define EVT_VALUE_CHANGING 0x11d /* a slider while it is dragged: stock's brightness page binds 0x11d and 0x11c (tools/pod.py LOCKSCREEN_PINS) */
 
 /* stSongInfo record fields (getAllAlbum's row callback @0x4e93c8, loadSongList @0x4e2ce0) */
 #define REC_ID 0x00        /* -1 = the "Unknown Album" row getAllAlbum appends */
