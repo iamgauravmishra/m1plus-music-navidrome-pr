@@ -1,4 +1,4 @@
-/* The Subsonic Server page (docs/modules/subsonic.md, task ND-12): the saved server as three rows (Server URL, Username, Password), two action rows (Sync Now, Sign Out), and the Sign In page
+/* The Subsonic Server page (docs/modules/subsonic.md, task ND-12): the saved server as three rows (URL, Username, Password), two action rows (Sync Now, Sign Out), and the Sign In page
  * that the three field rows open. The Server page's asset is tools/pod_ndserver.py (window m1plus_ndserver: the Settings cards, rows pod_row0..pod_row4, the values pod_value0..2); the Sign In
  * page's is its build_login (window m1plus_ndlogin).
  *
@@ -367,7 +367,7 @@ static void nl_go(void);
 static void nl_focus(int f) {
     static const unsigned flags[3] = {KB_PASSWORD, KB_LITERAL, KB_PASSWORD};
     /* (an untouched password field with one saved says that leaving it keeps it: the four dots it showed as a label are gone while it is typed in) */
-    const char *ph = f == 0                       ? TR("Server URL")
+    const char *ph = f == 0                       ? TR("URL")
                      : f == 1                     ? TR("Username")
                      : nl.saved_pw && !nl.touched ? TR("Leave empty to keep")
                                                   : TR("Password");
@@ -620,5 +620,5 @@ int nd_server_open(void) {
     return 0;
 }
 
-/* Add Server (the root page, with no server saved): the Sign In page on the Server URL row, with no Server page under it; a login that works goes back to the page it came from. */
+/* Add Server (the root page, with no server saved): the Sign In page on the URL row, with no Server page under it; a login that works goes back to the page it came from. */
 int nd_signin_open(void) { return nl_open(0); }

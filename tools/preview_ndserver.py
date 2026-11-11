@@ -17,7 +17,7 @@ import preview_icons as PI, preview_keyboard as PKV, preview_settings as PS
 W, H, BAR = PKV.W, PKV.H, PKV.BAR
 WHITE = PKV.WHITE
 LOGIN = 'm1plus_ndlogin'
-PLACEHOLDER = ('Server URL', 'Username', 'Password')
+PLACEHOLDER = ('URL', 'Username', 'Password')
 
 
 def server_page(s):

@@ -21,8 +21,8 @@ SB = sibling('sbapi')   # noqa: F821  (sibling: the harness helper of the pod te
 RAW = os.path.join('rootfs', 'release', 'assets', 'default', 'raw')
 WIN = 0x24400000
 EVT_DESTROY, EVT_CLICK, EVT_FG = O['EVT_DESTROY'], O['EVT_CLICK'], O['EVT_WINDOW_TO_FG']
-LABELS = ('Server URL', 'Username', 'Password', 'Sync Now', 'Sign Out')
-KEYS = ('Server', 'Server URL', 'Username', 'Password', 'Sync Now', 'Sign Out', 'Sign out of Subsonic? Downloaded songs stay on the card.', 'Leave empty to keep',
+LABELS = ('URL', 'Username', 'Password', 'Sync Now', 'Sign Out')
+KEYS = ('Server', 'URL', 'Username', 'Password', 'Sync Now', 'Sign Out', 'Sign out of Subsonic? Downloaded songs stay on the card.', 'Leave empty to keep',
         'Enter a valid server address', 'Enter a valid username', 'Enter a valid password', 'Could not save settings', 'Add a server first', 'Connect to Wi-Fi first',
         'Syncing…', 'Sign In', 'Next', 'Connecting…', 'Incorrect username or password', "Can't connect to the server", 'Server certificate not trusted', 'Set the date and time first')
 MUSIC, DLIDX = '/mnt/mmc/Subsonic/ab12cd34-Song.flac', SB.ND + '/dl.idx'
@@ -90,6 +90,8 @@ def server_asset(ctx):
            and pg.layout[3] is P.GAP and P.ACT_NDVALUE in P.VALUE_ACTIONS and P.ACT_NDACT in P.ACTION_ACTIONS and P.VALUE_INIT[P.ACT_NDVALUE] == '',
            'Server URL, Username and Password are value rows, a gap, then Sync Now and Sign Out as action rows; a value starts empty')
     tree = awtk_ui.parse(open(os.path.join(WORK, RAW, 'ui', 'm1plus_ndserver.bin'), 'rb').read())   # noqa: F821
+    expect([[tree.find(f'pod_label{i}').get(f'style:{s_}:text_color') == '#FF6B6B' for s_ in ('normal', 'disable', 'focused')] for i in (3, 4)] == [[False] * 3, [True] * 3], 'Sign Out is the destructive row: its label is red in every state, Sync Now is not')
+    expect((pod_i18n.TEXT['URL']['zh_CN'], pod_i18n.TEXT['URL']['zh_HK']) == ('地址', '位址'), 'the Chinese label is the short one (no Server prefix)')
     expect(tree.name == 'm1plus_ndserver_page' and tree.find('label_title') is not None and tree.find('btn_return') is not None and tree.find('btn_backtoplayer') is not None,
            'the stock navbar: title, Back and Now Playing')
     expect(pod_i18n.shown_english(tree.find('label_title')) == 'Server', 'the navbar reads Server')
@@ -158,7 +160,7 @@ def server_rows(ctx):
     for i, t in enumerate(LABELS): m.wtext[m.widgets[f'pod_label{i}']] = t
     m.call(PSYMS['nd_server_open'], count=20000000)
     x, w = box(m, 0)
-    expect(x + w == 280 and x >= 24 + 8 * len('Server URL') + 6 + 10, f'a long host is cut to the room the label leaves (x {x}, w {w})')
+    expect(x + w == 280 and x >= 24 + 8 * len('URL') + 6 + 10, f'a long host is cut to the room the label leaves (x {x}, w {w})')
     # one open; the destroy clears the state
     expect(m.call(PSYMS['nd_server_open'], count=20000000) == 0 and not [c for c in m.calls if c[0] == 'window_open'], 'a second open does nothing (0)')
     fn_, ctx_ = m.bound[(m.window, EVT_DESTROY)]
@@ -285,7 +287,7 @@ def server_login_asset(ctx):
     expect((f.x, f.y, f.w, f.h) == (24, 56, 281, 48) and by['kb_text'].w == f.w and f.x + by['kb_clear'].x + by['kb_clear'].w // 2 == by['nl_eye'].x + by['nl_eye'].w // 2 == 287 and by['kb_caret'].y == 13 and f.get('style:normal:bg_color') == '#00000000', 'the keyboard\'s field starts on the first row; its clear button is centred on the eye')
     expect([box(f'nl_hit{i}') for i in range(3)] == [(10, 56, 300, 48), (10, 104, 300, 48), (10, 152, 254, 48)] and box('nl_eye') == (264, 152, 46, 48) and by['nl_eye'].get('style:normal:icon') == 'wf_eyeoff'
            and all(by[f'nl_hit{i}'].get('enable') == 'true' for i in range(3)), 'three buttons take the row taps (the Password row ends at the eye); the eye starts as eye-off')
-    expect(all(box(f'nl_v{i}') == (24, 56 + 48 * i, 272, 48) == box(f'nl_h{i}') for i in range(3)) and [by[f'nl_h{i}'].get('tr_text') for i in range(3)] == [pod_i18n.key_for(k) for k in ('Server URL', 'Username', 'Password')]
+    expect(all(box(f'nl_v{i}') == (24, 56 + 48 * i, 272, 48) == box(f'nl_h{i}') for i in range(3)) and [by[f'nl_h{i}'].get('tr_text') for i in range(3)] == [pod_i18n.key_for(k) for k in ('URL', 'Username', 'Password')]
            and all(by[f'nl_{k}{i}'].get('visible') == 'false' and by[f'nl_{k}{i}'].get('sensitive') == 'false' for i in range(3) for k in ('v', 'h')) and all(by[f'nl_h{i}'].get('style:normal:text_color') == PK.KB_GREY and by[f'nl_v{i}'].get('style:normal:text_color') == PK.KB_INK for i in range(3)),
            'the static labels sit where the field text does: the ink value and the grey placeholder (the row\'s name), hidden and insensitive')
     expect(box('nl_spin') == (24, 211, 14, 14) and by['nl_busy'].get('tr_text') == pod_i18n.key_for('Connecting…') and box('nl_busy')[:2] == (46, 208) and box('nl_err')[:2] == (24, 208) and by['nl_err'].get('style:normal:text_color') == ST.GREY
@@ -304,7 +306,7 @@ def server_login_asset(ctx):
     for loc in pod_i18n.LOCALES:
         tx = lambda k: pod_i18n.TEXT[k][pod_i18n.table_for(loc)]
         w = lambda t, px: StbText(font, px).layout(t)[1]
-        bad = [k for k, px, room in (('Sign In', 20, by['label_title'].w), ('Server URL', 18, 232), ('Username', 18, 232), ('Password', 18, 232), ('Next', 15, PK.KB_MODE_W - 8), ('Sign In', 15, PK.KB_MODE_W - 8),
+        bad = [k for k, px, room in (('Sign In', 20, by['label_title'].w), ('URL', 18, 232), ('Username', 18, 232), ('Password', 18, 232), ('Next', 15, PK.KB_MODE_W - 8), ('Sign In', 15, PK.KB_MODE_W - 8),
                                       ('Connecting…', 16, by['nl_busy'].w)) + tuple((k, 16, by['nl_err'].w) for k in LOGIN_ERRORS) if w(tx(k), px) > room]
         expect(not bad, f'{loc}: the title, the placeholders, the action keys and the lines under the card fit their rooms ({bad})')
 
@@ -562,7 +564,7 @@ def server_login_touch(ctx):
     kdel(m)
     expect(text(m, 'kb_text') == 'http://' and shown(m, 'kb_clear') == 0, 'deleted back to the scheme: gone again')
     kdel(m, 7)
-    expect(text(m, 'kb_text') in ('', None) and shown(m, 'kb_clear') == 0 and text(m, 'kb_hint') == 'Server URL', 'the Delete key can empty it: the placeholder shows')
+    expect(text(m, 'kb_text') in ('', None) and shown(m, 'kb_clear') == 0 and text(m, 'kb_hint') == 'URL', 'the Delete key can empty it: the placeholder shows')
     ktype(m, 'x'); hit(m, 1); hit(m, 0)
     rec(m, fn_, a0=c, a1=0)
     expect(text(m, 'kb_text') == 'http://', 'and the clear button of whatever is typed then leaves the scheme again')
@@ -730,7 +732,7 @@ def server_strings(ctx):
         expect(all('Subsonic' in pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for loc in pod_i18n.LOCALES), f'"Navidrome" is not translated in {k!r}')
     src = open(os.path.join(ROOT, 'patch', 'ndserver.c'), encoding='utf-8').read()   # noqa: F821
     used = set(__import__('re').findall(r'TR\("((?:[^"\\]|\\.)*)"\)', src))
-    expect(used <= set(KEYS) and {'Add a server first', 'Could not save settings', 'Server URL'} <= used, f'every TR() key of ndserver.c is one of the page\'s ({sorted(used - set(KEYS))})')
+    expect(used <= set(KEYS) and {'Add a server first', 'Could not save settings', 'URL'} <= used, f'every TR() key of ndserver.c is one of the page\'s ({sorted(used - set(KEYS))})')
 
 
 def server_collapse(ctx):

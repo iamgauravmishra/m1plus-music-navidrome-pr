@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """The asset of the Navidrome Server page (patch/ndserver.c, docs/modules/subsonic.md ND-12): the stock navbar over the Settings cards (tools/pod_settings.py numbers), two cards:
-Server URL / Username / Password (a grey value and the chevron, no glyph) and Sync Now / Sign Out (plain action rows). The rows are the cards builder's own (tools/pod_ui.py cards_row),
+URL / Username / Password (a grey value and the chevron, no glyph) and Sync Now / Sign Out (plain action rows). The rows are the cards builder's own (tools/pod_ui.py cards_row),
 named pod_row0..4 with pod_label<i> and pod_value0..2, which the payload fills and binds. No status line: the root page shows the status. No colour of its own (the cards' greys)."""
 import os, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import pod_pages, pod_settings as ST
+from pod_roles import RED_RGB
 
 BIG_H = 60                                     # the large title's item: the Podcasts levels' title (PP_TITLE_H 52 high at SG_TITLE_X) and 8 px of air above the first card
 VALUE_RIGHT = ST.value_box()[0] + ST.VALUE_W   # the value's right edge in its row: patch/ndserver.c NS_VALUE_RIGHT
@@ -34,6 +35,8 @@ def build(page):
         else:
             row = cards_row(i, it, pieces[i], pieces[i] in ('single', 'bot'), icon=False)
             if it.action == pod_pages.ACT_NDACT and it.label == 'Sync Now': sync_status(row, i)   # the Sync Now row's grey status and the spinner before it (patch/ndserver.c ns_sync_show)
+            if it.label == 'Sign Out':   # the destructive row: the one red (tools/pod_roles.py), as the sheets' Delete rows
+                for st in ('normal', 'disable', 'focused'): styled(next(c for c in row.children if c.get('name') == f'pod_label{i}'), (st,), 'text_color', RED_RGB)
             sv.children.append(row); i += 1
         sv.children[-1].y = y + (BIG_H - ST.CM if it != ST.TOP else 0)
     root.children.append(lv)
@@ -71,7 +74,7 @@ def end_h(y):
 # URL, Username, Password) with our keyboard embedded: kb_field moves to the row being typed in, the other rows show their value in a static label (nl_v<i>) or, while empty, the grey placeholder (nl_h<i>), which is
 # also the row's name (no label column: a Username label is up to 171 px in 13 languages and a URL needs the room). Three buttons take the taps (nl_hit<i>), the eye is on the Password row, and under the card one
 # line holds the spinner and "Connecting..." (nl_spin, nl_busy) or the error (nl_err). Everything ends above the candidate strip (y 234): rows y 56..200, the line y 208..228. No colour of its own.
-NL_ROWS = ('Server URL', 'Username', 'Password')
+NL_ROWS = ('URL', 'Username', 'Password')
 NL_ROW_H, NL_Y0, NL_X = 48, 56, 24
 NL_VAL_W, NL_FIELD_W, NL_TW = 272, 281, 232   # (NL_FIELD_W is pod_ui.trail_field_w(NL_X), asserted in build_login) the static labels' box (card ink edge to ink edge), the field's box (its clear button's disc is centred on the eye's glyph, x 287) and the text room of each field (the Password row's ends before the eye)
 NL_LINE_Y, NL_LINE_H, NL_LINE_PX = 208, 20, 16

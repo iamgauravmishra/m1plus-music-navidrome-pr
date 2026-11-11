@@ -1417,7 +1417,7 @@ DATE_KEYS = _MONTH_KEYS + (', %d', '%dm ago', '%dh ago', '%dd ago', 'Refreshing 
 # The Navidrome Server page (patch/ndserver.c, tools/pod_ndserver.py): the row labels (the keyboard's titles and placeholders too), the two confirmations and the toasts. "Navidrome" stays as it is.
 TEXT.update([
     _t('Server', '服务器', '伺服器', 'サーバー', '서버', 'Serveur', 'Server', 'Servidor', 'Server', 'เซิร์ฟเวอร์', 'Serwer', 'Сервер', 'Сервер'),
-    _t('Server URL', '服务器地址', '伺服器位址', 'サーバーURL', '서버 URL', 'URL du serveur', 'Server-URL', 'URL del servidor', 'URL del server', 'URL เซิร์ฟเวอร์', 'Adres serwera', 'Адрес сервера', 'Адреса сервера'),
+    _t('URL', '地址', '位址', 'URL', 'URL', 'URL', 'URL', 'URL', 'URL', 'URL', 'Adres', 'Адрес', 'Адреса'),   # the Server page's row and the Sign In placeholder: the page says Server already
     _t('Username', '用户名', '使用者名稱', 'ユーザー名', '사용자 이름', 'Nom d’utilisateur', 'Benutzername', 'Usuario', 'Nome utente', 'ชื่อผู้ใช้', 'Nazwa użytkownika', 'Имя пользователя', 'Ім’я користувача'),
     _t('Sync Now', '立即同步', '立即同步', '今すぐ同期', '지금 동기화', 'Synchroniser', 'Jetzt synchronisieren', 'Sincronizar', 'Sincronizza', 'ซิงค์ทันที', 'Synchronizuj', 'Синхронизация', 'Синхронізація'),
     _t('Sign Out', '退出登录', '登出', 'サインアウト', '로그아웃', 'Se déconnecter', 'Abmelden', 'Cerrar sesión', 'Esci', 'ออกจากระบบ', 'Wyloguj się', 'Выйти', 'Вийти'),

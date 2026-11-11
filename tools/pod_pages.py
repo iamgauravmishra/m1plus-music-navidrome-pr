@@ -912,7 +912,7 @@ NDROOT_PAGE = Page('m1plus_ndroot', 'm1plus_ndroot_page', 'Subsonic', kind='ndro
 # The Navidrome Server page (patch/ndserver.c, tools/pod_ndserver.py): two cards of the Settings look, the login's three fields and Sync Now / Sign Out. It binds its own rows, so it is not a cards page
 # (no rows for patch/m1plus.c): `layout` is only the asset's.
 NDSERVER_PAGE = Page('m1plus_ndserver', 'm1plus_ndserver_page', 'Server', kind='ndserver')
-NDSERVER_PAGE.layout = [Row('Server URL', ACT_NDVALUE, 0), Row('Username', ACT_NDVALUE, 1), Row('Password', ACT_NDVALUE, 2), GAP, Row('Sync Now', ACT_NDACT, 3), Row('Sign Out', ACT_NDACT, 4)]
+NDSERVER_PAGE.layout = [Row('URL', ACT_NDVALUE, 0), Row('Username', ACT_NDVALUE, 1), Row('Password', ACT_NDVALUE, 2), GAP, Row('Sync Now', ACT_NDACT, 3), Row('Sign Out', ACT_NDACT, 4)]
 
 # The Navidrome Sign In page (patch/ndserver.c nl_open, tools/pod_ndserver.py build_login): the Server page's three login rows with our keyboard embedded, as the Join Wi-Fi Network page.
 NDLOGIN_PAGE = Page('m1plus_ndlogin', 'm1plus_ndlogin_page', 'Sign In', kind='ndlogin')
