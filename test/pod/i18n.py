@@ -76,8 +76,10 @@ def run(ctx):
 
     # 2. The built tables: the stock entries untouched, our keys added, in all 16, sorted for the binary search.
     for loc in ALL:
-        want = pod_i18n.coex_tables(pod_i18n.add_to_tables({loc: stock[loc]}))[loc]
+        want = pod_i18n.built_tables({loc: stock[loc]})[loc]
         expect(built[loc] == want, f'{loc}: the stock entries plus exactly our {len(pod_i18n.TEXT)} keys')
+        other = set(pod_i18n.TEXT) | set(pod_i18n.COEX_KEYS) | {k for k, by in pod_i18n.STOCK_FIX.items() if pod_i18n.table_for(loc) in by}
+        expect([kv for kv in built[loc] if kv[0] not in other] == [kv for kv in stock[loc] if kv[0] not in other], f'{loc}: every other stock entry is untouched')
         have = dict(built[loc])
         keys = [k.encode() for k, _ in built[loc]]
         expect(keys == sorted(keys), f'{loc}: sorted')
@@ -95,6 +97,19 @@ def run(ctx):
            and all(dict(built['en_US'])[k] == 'Bluetooth audio may stutter while Wi-Fi is on.' for k in pod_i18n.COEX_KEYS)
            and all('Wi-Fi' in t and 'Bluetooth' in t or loc in ('zh_CN', 'zh_HK') for loc, t in pod_i18n.COEX_TEXT.items()),
            'msg_wifi_open and msg_bt_open read as the one Wi-Fi + Bluetooth warning in all 13 languages (replacing stock\'s question)')
+    # The stock texts stock left in English (STOCK_FIX): Look up Album / Look up Artist and the rest of that block read in the table's language in the ten tables
+    # besides English and Chinese, which are never touched; it_IT has the two keys it lacked; no table reads as it did.
+    sen, ten = dict(stock['en_US']), ('ja_JP', 'ko_KR', 'fr_FR', 'ge_DE', 'sp_ES', 'it_IT', 'th_TH', 'po_PL', 'ru_RU', 'uk_UK')
+    block = [k for k, by in pod_i18n.STOCK_FIX.items() if set(by) == set(ten)]
+    expect(len(block) == 42 and{'player_albuminfo', 'player_songerinfo', 'msg_newplaylists', 'msg_playlistexist'} <= set(block)
+           and all(dict(built[loc])[k] == pod_i18n.STOCK_FIX[k][loc] != sen[k] for loc in ten for k in block),
+           f'the {len(block)} stock keys that were English in ten tables are translated in each')
+    expect(all(dict(built[loc])[k] == t != dict(stock[loc]).get(k) for k, by in pod_i18n.STOCK_FIX.items() for loc, t in by.items())
+           and all(set(by) <= set(ten) and k in sen for k, by in pod_i18n.STOCK_FIX.items()),
+           'every translated stock text replaces a different stock value of a stock key; en_US, zh_CN and zh_HK are not touched')
+    expect(dict(built['ja_JP'])['player_songerinfo'] == 'アーティストを表示' and dict(built['ja_JP'])['player_albuminfo'] == 'アルバムを表示'
+           and 'fav' not in dict(stock['it_IT']) and dict(built['it_IT'])['fav'] == 'Preferiti' and dict(built['it_IT'])['songer'] == 'Artista'
+           and len(built['it_IT']) == len(built['en_US']), 'Japanese Look up Artist / Look up Album; it_IT has fav and songer and as many entries as en_US')
     for stub, twin in pod_i18n.TWINS.items():
         expect(all(dict(built[stub])[k] == dict(built[twin])[k] for k in pod_i18n.TEXT), f'{stub} holds {twin}\'s language')
     for k, by in pod_i18n.TEXT.items():
@@ -391,7 +406,7 @@ def run(ctx):
     probe = StbText(font, 20)
     missing = {}
     for loc in LOC:
-        texts = [pod_i18n.TEXT[k][loc] for k in pod_i18n.TEXT] + [dict(built[loc])[k] for k in pod_i18n.STOCK]
+        texts = [pod_i18n.TEXT[k][loc] for k in pod_i18n.TEXT] + [dict(built[loc])[k] for k in pod_i18n.STOCK] + [by[loc] for by in pod_i18n.STOCK_FIX.values() if loc in by]
         for t in texts:
             for c in t:
                 if c != ' ' and probe.box(c) is None: missing.setdefault(c, loc)

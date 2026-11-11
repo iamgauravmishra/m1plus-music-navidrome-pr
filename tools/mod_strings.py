@@ -6,6 +6,7 @@ The pages we add (ui/m1plus_*.bin) and the payload show their texts through the 
 "Localisation"). Stock keys are used as they are (tools/pod_i18n.py STOCK); the texts the stock tables have
 no good key for are our own keys (the key is the English text), added here to strings/<lang>_<COUNTRY>.bin
 in sorted position (the app finds a key by binary search). Each table keeps its other entries and its mode.
+The stock texts the stock tables leave in English or in another language are translated (pod_i18n.STOCK_FIX).
 
 Checks, all before anything is written: every table parses and round-trips; the stock keys exist in the 13
 tables the language menu reaches, with the English the code says; no table has one of our keys already;
@@ -65,6 +66,19 @@ def check_coex(font, tables):
             check(dict(tables[loc]).get(k), f'{loc}: stock key {k!r} missing or empty')
 
 
+def check_fix(font, tables):
+    """The stock texts we translate (pod_i18n.STOCK_FIX): a key of the stock English table, a tidy text drawable in the shipped font, never en_US or Chinese, and not what the table has already."""
+    probe = StbText(font, 20)
+    for key, by in pod_i18n.STOCK_FIX.items():
+        check(key in dict(tables['en_US']) and key not in pod_i18n.TEXT and key not in pod_i18n.COEX_KEYS, f'{key!r}: not a stock key to translate')
+        check(by and set(by) <= set(pod_i18n.LOCALES) - {'en_US', 'zh_CN', 'zh_HK'}, f'{key!r}: tables {sorted(by)}')
+        for loc, t in by.items():
+            check(t and t == t.strip() and '%' not in t and all(ord(c) >= 0x20 for c in t), f'{key!r} {loc}: empty or untidy text {t!r}')
+            check(dict(tables[loc]).get(key) != t, f'{key!r} {loc}: the stock table already reads {t!r}')
+            for c in t:
+                if c != ' ': check(probe.box(c) is not None, f'{key!r} {loc}: no glyph with ink for U+{ord(c):04X} {c!r} in the shipped font')
+
+
 def apply(work):
     tables = {loc: awtk_strings.load(p) for loc, p in table_paths(work).items()}
     for loc in pod_i18n.LOCALES:
@@ -75,14 +89,15 @@ def apply(work):
     font = Ttf(os.path.join(work, FONT))
     check_texts(font)
     check_coex(font, tables)
-    new = pod_i18n.coex_tables(pod_i18n.add_to_tables(tables))   # (Wi-Fi and Bluetooth together: stock's two switch-on questions become one warning)
+    check_fix(font, tables)
+    new = pod_i18n.built_tables(tables)   # (our keys, the stock texts left untranslated, and Wi-Fi and Bluetooth together: stock's two switch-on questions become one warning)
     grew = {}
     for loc, p in table_paths(work).items():
         data = awtk_strings.serialize(new[loc])
         grew[loc] = len(data) - os.path.getsize(p)
         write_keep_mode(p, data)
     print(f'strings: {len(pod_i18n.TEXT)} keys added to {len(new)} tables, +{min(grew.values())}..+{max(grew.values())} bytes each '
-          f'(+{sum(grew.values())} in all); {len(pod_i18n.STOCK)} stock keys reused')
+          f'(+{sum(grew.values())} in all); {len(pod_i18n.STOCK)} stock keys reused, {sum(len(by) for by in pod_i18n.STOCK_FIX.values())} stock texts of {len(pod_i18n.STOCK_FIX)} keys translated')
 
 
 def main():

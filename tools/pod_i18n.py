@@ -1605,6 +1605,150 @@ def coex_tables(tables):
     return {loc: [(k, COEX_TEXT[table_for(loc)] if k in COEX_KEYS else v) for k, v in items] for loc, items in tables.items()}
 
 
+
+# Stock texts the stock tables leave in English (or in another language, or out). A block of keys that came with later firmware has the English text in the ten tables
+# besides en_US, zh_CN and zh_HK (Now Playing's Look up Album / Look up Artist, the digital filters, the format-card and New playlist messages, the sort orders ...);
+# a few more are English, misspelt or another language's in single tables, and it_IT lacks `fav` and `songer`. Each (key, table) below replaces the stock value
+# (or adds the missing entry); en_US, zh_CN and zh_HK are never touched. Found by comparing every table with en_US; tools/mod_strings.py applies them.
+_FL = ('ja_JP', 'ko_KR', 'fr_FR', 'ge_DE', 'sp_ES', 'it_IT', 'th_TH', 'po_PL', 'ru_RU', 'uk_UK')
+
+
+def _f(key, *texts, **by):
+    """key -> {locale: text}: `texts` are the ten _FL tables in order (none for a key fixed in single tables), `by` names single tables."""
+    assert len(texts) in (0, len(_FL)) and set(by) <= set(_FL), key
+    d = dict(zip(_FL, texts)); d.update(by)
+    return key, d
+
+
+def _own(key, text, *locs):
+    """A stock key that takes the translations of one of our own texts (all ten tables, or the ones named)."""
+    return key, {loc: TEXT[text][loc] for loc in (locs or _FL)}
+
+
+#       ja_JP    ko_KR    fr_FR    ge_DE    sp_ES    it_IT    th_TH    po_PL    ru_RU    uk_UK
+STOCK_FIX = dict([
+    # Now Playing's More sheet (patch/playmore.c: the stock rows listitem4 and listitem5) and the stock messages of a track without the tag
+    _f('player_albuminfo', 'アルバムを表示', '앨범 보기', "Voir l'album", 'Album anzeigen', 'Ver álbum', "Vai all'album", 'ดูอัลบั้ม', 'Pokaż album', 'Показать альбом', 'Показати альбом'),
+    _f('player_songerinfo', 'アーティストを表示', '아티스트 보기', "Voir l'artiste", 'Künstler anzeigen', 'Ver artista', "Vai all'artista", 'ดูศิลปิน', 'Pokaż wykonawcę', 'Показать исполнителя', 'Показати виконавця'),
+    _f('msg_notalbuminfo', 'この曲にはアルバム情報がありません', '이 곡에는 앨범 정보가 없습니다', "Ce fichier n'a pas d'info d'album", 'Diese Datei enthält keine Albumdaten', 'Este archivo no tiene datos de álbum',
+       "Questo file non ha dati sull'album", 'ไฟล์นี้ไม่มีข้อมูลอัลบั้ม', 'Ten plik nie ma danych albumu', 'В файле нет данных об альбоме', 'У файлі немає даних про альбом'),
+    _f('msg_notsongerinfo', 'この曲にはアーティスト情報がありません', '이 곡에는 아티스트 정보가 없습니다', "Ce fichier n'a pas d'info d'artiste", 'Diese Datei enthält keine Künstlerdaten', 'Este archivo no tiene datos de artista',
+       "Questo file non ha dati sull'artista", 'ไฟล์นี้ไม่มีข้อมูลศิลปิน', 'Ten plik nie ma danych wykonawcy', 'В файле нет данных об исполнителе', 'У файлі немає даних про виконавця'),
+    # playlists (the New playlist keyboard's placeholder and its message box: STOCK above), the keyboards' placeholders, Search's hint
+    _f('msg_newplaylists', 'プレイリスト名を入力', '플레이리스트 이름 입력', 'Nom de la playlist', 'Name der Playlist eingeben', 'Nombre de la lista', 'Nome della playlist', 'ป้อนชื่อเพลย์ลิสต์', 'Wpisz nazwę playlisty',
+       'Введите название плейлиста', 'Введіть назву плейлиста'),
+    _f('msg_playlistexist', 'プレイリストはすでに存在します', '이미 있는 플레이리스트입니다', 'La playlist existe déjà', 'Playlist existiert bereits', 'La lista ya existe', 'La playlist esiste già', 'มีเพลย์ลิสต์นี้อยู่แล้ว',
+       'Playlista już istnieje', 'Плейлист уже существует', 'Плейлист уже існує'),
+    _f('keyboard_keyword', 'キーワードを入力', '키워드 입력', 'Saisir un mot-clé', 'Suchbegriff eingeben', 'Introduce una palabra clave', 'Inserisci una parola chiave', 'ป้อนคำค้นหา', 'Wpisz słowo kluczowe',
+       'Введите ключевое слово', 'Введіть ключове слово'),
+    _f('keyboard_netname', 'ネットワーク名を入力', '네트워크 이름 입력', 'Saisir le nom du réseau', 'Netzwerknamen eingeben', 'Introduce el nombre de la red', 'Inserisci il nome della rete', 'ป้อนชื่อเครือข่าย', 'Wpisz nazwę sieci',
+       'Введите имя сети', 'Введіть назву мережі'),
+    _f('keyboard_password', 'パスワードを入力', '비밀번호 입력', 'Saisir le mot de passe', 'Passwort eingeben', 'Introduce la contraseña', 'Inserisci la password', 'ป้อนรหัสผ่าน', 'Wpisz hasło', 'Введите пароль', 'Введіть пароль'),
+    _f('search_tips1', '曲、アーティスト、アルバムを検索', '노래, 아티스트, 앨범 검색', 'Titres, artistes, albums', 'Titel, Künstler, Alben suchen', 'Buscar canciones, artistas, álbumes', 'Cerca brani, artisti, album',
+       'ค้นหาเพลง ศิลปิน อัลบั้ม', 'Szukaj utworów, wykonawców, albumów', 'Поиск песен, исполнителей, альбомов', 'Пошук пісень, виконавців, альбомів'),
+    # the sort orders
+    _f('title_sort', '並び順', '정렬 순서', 'Ordre de tri', 'Sortierung', 'Orden de la lista', 'Ordinamento', 'การเรียงลำดับ', 'Sortowanie', 'Сортировка', 'Сортування'),
+    _f('sort_alphabet', 'アルファベット順', '알파벳순', 'Alphabétique', 'Alphabetisch', 'Alfabético', 'Alfabetico', 'ตามตัวอักษร', 'Alfabetycznie', 'По алфавиту', 'За алфавітом'),
+    _own('sort_filename', 'File Name'),
+    _f('sort_format', 'ファイル形式', '파일 형식', 'Format de fichier', 'Dateiformat', 'Formato de archivo', 'Formato file', 'รูปแบบไฟล์', 'Format pliku', 'Формат файла', 'Формат файлу'),
+    _f('sort_time_asc', '追加日時 (昇順)', '추가한 시간 (오름차순)', "Date d'ajout (croissant)", 'Hinzugefügt (aufsteigend)', 'Fecha de adición (ascendente)', 'Data di aggiunta (crescente)', 'เวลาที่เพิ่ม (น้อยไปมาก)',
+       'Data dodania (rosnąco)', 'Дата добавления (по возрастанию)', 'Дата додавання (за зростанням)'),
+    _f('sort_time_desc', '追加日時 (降順)', '추가한 시간 (내림차순)', "Date d'ajout (décroissant)", 'Hinzugefügt (absteigend)', 'Fecha de adición (descendente)', 'Data di aggiunta (decrescente)', 'เวลาที่เพิ่ม (มากไปน้อย)',
+       'Data dodania (malejąco)', 'Дата добавления (по убыванию)', 'Дата додавання (за спаданням)'),
+    # formatting the card
+    _f('system_formatcard', 'カードをフォーマット', '카드 포맷', 'Formater la carte', 'Karte formatieren', 'Formatear tarjeta', 'Formatta scheda', 'ฟอร์แมตการ์ด', 'Formatuj kartę', 'Форматировать карту', 'Форматувати картку'),
+    _f('msg_checkformat', 'カードをフォーマットしますか?', '카드를 포맷할까요?', 'Formater la carte ?', 'Karte formatieren?', '¿Formatear la tarjeta?', 'Formattare la scheda?', 'ฟอร์แมตการ์ดหรือไม่', 'Sformatować kartę?',
+       'Форматировать карту?', 'Форматувати картку?'),
+    _f('msg_warnformt', 'すべてのデータが削除されます!', '모든 데이터가 삭제됩니다!', 'Toutes les données seront effacées !', 'Alle Daten werden gelöscht!', '¡Se borrarán todos los datos!', 'Tutti i dati verranno eliminati!',
+       'ข้อมูลทั้งหมดจะถูกลบ!', 'Wszystkie dane zostaną usunięte!', 'Все данные будут удалены!', 'Усі дані буде видалено!'),
+    _f('msg_formating', 'フォーマット中', '포맷 중', 'Formatage en cours', 'Formatierung läuft', 'Formateando', 'Formattazione in corso', 'กำลังฟอร์แมต', 'Formatowanie', 'Форматирование', 'Форматування'),
+    _f('msg_formatsuccess', 'フォーマットが完了しました', '포맷 완료', 'Formatage terminé', 'Formatierung abgeschlossen', 'Formateo completado', 'Formattazione completata', 'ฟอร์แมตสำเร็จ', 'Formatowanie zakończone',
+       'Форматирование завершено', 'Форматування завершено'),
+    _f('msg_formaterr', 'フォーマットに失敗しました', '포맷 실패', 'Échec du formatage', 'Formatierung fehlgeschlagen', 'Error al formatear', 'Formattazione non riuscita', 'ฟอร์แมตไม่สำเร็จ', 'Formatowanie nie powiodło się',
+       'Ошибка форматирования', 'Помилка форматування'),
+    # Bluetooth
+    _f('msg_btinit_run', 'Bluetoothを起動中', 'Bluetooth 시작 중', 'Démarrage du Bluetooth', 'Bluetooth wird gestartet', 'Iniciando Bluetooth', 'Avvio del Bluetooth', 'กำลังเริ่ม Bluetooth', 'Uruchamianie Bluetooth',
+       'Запуск Bluetooth', 'Запуск Bluetooth'),
+    _f('msg_unpairing', 'ペアリングを解除しますか?', '페어링을 해제할까요?', 'Dissocier ?', 'Kopplung aufheben?', '¿Desemparejar?', "Annullare l'abbinamento?", 'ยกเลิกการจับคู่หรือไม่', 'Rozparować?', 'Разорвать пару?', 'Скасувати пару?'),
+    _f('msg_disonnectbt', 'Bluetoothデバイスを切断してください', 'Bluetooth 기기 연결을 해제하세요', "Veuillez déconnecter l'appareil Bluetooth", 'Bitte Bluetooth-Gerät trennen', 'Desconecta el dispositivo Bluetooth',
+       'Disconnetti il dispositivo Bluetooth', 'โปรดยกเลิกการเชื่อมต่ออุปกรณ์ Bluetooth', 'Odłącz urządzenie Bluetooth', 'Отключите устройство Bluetooth', "Від'єднайте пристрій Bluetooth"),
+    # system settings
+    _own('about_ipaddr', 'IP Address'),
+    _f('rotate_0', '0度', '0도', '0 degré', '0 Grad', '0 grados', '0 gradi', '0 องศา', '0 stopni', '0 градусов', '0 градусів'),
+    _f('rotate_180', '180度', '180도', '180 degrés', '180 Grad', '180 grados', '180 gradi', '180 องศา', '180 stopni', '180 градусов', '180 градусів'),
+    _f('screenlock_timeshow', 'ロック画面の時刻表示', '잠금 화면 시간 표시', "Heure sur l'écran verrouillé", 'Uhrzeit auf Sperrbildschirm', 'Hora en pantalla de bloqueo', 'Ora sulla schermata di blocco', 'แสดงเวลาบนหน้าจอล็อก',
+       'Godzina na ekranie blokady', 'Время на экране блокировки', 'Час на екрані блокування'),
+    _f('sset_atmosphereled', 'アンビエントライト設定', '무드등 설정', "Éclairage d'ambiance", 'Ambientelicht', 'Luz ambiental', 'Luce ambiente', 'ไฟบรรยากาศ', 'Podświetlenie nastrojowe', 'Декоративная подсветка', 'Декоративне підсвічування'),
+    _f('ledfollowscreen', '画面に連動', '화면과 연동', "Suivre l'écran", 'Dem Bildschirm folgen', 'Seguir la pantalla', 'Segui lo schermo', 'ตามหน้าจอ', 'Jak ekran', 'Как экран', 'Як екран'),
+    # the digital filters
+    _f('filter_linearfast', 'リニアフェーズ高速ロールオフ', '선형 위상 고속 롤오프', 'Phase linéaire, atténuation rapide', 'Linearphasig, steiler Roll-off', 'Fase lineal, caída rápida', 'Fase lineare, roll-off rapido', 'เฟสเชิงเส้น โรลออฟเร็ว',
+       'Faza liniowa, szybki spadek', 'Линейная фаза, быстрый спад', 'Лінійна фаза, швидкий спад'),
+    _f('filter_linearslow', 'リニアフェーズ低速ロールオフ', '선형 위상 저속 롤오프', 'Phase linéaire, atténuation lente', 'Linearphasig, flacher Roll-off', 'Fase lineal, caída lenta', 'Fase lineare, roll-off lento', 'เฟสเชิงเส้น โรลออฟช้า',
+       'Faza liniowa, wolny spadek', 'Линейная фаза, медленный спад', 'Лінійна фаза, повільний спад'),
+    _f('filter_minifast', 'ミニマムフェーズ高速ロールオフ', '최소 위상 고속 롤오프', 'Phase minimale, atténuation rapide', 'Minimalphasig, steiler Roll-off', 'Fase mínima, caída rápida', 'Fase minima, roll-off rapido', 'เฟสต่ำสุด โรลออฟเร็ว',
+       'Faza minimalna, szybki spadek', 'Минимальная фаза, быстрый спад', 'Мінімальна фаза, швидкий спад'),
+    _f('filter_minislow', 'ミニマムフェーズ低速ロールオフ', '최소 위상 저속 롤오프', 'Phase minimale, atténuation lente', 'Minimalphasig, flacher Roll-off', 'Fase mínima, caída lenta', 'Fase minima, roll-off lento', 'เฟสต่ำสุด โรลออฟช้า',
+       'Faza minimalna, wolny spadek', 'Минимальная фаза, медленный спад', 'Мінімальна фаза, повільний спад'),
+    _f('filter_minimum', 'ミニマムフェーズ', '최소 위상', 'Phase minimale', 'Minimalphasig', 'Fase mínima', 'Fase minima', 'เฟสต่ำสุด', 'Faza minimalna', 'Минимальная фаза', 'Мінімальна фаза'),
+    _f('filter_apodizing', 'アポダイジング高速ロールオフ', '아포다이징 고속 롤오프', 'Apodisant, atténuation rapide', 'Apodisierend, steiler Roll-off', 'Apodizante, caída rápida', 'Apodizzante, roll-off rapido', 'อะโพไดซิง โรลออฟเร็ว',
+       'Apodyzujący, szybki spadek', 'Аподизирующий, быстрый спад', 'Аподизуючий, швидкий спад'),
+    _f('filter_brickwall', 'ブリックウォール', '브릭월 필터', 'Filtre brickwall', 'Brickwall-Filter', 'Filtro brickwall', 'Filtro brickwall', 'ฟิลเตอร์ Brick wall', 'Filtr brickwall', 'Фильтр brickwall', 'Фільтр brickwall'),
+    _f('filter_corrminifast', 'ミニマムフェーズ高速ロールオフ (補正)', '보정 최소 위상 고속 롤오프', 'Phase minimale corrigée, atténuation rapide', 'Minimalphasig korrigiert, steiler Roll-off', 'Fase mínima corregida, caída rápida',
+       'Fase minima corretta, roll-off rapido', 'เฟสต่ำสุดแบบปรับแก้ โรลออฟเร็ว', 'Faza minimalna skorygowana, szybki spadek', 'Скорректированная минимальная фаза, быстрый спад', 'Скоригована мінімальна фаза, швидкий спад'),
+    _f('filter_linearsfastapodizing', 'リニアフェーズ高速ロールオフ (アポダイジング)', '선형 위상 고속 롤오프 아포다이징', 'Phase linéaire, atténuation rapide, apodisant', 'Linearphasig, steiler Roll-off, apodisierend',
+       'Fase lineal, caída rápida, apodizante', 'Fase lineare, roll-off rapido, apodizzante', 'เฟสเชิงเส้น โรลออฟเร็ว อะโพไดซิง', 'Faza liniowa, szybki spadek, apodyzujący', 'Линейная фаза, быстрый спад, аподизирующий',
+       'Лінійна фаза, швидкий спад, аподизуючий'),
+    _f('filter_linearsfastripple', 'リニアフェーズ高速ロールオフ (低リップル)', '선형 위상 고속 롤오프 저리플', 'Phase linéaire, atténuation rapide, faible ondulation', 'Linearphasig, steiler Roll-off, geringe Welligkeit',
+       'Fase lineal, caída rápida, bajo rizado', 'Fase lineare, roll-off rapido, basso ripple', 'เฟสเชิงเส้น โรลออฟเร็ว ริปเปิลต่ำ', 'Faza liniowa, szybki spadek, niskie tętnienia', 'Линейная фаза, быстрый спад, низкие пульсации',
+       'Лінійна фаза, швидкий спад, низькі пульсації'),
+    _f('filter_minimumdispersion', 'ミニマムフェーズ低速ロールオフ (低分散)', '최소 위상 저속 롤오프 저분산', 'Phase minimale, atténuation lente, faible dispersion', 'Minimalphasig, flacher Roll-off, geringe Dispersion',
+       'Fase mínima, caída lenta, baja dispersión', 'Fase minima, roll-off lento, bassa dispersione', 'เฟสต่ำสุด โรลออฟช้า การกระจายต่ำ', 'Faza minimalna, wolny spadek, niska dyspersja', 'Минимальная фаза, медленный спад, низкая дисперсия',
+       'Мінімальна фаза, повільний спад, низька дисперсія'),
+    # single tables: English left in place
+    _f('gain_high', ja_JP='高ゲイン', ko_KR='높음', it_IT='Alto'),
+    _f('gain_low', ja_JP='低ゲイン', ko_KR='낮음', it_IT='Basso'),
+    _own('powerm_saver', 'Auto-Shutdown', 'ja_JP'),
+    _f('pset_gapless', ja_JP='ギャップレス再生'),
+    _f('sset_carmode', ja_JP='車載モード'),
+    _f('memplay_off', ko_KR='끄기'),
+    _own('recentadd', 'Recently Added', 'ko_KR'),
+    _f('msg_btabnormal', th_TH='Bluetooth ผิดปกติ'),
+    _own('msg_notmemory', 'Not enough memory', 'ge_DE', 'sp_ES', 'th_TH', 'po_PL', 'uk_UK'),
+    _f('player_multiple', sp_ES='Velocidad de reproducción', it_IT='Velocità di riproduzione'),
+    _f('player_onlinesearch', ge_DE='Cover und Songtext laden'),
+    _f('playmode_listplay', it_IT='Riproduzione in ordine'),
+    _f('powerm_standby', it_IT='Standby automatico'),
+    _f('sset_display', it_IT='Impostazioni schermo'),
+    _f('system_scrotate', it_IT='Rotazione schermo'),
+    _f('sset_doublewake', it_IT='Doppio tocco per accendere lo schermo', uk_UK='Подвійний дотик для ввімкнення екрана'),
+    _f('usb_disconnect', it_IT='USB disconnesso'),
+    _f('scover_lyric', po_PL='Tekst'),
+    # single tables: another language's text (ru_RU and uk_UK hold each other's; Thai has the Spanish word; ru_RU's Artist is Ukrainian), a misspelling (po_PL "Astysta"), and the two keys it_IT lacks
+    _f('msg_actionnotsupport', ge_DE='Nicht lokale Titel werden derzeit nicht unterstützt', it_IT='Brani non locali, attualmente non supportati', ru_RU='Не локальные файлы временно не поддерживаются',
+       uk_UK='Не локальні файли тимчасово не підтримуються'),
+    _f('dsdmode_native', th_TH='Native'),
+    _own('songer', 'Artist', 'it_IT', 'po_PL', 'ru_RU'),
+    _own('fav', 'Favorites', 'it_IT'),
+])
+
+
+def fix_tables(tables):
+    """tables: {locale: [(key, value), ...]} -> the same with STOCK_FIX's texts in place of the stock values; a key a reachable table lacks is added in sorted
+    position (a stub table keeps its eleven entries: only a key it has is replaced, with its twin's text)."""
+    out = {}
+    for loc, items in tables.items():
+        fix = {k: by[table_for(loc)] for k, by in STOCK_FIX.items() if table_for(loc) in by}
+        have = {k for k, _ in items}
+        new = [(k, fix.get(k, v)) for k, v in items] + ([(k, v) for k, v in fix.items() if k not in have] if loc in LOCALES else [])
+        out[loc] = sorted(new, key=lambda kv: kv[0].encode())
+    return out
+
+
+def built_tables(tables):
+    """The shipped tables of the stock ones: our keys added, the untranslated stock texts translated, the Wi-Fi + Bluetooth warning."""
+    return coex_tables(fix_tables(add_to_tables(tables)))
+
+
 def tr(locale, key, stock=None):
     """What a widget with tr_text `key` shows in `locale`. Our keys: the TEXT entry. A stock key: the entry of `stock`
     (a {locale: {key: text}} read from the shipped tables), else the key itself, as locale_info_tr returns it."""
