@@ -25,7 +25,7 @@ SYSBAR = pod.DATA['SYSTEM_BAR'][0]
 THEME_FILE = '/mnt/data/m1plus/cassette-theme'
 THEMES = tape_art.THEME_NAMES
 W, H = O['TP_W'], O['TP_H']                       # landscape 480 x 320
-FIELDS = ('title', 'artist', 'album', 'times', 'big', 'model', 'status')
+FIELDS = ('title', 'artist', 'album', 'times', 'big', 'model', 'status', 'spec')   # the label's; 'badge' (the sticker) is on the shell
 OUT = os.path.join(ROOT, 'out', 'preview')
 
 
@@ -60,13 +60,15 @@ class TM(Machine):
         self.mode = 0
         self.font = font
         self.mock_ms = 1000
+        self.info = dict(bitrate=915000, rate=44100, fmt='FLAC', bits=16)   # mclGetInfo's record; None: the player has no stream
+        self.info_calls = 0
         self.view = self.widgets['tape_view']
         # the view as a widget struct (demo's own widget_to_local walks x, y and the parent): window (0, 0) > view (0, 0)
         win = self.alloc(0x80)
         for off, v in ((0, 0), (4, 0), (8, 320), (0xc, 480), (0x44, 0)): self.setword(win + off, v)
         for off, v in ((0, 0), (4, 0), (8, 320), (0xc, 480), (0x44, win)): self.setword(self.view + off, v)
         self.images = {n: self.png(n) for n in tape_art.NAMES}
-        for n in ('mclGetPlayStatus', 'playpause_quick_click', 'next_quick_click', 'prev_quick_click', 'get_playtimeandlength', 'widget_get_text', 'time_now_ms'):
+        for n in ('mclGetPlayStatus', 'playpause_quick_click', 'next_quick_click', 'prev_quick_click', 'get_playtimeandlength', 'widget_get_text', 'time_now_ms', 'mclGetInfo'):
             self.handlers[pod.FUNCTIONS[n][2]] = n
         self.glyph_calls = 0
 
@@ -80,6 +82,10 @@ class TM(Machine):
         ret = None
         if name == 'mclGetPlayStatus': ret = self.status
         elif name == 'time_now_ms': ret = self.mock_ms
+        elif name == 'mclGetInfo':   # the 0x34 byte record: bit/s, Hz, the codec's name at 0x10, bits at 0x30
+            self.info_calls += 1
+            i = self.info or dict(bitrate=0, rate=0, fmt='', bits=0)
+            self.u.mem_write(a0, struct.pack('<ii8x32si', i['bitrate'], i['rate'], i['fmt'].encode(), i['bits'])); ret = 1
         elif name == 'playpause_quick_click':
             self.calls.append(('playpause_quick_click',)); self.cmds.append(('playpause',)); self.status = 2 if self.status != 2 else 3; ret = 1
         elif name in ('next_quick_click', 'prev_quick_click'):
@@ -142,8 +148,8 @@ class TM(Machine):
         return list(self.blits)
 
     def frame_bitmap(self):
-        """(data address, w, h) of the page's frame: the last 320 x 480 bitmap it made."""
-        return [v for v in self.bitmaps.values() if v[1:] == (320, 480)][-1]
+        """(data address, w, h) of the page's frame: the first 320 x 480 bitmap it made (the shells, also a later theme's, come after it)."""
+        return [v for v in self.bitmaps.values() if v[1:] == (320, 480)][0]
 
     def frame(self):
         data, w, h = self.frame_bitmap()
@@ -180,7 +186,7 @@ class TM(Machine):
 def machine(font=None, playing=True, status=2, theme=0, **kw):
     m = TM(font)
     m.status = status
-    if theme: m.fs[THEME_FILE] = b'%d\n' % theme
+    if theme is not None: m.fs[THEME_FILE] = b'%d\n' % theme   # None: nothing saved (Auto)
     if playing: m.playing(**kw)
     return m
 
@@ -217,7 +223,7 @@ def number_tests(ctx):
     expect(O['TP_MARK_PX'] == A.MARK_PX and [(O['TP_PLAY_X'], O['TP_PLAY_Y'], O['TP_PLAY_X'] + A.MARK_PX, O['TP_PLAY_Y'] + A.MARK_PX),
                                               (O['TP_REPEAT_X'], O['TP_REPEAT_Y'], O['TP_REPEAT_X'] + A.MARK_PX, O['TP_REPEAT_Y'] + A.MARK_PX),
                                               (O['TP_SCREW_X'], O['TP_SCREW_Y'], O['TP_SCREW_X'] + A.MARK_PX, O['TP_SCREW_Y'] + A.MARK_PX)] == A.mark_rects(), 'the marks\' cells, the close screw\'s the third')
-    expect(THEMES == ('normal', 'chrome', 'metal') and set(A.THEMES) == set(THEMES), 'three themes in the saved order: Normal (0, the default), Chrome (1), Metal (2)')
+    expect(THEMES == ('normal', 'chrome', 'metal') and set(A.THEMES) == set(THEMES), 'three themes in the saved order: Normal (0), Chrome (1), Metal (2)')
     expect(O['TP_SCREW_X'] == A.mark_rects()[2][0] and A.CLOSE_RECT == (O['TP_CLOSE_X0'], O['TP_CLOSE_Y0'], O['TP_CLOSE_X1'], O['TP_CLOSE_Y1']), 'the close screw\'s cell and touch area')
     expect(O['TP_LUT_N'] > (2 * (A.PACK_MAX + 1)) ** 2, 'the distance table reaches a full pack')
     expect(O['TP_PLAY_MS'] < O['TP_IDLE_MS'] and 60 <= O['TP_PLAY_MS'] <= 80, 'the timer: 70 ms while playing, 500 ms paused')
@@ -255,14 +261,14 @@ def asset_tests(ctx):
         got = stock_target(m, root, x, y)
         expect(got[-1] == 'tape_view', f'a touch at ({x}, {y}) reaches tape_view ({got})')
     # the pictures: sizes the payload loads, the generator's output pixel for pixel, no image in the tree is bigger than the budget
-    sizes = {'tape_top': (74, 280), 'tape_screw': (26, 26), 'tape_tex': (320, 480)}
+    sizes = {'tape_top': (74, 280), 'tape_screw': (26, 26), 'tape_tex': (320, 480), 'tape_badge': (24, 52)}
     for t in THEMES: sizes.update({f'tape_shell_{t}': (320, 480), f'tape_hubs_{t}': (30, 720), f'tape_marks_{t}': (26, 78)})
     gen = tape_art.images()
     for n, size in sizes.items():
         im = asset_image(n)
         built = open(asset_path(n), 'rb').read()
         expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() and same_pixels(built, gen[n]), f'{n}: {size}, the generator\'s PNG pixel for pixel')
-    expect(set(sizes) == set(tape_art.NAMES) and len(sizes) == 12, 'the pictures: three shared (tape_top, tape_screw, tape_tex) and three a theme (shell, hubs, marks)')
+    expect(set(sizes) == set(tape_art.NAMES) and len(sizes) == 13, 'the pictures: four shared (tape_top, tape_screw, tape_tex, tape_badge) and three a theme (shell, hubs, marks)')
     expect((tape_art.TOP_RECT[2] - tape_art.TOP_RECT[0], tape_art.TOP_RECT[3] - tape_art.TOP_RECT[1]) == (280, 74), 'tape_top: 280 x 74 landscape, 74 x 280 turned')
     total = sum(os.path.getsize(asset_path(n)) for n in sizes) + os.path.getsize(asset_path('pod_ic_tape'))
     per = {t: sum(os.path.getsize(asset_path(f'{n}_{t}')) for n in tape_art.PER_THEME) for t in THEMES}
@@ -332,11 +338,11 @@ def py_radii(pos, length):
     return math.isqrt(66 * 66 * 256 + 16 * 16 * 256 - take2), math.isqrt(take2)   # (supply, take-up)
 
 
-def py_pack(under, d, R, dx, dy):
+def py_pack(under, d, R, dx, dy, pk=(tape_art.PK_BASE, tape_art.PK_HI)):
     """tp_pack: the colour is tape_art.pack_rgb (the device's integer arithmetic, written once for the preview and here), the rim blended by the pixel's coverage."""
     if d < 0 or d > R + 8: return under
     cov = min(16, R + 8 - d)
-    c = tape_art.pack_rgb(d, R, dx, dy) + (255,)
+    c = tape_art.pack_rgb(d, R, dx, dy, pk) + (255,)
     return c if cov >= 16 else blend(under, c, cov * 255 // 16)
 
 
@@ -367,7 +373,7 @@ class Ref:
                 for cx, R in ((O['TP_REEL_X0'], rs), (O['TP_REEL_X1'], rt)):
                     dx, dy = 2 * (x - cx) + 1, 2 * (y - cy) + 1
                     d = lut(dx * dx + dy * dy)
-                    if clear or 0 <= d <= 16 * O['TP_HOLE_R']: c = py_pack(c, d, R, dx, dy)
+                    if clear or 0 <= d <= 16 * O['TP_HOLE_R']: c = py_pack(c, d, R, dx, dy, self.theme['pack'])
                 if T[0] <= x < T[2] and T[1] <= y < T[3]:
                     t = top[x - T[0], y - T[1]]
                     if t[3]: c = blend(c, t, t[3])
@@ -399,6 +405,13 @@ class Ref:
         x0, y0, x1, y1 = f['rect']; im, sh = self.img.load(), self.shell.load()
         for x in range(x0, x1):
             for y in range(y0, y1): im[x, y] = sh[x, y]
+        if name == 'badge' and text:   # the sticker under its text
+            if 'badge' not in _CACHE: _CACHE['badge'] = asset_image('tape_badge').transpose(Image.ROTATE_90)
+            bd = _CACHE['badge'].load()
+            for x in range(x0, x1):
+                for y in range(y0, y1):
+                    c = bd[x - x0, y - y0]
+                    if c[3]: im[x, y] = blend(im[x, y], c, c[3])
         chars = list(text)[:63]
         step = lambda ch: (font.step(font.glyph(ch), px_) if font.glyph(ch) else 4)
         w = sum(step(c) for c in chars)
@@ -418,7 +431,7 @@ class Ref:
                         for c in range(gw):
                             a = rows[r][c]; gx, gy = pen + gx0 + c, top + gy0 + asc + r
                             if a and x0 <= gx < x1 and y0 <= gy < y1:
-                                rgb = self.theme[f['colour']]
+                                rgb = tape_art.BADGE_INK if f['colour'] == 'badge_ink' else self.theme[f['colour']]
                                 im[gx, gy] = blend(im[gx, gy], rgb + (255,), a)
                 pen += step(ch)
 
@@ -428,12 +441,12 @@ def clock_of(m):
     t = _t.gmtime(m.wall + m.tz); return f'{t.tm_hour:02d}:{t.tm_min:02d}'
 
 
-def ref_frame(m, font, pos=14, length=562, reel_pos=None, theme='normal', playing=True, repeat=False, hub=(0, 5), title='So What', artist='Miles Davis', album='Kind of Blue', fmt='FLAC', vol=42, batt=60, charging=False, status_text=None):
+def ref_frame(m, font, pos=14, length=562, reel_pos=None, theme='normal', playing=True, repeat=False, hub=(0, 5), title='So What', artist='Miles Davis', album='Kind of Blue', fmt='FLAC 16/44.1', vol=42, batt=60, charging=False, status_text=None, badge=0):
     key = ('reels', theme, pos if reel_pos is None else reel_pos, length, tuple(hub), playing, repeat)   # the reels and the marks do not depend on the font: made once
     if key not in _CACHE:
         r = Ref(font, theme); r.reels(key[2], length, hub); r.marks_draw(playing, repeat); _CACHE[key] = r.img
     r = Ref(font, theme); r.img = _CACHE[key].copy()
-    r.field('big', 'A'); r.field('model', r.theme['model'])
+    r.field('big', 'A'); r.field('model', r.theme['model']); r.field('spec', r.theme['spec']); r.field('badge', tape_art.BADGE_TEXT[badge])
     r.field('title', title); r.field('artist', artist); r.field('album', album)
     r.field('times', tape_art.times_text(pos, length))
     text, size = status_text or tape_art.status_line(font, dict(batt=batt, charging=charging, vol=vol, fmt=fmt, clock=clock_of(m)))
@@ -501,7 +514,7 @@ def draw_tests(ctx):
     expect(n == 0, f'long title, artist and album are cut with an ellipsis to their room, glyphs inside their rectangles ({n} {first})')
     base = shell_land().load(); l2 = m2.landscape().load()
     out = [(x, y) for x in range(480) for y in range(320) if l2[x, y] != base[x, y]
-           and not any(r[0] <= x < r[2] and r[1] <= y < r[3] for r in [tape_art.TEXT[f]['rect'] for f in FIELDS] + [(100, 110, 380, 184), (410, 115, 436, 141), (410, 153, 436, 179)])]
+           and not any(r[0] <= x < r[2] and r[1] <= y < r[3] for r in [tape_art.TEXT[f]['rect'] for f in FIELDS + ('badge',)] + [(100, 110, 380, 184), (410, 115, 436, 141), (410, 153, 436, 179)])]
     expect(not out, f'nothing outside the fields, the reel window and the marks differs from the shell ({out[:3]})')
     # a new track: the old text is gone
     m.play([m.song('Teardrop', 'Massive Attack', 'Mezzanine', path='/mnt/mmc/m/t.mp3', name='t.mp3')], 0); m.pt = (150, 330)
@@ -869,7 +882,7 @@ def life_tests(ctx):
            'the view takes pointer down, up and abort (no move) and its own paint, the window its three events: nothing else is registered')
     expect([c_[0] for c_ in c].count('timer_add') == 1 and ('timer_add', PSYMS['tp_first'], O['TP_FIRST_MS']) in c, 'one page-scoped timer, a 50 ms one-shot')
     expect(not any(n in m.names() for n in ('widget_set_visible', 'widget_move', 'widget_resize', 'widget_destroy', 'widget_set_name')), 'it moves, hides and destroys nothing in the asset')
-    expect(len(m.bitmaps) == 6 and sorted(v[1:] for v in m.bitmaps.values()) == sorted([(320, 480), (320, 480), (74, 280), (30, 720), (26, 78), (26, 26)]), 'six bitmaps: the shell, the frame and the four small pictures')
+    expect(len(m.bitmaps) == 7 and sorted(v[1:] for v in m.bitmaps.values()) == sorted([(320, 480), (320, 480), (74, 280), (30, 720), (26, 78), (26, 26), (24, 52)]), 'seven bitmaps: the shell, the frame and the five small pictures')
     expect(m.open() == 0 and 'window_open' not in m.names(), 'opening again while it is up does nothing')
     # the first look starts the page timer; playing: 70 ms
     m.calls = []; m.call(PSYMS['tp_first'], a0=0, count=200000000)
@@ -912,7 +925,7 @@ def life_tests(ctx):
     m.calls = []; m.call(fn, a0=WIN + 8, a1=0)
     expect('timer_remove' not in m.names() and 'bitmap_destroy' not in m.names(), 'a destroy of another window leaves the page alone')
     m.calls = []; m.call(fn, a0=cx, a1=0)
-    expect(('timer_remove', 0x777) in m.calls and [c_[0] for c_ in m.calls].count('bitmap_destroy') == 6 and 'free' in m.names(), 'destroy: the timer is removed, the six bitmaps and the distance table freed')
+    expect(('timer_remove', 0x777) in m.calls and [c_[0] for c_ in m.calls].count('bitmap_destroy') == 7 and 'free' in m.names(), 'destroy: the timer is removed, the seven bitmaps and the distance table freed')
     m.timers = []; m.calls = []
     expect(m.open() == 0 and ('window_open', 'm1plus_tape') in m.calls, 'the state is clean: it opens again')
     # nothing playing: the page shows Not Playing and still turns nothing
@@ -956,8 +969,8 @@ def theme_tests(ctx):
         expect(m.open() == 0, f'{t}: the page opens')
         m.timers = []; settle(m)
         names = sorted(set(m.loads))
-        want = sorted([f'tape_shell_{t}', f'tape_hubs_{t}', f'tape_marks_{t}', 'tape_top', 'tape_screw', 'tape_tex'])
-        expect(names == want, f'{t}: the pictures loaded are the theme\'s three and the three shared ones ({names})')
+        want = sorted([f'tape_shell_{t}', f'tape_hubs_{t}', f'tape_marks_{t}', 'tape_top', 'tape_screw', 'tape_tex', 'tape_badge'])
+        expect(names == want, f'{t}: the pictures loaded are the theme\'s three and the four shared ones ({names})')
         got = m.landscape()
         n, first = diff(got, ref_frame(m, font, theme=t, playing=False))
         expect(n == 0, f'{t}: the frame is the design\'s picture in the theme\'s colours, hubs, marks, model name {tape_art.THEMES[t]["model"]!r} ({n} {first})')
@@ -984,10 +997,10 @@ def setting_tests(ctx):
     rows_n = PSYMS[f'pod_rows_{P.NPSET_PAGE_INDEX}']
     np_i = next(i for i, r in enumerate(P.SETTINGS_PAGE.rows) if r.action == P.ACT_PAGE and r.arg == P.NPSET_PAGE_INDEX)
     expect(P.SETTINGS_PAGE.rows[np_i].label == 'Now Playing' and C.title == 'Now Playing' and [(r.label, r.action, r.arg) for r in C.rows][:3] == [('Theme', P.ACT_CTHEME, P.THEME_PAGE_INDEX), ('Record', P.ACT_VREC, P.RECORD_PAGE_INDEX), ('Base', P.ACT_VTHEME, P.VTHEME_PAGE_INDEX)]
-           and P.ACT_CTHEME in P.VALUE_ACTIONS and P.CTHEME_VALUES == ('Normal', 'Chrome', 'Metal') and C.key == 'm1plus_npset' and any(isinstance(x, P.Hdr) and x.text == 'Cassette Mode' for x in C.layout) and any(isinstance(x, P.Hdr) and x.text == 'Vinyl Mode' for x in C.layout),
+           and P.ACT_CTHEME in P.VALUE_ACTIONS and P.CTHEME_VALUES == ('Normal', 'Chrome', 'Metal', 'Auto') and C.key == 'm1plus_npset' and any(isinstance(x, P.Hdr) and x.text == 'Cassette Mode' for x in C.layout) and any(isinstance(x, P.Hdr) and x.text == 'Vinyl Mode' for x in C.layout),
            'Settings has the Now Playing row; its page has a Cassette Mode header over the Theme value row, then a Vinyl Mode header over the Record row')
-    expect([(r.label, r.action, r.arg) for r in T.rows] == [('Normal', P.ACT_THEMESET, 0), ('Chrome', P.ACT_THEMESET, 1), ('Metal', P.ACT_THEMESET, 2)] and T.title == 'Cassette Theme'
-           and T.key == 'm1plus_tapetheme' and P.CTHEME_VALUES == tuple(n.capitalize() for n in THEMES), 'the picker: Normal, Chrome and Metal in the saved order, titled Cassette Theme')
+    expect([(r.label, r.action, r.arg) for r in T.rows] == [('Normal', P.ACT_THEMESET, 0), ('Chrome', P.ACT_THEMESET, 1), ('Metal', P.ACT_THEMESET, 2), ('Auto', P.ACT_THEMESET, 3)] and T.title == 'Cassette Theme'
+           and T.key == 'm1plus_tapetheme' and P.CTHEME_VALUES == tuple(n.capitalize() for n in THEMES) + ('Auto',) and O['TP_THEME_AUTO'] == 3, 'the picker: Normal, Chrome, Metal and Auto (3: by the track) in the saved order, titled Cassette Theme')
     val = 'pod_value0'
 
     def open_page(data=None, language=None):
@@ -1004,9 +1017,9 @@ def setting_tests(ctx):
 
     m = open_page()
     expect(('window_open', C.key) in m.calls and ('widget_on', m.widgets['pod_row0'], O['EVT_CLICK']) in [c[:3] for c in m.calls], 'the Now Playing row opens the page and binds its row')
-    expect(label(m) == 'Normal' and THEME_FILE not in m.fs, 'with nothing saved the theme is Normal, and reading writes nothing')
+    expect(label(m) == 'Auto' and THEME_FILE not in m.fs, 'with nothing saved the theme is Auto, and reading writes nothing')
     for data, want in ((b'1\n', 'Chrome'), (b'1', 'Chrome'), (b'2\n', 'Metal'), (b'2', 'Metal'), (b'0\n', 'Normal'), (b'0', 'Normal'),
-                       (b'3\n', 'Normal'), (b'', 'Normal'), (b'x', 'Normal'), (b'11', 'Normal'), (b'1\n\n', 'Normal'), (b'12', 'Normal'), (b' 1\n', 'Normal'), (b'\x001', 'Normal'), (b'-1', 'Normal')):
+                       (b'3\n', 'Auto'), (b'3', 'Auto'), (b'4\n', 'Auto'), (b'', 'Auto'), (b'x', 'Auto'), (b'11', 'Auto'), (b'1\n\n', 'Auto'), (b'12', 'Auto'), (b' 1\n', 'Auto'), (b'\x001', 'Auto'), (b'-1', 'Auto'), (b'0\n\n', 'Auto'), (b'00', 'Auto')):
         expect(label(open_page(data)) == want, f'saved {data!r}: {want}')
     m = open_page()
     m.click('pod_row0')
@@ -1014,7 +1027,7 @@ def setting_tests(ctx):
 
     def open_pick(data=None):
         m = Machine()
-        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(3)] + [f'pod_check{i}' for i in range(3)])}
+        m.widgets = {n: 0x30000000 + 0x100 * i for i, n in enumerate(['btn_return', 'btn_backtoplayer'] + [f'pod_row{i}' for i in range(4)] + [f'pod_check{i}' for i in range(4)])}
         if data is not None: m.fs[THEME_FILE] = data
         m.call(PSYMS['on_row'], a0=rows_n, count=3000000)
         return m
@@ -1024,27 +1037,27 @@ def setting_tests(ctx):
         return v[-1] if v else None
 
     m = open_pick()
-    expect(('window_open', T.key) in m.calls and [shown(m, i) for i in range(3)] == [1, 0, 0], 'the picker opens with the check on Normal')
-    expect([[shown(open_pick(d), i) for i in range(3)] for d in (b'1\n', b'2\n', b'9')] == [[0, 1, 0], [0, 0, 1], [1, 0, 0]], 'a saved Chrome or Metal has the check; an invalid file is Normal')
+    expect(('window_open', T.key) in m.calls and [shown(m, i) for i in range(4)] == [0, 0, 0, 1], 'the picker opens with the check on Auto')
+    expect([[shown(open_pick(d), i) for i in range(4)] for d in (b'0\n', b'1\n', b'2\n', b'3\n', b'9')] == [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1], [0, 0, 0, 1]], 'a saved Normal, Chrome, Metal or Auto has the check; an invalid file is Auto')
     m = open_pick()
-    for want_file, k in ((b'1\n', 1), (b'2\n', 2), (b'0\n', 0), (b'1\n', 1)):
+    for want_file, k in ((b'1\n', 1), (b'2\n', 2), (b'3\n', 3), (b'0\n', 0), (b'1\n', 1)):
         m.click(f'pod_row{k}')
         expect(m.fs.get(THEME_FILE) == want_file and THEME_FILE + '.tmp' not in m.fs and ('rename', THEME_FILE + '.tmp', THEME_FILE) in m.calls and ('fsync', '/mnt/data/m1plus') in m.calls
-               and [shown(m, i) for i in range(3)] == [int(i == k) for i in range(3)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(THEME_FILE)!r}), the check follows')
+               and [shown(m, i) for i in range(4)] == [int(i == k) for i in range(4)], f'a tap on {T.rows[k].label}: written atomically ({m.fs.get(THEME_FILE)!r}), the check follows')
     m = open_pick(b'1\n'); m.fail.add(('write', THEME_FILE + '.tmp')); m.click('pod_row2')
     expect(m.fs.get(THEME_FILE) == b'1\n' and THEME_FILE + '.tmp' not in m.fs and not any(c[0] == 'widget_set_visible' for c in m.calls),
            'a failed write changes neither the file nor the check')
     m = open_pick(b'2\n'); m.fail.add(('rename', THEME_FILE)); m.click('pod_row0')
     expect(m.fs.get(THEME_FILE) == b'2\n' and not any(c[0] == 'widget_set_visible' for c in m.calls), 'a failed rename changes neither')
     # the setting is what the Tape page opens with
-    for data, t in ((None, 'normal'), (b'1\n', 'chrome'), (b'2\n', 'metal'), (b'7\n', 'normal'), (b'', 'normal')):
-        mt = machine(font=real_font(), status=3)
+    for data, t in ((None, 'chrome'), (b'0\n', 'normal'), (b'1\n', 'chrome'), (b'2\n', 'metal'), (b'7\n', 'chrome'), (b'', 'chrome')):   # nothing saved or not a theme: Auto, Chrome for the CD-quality FLAC that plays
+        mt = machine(font=real_font(), status=3, theme=None, path='/mnt/mmc/m/a.flac')
         if data is not None: mt.fs[THEME_FILE] = data
         mt.open()
         expect(f'tape_shell_{t}' in mt.loads and sum(u.startswith('tape_shell_') for u in mt.loads) == 1, f'the Tape page opens with the {t} theme for a saved {data!r}')
     # localisation: the value in every language is set by key
     for loc in pod_i18n.ALL_TABLES:
-        for data, key in ((None, 'Normal'), (b'1\n', 'Chrome'), (b'2\n', 'Metal')):
+        for data, key in ((b'0\n', 'Normal'), (b'1\n', 'Chrome'), (b'2\n', 'Metal'), (None, 'Auto')):
             expect(label(open_page(data, loc)) == key, f'{loc}: {key} is set by key')
     # the assets: the value label reads Normal until the payload sets it; the picker has the three rows with a hidden check each and the note
     tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_npset.bin'), 'rb').read())
@@ -1052,8 +1065,8 @@ def setting_tests(ctx):
     expect(row is not None and lab is not None and (lab.get('tr_text') or lab.get('text')) == 'Normal' and row.find('pod_icon') is not None and tree.find('label_title').get('tr_text') == 'Now Playing'
            and tree.find('pod_sec0_t').get('tr_text') == 'Cassette Mode', 'the page asset: a title Now Playing, the Cassette Mode header, one row with the cassette glyph and its value label')
     tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs/release/assets/default/raw/ui/m1plus_tapetheme.bin'), 'rb').read())
-    expect(all(tree.find(f'pod_check{i}').get('visible') == 'false' and tree.find(f'pod_check{i}').get('sensitive') == 'false' and tree.find(f'pod_row{i}').find('pod_icon') is None for i in range(3))
-           and tree.find('pod_note0_t').get('tr_text') == 'Applies the next time Cassette Mode opens.', 'the picker asset: three rows without a glyph, a hidden insensitive check each, the note')
+    expect(all(tree.find(f'pod_check{i}').get('visible') == 'false' and tree.find(f'pod_check{i}').get('sensitive') == 'false' and tree.find(f'pod_row{i}').find('pod_icon') is None for i in range(4))
+           and tree.find('pod_note0_t').get('tr_text') == 'Applies the next time Cassette Mode opens.', 'the picker asset: four rows without a glyph, a hidden insensitive check each, the note')
 
 
 def symmetry_tests(ctx):
@@ -1112,4 +1125,152 @@ def symmetry_tests(ctx):
     expect(480 % 4 == 0 and (A.CASS[0] - 5) % 4 == 0, 'the knurl grid starts at x 0 and 480 is a whole number of cells: the cells mirror about x 240')
 
 
-SECTIONS = [number_tests, symmetry_tests, asset_tests, theme_tests, setting_tests, draw_tests, reel_tests, hub_tests, mark_tests, status_tests, live_tests, touch_tests, idle_touch_tests, life_tests, paint_tests]
+SWITCH_MAX = 32000000   # instructions: the tick that changes the tape (three pictures decoded, the grain and the knurl over the shell, every reel pixel and mark again)
+
+
+def quality_tests(ctx):
+    """The playing stream's quality (the player's own record, mclGetInfo): the status line's format, the sticker, and with the Auto theme the tape itself; what a change of
+    track does and when; a tape whose pictures will not load."""
+    expect = ctx.expect
+    font = real_font()
+    I = lambda fmt, rate, bits, bitrate=900000: dict(bitrate=bitrate, rate=rate, fmt=fmt, bits=bits)
+    CASES = (   # the player's record, the file, the status line's format, Auto's tape, the sticker
+        (I('MP3', 44100, 16, 320000), 'a.mp3', 'MP3 320', 'normal', 0), (I('AAC', 44100, 16, 256999), 'a.m4a', 'M4A 256', 'normal', 0), (I('OGG', 48000, 16, 0), 'a.ogg', 'OGG', 'normal', 0),
+        (I('MP3', 96000, 24, 320000), 'a.mp3', 'MP3 320', 'normal', 0),
+        (I('ALAC', 44100, 16), 'a.m4a', 'M4A 16/44.1', 'chrome', 0), (I('FLAC', 44100, 16), 'a.flac', 'FLAC 16/44.1', 'chrome', 0), (I('FLAC', 48000, 16), 'a.flac', 'FLAC 16/48', 'chrome', 0),
+        (I('FLAC', 48000, 24), 'a.flac', 'FLAC 24/48', 'metal', 1), (I('FLAC', 44100, 24), 'a.flac', 'FLAC 24/44.1', 'metal', 1), (I('FLAC', 88200, 16), 'a.flac', 'FLAC 16/88.2', 'metal', 1),
+        (I('FLAC', 96000, 24), 'a.flac', 'FLAC 24/96', 'metal', 1), (I('WAV', 192000, 24), 'a.wav', 'WAV 24/192', 'metal', 1), (I('APE', 176400, 24), 'a.ape', 'APE 24/176.4', 'metal', 1),
+        (I('DSD', 2822400, 1), 'a.dsf', 'DSD64', 'metal', 2), (I('DSF', 5644800, 1), 'a.dff', 'DSD128', 'metal', 2), (I('DSD', 11289600, 1), 'a.dsf', 'DSD256', 'metal', 2),
+        (None, 'a.flac', 'FLAC', 'chrome', 0), (None, 'a.mp3', 'MP3', 'normal', 0), (None, 'a.dsf', 'DSF', 'metal', 2), (None, 'a.wav', 'WAV', 'chrome', 0),
+        (I('', 44100, 16), 'a.flac', 'FLAC', 'chrome', 0), (I('FLAC', 0, 16), 'a.mp3', 'MP3', 'normal', 0),
+    )
+
+    def page(info, name, theme):
+        m = machine(font=font, status=3, theme=theme, path='/mnt/mmc/m/' + name); m.info = info
+        assert m.open() == 0
+        m.timers = []; settle(m)
+        return m
+
+    for info, name, fmt, tape, badge in CASES:
+        m = page(info, name, 3)
+        shells = [u for u in m.loads if u.startswith('tape_shell_')]
+        n, first = diff(m.landscape(), ref_frame(m, font, theme=tape, playing=False, fmt=fmt, badge=badge))
+        expect(shells == [f'tape_shell_{tape}'] and n == 0,
+               f'Auto, {name} {info and (info["fmt"], info["rate"], info["bits"], info["bitrate"])}: one shell loaded, {tape}; "{fmt}" on the status line; sticker {tape_art.BADGE_TEXT[badge]!r} ({shells}, {n} {first})')
+        if badge == 1 and info['rate'] == 96000: dump(m, 'quality-hires')
+        if badge == 2 and info and info['rate'] == 2822400: dump(m, 'quality-dsd')
+        if fmt == 'MP3 320' and info and info['rate'] == 44100: dump(m, 'quality-lossy')
+        if fmt == 'FLAC 16/44.1': dump(m, 'quality-cd')
+    # a chosen theme keeps its tape: the format and the sticker still follow the stream
+    for t in range(3):
+        m = page(I('FLAC', 96000, 24), 'a.flac', t)
+        n, first = diff(m.landscape(), ref_frame(m, font, theme=THEMES[t], playing=False, fmt='FLAC 24/96', badge=1))
+        expect([u for u in m.loads if u.startswith('tape_shell_')] == [f'tape_shell_{THEMES[t]}'] and n == 0, f'{THEMES[t]} chosen, a hi-res track: the chosen tape with the HI-RES sticker ({n} {first})')
+    # nothing playing: Normal, no sticker, no format
+    m = machine(font=font, status=1, playing=False, theme=3); m.info = None
+    expect(m.open() == 0 and [u for u in m.loads if u.startswith('tape_shell_')] == ['tape_shell_normal'], 'Auto with nothing playing opens with the Normal tape')
+    # the sticker's picture missing: the page opens, no sticker
+    m = machine(font=font, status=3, theme=3); m.info = I('FLAC', 96000, 24); del m.images['tape_badge']
+    expect(m.open() == 0, 'no tape_badge: the page opens')
+    m.timers = []; settle(m)
+    n, first = diff(m.landscape(), ref_frame(m, font, theme='metal', playing=False, fmt='FLAC 24/96', badge=0))
+    expect(n == 0, f'no tape_badge: the hi-res track shows no sticker, everything else as designed ({n} {first})')
+
+    # a change of track, Auto: the text at once with the extension as the format; the player is not asked for TP_INFO_MS; then the tape, the format and the sticker
+    m = page(I('MP3', 44100, 16, 320000), 'a.mp3', 3)
+    def change(title, name, info, pos=30, length=300):
+        m.play([m.song(title, 'Artist', 'Album', path='/mnt/mmc/m/' + name, name=name)], 0); m.pt = (pos, length); m.info = info
+        m.loads.clear(); m.info_calls = 0
+    change('Hi', 'b.flac', I('FLAC', 96000, 24))
+    m.tick(70); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='normal', playing=False, title='Hi', artist='Artist', album='Album', fmt='FLAC'))
+    expect(n == 0 and not m.loads and m.info_calls == 1, f'the new track\'s first look: its text on the old tape, "FLAC" alone, the record read once to tell a later one from and not used, nothing loaded ({n} {first}, {m.loads}, {m.info_calls})')
+    for _ in range(8): m.tick(70)
+    expect(not m.loads and m.info_calls == 1 and O['TP_INFO_MS'] == 600, 'for 600 ms the player\'s record is not looked at (it may be the last track\'s)')
+    before = len(m.bitmaps)
+    m.count(); m.tick(70); cost = m.icount
+    destroyed = [c_[0] for c_ in m.calls].count('bitmap_destroy')
+    whole = any(r and r[0] <= 0 and r[1] <= 0 and r[2] >= 320 and r[3] >= 480 for r in m.rects)
+    m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Hi', artist='Artist', album='Album', fmt='FLAC 24/96', badge=1))
+    expect(sorted(m.loads) == ['tape_hubs_metal', 'tape_marks_metal', 'tape_shell_metal', 'tape_tex'] and n == 0,
+           f'then the tape changes: Metal\'s three pictures (and the texture) loaded, the whole frame the design\'s Metal picture with the track, "FLAC 24/96" and the HI-RES sticker ({sorted(m.loads)}, {n} {first})')
+    expect(len(m.bitmaps) == before == 7 and destroyed >= 3 and whole, f'the old tape\'s three bitmaps are freed (still {len(m.bitmaps)} bitmaps) and the whole view is invalidated ({m.rects[:2]})')
+    print('  a change of tape: %d instructions in its tick' % cost)
+    expect(cost < SWITCH_MAX, f'the tick that changes the tape costs {cost} instructions (budget {SWITCH_MAX})')
+    dump(m, 'quality-switch')
+    m.loads.clear(); m.tick(70); m.tick(500)
+    expect(not m.loads, 'the next ticks load nothing')
+    # the same tape for the next track: nothing loaded, the sticker stays through the wait and is right after it
+    change('Dsd', 'c.dsf', I('DSD', 2822400, 1))
+    m.tick(70); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Dsd', artist='Artist', album='Album', fmt='DSF', badge=1))
+    expect(n == 0, f'a DSD track after it: during the wait the old sticker stays and the format is the extension ({n} {first})')
+    m.tick(600); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Dsd', artist='Artist', album='Album', fmt='DSD64', badge=2))
+    expect(n == 0 and not m.loads, f'then "DSD64" and the DSD sticker on the same tape, nothing loaded ({n} {first}, {m.loads})')
+    # the player's record arrives late (still empty after the wait): the extension's tape first, the stream's when it is there
+    change('Late', 'd.flac', None)
+    m.tick(70); m.tick(600); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='chrome', playing=False, title='Late', artist='Artist', album='Album', fmt='FLAC'))
+    expect(n == 0, f'no record after the wait: the tape of the extension (Chrome for .flac), no sticker ({n} {first})')
+    m.info = I('FLAC', 192000, 24); m.tick(70); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Late', artist='Artist', album='Album', fmt='FLAC 24/192', badge=1))
+    expect(n == 0, f'the record arrives: Metal, "FLAC 24/192", HI-RES ({n} {first})')
+    # a VBR file: the bit rate shown is the first look's at the track's own record, the status line is not redrawn as it moves
+    shown = lambda title, fmt: diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='normal', playing=False, title=title, artist='Artist', album='Album', fmt=fmt))[0] == 0
+    change('Vbr', 'e.mp3', I('FLAC', 192000, 24)); m.tick(70)      # the last track's record at the change, this track's within the wait
+    m.info = I('MP3', 44100, 16, 192000); m.tick(600); m.paint()
+    a = m.landscape()
+    m.info = I('MP3', 44100, 16, 224000); m.tick(70); m.paint()
+    expect(a.tobytes() == m.landscape().tobytes() and shown('Vbr', 'MP3 192'), 'a moving bit rate does not redraw: "MP3 192" stays')
+    # the last track's record outlives the wait, the next track has its codec, rate and bits: its bit rate is shown when its record arrives, and then stays
+    change('Stale', 'g.mp3', I('MP3', 44100, 16, 128000)); m.tick(70); m.tick(600); m.paint()
+    expect(shown('Stale', 'MP3 128'), 'the record still the one of the change after the wait: shown as it is ("MP3 128")')
+    m.tick(70); m.info = I('MP3', 44100, 16, 320000); m.tick(70); m.paint()
+    expect(shown('Stale', 'MP3 320'), 'the track\'s own record arrives with another bit rate only: "MP3 320"')
+    m.info = I('MP3', 44100, 16, 300000); m.tick(70); m.paint()
+    expect(shown('Stale', 'MP3 320'), 'and from then a moving bit rate does not redraw')
+    # the page leaves the front and comes back inside the wait (a full redraw of the same track): the wait and the doubt are kept
+    change('Front', 'h.mp3', I('MP3', 44100, 16, 128000)); m.tick(70)
+    m.fire(EVT_BG, WIN); m.fire(EVT_FG, WIN); m.info_calls = 0; m.mock_ms += 70; m.first(); m.paint()
+    expect(m.info_calls == 0 and shown('Front', 'MP3'), f'back in front 140 ms after the change: the record is still not used ({m.info_calls} reads)')
+    m.tick(600); m.info = I('MP3', 44100, 16, 320000); m.tick(70); m.paint()
+    expect(shown('Front', 'MP3 320'), 'and the track\'s own record, arriving after the wait, is taken ("MP3 320")')
+    # the page opened right after a change of track, the record still the last track's: shown as it is, the track's own taken when it arrives
+    m = page(I('MP3', 44100, 16, 128000), 'a.mp3', 3)
+    n, first = diff(m.landscape(), ref_frame(m, font, theme='normal', playing=False, fmt='MP3 128'))
+    m.info = I('MP3', 44100, 16, 320000); m.tick(70); m.paint()
+    n2, first2 = diff(m.landscape(), ref_frame(m, font, theme='normal', playing=False, fmt='MP3 320'))
+    m.info = I('MP3', 44100, 16, 300000); m.tick(70); m.paint()
+    expect(n == 0 and n2 == 0 and diff(m.landscape(), ref_frame(m, font, theme='normal', playing=False, fmt='MP3 320'))[0] == 0,
+           f'opened on a record that then changes its bit rate only: "MP3 128", then "MP3 320", which stays ({n} {first}, {n2} {first2})')
+    m = page(I('MP3', 44100, 16, 320000), 'a.mp3', 3)
+    # a tape whose pictures will not load: the one shown stays, tried once for the track, again for the next
+    del m.images['tape_shell_metal']
+    change('Gone', 'f.flac', I('FLAC', 96000, 24)); m.tick(70); m.tick(600); m.paint()
+    tries = m.loads.count('tape_shell_metal')
+    for _ in range(5): m.tick(70)
+    m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='normal', playing=False, title='Gone', artist='Artist', album='Album', fmt='FLAC 24/96', badge=1))
+    expect(tries == 1 and m.loads.count('tape_shell_metal') == 1 and len(m.bitmaps) == 7 and n == 0,
+           f'a missing shell: the tape shown stays (Normal), with the track\'s text, format and sticker; tried once, nothing left allocated ({m.loads.count("tape_shell_metal")} tries, {len(m.bitmaps)} bitmaps, {n} {first})')
+    # a chosen theme never changes its tape
+    m = page(I('MP3', 44100, 16, 320000), 'a.mp3', 1)
+    m.play([m.song('Hi', path='/mnt/mmc/m/b.flac', name='b.flac')], 0); m.info = I('FLAC', 96000, 24); m.loads.clear()
+    m.tick(70); m.tick(700)
+    expect(not m.loads, 'Chrome chosen: a hi-res track after a lossy one loads nothing')
+    # the texts: the bias line fits its room and ends where the times do; the sticker's text fits the sticker
+    for t in THEMES:
+        f = tape_art.TEXT['spec']; w = font.width(tape_art.THEMES[t]['spec'], f['px'])
+        expect(w <= f['room'] and f['x'] == tape_art.TEXT['times']['x'], f'{t}: the bias line {tape_art.THEMES[t]["spec"]!r} is {w} px of {f["room"]}, right aligned with the times')
+    f = tape_art.TEXT['badge']
+    expect(all(font.width(s_, f['px']) + 1 <= f['room'] for s_ in tape_art.BADGE_TEXT) and f['rect'] == (O['TP_BADGE_X'], O['TP_BADGE_Y'], O['TP_BADGE_X'] + O['TP_BADGE_W'], O['TP_BADGE_Y'] + O['TP_BADGE_H'])
+           and (tape_art.BADGE_W, tape_art.BADGE_H) == (O['TP_BADGE_W'], O['TP_BADGE_H']) and f['rect'][3] <= tape_art.SCREWS[2][1] - 13 and f['rect'][1] >= tape_art.LABEL[3] + 8,
+           'the sticker: its cell is the badge field\'s rectangle, on the shell between the label and the bottom left screw; HI-RES and DSD fit it')
+    d = open(DEMO, 'rb').read(); image = bytearray(d)
+    expect(struct.unpack_from('<I', d, pod.fileoff(image, 0x5d354c))[0] == 0x24060034 and struct.unpack_from('<I', d, pod.fileoff(image, 0x5d357c))[0] == 0x24a5ab50,
+           'stock: mclGetInfo copies 0x34 bytes of the player\'s record (0xa0ab50) to its argument')
+
+
+SECTIONS = [number_tests, symmetry_tests, asset_tests, theme_tests, setting_tests, draw_tests, quality_tests, reel_tests, hub_tests, mark_tests, status_tests, live_tests, touch_tests, idle_touch_tests, life_tests, paint_tests]

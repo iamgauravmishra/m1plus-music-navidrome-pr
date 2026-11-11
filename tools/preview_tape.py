@@ -42,7 +42,11 @@ def frame(s, f):
     ink, sub = t['ink'], t['sub']
     # written on the index lines
     s.text(im, 40, 49, s.clip(f["title"], 22, 388), 22, ink)
-    s.text(im, 40, 70, s.clip(f["artist"], 16, 388), 16, ink)
+    s.text(im, 40, 70, s.clip(f["artist"], 16, 262), 16, ink)
+    s.text(im, 428, 70, t['spec'], 11, t['print'], 'r')   # the tape's bias and equalisation
+    if f.get('badge'):   # the sticker on the shell: 1 HI-RES, 2 DSD
+        im.alpha_composite(badge_image().transpose(Image.ROTATE_90), BADGE_AT)
+        bold(s, im, TEXT['badge']['x'], TEXT['badge']['y'], BADGE_TEXT[f['badge']], 11, BADGE_INK, 'm')
     s.text(im, 40, 89, s.clip(f['album'], 13, 190), 13, sub)
     s.text(im, 428, 89, times_text(f['pos'], f['len']), 12, sub, 'r')
     # the band and the strip below
@@ -59,7 +63,7 @@ FRAMES = [   # title, artist, album, length s, position s, theme, repeat, playin
     ('2 Chrome theme, mid-track, repeat on', dict(title='Teardrop', artist='Massive Attack', album='Mezzanine', len=330, pos=150,
         theme='chrome', repeat=True, playing=True, cover=(190, 90, 120), ang_s=25, ang_t=50, batt=60, charging=False, vol=30, fmt='FLAC 16/44.1', clock='21:12')),
     ('3 Metal theme, near the end, paused', dict(title='Weightless', artist='Marconi Union', album='Weightless (Hi-Res)', len=480, pos=452,
-        theme='metal', repeat=False, playing=False, cover=(60, 140, 150), ang_s=40, ang_t=15, batt=20, charging=True, vol=18, fmt='FLAC 24/96', clock='22:48')),
+        theme='metal', repeat=False, playing=False, cover=(60, 140, 150), ang_s=40, ang_t=15, batt=20, charging=True, vol=18, fmt='FLAC 24/96', badge=1, clock='22:48')),
     ('4 Chrome theme with the tap control strip', dict(title='Orinoco Flow', artist='Enya', album='Watermark', len=266, pos=60,
         theme='chrome', repeat=False, playing=True, cover=(120, 110, 180), ang_s=30, ang_t=5, strip=True, batt=80, charging=False, vol=55, fmt='WAV 16/44.1', clock='08:30')),
 ]

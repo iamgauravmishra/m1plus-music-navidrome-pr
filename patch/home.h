@@ -56,7 +56,7 @@
     "/mnt/data/m1plus/album-order" /* the retired Settings > Library > Album Order ("0" Title, else Artist): cc_sort_mode moves it into ALBUMS_SORT_FILE once and deletes it */
 #define OLD_ORDER_TMP "/mnt/data/m1plus/album-order.tmp"
 #define TAPETHEME_FILE \
-    "/mnt/data/m1plus/cassette-theme" /* the Cassette Mode theme: "1" = Chrome, "2" = Metal (each with an optional newline), anything else or missing = Normal (the default) */
+    "/mnt/data/m1plus/cassette-theme" /* the Cassette Mode theme: "0" = Normal, "1" = Chrome, "2" = Metal, "3" = Auto, by the track's quality (each with an optional newline), anything else or missing = Auto (the default) */
 #define TAPETHEME_TMP "/mnt/data/m1plus/cassette-theme.tmp"
 #define IDLE_FILE \
     "/mnt/data/m1plus/nowplaying-idle" /* where Now Playing's timed view goes: "1" Cassette, "2" Vinyl (each with an optional newline), anything else or missing = Album Cover (the default; docs/modules/bigcover.md "Idle view") */

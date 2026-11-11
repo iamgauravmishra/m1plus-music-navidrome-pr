@@ -61,9 +61,9 @@ ACT_SUBSONIC = 93 # the Navidrome root page (patch/ndroot.c)
 ACT_SEARCH = 35   # open the library search page (patch/search.c search_open; the stock search_page where ours will not open), the Search item of the menu and Extras
 ACT_KB_EN = 27  # switch row (Settings > Keyboards): English, always on and not switchable (the row's switch is shown on and the row is dimmed)
 ACT_KB_ZH = 28  # switch row (Settings > Keyboards): Chinese (Pinyin), off by default; on gives the on-screen keyboard a language key and the pinyin layer (patch/keyboard.c kb_zh_toggle)
-ACT_CTHEME = 24  # value row: the Cassette Mode theme, Normal, Chrome or Metal; opens its picker page (arg = the page index); the payload shows the saved theme (patch/tape.c tape_theme)
+ACT_CTHEME = 24  # value row: the Cassette Mode theme, Normal, Chrome, Metal or Auto; opens its picker page (arg = the page index); the payload shows the saved theme (patch/tape.c tape_theme)
 ACT_STOCK = 29   # open a stock page by name (arg = index in STOCK_PAGES; patch/m1plus.c navigator_to, no context); some show a value of the stock state at the right
-ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal); a check shows on the chosen row (patch/tape.c tape_theme_set)
+ACT_THEMESET = 31  # picker row (Cassette Theme): choose the theme (arg 0 Normal, 1 Chrome, 2 Metal, 3 Auto); a check shows on the chosen row (patch/tape.c tape_theme_set)
 ACT_PEQ = 57      # value row (Settings > Playback > EQ): what the equalizer plays (Off, the 10-Band EQ's curve or the preset's name); opens the Equalizer page (arg = its page index; patch/peq_ui.c)
 ACT_INFO = 33     # an information row of the About page: a label and a grey value at the right, no chevron, not tappable (arg = INFO_*: where patch/m1plus.c reads the value; INFO_STATIC: the Row's own text)
 ACT_PCSEARCH = 34  # switch row (Settings > Library > Podcasts): Podcast Discover, on by default; off hides Discover and the search level (patch/podcasts.c pcsearch_toggle, /mnt/data/m1plus/podcast-online-search)
@@ -709,6 +709,7 @@ THEME_PAGE = Page('m1plus_tapetheme', 'm1plus_tapetheme_page', 'Cassette Theme',
     Row('Normal', ACT_THEMESET, 0),
     Row('Chrome', ACT_THEMESET, 1),
     Row('Metal', ACT_THEMESET, 2),
+    Row('Auto', ACT_THEMESET, 3),   # by the playing track's quality: lossy Normal, lossless Chrome, hi-res and DSD Metal (patch/tape.c tp_quality)
     Note('Applies the next time Cassette Mode opens.'),
 ])
 # Settings > Now Playing > Record: the picker for Vinyl Mode's record colour (a check on the chosen row); the saved index is vinyl_art.RECORD_NAMES'.
@@ -725,7 +726,7 @@ VTHEME_PAGE = Page('m1plus_vinyltheme', 'm1plus_vinyltheme_page', 'Base', layout
 ])
 VTHEME_VALUES = ('Graphite', 'Snow')   # the value the Base row shows, in the order of the saved index
 RECORD_VALUES = ('Black', 'Cover')   # the value the Record row shows, in the order of the saved index (tools/vinyl_art.py RECORD_NAMES)
-CTHEME_VALUES = ('Normal', 'Chrome', 'Metal')   # the value shown for the setting's three states, in the order of the saved index (tools/tape_art.py THEME_NAMES)
+CTHEME_VALUES = ('Normal', 'Chrome', 'Metal', 'Auto')   # the value shown for the setting's four states, in the order of the saved index (tools/tape_art.py THEME_NAMES, then Auto: by the track)
 
 # Settings > System > Appearance > Background (docs/modules/accent.md): the picker, a check on the chosen row. The choice applies at once (patch/palette.c pal_bg_set: cached images dropped, the screen
 # repainted). The saved file also knows 2 Light and 3 Light Auto (patch/palette.c); they are not offered.

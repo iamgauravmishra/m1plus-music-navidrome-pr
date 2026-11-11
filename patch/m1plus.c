@@ -624,7 +624,8 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
 
 /* The values (tr keys of the stock tables where the value is stock's own, so they follow Settings > Language): Wi-Fi and Bluetooth On / Off (the flags the status bar reads), the EQ (Off, or the preset's name from stock's own lookup), the album order and the
  * cassette theme (ours). */
-extern int tape_theme(void); /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal */
+extern int tape_theme(
+    void); /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal, 3 Auto (by the track's quality) */
 extern int tape_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
 extern int vinyl_record(void); /* patch/vinyl.c: the saved record colour, 0 Black (the default) .. VN_RECS - 1 */
 extern int vinyl_record_set(int rec); /* choose it, saved atomically; the colour or -1 */
@@ -636,6 +637,7 @@ extern int idle_choice(
 extern int idle_set(
     int choice); /* choose it, saved (the byte through stock's save, the destination atomically); the choice or -1 */
 static const char *const idle_key[4] = {"Off", "Album Cover", "Cassette", "Vinyl"};
+static const char *const tape_theme_key[4] = {"Normal", "Chrome", "Metal", "Auto"};
 static const char *const record_key[VN_RECS] = {"Black", "Cover"};
 extern int vinyl_theme(void); /* patch/vinyl.c: the saved plinth theme, 0 Graphite (the default), 1 White */
 extern int vinyl_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
@@ -655,7 +657,7 @@ static void value_text(void *label, int kind) {
         VK_EQ) /* Off, the APO / AutoEQ preset that plays (a file name: no key, shown as it is), or the 10-Band EQ's curve (Flat, Rock, Custom: keys) */
         key = !*(volatile unsigned char *)EQ_FLAG ? "Off" : peq_playing_name(buf, sizeof buf) ? buf : "Off";
     else if (kind == VK_THEME)
-        key = tape_theme() == 1 ? "Chrome" : tape_theme() == 2 ? "Metal" : "Normal";
+        key = tape_theme_key[tape_theme()];
     else if (kind == VK_IDLE)
         key = idle_key[idle_choice()];
     else if (kind == VK_RECORD)

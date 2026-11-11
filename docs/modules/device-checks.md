@@ -122,7 +122,7 @@ in [history](../history.md); feature modules retain their detailed edge cases.
   [Podcast checklist](podcasts.md#device-checks)
 - **EXTRA-03:** virtual iPod wheel/navigation/playback and embedded Cover Flow.
   [iPod checklist](ipod.md#device-checklist)
-- **EXTRA-04:** Cassette Mode orientation, text, theme, progress/reels, pause/resume, close
+- **EXTRA-04:** Cassette Mode orientation, text, theme (Auto: the tape, format and sticker by the track's quality), progress/reels, pause/resume, close
   and dark-screen timer behaviour. [Cassette checklist](tape.md#device-checklist)
 - **EXTRA-06:** Find Cover & Lyrics (More sheet, More page): row dimmed with Wi-Fi off, covers from iTunes and Deezer,
   a tapped cover on Albums, Cover Flow, the album page, mini player and Vinyl, the folder picture, LRCLIB lyrics saved as

@@ -12,12 +12,13 @@ The release status records flashed builds; use the final checklist for validatio
 
 ## Themes and assets
 
-Settings → Now Playing → Theme cycles Normal, Chrome and Metal. The order is
-`tape_art.THEME_NAMES`; `/mnt/data/m1plus/cassette-theme` stores `0\n`, `1\n` or `2\n` atomically.
-`tape_theme` accepts `1`/`2` with an optional newline and defaults to Normal for all other data.
+Settings → Now Playing → Theme offers Normal, Chrome, Metal and Auto (the tape follows the track's quality,
+"Quality" below). The order is `tape_art.THEME_NAMES`, then Auto (`TP_THEME_AUTO` 3);
+`/mnt/data/m1plus/cassette-theme` stores `0\n` .. `3\n` atomically.
+`tape_theme` accepts `0` .. `3` with an optional newline and defaults to Auto (3) for all other data and for no file.
 A failed save changes neither file nor label. The Tape page reads the setting once at open.
 
-Shared assets are `tape_top`, `tape_screw` and `tape_tex`. Each theme has `tape_shell_<theme>`,
+Shared assets are `tape_top`, `tape_screw`, `tape_tex` and `tape_badge`. Each theme has `tape_shell_<theme>`,
 `tape_hubs_<theme>` and `tape_marks_<theme>`, plus text colours and TYPE I NORMAL / TYPE II CHROME /
 TYPE IV METAL fine print. Current sizes and rootfs headroom come from the build output;
 `fwtool` enforces the stock limit.
@@ -61,6 +62,7 @@ blended into the frame at (pen + glyph.x + c, top + glyph.y + ascent + r), lands
   | `tape_hubs_<theme>` | 30 x 720, RGBA | the reel hub in **24 frames, 5 degrees apart**: a pale translucent plastic ring with six teeth round a dark opening and a pale disc with a dark 3-spoke drive, lit from the top left with a soft shadow under it (about 24 KB a theme); the ring repeats every 60 degrees, the drive every 120, so the picture repeats every **120 degrees** and 24 frames close the loop seamlessly (angle modulo 120 / 5; `tp.ang` counts sixteenths modulo 1920); stacked, pre-rotated with the picture |
   | `tape_marks_<theme>` | 26 x 78, RGBA | the printed play mark, pause mark and repeat arrow, in the theme's band ink (white, Metal's gold) |
   | `tape_tex` | 320 x 480, RGBA, 13 KB | the shell's texture as two maps, the same for every theme: **red the knurl's strength** (128 is the cell's own alpha, in steps of 4), **green the grain's amplitude** (alpha of 255, at most 24); see "Grain and knurl" |
+  | `tape_badge` | 24 x 52, RGBA, 0.5 KB | the quality sticker, 52 x 24 in landscape: a gold foil rectangle with a soft shadow, no text (the page writes `HI-RES` or `DSD` on it); missing: the page opens without a sticker |
   | `tape_screw` | 26 x 26, RGBA | the close screw pressed: darker, its slot turned 45 degrees (the same in every theme) |
 
   The sizes are above (the rebuilt rootfs may not exceed stock size and the build refuses otherwise).
@@ -78,14 +80,15 @@ blended into the frame at (pen + glyph.x + c, top + glyph.y + ascent + r), lands
   | Field | Where (landscape) | Source |
   | --- | --- | --- |
   | title | x 40, line middle 49, 22 px | the playing track's title (else its file name; `Not Playing` with no track) |
-  | artist, album | 40 / 70, 16 px; 40 / 89, 13 px (190 px room) | the playing track's tags |
+  | artist, album | 40 / 70, 16 px (262 px room); 40 / 89, 13 px (190 px room) | the playing track's tags |
+  | bias line | right end 435, 70, 11 px (124 px room) | fixed per theme, in the print colour: `NORMAL BIAS · 120µs EQ`, `HIGH BIAS · 70µs EQ`, `METAL BIAS · 70µs EQ` (what a real tape of the type prints) |
+  | sticker | the shell's lower left, cell 33 .. 85 x 237 .. 261, text 11 px bold, middle 58 / 248 | `HI-RES` or `DSD` on `tape_badge`, nothing for other tracks ("Quality" below) |
   | elapsed, -remaining | right end 428, 89, 12 px | `get_playtimeandlength`, `m:ss  -m:ss` |
   | A, fine print | 58 / 146, 54 px bold; 40 / 206, 12 px | fixed per theme (`TYPE I NORMAL`, `TYPE II CHROME`, `TYPE IV METAL`; drawn once, in the theme's print colour, flat) |
   | status line | right end 428, 206, 12 px (11), 212 px room | below |
 
-  The status line is `VOL 42 | FLAC | 21:07 | 60%`: the **volume** is the status bar's `label_volume` text, **read only, never set**; the **format** is the upper-case file extension of the
-  playing track's path (`FLAC`, `MP3`, `WAV`, `M4A`; the track's record has no bitrate or bit depth we know of, so the mock's `FLAC 16/44.1` is not reachable: this is the one piece of
-  information that source gives); the **clock** is `localtime` as `HH:MM` (24 h); the **battery** is read as the Pod does (`*system_bar` `0xa06f90` > `pgbar_battery` `value`, 20 % steps,
+  The status line is `VOL 42 | FLAC 16/44.1 | 21:07 | 60%`: the **volume** is the status bar's `label_volume` text, **read only, never set**; the **format** is the upper-case file extension of the
+  playing track's path with the stream's figures from the player (`FLAC 24/96`, `MP3 320`, `DSD64`; the extension alone while the player has none: "Quality" below); the **clock** is `localtime` as `HH:MM` (24 h); the **battery** is read as the Pod does (`*system_bar` `0xa06f90` > `pgbar_battery` `value`, 20 % steps,
   `img_battery` = `bar_charge` while charging: a `+` before the number). It is set at 12 px if it fits 212 px (the advance + 1 px a glyph, the font's own), else 11 px, dropping the **clock
   first, then the format** (`tape_art.status_line`, the same function the mock and the test use). A missing status bar gives `VOL 0`.
 - **Refresh only on change**: the timer looks at the track, the position, the play state, the repeat mode, the battery, the volume text and the clock minute each tick and redraws only what
@@ -147,11 +150,45 @@ Following the other page timers (`m1_screen_lit()` in `patch/common.c`, the stoc
   More sheet, which closes only after the page is up (`pm_on_tape`), stays as it was.
 - Hidden stays `visible=false` + `sensitive=false`; the only visible, sensitive widget is `tape_view`; the picture is painted, not widgets.
 
+## Quality (the format, the sticker, the Auto theme)
+
+The player keeps a record of the stream it plays; stock's `mclGetInfo` (`0x5d3518`: a mutex, then a copy of 0x34 bytes) gives it: the bit rate in bit/s at 0, the sample
+rate in Hz at 4, the codec's name at 0x10, the bits a sample at 0x30 (1 for DSD). It is the record stock's own quality line prints (`show_player_face`,
+`%s|%.1fkHz|%dbit|%dkbps`) and `get_hrflag` (`0x4dfbc4`) reads. `tp_quality` turns it into three things:
+
+| Stream | Status line | Auto's tape | Sticker |
+| --- | --- | --- | --- |
+| lossy (MP3, AAC, OGG ...) | `MP3 320` (the extension and kbit/s) | Normal | none |
+| lossless up to 16 bit / 48 kHz | `FLAC 16/44.1` (bits / kHz, one decimal when there is one) | Chrome | none |
+| lossless over 48 kHz, or 24 bit from 44.1 kHz (`get_hrflag`'s rule) | `FLAC 24/96` | Metal | `HI-RES` |
+| DSD (1 bit) | `DSD64`, `DSD128` .. (the rate / 44.1 kHz) | Metal | `DSD` |
+
+- **Lossless** is the codec's name as `get_hrflag` spells it (`FLAC`, `ALAC`, `WAV`, `APE`, `AIFF`, `DSD`, `DSF`, `ISO`) or the file's extension (those and `AIF`, `DFF`, `WV`), so an
+  ALAC `.m4a` is lossless by its codec and an AAC one is not.
+- **No record** (no rate or no name: nothing playing yet, a stream the player does not describe): everything follows the extension: `FLAC` alone on the status line, Chrome for a
+  lossless extension, Metal and `DSD` for `.dsf` / `.dff`, Normal otherwise.
+- **A change of track:** the text changes at once and the format is the extension alone; the player is not asked for `TP_INFO_MS` (600 ms: its record may still be the last
+  track's), the tape and the sticker stay. Then the record is read at every look and the format, the sticker and the tape follow when its rate, bits or name differ from the ones
+  last used. The bit rate is not part of that: a VBR file shows the bit rate of the first look and the line is not redrawn as it moves. The exception is a record that is
+  still the one read at the change of track (`tp.unsure`; one `mclGetInfo` at the change keeps it): it may be the last track's, arriving late, so until a record differs from
+  it the bit rate is compared too. A track after one of the same codec, rate and bits then gets its own bit rate when its record arrives; a VBR track whose record was already
+  there at the change redraws the line once. All of this belongs to the track (`tp.q_key`), not to the drawing: a full redraw of the same track (the page back in front)
+  keeps the wait and the doubt, and the page's first look, which asks at once, starts in doubt too, since the page may open right after a change.
+- **Auto** (`tp.automatic`, the saved theme 3): the page opens with the playing track's tape (one shell loaded; nothing playing: Normal). When the tape changes `tp_theme_load`
+  loads the new theme's shell (with `tp_finish`), hubs and marks, copies the shell into the frame, frees the old three and the page draws everything again (reels, marks, all
+  text, the whole view invalidated): about 20.5 M instructions in that tick, as much as an open. A theme whose pictures will not load leaves the tape shown and is not tried
+  again for that track. A chosen theme (Normal, Chrome, Metal) never changes its tape; the format and the sticker follow the stream in every theme.
+- **The tape's colour** follows the theme too (`theme_pack`, `THEMES[..]['pack']`): ferric brown for Normal (#22150E to #6C4F38, as before), a darker, greyer brown for Chrome
+  (#1A1412 to #5A4C46), blue-black for Metal (#121215 to #505058), the same sheen and windings.
+
+Not verified on a device: how soon after a track starts the player's record is the new track's (the 600 ms wait is a guess), what name it gives an ALAC or AAC `.m4a`, and how
+long the tick that changes the tape takes on the panel.
+
 ## Themes
 
-The look is a **theme the user chooses**: **Settings > Now Playing > Theme: Normal (default), Chrome, Metal**, as FiiO's "Tape mode theme" (above). The same
-cassette is shown for every track; a theme is a complete look (shell colour, label paper and print, band, hub ring), not a tape grade tied to the
-music. More themes can be added later as data (`THEMES` in the mock).
+The look is a **theme the user chooses**: **Settings > Now Playing > Theme: Normal, Chrome, Metal, or Auto (default)**, as FiiO's "Tape mode theme" (above). With a
+chosen theme the same cassette is shown for every track; a theme is a complete look (shell colour, label paper and print, band, hub ring, the tape's own colour). **Auto** makes
+it the tape grade of the music, as Sony does ("Quality" above). More themes can be added later as data (`THEMES` in the mock).
 
 | Theme | Shell | Label | Band | Hub |
 | --- | --- | --- | --- | --- |
@@ -160,8 +197,8 @@ music. More themes can be added later as data (`THEMES` in the mock).
 | Metal | black | black label, gold print | dark with gold hairlines | gold |
 
 Background only: Sony picks its tape from the codec and bitrate (9 real tapes: lossy up to 128 kbps CHF, up to 160 BHF, up to 256 AHF, up to
-320 JHF; CD-quality FLAC / ALAC / APE UCX, AIFF UCX-S, WAV DUAD ferrichrome; hi-res PCM METAL; DSD Metal Master). We chose a fixed user theme instead;
-Sony's mapping stays the reference should a format-driven option ever be wanted. Sources: av.watch.impress.co.jp/docs/review/review/1222109.html,
+320 JHF; CD-quality FLAC / ALAC / APE UCX, AIFF UCX-S, WAV DUAD ferrichrome; hi-res PCM METAL; DSD Metal Master). Our Auto has three tapes for
+the same idea (lossy, lossless, hi-res / DSD) and keeps the fixed themes as choices. Sources: av.watch.impress.co.jp/docs/review/review/1222109.html,
 news.mynavi.jp/article/20191016-910000/, the FiiO M21 manual (Tape mode, Settings > Tape mode theme), the FIIO_official post on X about Cassette Mode.
 
 ## The cassette (follows a real one and Sony's screen turned sideways)
@@ -207,7 +244,10 @@ Open Now Playing on a playing track, More (page 1), tap **Cassette Mode**: the s
 - Tap the middle: pause / play, with the pause bars shown at once? Tap the top left screw: does it darken and turn while held, and close the page on release? Is a swipe from the top edge still opening
   the control centre (pull-down) with the page open, playing and paused? Does a long drag do nothing? Is 14 px too easy / too hard for a tap, is the 50 px screw area right?
 - Material: is the knurl crisp (4 px cells, no moire), the arrow and the Metal hairlines read as printed ink (not glossy), the shell's light falling off from the top left, the label's grain and frame shadow, the smoked window with its scratches and fading reflection, the lit hubs with their shadow, the screws' different slot angles, and the reels still smooth at 24 frames?
-- Settings > Now Playing > Theme: tap cycles Normal, Chrome, Metal; reopen the page: the new look (shell, hubs, ink, fine print)? It survives a reboot?
+- Settings > Now Playing > Theme: the picker has Normal, Chrome, Metal, Auto; reopen the page: the new look (shell, hubs, ink, fine print, the bias line at the right of the artist's line, the tape's colour)? It survives a reboot?
+- Auto: an MP3 shows the Normal tape and `MP3 320`; a CD-quality FLAC the Chrome tape and `FLAC 16/44.1`; a 24 bit or 96 kHz file the Metal tape, `FLAC 24/96` and the gold `HI-RES` sticker at the shell's lower left; a DSD file Metal, `DSD64` and the `DSD` sticker. An ALAC and an AAC `.m4a`: Chrome and Normal?
+- Auto, from a lossy track to a hi-res one (next track, and by itself at the track's end): the title changes at once, the tape within about a second; how long does the picture stand still while it changes? Never the wrong tape for a moment (the last track's figures on the new track)?
+- A chosen theme with a hi-res track: the tape stays, the sticker and the format show.
 - Battery number, `+` while charging, volume (change it with the keys: the line follows within half a second while paused), the format (file extension), the clock?
 - Does the screen still sleep after the usual idle time with the page open (playing and paused)? Does it wake and keep going, the reels on the right turn and the text current at once (no jump)? Battery: leave it playing with the screen off for an hour (screen-off ticks are 1 s and draw nothing) and compare the drain with Now Playing; is the lit 70 ms tick warm?
 - Back to Now Playing, More again, Tape again: opens every time, no leaked state. Does the page keep playing through a track change and a phone-style lock / unlock?

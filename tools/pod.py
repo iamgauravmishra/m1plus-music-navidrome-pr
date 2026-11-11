@@ -457,6 +457,10 @@ FUNCTIONS.update({
     'playpause_quick_click':   ('int', 'void', 0x4cd150),
     'next_quick_click':        ('int', 'void *, int', 0x4ccf00),
     'mclGetPlayStatus':        ('int', 'void', 0x5d3640),
+    # The playing stream as the player reports it (the mutex 0xa0ab20, then a copy of the 0x34 bytes at 0xa0ab50 into the caller's): bit rate in bit/s at 0, sample rate in Hz at 4, the codec's name at
+    # 0x10 ('FLAC', 'ALAC', 'WAV', 'APE', 'AIFF', 'DSD', 'DSF', 'ISO' are the names get_hrflag @0x4dfbc4 looks for), bits a sample at 0x30 (1 for DSD). get_playinfo @0x4dfb14 (the idle tick) copies it to
+    # playsong_info 0xa0e930, which show_player_face prints as '%s|%.1fkHz|%dbit|%dkbps'. Returns 1.
+    'mclGetInfo':              ('int', 'void *', 0x5d3518),
 })
 # The Playlists page (patch/playlists.c, docs/modules/playlists.md): the stock playlist creation, and the click handlers of the stock Playlists
 # page's Import and Export rows (static, unnamed; ret_t (ctx, event), neither reads its arguments: each asks with the stock confirm dialog,

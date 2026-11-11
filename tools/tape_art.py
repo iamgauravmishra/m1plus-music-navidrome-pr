@@ -46,13 +46,13 @@ TEETH, SPRITES = 6, 24                               # the ring has 6 teeth (60 
 THEMES = {   # the user's choice (Settings > Now Playing > Theme, saved as the index in THEME_NAMES); more themes can be added as data
     'normal': dict(shell=(0x3A, 0x3D, 0x42), paper=((0xF3, 0xF1, 0xE8), (0xE6, 0xE3, 0xD7)), ink=(0x1B, 0x1F, 0x2A), sub=(0x4A, 0x52, 0x62),
                    band=(0x3C, 0x78, 0xBE), band_ink=(255, 255, 255), print=(0x3C, 0x78, 0xBE), hub=(0xE9, 0xE7, 0xDF),
-                   model='TYPE I NORMAL', rule_a=0.20, tone_mix=0.30),
+                   model='TYPE I NORMAL', spec='NORMAL BIAS · 120µs EQ', pack=((0x22, 0x15, 0x0E), (0x6C, 0x4F, 0x38)), rule_a=0.20, tone_mix=0.30),
     'chrome': dict(shell=(0x24, 0x27, 0x2C), paper=((0xDF, 0xE2, 0xE6), (0xC4, 0xC8, 0xCE)), ink=(0x12, 0x14, 0x18), sub=(0x3A, 0x3E, 0x48),
                    band=(0xC0, 0x3A, 0x3A), band_ink=(255, 255, 255), print=(0xC0, 0x3A, 0x3A), hub=(0xD6, 0xDA, 0xDF),
-                   model='TYPE II CHROME', rule_a=0.25, tone_mix=0.30),
+                   model='TYPE II CHROME', spec='HIGH BIAS · 70µs EQ', pack=((0x1A, 0x14, 0x12), (0x5A, 0x4C, 0x46)), rule_a=0.25, tone_mix=0.30),
     'metal': dict(shell=(0x1E, 0x18, 0x12), paper=((0x26, 0x20, 0x18), (0x16, 0x12, 0x0D)), ink=GOLD, sub=(0xA8, 0x88, 0x48),
                   band=(0x2A, 0x24, 0x1A), band_ink=GOLD, print=GOLD, hub=(0xDD, 0xD6, 0xC4),
-                  model='TYPE IV METAL', rule_a=0.30, tone_mix=0.0),
+                  model='TYPE IV METAL', spec='METAL BIAS · 70µs EQ', pack=((0x12, 0x12, 0x15), (0x50, 0x50, 0x58)), rule_a=0.30, tone_mix=0.0),
 }
 
 # ---- the text, landscape (x, the line's vertical middle, px, colour key, anchor) and the rectangle each field may touch -------------------------
@@ -60,13 +60,18 @@ THEMES = {   # the user's choice (Settings > Now Playing > Theme, saved as the i
 # rectangles of the fields on the label do not overlap, so a field redrawn never wipes a neighbour's glyphs (a descender may reach the line below its own).
 TEXT = {
     'title':  dict(x=47,  y=49,  px=22, colour='ink',        anchor='l', room=388, rect=(43, 37, 439, 62)),
-    'artist': dict(x=47,  y=70,  px=16, colour='ink',        anchor='l', room=388, rect=(43, 62, 439, 83)),
+    'artist': dict(x=47,  y=70,  px=16, colour='ink',        anchor='l', room=262, rect=(43, 62, 311, 83)),
+    'spec':   dict(x=435, y=70,  px=11, colour='print',      anchor='r', room=124, rect=(311, 62, 439, 83)),   # the tape's bias and equalisation, printed at the right end of the artist's line
     'album':  dict(x=47,  y=89,  px=13, colour='sub',        anchor='l', room=190, rect=(43, 83, 243, 99)),
     'times':  dict(x=435, y=89,  px=12, colour='sub',        anchor='r', room=100, rect=(325, 83, 439, 99)),
     'big':    dict(x=65,  y=146, px=54, colour='band_ink',   anchor='m', room=400, rect=(39, 112, 97, 182), bold=True),
     'model':  dict(x=47,  y=206, px=12, colour='print',      anchor='l', room=130, rect=(41, 195, 175, 218)),   # the fine print: type and grade, small, in the print's mid tone
     'status': dict(x=435, y=206, px=12, colour='sub',        anchor='r', room=212, rect=(219, 195, 441, 219)),
+    'badge':  dict(x=58,  y=248, px=11, colour='badge_ink',  anchor='m', room=44,  rect=(33, 237, 85, 261), bold=True),   # the sticker on the shell (tape_badge under the text): HI-RES or DSD, nothing for other tracks
 }
+BADGE_AT, BADGE_W, BADGE_H = (33, 237), 52, 24   # the sticker's cell (landscape): the badge field's rectangle
+BADGE_INK = (0x2A, 0x1C, 0x08)
+BADGE_TEXT = ('', 'HI-RES', 'DSD')
 STATUS_W = 212   # the room right of the direction arrow on the strip below the band
 
 def S(v): return int(round(v * K))
@@ -174,7 +179,7 @@ def lit_hub(sp):
 PK_BASE, PK_HI = (0x22, 0x15, 0x0E), (0x6C, 0x4F, 0x38)
 PK_WIND = [round(32 + 32 * math.sin(2 * math.pi * i / 32)) for i in range(32)]   # the windings, one period per 2 px of distance (patch/tape.c pk_wind)
 
-def pack_rgb(d, R, dx, dy):
+def pack_rgb(d, R, dx, dy, pk=(PK_BASE, PK_HI)):
     """The tape pack's colour at distance d from the reel's centre, pack radius R (both 1/16 px), the pixel at (dx, dy) half pixels from the centre: a smooth near-black brown with
     a static bow-tie sheen (|cos|^14 of the angle from the upper-left / lower-right axis, the lower right x 0.45), fine 2 px windings, a lighter ring just inside the edge and a dark
     edge. The device's integer arithmetic (patch/tape.c tp_pack) to the bit."""
@@ -187,9 +192,9 @@ def pack_rgb(d, R, dx, dy):
     mb = 236 + (w * 13 >> 5)
     k = lobe * (179 + (w * 77 >> 6)) >> 8
     e = 115 if d > R - 16 else 287 if d > R - 35 else 256
-    return tuple(min(255, ((b * mb >> 8) + ((h - b) * k >> 16)) * e >> 8) for b, h in zip(PK_BASE, PK_HI))
+    return tuple(min(255, ((b * mb >> 8) + ((h - b) * k >> 16)) * e >> 8) for b, h in zip(*pk))
 
-def packs(size, p):
+def packs(size, p, pk=(PK_BASE, PK_HI)):
     """Both tape packs (supersampled RGBA, not yet clipped): the device's pack_rgb at each 1:1 pixel's centre (one 1:1 pixel is K x K supersampled ones), its rim anti-aliased by the
     coverage of the pixel's distance as the page does."""
     im = Image.new('RGBA', size); rs, rt = pack_radii(p); x0, y0, x1, y1 = (v * K for v in TOP_RECT)
@@ -201,7 +206,7 @@ def packs(size, p):
             for x in range(max(TOP_RECT[0], cx - 70), min(TOP_RECT[2], cx + 71)):
                 dx = 2 * (x - cx) + 1; d = math.isqrt((dx * dx + dy * dy) << 6)
                 if d > R + 8: continue
-                cov = min(16, R + 8 - d); c = pack_rgb(d, R, dx, dy) + (cov * 255 // 16,)
+                cov = min(16, R + 8 - d); c = pack_rgb(d, R, dx, dy, pk) + (cov * 255 // 16,)
                 for j in range(K):
                     for i in range(K): px[(x - TOP_RECT[0]) * K + i, (y - TOP_RECT[1]) * K + j] = c
     im.paste(sq, (x0, y0)); return im
@@ -337,7 +342,7 @@ def draw_base(im, t, tone=None):
 def draw_packs(im, f):
     """The tape packs at the position f['pos'] / f['len'], clipped to the holes and the clear window."""
     sz = im.size; vis = ImageChops.lighter(holes_mask(sz), rr_mask(sz, CLEAR, 4))
-    pk = packs(sz, f['pos'] / f['len']); pk.putalpha(ImageChops.multiply(pk.getchannel('A'), vis)); im.alpha_composite(pk)
+    pk = packs(sz, f['pos'] / f['len'], THEMES[f['theme']]['pack'] if f.get('theme') in THEMES else (PK_BASE, PK_HI)); pk.putalpha(ImageChops.multiply(pk.getchannel('A'), vis)); im.alpha_composite(pk)
 
 def draw_top(im):
     """What lies over the tape: the holes' gear rings and lips (the lip casts a shadow on the tape; lit lower right, shaded upper left), the smoked window's reflection (fading
@@ -536,14 +541,27 @@ def screw_image():
     c = MARK_PX // 2
     return rot(layer(lambda b: screw(b, c, c, **PRESSED), (0, 0, MARK_PX, MARK_PX)))
 
+def draw_badge(im):
+    """The sticker: a gold foil rectangle 48 x 20 with 3 px corners at (1, 1) of its cell, a darker edge, a hint of light along the top, a soft shadow right and down. The text is the page's."""
+    b = (1, 1, 49, 21); sz = im.size; m = rr_mask(sz, b, 3)
+    glow_shadow(im, m, 1, 1.5, 1.2, 150)
+    x0, y0, x1, y1 = box(b)
+    g = Image.new('RGBA', sz); g.paste(vgrad3((x1 - x0, y1 - y0), mix(GOLD, (255, 255, 255), 0.30), GOLD, mix(GOLD, (0, 0, 0), 0.22)), (x0, y0))
+    im.paste(g, (0, 0), m)
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((x0, y0, x1 - 1, y1 - 1), radius=S(3), outline=mix(GOLD, (0, 0, 0), 0.45) + (255,), width=max(1, K // 2))
+
+def badge_image():
+    return rot(layer(draw_badge, (0, 0, BADGE_W, BADGE_H)))
+
 THEME_NAMES = tuple(THEMES)     # the order of the saved value: 0 Normal, 1 Chrome, 2 Metal
-SHARED = ('tape_top', 'tape_screw', 'tape_tex')                                                 # the same in every theme
+SHARED = ('tape_top', 'tape_screw', 'tape_tex', 'tape_badge')                                                 # the same in every theme
 PER_THEME = ('tape_shell', 'tape_hubs', 'tape_marks')                               # one picture a theme: <name>_<theme>
 NAMES = SHARED + tuple(f'{n}_{t}' for t in THEME_NAMES for n in PER_THEME)
 
 def images():
     """name -> PIL image of every installed Tape picture: the shared ones once, the shell, the hub frames and the marks (the band's ink) for each theme."""
-    out = {'tape_top': top_image(), 'tape_screw': screw_image(), 'tape_tex': tex_image()}
+    out = {'tape_top': top_image(), 'tape_screw': screw_image(), 'tape_tex': tex_image(), 'tape_badge': badge_image()}
     for t in THEME_NAMES: out.update({f'tape_shell_{t}': shell_image(t), f'tape_hubs_{t}': hubs_image(t), f'tape_marks_{t}': marks_image(t)})
     return out
 

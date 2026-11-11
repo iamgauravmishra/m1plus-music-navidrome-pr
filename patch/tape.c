@@ -27,22 +27,31 @@
 
 #define FRAME_W 320 /* the frame is TP_H wide (columns) and TP_W tall (rows) */
 
-enum { F_TITLE, F_ARTIST, F_ALBUM, F_TIMES, F_BIG, F_MODEL, F_STATUS, F_N };
+enum { F_TITLE, F_ARTIST, F_ALBUM, F_TIMES, F_BIG, F_MODEL, F_STATUS, F_SPEC, F_BADGE, F_N };
 enum {
     C_INK,
     C_SUB,
     C_BAND,
-    C_PRINT
-}; /* a field's colour: the theme's title / artist ink, album / times / status ink, the band's ink (the big A), the print (the model name) */
+    C_PRINT,
+    C_BADGE
+}; /* a field's colour: the theme's title / artist ink, album / times / status ink, the band's ink (the big A), the print (the model name, the bias line), the sticker's ink (one for every theme) */
 
 /* The themes, in the order of the saved value (tools/tape_art.py THEME_NAMES, THEMES; test/pod/tape.py draws every one from the python table and compares): the picture names
- * (tape_shell_<name>, tape_hubs_<name>, tape_marks_<name>), the colours as r | g << 8 | b << 16, the model name printed on the label. */
+ * (tape_shell_<name>, tape_hubs_<name>, tape_marks_<name>), the colours as r | g << 8 | b << 16, the model name and the bias line printed on the label, the tape's own colour
+ * (the pack's base and what its sheen adds, r g b: ferric brown, chrome's darker brown, metal's blue-black). */
 #define TP_THEMES 3
 static const char *const theme_name[TP_THEMES] = {"normal", "chrome", "metal"};
-static const unsigned theme_rgb[TP_THEMES][4] = {{0x2a1f1bu, 0x62524au, 0xffffffu, 0xbe783cu},
-                                                 {0x181412u, 0x483e3au, 0xffffffu, 0x3a3ac0u},
-                                                 {0x5eb2d9u, 0x4888a8u, 0x5eb2d9u, 0x5eb2d9u}};
+static const unsigned theme_rgb[TP_THEMES][5] = {{0x2a1f1bu, 0x62524au, 0xffffffu, 0xbe783cu, 0x081c2au},
+                                                 {0x181412u, 0x483e3au, 0xffffffu, 0x3a3ac0u, 0x081c2au},
+                                                 {0x5eb2d9u, 0x4888a8u, 0x5eb2d9u, 0x5eb2d9u, 0x081c2au}};
 static const char *const theme_model[TP_THEMES] = {"TYPE I NORMAL", "TYPE II CHROME", "TYPE IV METAL"};
+static const char *const theme_spec[TP_THEMES] = {
+    "NORMAL BIAS \xc2\xb7 120\xc2\xb5s EQ", "HIGH BIAS \xc2\xb7 70\xc2\xb5s EQ", "METAL BIAS \xc2\xb7 70\xc2\xb5s EQ"};
+static const unsigned char theme_pack[TP_THEMES][2][3] = {
+    {{0x22, 0x15, 0x0e}, {0x6c - 0x22, 0x4f - 0x15, 0x38 - 0x0e}},
+    {{0x1a, 0x14, 0x12}, {0x5a - 0x1a, 0x4c - 0x14, 0x46 - 0x12}},
+    {{0x12, 0x12, 0x15}, {0x50 - 0x12, 0x50 - 0x12, 0x58 - 0x15}}};
+static const char *const badge_text[3] = {"", "HI-RES", "DSD"}; /* tp.badge: none, a hi-res PCM stream, DSD */
 
 struct field {
     short x, y; /* the pen's start, or the right end / middle by `anchor`; y is the line's vertical middle */
@@ -55,12 +64,16 @@ struct field {
 /* tools/tape_art.py TEXT; the numbers are checked by test/pod/tape.py */
 static const struct field fields[F_N] = {
     [F_TITLE] = {47, 49, 22, 'l', 0, 388, 43, 37, 439, 62, C_INK},
-    [F_ARTIST] = {47, 70, 16, 'l', 0, 388, 43, 62, 439, 83, C_INK},
+    [F_ARTIST] = {47, 70, 16, 'l', 0, 262, 43, 62, 311, 83, C_INK},
     [F_ALBUM] = {47, 89, 13, 'l', 0, 190, 43, 83, 243, 99, C_SUB},
     [F_TIMES] = {435, 89, 12, 'r', 0, 100, 325, 83, 439, 99, C_SUB},
     [F_BIG] = {65, 146, 54, 'm', 1, 400, 39, 112, 97, 182, C_BAND},
     [F_MODEL] = {47, 206, 12, 'l', 0, 130, 41, 195, 175, 218, C_PRINT}, /* the fine print: type and grade */
     [F_STATUS] = {435, 206, 12, 'r', 0, 212, 219, 195, 441, 219, C_SUB},
+    [F_SPEC] = {435, 70, 11, 'r', 0, 124, 311, 62, 439, 83,
+                C_PRINT}, /* the tape's bias and equalisation, at the right end of the artist's line */
+    [F_BADGE] = {58, 248, 11, 'm', 1, 44, TP_BADGE_X, TP_BADGE_Y, TP_BADGE_X + TP_BADGE_W, TP_BADGE_Y + TP_BADGE_H,
+                 C_BADGE}, /* the sticker on the shell: tape_badge under the text */
 };
 #define STATUS_W 212
 
@@ -73,16 +86,29 @@ typedef struct {
 
 static struct {
     void *win, *view, *st_font;
-    int theme; /* the saved theme when the page opened */
-    void *frame, *base, *top, *hubs, *marks,
-        *screw; /* RGBA8888 bitmaps in the frame's orientation (the images are made turned) */
+    int theme; /* the theme shown (0 .. 2): the saved one when the page opened, or the playing track's when that is TP_THEME_AUTO */
+    int automatic; /* the saved theme was TP_THEME_AUTO: the theme follows the track */
+    void *frame, *base, *top, *hubs, *marks, *screw,
+        *sticker; /* RGBA8888 bitmaps in the frame's orientation (the images are made turned); sticker (tape_badge) may be missing: then no sticker is shown */
     unsigned short *lut; /* sqrt(d2h) * 8 for d2h < TP_LUT_N: a distance in 1/16 px */
     unsigned timer, ival;
     int fg;
     /* what the page shows now */
     unsigned key; /* the playing track (a hash), 0 none, ~0 not looked at yet */
     int playing, repeat, pos, len;
-    char title[96], artist[64], album[64], fmt[8], times[24];
+    char title[96], artist[64], album[64], fmt[24], times[24];
+    /* the stream's quality (tp_quality): what the status line, the sticker and an automatic theme show */
+    unsigned t_key; /* when the track changed (ms, never 0), 0 once the player's information is looked at again */
+    int q_rate, q_bits; /* the stream the quality was last worked out from (-1: the file name alone) */
+    unsigned q_name; /* its codec name's hash */
+    int q_br; /* and its bit rate (bit/s), compared only while the record is not known to be this track's */
+    int o_rate, o_bits, o_br; /* the player's record as it was when the track changed */
+    unsigned o_name;
+    int unsure; /* the record read since the change is still that one: it may be the last track's */
+    unsigned q_key; /* the track all of this is for (tp.key is forgotten by a full redraw, this is not) */
+    int q_seen; /* 0 until the page's first look */
+    int badge; /* 0 none, 1 HI-RES, 2 DSD */
+    int tried; /* the theme whose pictures would not load (-1 none): not tried again for this track */
     int batt, charging, vol, hh, mm; /* batt -1: no bar */
     int rs, rt; /* the packs' radii, 1/16 px; -1: not drawn yet */
     unsigned ang[2]; /* the hubs' turn, 1/16 degree, 0 .. 959 (60 degrees: six teeth) */
@@ -205,9 +231,9 @@ static void tp_finish(void *bmp) {
 }
 
 static void tp_free(void) {
-    void **b[6] = {&tp.frame, &tp.base, &tp.top, &tp.hubs, &tp.marks, &tp.screw};
+    void **b[7] = {&tp.frame, &tp.base, &tp.top, &tp.hubs, &tp.marks, &tp.screw, &tp.sticker};
     int i;
-    for (i = 0; i < 6; ++i)
+    for (i = 0; i < 7; ++i)
         if (*b[i]) bitmap_destroy(*b[i]), *b[i] = (void *)0;
     if (tp.lut) free(tp.lut), tp.lut = (unsigned short *)0;
 }
@@ -246,7 +272,7 @@ static const unsigned char pk_wind[32] = {/* 32 + 32 sin(2 pi i / 32): the windi
 
 /* The pack of radius R (1/16 px) at distance d (1/16 px) laid over `under`; (dx, dy) are the pixel's half pixels from the centre. */
 static unsigned tp_pack(unsigned under, int d, int R, int dx, int dy) {
-    static const unsigned char base[3] = {0x22, 0x15, 0x0e}, rise[3] = {0x6c - 0x22, 0x4f - 0x15, 0x38 - 0x0e};
+    const unsigned char *base = theme_pack[tp.theme][0], *rise = theme_pack[tp.theme][1];
     unsigned u, u2, d2, lobe, w, mb, k, e, c = 0xff000000u;
     int cov, s = -dx - dy, i;
     if (d < 0 || d > R + 8) return under;
@@ -422,6 +448,16 @@ static void tp_field(unsigned *f, const unsigned *base, void *font, int id, cons
     tp_dirty(fd->x0, fd->y0, fd->x1, fd->y1);
     while (utf8[n] && n < 255) ++n;
     if (!n) return;
+    if (id == F_BADGE) { /* the sticker under its text (the field's rectangle is the picture's) */
+        const unsigned *s = (const unsigned *)bitmap_lock_buffer_for_read(tp.sticker);
+        if (!s) return;
+        for (x = 0; x < TP_BADGE_W; ++x)
+            for (y = 0; y < TP_BADGE_H; ++y) {
+                unsigned c = s[x * TP_BADGE_H + (TP_BADGE_H - 1 - y)], *p = tp_pix(f, FRAME_W, fd->x0 + x, fd->y0 + y);
+                if (c >> 24) *p = tp_mix(*p, c, c >> 24);
+            }
+        bitmap_unlock_buffer(tp.sticker);
+    }
     tk_utf8_to_utf16_ex(utf8, n, wide, 63);
     wide[63] = 0;
     for (n = 0; wide[n]; ++n) {
@@ -518,6 +554,12 @@ static int tp_on_paint(void *ctx, void *e) {
                 case F_MODEL:
                     tp_field(f, base, font, i, theme_model[tp.theme], fields[i].px);
                     break;
+                case F_SPEC:
+                    tp_field(f, base, font, i, theme_spec[tp.theme], fields[i].px);
+                    break;
+                case F_BADGE:
+                    tp_field(f, base, font, i, tp.sticker ? badge_text[tp.badge] : "", fields[i].px);
+                    break;
                 default:
                     tp_status(font, line, sizeof line, &px);
                     tp_field(f, base, font, i, line, px);
@@ -581,6 +623,114 @@ static void tp_format(
     out[k] = 0;
 }
 
+/* The playing stream's quality: the status line's text ("FLAC 24/96", "MP3 320", "DSD64"; the file's extension alone when the player's information is not used), the tape an
+ * automatic theme shows (lossy Normal, lossless Chrome, hi-res and DSD Metal) and the sticker (1 HI-RES, 2 DSD). `look` asks the player (mclGetInfo: a mutex and a copy);
+ * without it, or while the player has no stream (no rate, no name), everything follows the extension. Lossless is by the codec's name as stock's get_hrflag spells it, or by
+ * the extension; hi-res is get_hrflag's rule (over 48 kHz, or 24 bit from 44.1 kHz), DSD is 1 bit. rate / bits / name tell one stream from the next (-1, -1, 0: the extension). */
+struct tp_q {
+    int theme, badge, rate, bits, br;
+    unsigned name;
+    char fmt[24];
+};
+
+static int tp_lossless(const char *s) {
+    static const char names[] = "FLAC\0ALAC\0WAV\0APE\0AIFF\0AIF\0DSD\0DSF\0DFF\0ISO\0WV\0";
+    const char *n = names;
+    while (*n) {
+        if (!strcmp(n, s)) return 1;
+        while (*n++) {
+        }
+    }
+    return 0;
+}
+
+static void tp_quality(void *t, int look, struct tp_q *q) {
+    int in[PLAYINFO_SIZE / 4], rate, bits, kbps, ok, dsd, lossless, hires;
+    char ext[8], *codec = (char *)in + PLAYINFO_FMT;
+    const char *name;
+    memset(in, 0, sizeof in);
+    if (t && look) mclGetInfo(in);
+    codec[PLAYINFO_BITS - PLAYINFO_FMT - 1] = 0;
+    rate = in[PLAYINFO_RATE / 4], bits = in[PLAYINFO_BITS / 4], kbps = in[PLAYINFO_BITRATE / 4] / 1000;
+    ok = rate > 0 && codec[0];
+    tp_format(ext, t ? cc_str(t, REC_PATH) : "");
+    name = ext[0] ? ext : codec;
+    dsd = ok ? bits == 1 : !strcmp(ext, "DSF") || !strcmp(ext, "DFF");
+    lossless = dsd || tp_lossless(ext) || (ok && tp_lossless(codec));
+    hires = ok && lossless && !dsd && (rate > 48000 || (bits >= 24 && rate >= 44100));
+    q->theme = dsd || hires ? 2 : lossless;
+    q->badge = dsd ? 2 : hires;
+    q->rate = ok ? rate : -1, q->bits = ok ? bits : -1, q->name = ok ? cc_fnv(FNV_SEED, codec) : 0;
+    q->br = ok ? in[PLAYINFO_BITRATE / 4] : 0;
+    if (ok && dsd && rate >= 32 * 44100)
+        snprintf(q->fmt, sizeof q->fmt, "DSD%d", (rate + 22050) / 44100);
+    else if (ok && lossless && !dsd && rate % 1000 / 100)
+        snprintf(q->fmt, sizeof q->fmt, "%s %d/%d.%d", name, bits, rate / 1000, rate % 1000 / 100);
+    else if (ok && lossless && !dsd)
+        snprintf(q->fmt, sizeof q->fmt, "%s %d/%d", name, bits, rate / 1000);
+    else if (ok && !lossless && kbps > 0)
+        snprintf(q->fmt, sizeof q->fmt, "%s %d", name, kbps);
+    else
+        snprintf(q->fmt, sizeof q->fmt, "%s", name);
+}
+
+/* The theme's three pictures (the shell with its grain and knurl, the hubs, the marks) in place of the ones shown, and the shell copied into the frame: 1, or 0 with nothing
+ * changed (a picture missing or of another size, no memory). The page then draws everything again. */
+static int tp_theme_load(int theme) {
+    char name[32];
+    void *b[3], **old[3] = {&tp.base, &tp.hubs, &tp.marks};
+    unsigned *f = (unsigned *)0;
+    const unsigned *s = (const unsigned *)0;
+    int i;
+    snprintf(name, sizeof name, "tape_shell_%s", theme_name[theme]);
+    b[0] = tp_load(name, TP_H, TP_W);
+    snprintf(name, sizeof name, "tape_hubs_%s", theme_name[theme]);
+    b[1] = tp_load(name, TP_HUB_PX, TP_HUB_PX * TP_SPRITES);
+    snprintf(name, sizeof name, "tape_marks_%s", theme_name[theme]);
+    b[2] = tp_load(name, TP_MARK_PX, TP_MARK_PX * 3);
+    if (b[0] && b[1] && b[2] && tp.frame) {
+        tp_finish(b[0]);
+        f = (unsigned *)bitmap_lock_buffer_for_write(tp.frame);
+        s = f ? (const unsigned *)bitmap_lock_buffer_for_read(b[0]) : s;
+        if (s) memcpy(f, s, (unsigned)TP_H * TP_W * 4), bitmap_unlock_buffer(b[0]);
+        if (f) bitmap_unlock_buffer(tp.frame);
+    }
+    for (i = 0; i < 3; ++i) {
+        void *drop = s ? *old[i] : b[i];
+        if (s) *old[i] = b[i];
+        if (drop) bitmap_destroy(drop);
+    }
+    if (s) tp.theme = theme;
+    return s != (const unsigned *)0;
+}
+
+/* The quality looked at again: the status line's format, the sticker and, with the automatic theme, the tape. After a change of track the player is not asked for TP_INFO_MS
+ * (its record may still be the last track's): the format is the extension until then, the sticker and the tape stay. A VBR file's bit rate is the one of the first look
+ * (the rate is not part of what tells streams apart), once the record is known to be this track's: while it is still word for word the one read when the track changed
+ * (tp.unsure) it may be the last track's, arriving late, so the bit rate is compared too and the first record that differs is the track's. 1: the theme changed, everything
+ * is to be drawn again. */
+static int tp_look(void *t, unsigned now) {
+    struct tp_q q;
+    int look = !tp.t_key || now - tp.t_key >= TP_INFO_MS;
+    if (look) tp.t_key = 0;
+    tp_quality(t, look, &q);
+    if (!look) q.rate = -3;
+    if (q.rate == tp.q_rate && q.bits == tp.q_bits && q.name == tp.q_name && (!tp.unsure || q.br == tp.q_br)) return 0;
+    if (look && (q.rate != tp.o_rate || q.bits != tp.o_bits || q.name != tp.o_name || q.br != tp.o_br)) tp.unsure = 0;
+    tp.q_rate = q.rate, tp.q_bits = q.bits, tp.q_name = q.name, tp.q_br = q.br;
+    if (strcmp(tp.fmt, q.fmt)) {
+        snprintf(tp.fmt, sizeof tp.fmt, "%s", q.fmt);
+        tp.pending |= 1u << F_STATUS;
+    }
+    if (!look) return 0;
+    if (q.badge != tp.badge) tp.badge = q.badge, tp.pending |= 1u << F_BADGE;
+    if (tp.automatic && t && q.theme != tp.theme && q.theme != tp.tried) {
+        if (tp_theme_load(q.theme)) return 1;
+        tp.tried = q.theme; /* no memory, a picture gone: the tape shown stays for this track */
+    }
+    return 0;
+}
+
 static unsigned tp_track_key(void *t) {
     unsigned h = cc_fnv(cc_fnv(cc_fnv(FNV_SEED, cc_str(t, REC_PATH)), cc_str(t, REC_TITLE)), cc_str(t, REC_NAME));
     return h | !h;
@@ -616,15 +766,28 @@ static void tp_update(int force) {
     if (len > 65535) len = 65535, pos = pos > len ? len : pos;
     if (key != tp.key) {
         const char *s;
+        /* Another track, not the same one drawn again (force): the page's first look asks the player at once, a change waits. Either way the record as it is now may be
+         * the last track's (the page may open, or come back to the front, right after a change), so it is kept to tell this track's from. */
+        if (key != tp.q_key || !tp.q_seen) {
+            struct tp_q q;
+            tp.t_key = tp.q_seen ? now | !now : 0;
+            tp.q_rate = -2, tp.tried = -1;
+            tp_quality(t, 1, &q);
+            tp.o_rate = q.rate, tp.o_bits = q.bits, tp.o_name = q.name, tp.o_br = q.br;
+            tp.unsure = 1, tp.q_key = key, tp.q_seen = 1;
+        }
         tp.key = key;
         s = t ? cc_str(t, REC_TITLE) : "";
         if (t && !*s) s = cc_str(t, REC_NAME);
         tp_copy(tp.title, sizeof tp.title, t ? s : TR("Not Playing"));
         tp_copy(tp.artist, sizeof tp.artist, t ? cc_str(t, REC_ARTIST) : "");
         tp_copy(tp.album, sizeof tp.album, t ? cc_str(t, REC_ALBUM) : "");
-        tp_format(tp.fmt, t ? cc_str(t, REC_PATH) : "");
         tp.pending |= 1u << F_TITLE | 1u << F_ARTIST | 1u << F_ALBUM | 1u << F_STATUS;
         tp.pos = -1;
+    }
+    if (tp_look(t, now)) { /* another tape: the frame is the new shell, everything on it is drawn again */
+        force = 1, tp.rs = -1;
+        tp_dirty(0, 0, TP_W, TP_H);
     }
     if (pos != tp.pos || len != tp.len) {
         tp.pos = pos, tp.len = len;
@@ -782,17 +945,18 @@ static int tp_on_touch(void *ctx, void *e) {
 }
 
 /* ---------------------------------------------------------------------------
- * The saved theme (Settings > Now Playing > Theme): "1" Chrome, "2" Metal (an optional newline), anything else or no file Normal; reading never writes.
+ * The saved theme (Settings > Now Playing > Theme): "1" Chrome, "2" Metal, "3" by the track's quality (TP_THEME_AUTO; each with an optional newline), anything else or no
+ * file Normal; reading never writes.
  */
 int tape_theme(void) {
     int c = set_read(TAPETHEME_FILE, 0);
-    return c == '1' || c == '2' ? c - '0' : 0;
+    return c >= '0' && c <= '0' + TP_THEME_AUTO ? c - '0' : TP_THEME_AUTO;
 }
 
-/* Choose the theme (0 Normal, 1 Chrome, 2 Metal), saved atomically; the theme, or -1 (an unknown theme, or one that could not be saved: the saved one is unchanged). */
+/* Choose the theme (0 Normal, 1 Chrome, 2 Metal, 3 by the track), saved atomically; the theme, or -1 (an unknown theme, or one that could not be saved: the saved one is unchanged). */
 int tape_theme_set(int theme) {
-    static const char *const text[TP_THEMES] = {"0\n", "1\n", "2\n"};
-    if (theme < 0 || theme >= TP_THEMES) return -1;
+    static const char *const text[TP_THEME_AUTO + 1] = {"0\n", "1\n", "2\n", "3\n"};
+    if (theme < 0 || theme > TP_THEME_AUTO) return -1;
     return home_write_atomic(TAPETHEME_FILE, TAPETHEME_TMP, text[theme]) == 0 ? theme : -1;
 }
 
@@ -811,31 +975,21 @@ int tape_open(void) {
     tp.view = widget_lookup(tp.win, "tape_view", 1);
     tp.st_font = widget_lookup(tp.win, "label_tp_font", 1);
     if (tp.view && tp.st_font) {
-        unsigned *f, d2;
-        char name[32];
-        tp.theme = tape_theme(); /* read once: a change in Settings shows the next time the page opens */
-        snprintf(name, sizeof name, "tape_shell_%s", theme_name[tp.theme]);
-        tp.base = tp_load(name, TP_H, TP_W);
-        if (tp.base) tp_finish(tp.base);
-        snprintf(name, sizeof name, "tape_hubs_%s", theme_name[tp.theme]);
-        tp.hubs = tp_load(name, TP_HUB_PX, TP_HUB_PX * TP_SPRITES);
-        snprintf(name, sizeof name, "tape_marks_%s", theme_name[tp.theme]);
-        tp.marks = tp_load(name, TP_MARK_PX, TP_MARK_PX * 3);
+        unsigned d2;
+        int theme = tape_theme(); /* read once: a change in Settings shows the next time the page opens */
+        tp.automatic = theme == TP_THEME_AUTO;
+        if (tp.automatic) { /* the playing track's tape at once (nothing playing: Normal), so the open loads one shell */
+            struct tp_q q;
+            void *t = cc_playing();
+            tp_quality(t, 1, &q);
+            theme = t ? q.theme : 0;
+        }
+        tp.frame = bitmap_create_ex(TP_H, TP_W, TP_H * 4, BITMAP_RGBA8888);
         tp.top = tp_load("tape_top", TP_TOP_H, TP_TOP_W);
         tp.screw = tp_load("tape_screw", TP_MARK_PX, TP_MARK_PX);
-        tp.frame = bitmap_create_ex(TP_H, TP_W, TP_H * 4, BITMAP_RGBA8888);
+        tp.sticker = tp_load("tape_badge", TP_BADGE_H, TP_BADGE_W); /* missing: the page opens without the sticker */
         tp.lut = (unsigned short *)calloc(TP_LUT_N, sizeof(unsigned short));
-        f = tp.frame && tp.base ? (unsigned *)bitmap_lock_buffer_for_write(tp.frame) : (unsigned *)0;
-        if (f && tp.top && tp.hubs && tp.marks && tp.screw && tp.lut) {
-            const unsigned *b = (const unsigned *)bitmap_lock_buffer_for_read(tp.base);
-            if (b) {
-                memcpy(f, b, (unsigned)TP_H * TP_W * 4);
-                bitmap_unlock_buffer(tp.base);
-            } else
-                f = (unsigned *)0;
-        }
-        if (f) bitmap_unlock_buffer(tp.frame);
-        if (f && tp.top && tp.hubs && tp.marks && tp.screw && tp.lut) {
+        if (tp.frame && tp.top && tp.screw && tp.lut && tp_theme_load(theme)) {
             for (d2 = 0; d2 < TP_LUT_N; ++d2) tp.lut[d2] = (unsigned short)tp_isqrt(d2 << 6);
             tp.ang[1] = 400, tp.hub[1] = 400 / 80; /* the reels do not start in step */
             tp.fg = 1;
