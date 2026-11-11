@@ -312,6 +312,7 @@ static struct {
     void *sf, *sf_hint, *sf_text, *sf_clear;
     const char *
         htext; /* the Discover and search levels' status text, already translated (NULL: rows or none); painted as the hint */
+    int hbusy; /* htext is Loading… or Searching…: the spinner turns before it (pg_hint_busy) */
     unsigned sgen;
     char sq[KB_MAX_LONG + 1], sp_url[PC_URL], sp_art[PJ_ART], sp_id[16], sp_eid[16], sp_text[KB_MAX_LONG + 1];
     /* aqh: pc_hash of the text the Apple answer is of (0: none); sfok: the page has the field's widgets (without them it has no search). */
@@ -404,6 +405,8 @@ static const char *pg_hint(void) {
     return (const char *)0;
 }
 static int pg_hint_y(void) { return pg.level == L_DLS ? pg_dh() : pg_top(); }
+/* The Discover and search levels' status line says that a job is on (Loading…, Searching…): the spinner is drawn before it. */
+static int pg_hint_busy(void) { return (pg.level == L_DISC || pg.level == L_SRCH) && !pg.det && pg.htext && pg.hbusy; }
 static const char *pg_hint_text(void) {
     const char *k = pg_hint();
     return k && pg.level != L_DISC && pg.level != L_SRCH ? TR(k) : k;
@@ -1285,7 +1288,7 @@ static void pg_paint_eps(void *canvas) {
     memset(&lp, 0, sizeof lp);
     pg_span(&r0, &r1);
     if (r1 - r0 + 1 > PG_SEEN) r1 = r0 + PG_SEEN - 1;
-    if (off < hy) {
+    if (off < hy && !pg.allv) { /* (not on the All Episodes page: pulled down past its top it has no header) */
         grid_blit(canvas, &pg.hg, &pg.hg.tiles[0], PS_ART_X, -off, GRID_VIEW_H);
         if (h->has_latest) {
             pg_latest(&lp);
@@ -1316,7 +1319,7 @@ static void pg_paint_eps(void *canvas) {
             pg_sprite(canvas, 0, PA_DOTS_Y, PA_DOTS_PX, PA_DOTS_PX, PS_DOTS_CX - PA_DOTS_PX / 2,
                       y + PS_PILL_Y + PS_PILL_H / 2 - PA_DOTS_PX / 2);
     }
-    if (off < hy) { /* the header's texts */
+    if (off < hy && !pg.allv) { /* the header's texts */
         pg_style(canvas, ST_NAME);
         for (k = 0; k < h->nn; ++k)
             pg_text(canvas, h->name + h->nl[k].start, h->nl[k].len, PS_NAME_X, h->y_name + k * PS_NAME_PITCH - off,
@@ -1750,13 +1753,16 @@ static void pg_paint_hint(void *canvas, int off) {
     const char *key = pg_hint_text();
     unsigned t[160];
     pw_line_t ln[4];
-    int n, k, nl;
+    int n, k, nl, sx = 0;
     if (!key) return;
+    if (pg_hint_busy() && grid_spin_draw(canvas, &pg.hg, PP_LINE_X,
+                                         pg_hint_y() + 8 + (PS_TITLE_PITCH - PS_SPIN_PX) / 2 - off, GRID_VIEW_H))
+        sx = PS_SPIN_PX + PS_SPIN_GAP; /* (Loading…, Searching…: the See All row's spinner, the text after it) */
     n = pg_wide(t, 160, key);
-    nl = pg_lines(pg.st[ST_CDIM], t, n, PG_W - 2 * PP_LINE_X, 4, ln); /* (the episode cells' dim 20 px grey) */
+    nl = pg_lines(pg.st[ST_CDIM], t, n, PG_W - 2 * PP_LINE_X - sx, 4, ln); /* (the episode cells' dim 20 px grey) */
     for (k = 0; k < nl; ++k)
-        pg_paint_text_at(canvas, pg.st[ST_CDIM], t + ln[k].start, ln[k].len, PP_LINE_X,
-                         pg_hint_y() + 8 + k * PS_TITLE_PITCH - off, PG_W - 2 * PP_LINE_X, PS_TITLE_PITCH);
+        pg_paint_text_at(canvas, pg.st[ST_CDIM], t + ln[k].start, ln[k].len, PP_LINE_X + sx,
+                         pg_hint_y() + 8 + k * PS_TITLE_PITCH - off, PG_W - 2 * PP_LINE_X - sx, PS_TITLE_PITCH);
 }
 
 /* The grey line under the large title: the chart's name and the storefront it is of ("Top 25 Shows in United States": the Downloads storage line's place and style). The storefront is the one the answer is of (a fall back
@@ -2936,9 +2942,11 @@ static void pg_srch_rows_reset(void) {
 }
 
 /* The status line under the field or the control (the label of the empty states), or none. */
-static void pg_srch_hint(const char *text) {
+static void pg_srch_hint(const char *text, int busy) {
     pg.htext = text;
+    pg.hbusy = busy;
     m1_show(pg.status, 0);
+    pg_spin_arm();
 }
 
 /* What the level shows for the state: the field's texts, the status line (Loading... while a preview is fetched, Searching..., No results, the failure's words) or the rows of the answer. */
@@ -2957,7 +2965,7 @@ static void pg_srch_apply(void) {
             hint = TR("No results");
     }
     pg.srn = n;
-    pg_srch_hint(hint);
+    pg_srch_hint(hint, pg.loading || pg.sstate == SS_WAIT || pg.sstate == SS_RUN);
     if (pg.sf_hint) widget_set_visible(pg.sf_hint, pg.sq[0] == 0, 0);
     if (pg.sf_clear)
         widget_set_visible(pg.sf_clear, pg.sq[0] != 0, 0); /* (an image: insensitive for life, the touch is PH_CLEAR) */
@@ -3331,7 +3339,7 @@ static void pg_subscribe(void) {
  */
 /* What the level shows for the state of the chart in view: its rows, or the status line (Loading... while it is asked for, the failure's words, No results). */
 static void pg_disc_apply(void) {
-    int t = pg.dtab, n = 0, max, cnt, code;
+    int t = pg.dtab, n = 0, max, cnt, code, busy = 0;
     const char *hint = (const char *)0;
     if (pg.level != L_DISC) return;
     cnt = pn_chart_count(t), code = pn_chart_code(t);
@@ -3344,11 +3352,11 @@ static void pg_disc_apply(void) {
     else if (pn_chart_state(t) == 2 && !pg.dpend && pg.dtried[t] && !cnt)
         hint = TR("No results");
     else
-        hint = TR("Loading…");
+        hint = TR("Loading…"), busy = 1;
     if (n != pg.dn) pg_srch_rows_reset();
     pg.dn = n;
     pg.cgen = pn_chart_gen();
-    pg_srch_hint(hint);
+    pg_srch_hint(hint, busy);
     pg_size();
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;
@@ -4841,11 +4849,13 @@ static void pg_arch_go(void) {
     pg_redraw();
 }
 
-/* The See All row's spinner: a 250 ms timer that exists only while the row is busy (the job runs for this show, or waits for the downloads) and the page is in front on the Show level. It turns the
+/* The spinner of the See All row and of the Discover and search levels' status line (Loading…, Searching…: pg_hint_busy): a 250 ms timer that exists only while the row is busy (the job runs for this show, or waits for the downloads) or the line is a busy one, and the page is in front. It turns the
  * frame and repaints when the row is in view; it ends itself (return RET_OK) when the row is no longer busy, the level changes or the page goes to the background (pg_on_bg stops it, pg_arm_spin starts it again). */
 static int pg_spin_busy(void) {
-    return pg.win && pg.fg && pg_fetch_on() &&
-           ((pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == pg.shows[pg.sel].hash) || pg.apend);
+    return pg.win && pg.fg &&
+           (pg_hint_busy() ||
+            (pg_fetch_on() &&
+             ((pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == pg.shows[pg.sel].hash) || pg.apend)));
 }
 static int pg_spin_tick(const void *timer) {
     int y;
@@ -4857,7 +4867,7 @@ static int pg_spin_tick(const void *timer) {
     }
     if (!m1_screen_lit()) return RET_REPEAT;
     ++pg.hg.spin_n;
-    y = pg_more_y() - pg_off();
+    y = (pg_hint_busy() ? pg_hint_y() : pg_more_y()) - pg_off();
     if (y < GRID_VIEW_H && y + PS_MORE_H > 0) pg_redraw();
     return RET_REPEAT;
 }

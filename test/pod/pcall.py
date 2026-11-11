@@ -127,6 +127,10 @@ def page_tests(ctx):
     expect(len(titles) == 70 and more == '' and titles[:3] == ['Episode 0', 'Episode 1', 'Episode 2'] and titles[-1] == 'Old 39' and m.props[(m.sv, 'virtual_h')] == 70 * CELL + 20,
            f'every episode of the complete list, in order, no See All row ({len(titles)}: {titles[:1]}..{titles[-1:]})')
     expect(m.props.get((m.sv, 'yoffset'), 0) == 0, 'the list starts at the top')
+    # pulled down past its top (the scroll view's overscroll): rows only, no header of the Show page above them
+    b0, _, s0, _ = PCP.paint(m, 0)
+    b1, t1, s1, _ = PCP.paint(m, -60)
+    expect(set(s1) <= set(s0) and not [b for b in b1 if b[0] not in {x[0] for x in b0}], f'pulled down past its top: the rows only, no cover, pill or text of the Show page\'s header ({sorted(set(s1) - set(s0))}, {b1[:2]} / {b0[:2]})')
     # Back: the Show page at its scroll offset
     PCP.click(m, 'btn_return')
     titles, more = rows(m)

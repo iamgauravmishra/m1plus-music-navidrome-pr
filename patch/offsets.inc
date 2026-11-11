@@ -1262,7 +1262,7 @@
 #define PP_HEAD_H 28
 #define PP_HEAD_PITCH 34
 #define PP_HEAD_X 14
-#define PP_SHOWS_X 16
+#define PP_SHOWS_X 12 /* = GRID_MARGIN, SG_TITLE_X: the header starts where the covers under it and the large title do */
 #define PP_SHELF_MAX 3
 #define PP_SHELF_ART 92
 #define PP_SHELF_R 8

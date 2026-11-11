@@ -995,4 +995,34 @@ def asset_tests(ctx):
            'the Podcasts page has btn_search at x 214, 46 wide, the Radio page\'s glyph, hidden until the Discover level shows it; the Shows level\'s globe is a button of its own')
 
 
-SECTIONS = [json_tests, episode_json_tests, pf_iso_tests, net_tests, failure_tests, layout_tests, segmented_tests, switch_tests, tap_tests, episode_tests, notavail_tests, state_tests, width_tests, asset_tests]
+def spin_tests(ctx):
+    """The status line's spinner (patch/podcasts.c pg_hint_busy): the See All row's 14 px frame before Loading… while the chart is asked for, turned by pg_spin_tick; none beside a failure or the rows."""
+    expect = ctx.expect
+    PCP = SU.PCP
+    spin = lambda m: [b for b in PCP.paint(m, 0)[0] if m.bitmaps[b[0]][1:] == (14, 14)]
+    dim = lambda m: texts_style(m, 'label_ps_cdim', 0)
+    adds = lambda m: [t for t in m.timers if t[0] == SU.PSYMS['pg_spin_tick']]
+    L0 = pod_show.discover_layout(0)
+
+    def opened(site):
+        m = SU.opened(site=site)
+        for i in range(8): m.images[f'wf_spin{i}'] = (14, 14, bytes((0x55, 0x55, 0x55, 255)) * 196)
+        return m
+    m = opened(disc_site())
+    PCP.tap_discover(m)
+    SU.tick(m)
+    sp, d = spin(m), dim(m)
+    expect(SU.hint(m) == 'Loading…' and len(sp) == 1 and sp[0][2][0] == O_['PP_LINE_X'] and sp[0][2][1] == L0['hint_y'] + (O_['PS_TITLE_PITCH'] - 14) // 2 and d[0][1][0] == O_['PP_LINE_X'] + 14 + O_['PS_SPIN_GAP'],
+           f'the chart is asked for: one 14 px spinner at the line\'s left edge, Loading… after it ({[b[2] for b in sp]}, {d[:1]})')
+    expect(len(adds(m)) == 1, 'one spinner timer')
+    a = sp[0][0]
+    expect(m.call(SU.PSYMS['pg_spin_tick'], a0=0, count=40000000) == O_['RET_REPEAT'] and spin(m)[0][0] != a, 'the timer turns the frame while the line is busy')
+    SU.work(m); SU.tick(m)
+    expect(not SU.hint(m) and spin(m) == [] and m.call(SU.PSYMS['pg_spin_tick'], a0=0, count=40000000) != O_['RET_REPEAT'], 'the rows came: no spinner, the timer ends itself')
+    m = opened(disc_site(**{CHART + 'podcasts.json': {'rc': 6}}))
+    SU.discover(m)
+    d = dim(m)
+    expect(SU.hint(m) == "Can't connect" and spin(m) == [] and d[0][1][0] == O_['PP_LINE_X'], f'a failure: no spinner, the words at the line\'s left edge ({d[:1]})')
+
+
+SECTIONS = [spin_tests, json_tests, episode_json_tests, pf_iso_tests, net_tests, failure_tests, layout_tests, segmented_tests, switch_tests, tap_tests, episode_tests, notavail_tests, state_tests, width_tests, asset_tests]
