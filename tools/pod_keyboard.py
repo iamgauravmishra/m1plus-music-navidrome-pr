@@ -2,7 +2,7 @@
 """The geometry of M1+ Music's own QWERTY keyboard (patch/keyboard.c, docs/modules/keyboard.md), in one place.
 
 tools/pod_ui.py builds ui/m1plus_keyboard.bin from it (the lowercase page), the tests check every page's widget moves in the payload against it,
-and tools/preview_keyboard.py draws all pages from it. patch/keyboard.c repeats the arithmetic (x0 = (320 - n w - (n - 1) 3 + 1) / 2) and the strings;
+and tools/preview/preview_keyboard.py draws all pages from it. patch/keyboard.c repeats the arithmetic (x0 = (320 - n w - (n - 1) 3 + 1) / 2) and the strings;
 test/pod/keyboard.py compares the two.
 
 iPhone OS 1 proportions on the M1 Plus' 320 px screen: the pad is 180 px high at the bottom of the window (450 px under the 30 px status bar: the

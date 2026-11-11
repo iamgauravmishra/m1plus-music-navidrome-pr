@@ -9,7 +9,7 @@ The design follows q2-pod's Network Update (github.com/DiamondBond/q2-pod, `patc
 into `<asset>.part` that is renamed into place only when complete (a failure deletes the `.part` and keeps the old file), a page that shows the progress, keeps the device awake and cancels on a second press, and the
 firmware's TF card update at the end. The code is our own. Differences: the asset is fetched by its tag (not `latest`), the version is compared as numbers, and the downloaded package's own version lines are checked.
 
-Preview: `uv run python -I tools/preview_update.py work/mod-release out/preview/update.png [--lang CODE]` (sixteen states, the notes page not drawn; the asset walked by the shared painter, not pixel-exact; not tracked).
+Preview: `uv run python -I tools/preview/preview_update.py work/mod-release out/preview/update.png [--lang CODE]` (sixteen states, the notes page not drawn; the asset walked by the shared painter, not pixel-exact; not tracked).
 
 ## What the user sees
 

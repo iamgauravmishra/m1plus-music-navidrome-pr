@@ -6,7 +6,7 @@ available from Shanling Home.
 
 Sources: `patch/playlists.c`, `patch/grid.c` (`grid_mosaic`), `tools/pod_ui.py`
 (`build_playlists_page`) and `tools/pod_pages.py` (`PLAYLISTS`, `ACT_PLAYLISTS`).
-Tests: `test/pod/playlists.py`; preview: `tools/preview_playlists.py`.
+Tests: `test/pod/playlists.py`; preview: `tools/preview/preview_playlists.py`.
 
 ## What the user sees
 
@@ -60,7 +60,7 @@ The same page is the Add to Playlist picker (`docs/modules/picker.md`): list mod
 
 Everything above is checked on the emulated payload and the real stock code where the harness runs it; not seen on the device: the large title and its collapse, the shared card on this page (its glass, the scrim's dim, the hairlines, the row hit-testing), the two cards on the device, the list-plus button glyph's look, the Name order on a real playlist table, the keyboard dialog opening from a click handler of our page (the stock page does the same from its own), the stock import / export dialogs over our page, the "..." glyph's look, the time of a scan on a large playlist table (one `select ... where id > 100 and cd_num=` per playlist, one a 16 ms tick), the select mode (its look: the marks at the covers' corner, the pill across the bar; the stock confirm dialog kind 1 and `batch_delete_file(0xf00b, ...)` called from our page: read from the disassembly and run in the emulation with the call mocked, never run for real) and the stock Playlists page as its fallback.
 
-Preview: `uv run python -I tools/preview_playlists.py work/mod-release out/preview/playlists.png` (also two panels of `tools/preview.py`).
+Preview: `uv run python -I tools/preview/preview_playlists.py work/mod-release out/preview/playlists.png` (also two panels of `tools/preview/preview.py`).
 
 ## Handover (list-plus + two cards, 2026-11-06)
 

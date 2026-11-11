@@ -210,5 +210,5 @@ Two sampling steps make the 168 px cache file and the tiles drawn from it; both 
   background). Change the letter when the way a cover is made changes again.
 - **`cc_box`** (grid tiles, mini player, album page, and so on) is `ar_push` over the centred square: edge pixels weigh their covered fraction (integer weights, one rounding, no per-pixel
   division), where it counted every touched pixel in full (168 -> 144 blurred a 2 x 2 neighbourhood). `cc_sample` (Cover Flow's nearest) is unchanged.
-- **Comparison**: `uv run python -I tools/preview_cover_resample.py [--card | --image F | --m4a F]` writes `out/peek/cover-resample.png`: stock today (bilinear + old `cc_box`) against ours, with a 3x zoom.
+- **Comparison**: `uv run python -I tools/preview/preview_cover_resample.py [--card | --image F | --m4a F]` writes `out/peek/cover-resample.png`: stock today (bilinear + old `cc_box`) against ours, with a 3x zoom.
   Tests: `test/coverflow.py` (area average against an exact model, stock fit), `test/pod/coverart.py` (the worker end to end under Unicorn: sizes, scales, folder choice, every fallback).

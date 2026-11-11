@@ -2,7 +2,7 @@
 
 Code: `patch/keyboard.c`, `patch/keyboard.h` (API and geometry constants). Asset: `tools/pod_ui.py` `build_keyboard_page` (`ui/m1plus_keyboard.bin`), geometry in `tools/pod_keyboard.py`,
 glyphs in `tools/mod_icons.py` (`KEYBOARD_IMAGES`, `qk_*`). Tests: `test/pod/keyboard.py` (sections: base, name, password, refocus, gap, asset, setting, zh, strip, hit, lang_gap), `test/pod/pinyin.py` (the engine on its own).
-Preview: `tools/preview_keyboard.py`. No hook, no new import, no thread; one timer only while the delete key is held. Built for podcast search (iTunes search itself is not part of it); its consumers are the Playlists page's New playlist and library Search (below, and embedded in the Search page); stock's T9 popup
+Preview: `tools/preview/preview_keyboard.py`. No hook, no new import, no thread; one timer only while the delete key is held. Built for podcast search (iTunes search itself is not part of it); its consumers are the Playlists page's New playlist and library Search (below, and embedded in the Search page); stock's T9 popup
 (`ui/user_keyboard.bin`, pages laid out 640 px wide in a 320 px popup) is not used. With Settings > Keyboards > Chinese (Pinyin) on, it also types Chinese (below).
 
 ## What it is
@@ -150,7 +150,7 @@ engine** on the real dictionary, `pinyin.py`'s `Engine`): the language key prese
 engine somebody else opened, open and close with the page, the layer kept for the session. **Chinese layer**: nihao (candidates, pinyin, geometry), delete, space, predictions and their chain, a long sentence
 in steps against fresh engine searches, jianpin, the separator, Search with pending / unreadable / mixed text, Back, clear, repeat, the limits, a glyph in the font for every candidate of common inputs.
 **Strip**: the highlight, tap, scroll, the ring of widgets, scrolling to the 100th candidate and tapping one far along, and demo's hit test on the strip. `Settings > Keyboards` is in `test/pod/menu.py`.
-`uv run python -I tools/preview_keyboard.py work/mod-release out/preview/keyboard.png` draws the tree's real rectangles, colours and glyphs for all pages, the strip states (the candidate lists are the real
+`uv run python -I tools/preview/preview_keyboard.py work/mod-release out/preview/keyboard.png` draws the tree's real rectangles, colours and glyphs for all pages, the strip states (the candidate lists are the real
 engine's answers) and the Keyboards page.
 
 ## Not verified on a device

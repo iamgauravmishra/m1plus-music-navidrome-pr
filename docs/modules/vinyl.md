@@ -7,7 +7,7 @@ or resume; tap the top-left chevron to close. No hook, no boot work, one page ti
 
 Sources: `patch/vinyl.c`, `tools/vinyl_art.py` (the design's drawing code and the installed layers), `tools/pod_ui.py` (`build_vinyl_page`),
 `tools/mod_icons.py` (installs the pictures and the row glyph `pod_ic_vinyl`, `assets/icons/custom/turntable.svg`), and `VN_*` in `offsets.inc`. Tests:
-`test/pod/vinyl.py`; preview: `tools/preview_vinyl.py` (frames J1 playing / J2 paused, the approved design). Emulated frames are written to
+`test/pod/vinyl.py`; preview: `tools/preview/preview_vinyl.py` (frames J1 playing / J2 paused, the approved design). Emulated frames are written to
 `out/preview/vinyl-emu-*.png`, each next to the design drawn at the same state (`vinyl-emu-*-design.png`).
 
 ## The page
@@ -99,7 +99,7 @@ changed for Black: `vinyl_base` is pixel for pixel what V2.1qD installed, `vinyl
 Settings > Now Playing > Vinyl Mode > **Base**: **Graphite** (default, the installed look) or **Snow** (a
 matte off-white plinth, silver arm, grey keys, dark text). A value row opening the picker `m1plus_vinyltheme` (a check on the chosen row, "Applies the next time Vinyl Mode opens.");
 saved as `0` or `1` (optional newline; only `1` is Snow, anything else or no file is Graphite) in `/mnt/data/m1plus/vinyl-base` (`vinyl_theme`, `vinyl_theme_set`), read once when the page opens.
-The designs are `vinyl_art.THEMES` (selected by `use(theme)`; the mocks are `tools/preview_vinyl_themes.py`).
+The designs are `vinyl_art.THEMES` (selected by `use(theme)`; the mocks are `tools/preview/preview_vinyl_themes.py`).
 
 - **Pictures.** A theme changes six (and Graphite has `vinyl_grain`): `vinyl_base`, `vinyl_lid` (the rim colour), `vinyl_arm`, `vinyl_armsh` (Snow's shadow is lighter), `vinyl_cap`, `vinyl_keys`. Graphite's keep their
   names and are pixel for pixel what V2.1qD installed; Snow's end in `_white` (`vinyl_art.tname`, `vn_names`). `vinyl_label` and `vinyl_rec` are shared: the Cover record carries

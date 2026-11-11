@@ -203,7 +203,7 @@ opens the bottom sheet (`pc_sheet2`, two rows) with Add to My Stations (Lucide `
 (`rn_live`: 4 px capsule images (`rn_live_l`/`rn_live_r`, white 45 % at the outer end fading to 5 % at LIVE) either side of a small LIVE, shown while connecting or playing, hidden when paused); one 64 px centred
 button (`rn_stop` white rounded square while connecting or playing, `rn_play` triangle when stopped or paused: a tap while Paused resumes with `rd_resume`, as the mini bar's play does; the mini bar shows the same Stop square, `mb_stop`). `btn_fav`, `btn_prev`, `btn_next`,
 `rn_station`, `rn_info`, `rn_elapsed` stay in the asset hidden and insensitive. The line under the name: error "Can't play:
-reason"; Connecting…; Paused; Stopped; playing: "Country · CODEC 128k" (the directory's words; no stream title yet). No volume slider (the local page has none) and no elapsed time. Preview: `tools/preview_radionp.py`.
+reason"; Connecting…; Paused; Stopped; playing: "Country · CODEC 128k" (the directory's words; no stream title yet). No volume slider (the local page has none) and no elapsed time. Preview: `tools/preview/preview_radionp.py`.
 A 500 ms page timer refreshes the labels only while the screen is lit and the page is on top and writes a label only when its
 text changed. No star anywhere; the file is read when the sheet opens and the My Stations list again only when `rd_serial` moves. The page owns no playback: closing it leaves the station playing.
 

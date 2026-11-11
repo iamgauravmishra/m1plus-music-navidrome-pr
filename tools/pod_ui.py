@@ -1542,7 +1542,7 @@ def build_vinyl_page(page):
 OA_ES_CENTRE, OA_ES_ICON, OA_ES_TITLE_H, OA_ES_TEXT_H, OA_ES_TEXT_W, OA_ES_PILL_W, OA_ES_PILL_H = 260, 40, 26, 40, 260, 168, 36
 OA_ES_ICON_GAP, OA_ES_TITLE_GAP, OA_ES_PILL_GAP = 14, 4, 18
 OA_ES_TEXT_PX = 14
-# The states (patch/onlineart.c oa_es_fail / oa_es_state; test/pod/onlineartpage.py proves the payload shows exactly these; tools/preview_onlineart.py draws them): name -> (glyph image, title, explanation, Try Again pill).
+# The states (patch/onlineart.c oa_es_fail / oa_es_state; test/pod/onlineartpage.py proves the payload shows exactly these; tools/preview/preview_onlineart.py draws them): name -> (glyph image, title, explanation, Try Again pill).
 # "Searching…" has only the title. The failure titles are the Podcasts' words.
 OA_ES_STATES = {
     'lyrics busy': ('pod_es_timer', 'Lyrics Service Busy', 'LRCLIB is under heavy load. Try again in a moment.', True),

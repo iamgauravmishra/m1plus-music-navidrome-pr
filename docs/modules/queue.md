@@ -1,7 +1,7 @@
 # The Queue page
 
 **Sources:** `patch/queuepage.c` (our page), `patch/upnext.c` + `upnext.h` and `pod_queue_insert` in `patch/shuffle.c` (Play Next / Play After, below), `patch/nowplaying.c` (`np_on_queue`: the queue button's handler), `tools/pod_ui.py` `build_queue_page`, `tools/pod_pages.py` `QUEUE_PAGE`,
-`patch/offsets.inc` `QP_*`, tests `test/pod/queuepage.py`, preview `tools/preview_queue.py` (`uv run python -I tools/preview_queue.py work/mod-release out/preview/queue.png`, not tracked).
+`patch/offsets.inc` `QP_*`, tests `test/pod/queuepage.py`, preview `tools/preview/preview_queue.py` (`uv run python -I tools/preview/preview_queue.py work/mod-release out/preview/queue.png`, not tracked).
 
 ## What the stock app does
 

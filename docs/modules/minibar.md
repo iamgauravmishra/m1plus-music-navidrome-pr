@@ -6,7 +6,7 @@ the bar; it adds no stock hook.
 
 Sources: `patch/minibar.c`, `tools/pod_ui.py` (`minibar()` in `ui/m1plus_menu.bin`) and `MB_*`
 in `offsets.inc`. Tests check the shared geometry: `test/pod/minibar.py`. Preview:
-`tools/preview.py` (`minibar_page`). The visual reference is Apple Music's floating dark mini player.
+`tools/preview/preview.py` (`minibar_page`). The visual reference is Apple Music's floating dark mini player.
 
 ## Layout (window y; the window is 450 px; `tools/pod_ui.py` MB_*, `patch/offsets.inc` MB_*)
 

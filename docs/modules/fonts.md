@@ -70,7 +70,7 @@ sized from them still adds up. The step runs first so every later step measures 
   changes: from the boot guard's ready path (`fr_boot`, before the first frame) and from one 10 ms timer after
   `EVT_LOCALE_CHANGED` or `EVT_THEME_CHANGED` (both recreate the font; registered once a session). No hook. The
   language picks the forms, not the text: a Japanese title in a Chinese UI is drawn with SC forms (a per-text choice
-  would need code at paint). `tools/preview_cjk.py STOCK_WORKDIR` draws the four maps side by side
+  would need code at paint). `tools/preview/preview_cjk.py STOCK_WORKDIR` draws the four maps side by side
   (`out/peek/cjk_regions.png`).
 - **Lyrics face (a second font file).** `release/assets/default/raw/fonts/lyrics.ttf`, 153,156 bytes, AWTK font name `lyrics`:
   the Inter 4.1 **Bold** subset (`assets/fonts/Inter-Bold-m1plus.ttf`, 153,160 bytes, made by `tools/font_inter.py --weight Bold`
@@ -93,7 +93,7 @@ sized from them still adds up. The step runs first so every later step measures 
 - **Coverage gamma (`patch/textgamma.c`, `tools/textgamma.py`).** stb_truetype blends each glyph's 8-bit coverage straight
   into sRGB, so light text on black reads thin. Every freshly rasterized mask of the default font is mapped once through
   a' = round(255 (a/255)^(1/G)), G = 1.45 (`GAMMA` in `tools/textgamma.py`; 1.25 is the other candidate in
-  `tools/preview_aa.py`, which uses the same formula): 16 -> 38, 64 -> 98, 128 -> 159. The table is the 256-byte
+  `tools/preview/preview_aa.py`, which uses the same formula): 16 -> 38, 64 -> 98, 128 -> 159. The table is the 256-byte
   `TEXT_GAMMA_LUT` that `tools/pod.py` writes into `stock.h`. `tg_apply`, called from `fr_apply` (the regional forms'
   two occasions), swaps the font object's get_glyph slot (+0x24, read on every `font_get_glyph`) for `tg_get_glyph`.
   The wrapper calls `glyph_cache_lookup` (`0x6a4204`) on the glyph cache at font +0xb4 first: a hit returns stock's

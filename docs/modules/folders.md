@@ -1,7 +1,7 @@
 # The Folders page
 
 **Sources:** `patch/folders.c` (the page), `patch/viewsort.c` (the card), `patch/songops.c` (`so_play_with`, `so_selection`, `so_add`), `tools/pod_ui.py` `build_folders_page`, `tools/pod_pages.py` (`FOLDERS`,
-`ACT_FOLDERS`), `tools/pod.py` (the pinned stock functions, `FOLDER_PINS`), tests `test/pod/folders.py`, preview `tools/preview_folders.py` (`out/preview/folders.png`; `--covers` draws the rows with stock's Folder cover switch on).
+`ACT_FOLDERS`), `tools/pod.py` (the pinned stock functions, `FOLDER_PINS`), tests `test/pod/folders.py`, preview `tools/preview/preview_folders.py` (`out/preview/folders.png`; `--covers` draws the rows with stock's Folder cover switch on).
 
 The Extras menu's Folders row (`ACT_FOLDERS`, arg `HOME_FOLDER`) opens `ui/m1plus_folders.bin` in place of the stock `folder_page`. The stock page, with its restyled navbar
 (`navbar.md`, `rows.md`), is only the fallback: a window or asset that will not open (`folders_open` returns through `pod_home_open(HOME_FOLDER)`).

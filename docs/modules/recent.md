@@ -7,7 +7,7 @@ absent from the normal menu instance.
 Sources: `patch/recent.c` (recording/file/shelf), `patch/grid.c` and `grid.h` (cells),
 `patch/menu.c` (`menu_shelf`), and `tools/pod_ui.py` (`shelf()`). Constants: `SH_*`, `RC_*`
 and `GRID_*` in `offsets.inc`. File model: `tools/pod_recent.py`; tests: `test/pod/recent.py`;
-preview: `tools/preview.py` (`shelf_image`, `minibar_page`).
+preview: `tools/preview/preview.py` (`shelf_image`, `minibar_page`).
 
 The feature adds no stock hook or address. It uses its window/widgets, events and one page
 timer. See the final section for the boundary between emulation evidence and device testing.
@@ -30,7 +30,7 @@ with `widget_resize` before the rows are arranged, and `menu.c` sums the shelf's
 Cells fill row by row (cell i is column `i % 2`, row `i / 2`): 1 or 2 albums are one row, 3 or 4 two rows, 5 or 6 three rows: `SH_TILES` = `GRID_COLS` x `SH_ROWS` (3) = `RC_MAX` = 6, so the shelf shows every album the file keeps (`recent.c` `#error`s if the three differ; `recent.py` asserts it).
 The header is a stock label child of the shelf (the stock paint draws it, so the language and the ellipsis are the stock's); the covers and the text lines are painted by the shelf itself
 (below). The widest translation of the header at 20 px in the shipped font is Spanish and Ukrainian, 189 px of the label's 296 (`test/pod/recent.py` measures all 13 with `StbText`: none needs the
-ellipsis). The 20 / 8 px air is the result of measuring `tools/preview.py`'s render (`peek.py runs`): header ink 20..36 below the Settings row's hairline, covers at 44.
+ellipsis). The 20 / 8 px air is the result of measuring `tools/preview/preview.py`'s render (`peek.py runs`): header ink 20..36 below the Settings row's hairline, covers at 44.
 
 With the shelf (six albums) and the mini player bar up a menu of 8 rows (416 px; the default menu has 6, so everything below is 104 px higher) is 416 + 634 + 64 (`MB_PAD`) = 1114 px in a 430 px list; at the top the shelf's first row is already within a row of the
 viewport (416 < 430), at the end the last row fills the bottom of the list above the pill. One album: 416 + 234 + 64 = 714 px.

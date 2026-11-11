@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Settings pages' layout model (tools/pod_pages.py cards pages, docs/modules/settings.md "Cards"): iOS-style grouped cards in the stock list.
 
-tools/pod_ui.py builds the widget trees from these numbers, tools/preview_settings.py draws the design from them and test/pod/settings.py checks the built
+tools/pod_ui.py builds the widget trees from these numbers, tools/preview/preview_settings.py draws the design from them and test/pod/settings.py checks the built
 trees against them (with demo's own layouter), so the mock, the tests and the device share one set of numbers.
 
 The stock list_view layouter ignores a child's y: it stacks every visible child of the scroll_view in child order, from y 0, setting x (0) and the width and summing the heights

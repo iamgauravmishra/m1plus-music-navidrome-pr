@@ -24,4 +24,4 @@ select = ["F", "E9"]
 [tool.ruff.lint.per-file-ignores]
 "test/pod/*.py" = ["F403", "F405"]
 "test/pod/harness.py" = ["F401"]  # its imports are re-exported to the tests through `from harness import *`
-"tools/preview_tape.py" = ["F403", "F405"]
+"tools/preview/preview_tape.py" = ["F403", "F405"]

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Daily Mix hero card of the menu's Home instance (docs/modules/dailymix.md): geometry, the art generator and the text fitting. The device
 code is patch/dailymix.c; tools/pod_ui.py builds the widgets from these DM_* numbers (patch/offsets.inc carries the same ones, test/pod/dailymix.py
-asserts it), tools/preview_dailymix.py draws the card, test/pod/dailymix.py checks it and runs the compiled code against this file. The texts are in
+asserts it), tools/preview/preview_dailymix.py draws the card, test/pod/dailymix.py checks it and runs the compiled code against this file. The texts are in
 tools/pod_i18n.py (`TEXT` here is those five keys).
 
 The art is a pure function of (tones, seed): 2 to 4 RGB tones -> a 296 x 220 RGB image, integer arithmetic only (patch/dailymix.c mirrors it line by

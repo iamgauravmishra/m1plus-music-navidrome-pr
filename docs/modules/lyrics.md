@@ -7,7 +7,7 @@ other scripts use the default font. Stock still loads and parses local and onlin
 **Sources:** `patch/lyrics.c`, `patch/lyrics.h`, `patch/nowplaying.c`,
 `tools/mod_nowplaying.py`, `tools/mod_font.py`, `tools/font_inter.py`.
 **Validation:** `test/pod/lyrics.py`, `LYRICS_PINS` in `tools/pod.py`,
-`tools/preview_lyrics.py` (pass `--shot PATH` for the background screenshot;
+`tools/preview/preview_lyrics.py` (pass `--shot PATH` for the background screenshot;
 `--mode scrim` and `--mode intro` select those previews).
 Previews use the shared layout model and real fonts; the tests draw the label text the way
 stock's wrap does (`stock_rows`, a model of the inspected path).

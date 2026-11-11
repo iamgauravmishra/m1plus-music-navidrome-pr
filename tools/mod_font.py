@@ -176,7 +176,7 @@ def lyric_face(inter, stock, k=0):
 
 def merge(stock, inter=None, shs=None, log=print, ranges=CJK_RANGES, regions=REGIONS):
     """stock default.ttf bytes (+ Inter subset bytes, + shs_faces()) -> new font bytes, report.
-    ranges: the code points SHS replaces (tools/preview_cjk.py draws the font before the punctuation step);
+    ranges: the code points SHS replaces (tools/preview/preview_cjk.py draws the font before the punctuation step);
     regions: the regional cmaps to add (REGIONS or a part of it)."""
     from fontTools.ttLib import TTFont
     from fontTools.ttLib.tables._c_m_a_p import CmapSubtable

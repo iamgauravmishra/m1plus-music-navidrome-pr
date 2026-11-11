@@ -2,7 +2,7 @@
 
 **Sources:** `patch/albums.c`, `patch/viewsort.c` (the "..." card), `patch/grid.c`, `patch/covercache.c`,
 `tools/pod_ui.py` (`navbar(albums=True)`, `view_sort_card`). **Tests:** `test/pod/albums.py`, `test/coverflow.py`.
-Previews: the Albums panels in `tools/preview_icons.py`.
+Previews: the Albums panels in `tools/preview/preview_icons.py`.
 
 Albums opens a grid or list in the last selected mode. Tapping an album calls
 `cc_open_album`; Back returns to the same position. Cover Flow opens above this page.

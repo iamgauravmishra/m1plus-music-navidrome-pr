@@ -19,7 +19,7 @@ keyline; low: red `#FF1448` outline. Status bar (`STATUS`): image 22x12 at (288,
 16x8 at (290,11) (0.5 px gap), right edge at x 310 as stock (it was 18x11 at (292,10) with a 12x7 fill until the sizing change), the right icon group ending 4 px before it
 (its box is x 183..284); the same in `dropdown_dialog.bin`. Lock screen: the same three pictures as `screens_battery/charge/lowbattery`,
 the same size, fill and right edge (the image at 288,12 on the date line), the fill under the picture too. `fill_gap` asserts the fill stays inside
-the outline; `tools/preview_battery.py` draws empty/half/full/charging/low from the tree's files.
+the outline; `tools/preview/preview_battery.py` draws empty/half/full/charging/low from the tree's files.
 
 ## The percentage (`patch/battery.c`, `patch/battery.h`, `test/pod/battery.py`; hook 8 in [payload](payload.md))
 
@@ -44,7 +44,7 @@ invisible child, so the label **makes room**: the icons to its left move left by
 digits are tabular, 7 px at 13 px) is `BP_W2` 18, `BP_W3` 25, `BP_W4` 32 px for `5%`, `87%`, `100%` (`tools/pod_ui.py pct_widths`, written into `stock.h` at build time), and when the width changes the
 hook calls `widget_resize` and asks the group to lay out again (`widget_set_need_relayout_children` on `widget_t.parent`, as `widget_set_visible` does). The Bluetooth image is 47 px wide with its
 glyph in the right 11 px, so with Bluetooth, SyncLink and Wi-Fi all lit and `100%` the ink starts at x 189, 3 px clear of the 12 h clock's end (186); with the Screenshot camera too (a developer's
-5 s countdown) and SyncLink off, the same 189 (the tests require at least 3 px) (`test/pod/battery.py` computes both). `tools/preview.py` shows the bar with 100%, 87%, 5% and 87% with the camera (`preview.shot_bars`).
+5 s countdown) and SyncLink off, the same 189 (the tests require at least 3 px) (`test/pod/battery.py` computes both). `tools/preview/preview.py` shows the bar with 100%, 87%, 5% and 87% with the camera (`preview.shot_bars`).
 
 **Cost and safety.** Setting off (the default): stock's call, one `access` (the kill switch) and a cached flag, read once from a 1 byte file at the first tick (the Settings switch keeps it; a file edited by
 hand applies after a restart): no lookup, no label touched. On: one open / read / close of the 4 byte gauge and three `widget_lookup`s per second, `widget_set_text_utf8` (an invalidate of a 25 px box). No allocation,

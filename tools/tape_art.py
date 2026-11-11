@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Tape page's art (docs/modules/tape.md): the drawing code of the approved mock, shared by tools/preview_tape.py (the full mock frames) and by the
+"""The Tape page's art (docs/modules/tape.md): the drawing code of the approved mock, shared by tools/preview/preview_tape.py (the full mock frames) and by the
 build (the installed images, `images()`; tools/mod_icons.py puts them in the tree and assets/icons/png keeps the generated files).
 
 The page is LANDSCAPE, 480 x 320 (W x H); the panel is portrait 320 x 480, so the landscape picture is turned 90 degrees clockwise onto the framebuffer:

@@ -1,7 +1,7 @@
 # Recently Added albums
 
 **Sources:** `patch/songs.c` (`rv_*`, `sg_set_view`), `patch/grid.c`, `patch/covercache.c`, `tools/pod_ui.py` (`build_songs_page`, `navbar(songs=True)`),
-`patch/home.h` (`RECENTADD_VIEW_FILE`), `patch/setfiles.c`. **Tests:** `test/pod/recentalbums.py`. **Preview:** `tools/preview_recent_albums.py` (a PIL approximation
+`patch/home.h` (`RECENTADD_VIEW_FILE`), `patch/setfiles.c`. **Tests:** `test/pod/recentalbums.py`. **Preview:** `tools/preview/preview_recent_albums.py` (a PIL approximation
 that `make preview` writes beside the sheet as `recent-songs-view.png` and `recent-album-view.png`; the songs preview path draws no real page).
 
 The Recently Added list (stock `allmusic_page`, class `0xf009`, shown on our Songs page: [songs](songs.md) "The other lists") has a **View group** (**Albums** with the grid glyph, **Songs** with the list glyph: the Albums and Playlists pages keep "Grid" / "List", this list switches between two contents) in its "..." card (the existing translated "Albums" and "Songs" strings; it was a navbar toggle with the glyphs `pod_nav_grid` / `pod_nav_list` before the Songs page's buttons folded into the "..."; `btn_albumview` is gone from the Songs asset, [songs](songs.md), [albums](albums.md)). The page stays the Songs page; the rows switch in place (nothing opens
@@ -16,7 +16,7 @@ or closes) between the songs (Songs) and the newest-first Albums grid (Albums), 
   No albums (every recent song untagged): the "No albums" line.
 - The capsule is the real glass pieces (`mod_icons.py`: left cap `pod_nav_more`, right cap `ah_nav_play`; the old `pod_nav_select` / `pod_nav_search` middles are gone from this page).
 - **Small navbar title**: collapses in like the other lists'. "Recently Added" is 127 px at 20 px in English and the room before the "..." (x 214) is 156 px, so it is shown whole (`az_fit` still cuts a longer word).
-- **Preview**: `make preview` writes `songs-recent-card.png` and `songs-recent-albums-card.png` with the card open (`tools/preview_songs.py` `sort_card` kinds `recent` / `albums`).
+- **Preview**: `make preview` writes `songs-recent-card.png` and `songs-recent-albums-card.png` with the card open (`tools/preview/preview_songs.py` `sort_card` kinds `recent` / `albums`).
 - **Remembered choice**: `/mnt/data/m1plus/recently-added-view` (`RECENTADD_VIEW_FILE`): `1` albums; anything else, or missing, the songs. Written on every view change with `home_write_atomic`.
   Read when the page opens (an open in the album view runs the 0xf009 query first, then the album query). A Settings Files row (after `playlists-view`).
 

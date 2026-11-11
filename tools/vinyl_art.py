@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The Vinyl page's art (docs/modules/vinyl.md): the drawing code of the approved mock (frames J1 / J2 of tools/preview_vinyl.py), shared by the preview
+"""The Vinyl page's art (docs/modules/vinyl.md): the drawing code of the approved mock (frames J1 / J2 of tools/preview/preview_vinyl.py), shared by the preview
 (`design`, the full mock frame), the build (`images()`: the installed pictures; tools/mod_icons.py puts them in the tree and assets/icons/png keeps the
 generated files) and test/pod/vinyl.py (the numbers, the reference model of what the payload composes).
 
@@ -620,7 +620,7 @@ def with_chevron(out, wt):
 
 def design(s, f):
     """The approved mock (frames J1 / J2): the whole page at the state f (cover: a PIL image or a sample name, angle: the label's turn in PIL's
-    sense, playing, pos, len, title, artist, and the status fields). s: a tools/preview_icons.Side (its font draws the text as AWTK)."""
+    sense, playing, pos, len, title, artist, and the status fields). s: a tools/preview/preview_icons.Side (its font draws the text as AWTK)."""
     from tape_art import times_text
     size = (S(W), S(H)); cv = cover(f['cover']) if isinstance(f['cover'], str) else f['cover']
     FG[0] = Image.new('L', size, 0)

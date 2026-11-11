@@ -408,7 +408,7 @@ SHUFFLE_PAGE = Page('m1plus_shuffle', 'm1plus_shuffle_page', 'Shuffle', rows=[
     Row('Shuffle Folders', ACT_SHUFFLE, SHUFFLE_FOLDERS),
 ])
 
-# Settings (iOS style grouped cards, tools/pod_settings.py places them; the design is tools/preview_settings.py's): the stock Wi-Fi and Bluetooth pages, the M1+ Music pages
+# Settings (iOS style grouped cards, tools/pod_settings.py places them; the design is tools/preview/preview_settings.py's): the stock Wi-Fi and Bluetooth pages, the M1+ Music pages
 # (Home Screen, Library, Now Playing, Keyboards), Playback (EQ, the stock Play Settings list) and System (Display, Appearance, Keyboards, About, the stock
 # System Settings list), then Developer. Every "stock page" row is a plain navigator_to of the page stock's own list calls (STOCK_PAGES).
 SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layout=[

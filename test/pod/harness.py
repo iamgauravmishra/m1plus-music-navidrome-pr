@@ -16,6 +16,7 @@ PERF = os.environ.get('M1_PERF') == '1'   # cost measurement and stress-scale ch
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 TOOLS = os.path.join(ROOT, 'tools')
 sys.path.insert(0, TOOLS)
+sys.path.insert(0, os.path.join(TOOLS, 'preview'))   # the preview scripts (tools/preview/) that the tests import
 import cdefs  # noqa: E402
 import paths  # noqa: E402
 import pod  # noqa: E402

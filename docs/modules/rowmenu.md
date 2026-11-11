@@ -8,7 +8,7 @@ Recently Played / Added, Hi-Res, Favourites; whatever `sg.cls` covers). Not in t
 `Add to Playlist`, `patch/upnext.c` (`upnext_add`, [queue](queue.md)), `patch/songops.c` (`so_add`), `patch/picker.c`, `tools/pod_ui.py` (`row_menu`),
 `tools/mod_icons.py` (`RM_MENU_ICONS`, `RM_DOTS`, `GLASS_ROWMENU`), `patch/offsets.inc` (`RM_*`), `tools/pod_i18n.py`.
 **Tests:** `test/pod/rowmenu.py` (five sections; `fav_info_tests`: the toggle, its label and glyph, the toasts, a failed add, Get Info); the pages' own tests keep their old numbers with no menu assets (`test/pod/songs.py`, `albumpage.py`).
-**Preview:** `uv run python -I tools/preview_rowmenu.py work/mod-release out/preview/rowmenu.png` (also `tools/preview_songs.py`).
+**Preview:** `uv run python -I tools/preview/preview_rowmenu.py work/mod-release out/preview/rowmenu.png` (also `tools/preview/preview_songs.py`).
 Evidence tags: **[S]** static (read from the stock code), **[E]** emulated (Unicorn), **[U]** untested on the device. Nothing here has been on the device: **[E]** or **[U]** throughout.
 
 ## What the user sees

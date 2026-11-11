@@ -2,7 +2,7 @@
 
 **Sources:** `patch/nowplaying.c`, `tools/mod_nowplaying.py`, `patch/common.c`.
 **Tests:** `test/pod/nowplaying.py`, `test/pod/shared.py`.
-Preview: `tools/preview_nowplaying.py`.
+Preview: `tools/preview/preview_nowplaying.py`.
 
 The stock `playing_page` has cover-colored backgrounds, rounded artwork, elapsed/remaining
 time and reformatted track information. Playback, the slider and stock lyric loading remain

@@ -40,7 +40,7 @@ as "fits within" or agreement), never the expected value of what the C code draw
 Every reader of `#define`s in `tools/` and `test/` uses this module: `harness.O` and the `offsets.inc` readers,
 `folders.c` (seeded with `POD_ROW_H`), the `search.h`, `pcdetail.h`, `keyboard.h`, `battery.h`, `lineout.h`,
 `shot.h` readers, `vinyl.c` and `ipod_render.c` values, and the build's `stock.h` numbers (`BP_W2..4`,
-`GOT_DEQUE_SIZE`). Left as they are, because they are not scalar `#define`s: `tools/preview_ipod.py` expands
+`GOT_DEQUE_SIZE`). Left as they are, because they are not scalar `#define`s: `tools/preview/preview_ipod.py` expands
 `ipod_theme.c` macro bodies as text (`SCREEN_COLORS` and `SCREEN_REST` are comma lists), and `test/pod/textgamma.py`
 reads the `TEXT_GAMMA_LUT` brace list. Tests that compare the generated header's text (`palette`, `queuepage`,
 `search`) check text, not values.

@@ -2,7 +2,7 @@
 """The palette's model (docs/modules/accent.md): the one colour mapping (background, then accent), Light Mode's flip of a neutral colour and the classification of a theme image, as
 patch/palette.c does them at run time.
 
-patch/palette.c is the C twin of this file and test/pod/palette.py runs the compiled C against it; the previews (tools/preview_settings.py) draw with this one. The constants are read from
+patch/palette.c is the C twin of this file and test/pod/palette.py runs the compiled C against it; the previews (tools/preview/preview_settings.py) draw with this one. The constants are read from
 patch/offsets.inc (LIGHT_*), the name lists are below and pod.py writes them into stock.h for the payload, so there is one source for each.
 
   map_colour(c, bg, ac) the one entry point: a colour as the painter gets it for a background ('black', 'tinted' or 'light') and an accent (ACCENTS; the role colours, below)

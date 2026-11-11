@@ -33,7 +33,7 @@ test: lint
 dev: lint format-check
 	$(RUN) tools/check.py --dev $(if $(JOBS),--jobs "$(JOBS)")
 preview:
-	$(RUN) tools/preview.py --build "$(BUILD)"
+	$(RUN) tools/preview/preview.py --build "$(BUILD)"
 flash:
 	$(RUN) tools/flash_sd.py --build "$(BUILD)" --volume "$(VOLUME)" $(if $(DRY_RUN),--dry-run)
 ota-serve:

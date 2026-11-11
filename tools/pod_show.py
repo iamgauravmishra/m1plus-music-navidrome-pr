@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The Podcasts Show page's and Shows page's layout model (patch/podcasts.c, docs/modules/podcasts.md "The Show page", "The Shows page"): the PS_* and PP_* numbers of patch/offsets.inc, the line breaking of tools/pod_wrap.py
-and the glyph advances of the font (tools/awtk_text.py: the glyph's width and 1 px each). test/pod/pcshow.py and test/pod/pcshows.py check the payload against it and tools/preview_podcasts_revamp.py draws
+and the glyph advances of the font (tools/awtk_text.py: the glyph's width and 1 px each). test/pod/pcshow.py and test/pod/pcshows.py check the payload against it and tools/preview/preview_podcasts_revamp.py draws
 from it, so the preview, the tests and the device share one set of numbers.
 """
 import os, sys

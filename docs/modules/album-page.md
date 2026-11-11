@@ -3,7 +3,7 @@
 **Sources:** `patch/albumpage.c`, `patch/songops.c`, `patch/covercache.c`, `patch/durations.c`,
 `tools/pod_ui.py` (`build_album_page`).
 **Tests:** `test/pod/albumpage.py`, `test/pod/durations.py`, `test/pod/shared.py`.
-Preview: `tools/ah_ink.py` measures header typography; `tools/preview_albumlen.py` draws the scrolled page with its footer and the footer line in all languages.
+Preview: `tools/ah_ink.py` measures header typography; `tools/preview/preview_albumlen.py` draws the scrolled page with its footer and the footer line in all languages.
 
 Albums, Cover Flow, Recently Played and Look up album open `m1plus_album_page`
 (`ui/m1plus_album.bin`) through `cc_open_album`.

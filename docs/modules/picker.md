@@ -2,7 +2,7 @@
 
 Our own picker replaces the stock one. Add on the Songs page and the album page (`so_add`, `patch/songops.c`) opens it; the stock `playlist_page` in picker mode
 is only the fallback. Files: `patch/picker.c` / `picker.h` (the add and the copies), `patch/playlists.c` (the page: pick mode), `test/pod/picker.py`,
-`tools/preview_picker.py` (the mock: `out/preview/picker.png`, rows as `preview_icons.playlists_grid(pick=True)`).
+`tools/preview/preview_picker.py` (the mock: `out/preview/picker.png`, rows as `preview_icons.playlists_grid(pick=True)`).
 
 ## Choice: a page, not a sheet
 

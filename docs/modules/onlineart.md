@@ -4,7 +4,7 @@ An online lookup for the playing track: the album's cover from the **iTunes Sear
 sheet (`docs/modules/playmore.md`) and a page of our own. Stock has a hidden "Online search" row (`listitem3`, Baidu / Kugou / NetEase over plain HTTP); it stays hidden and is not used.
 No new hook and no new patched stock word: the row is the existing More dialog hook's, the page a new window asset, the network the Podcasts worker's libcurl client.
 
-Preview: `uv run python -I tools/preview_onlineart.py work/mod-release out/preview/onlineart.png` (twenty-two states: loading, Covers (current framed, scrolled), the cover confirmation (Use / Replace / failure), Lyrics (a saved row), the lyrics detail with a long English and a long CJK line wrapped (Save / Replace), every empty and failed state; the page's asset widgets are walked by the shared painter of `tools/preview_nowplaying.py`, what the payload paints itself is drawn from the same numbers, the wrapping by `tools/pod_wrap.py`; not tracked) and `tools/preview_playmore.py` (page 2 with the row, also dimmed).
+Preview: `uv run python -I tools/preview/preview_onlineart.py work/mod-release out/preview/onlineart.png` (twenty-two states: loading, Covers (current framed, scrolled), the cover confirmation (Use / Replace / failure), Lyrics (a saved row), the lyrics detail with a long English and a long CJK line wrapped (Save / Replace), every empty and failed state; the page's asset widgets are walked by the shared painter of `tools/preview/preview_nowplaying.py`, what the payload paints itself is drawn from the same numbers, the wrapping by `tools/pod_wrap.py`; not tracked) and `tools/preview/preview_playmore.py` (page 2 with the row, also dimmed).
 
 ## What the user sees
 

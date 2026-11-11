@@ -1,8 +1,8 @@
-# Overlay screens (`tools/mod_overlays.py`, `tools/preview_overlays.py`, `test/pod/overlays.py`)
+# Overlay screens (`tools/mod_overlays.py`, `tools/preview/preview_overlays.py`, `test/pod/overlays.py`)
 
 Two stock-looking screens restyled with assets only (no code, no new or renamed widget): the message and confirm dialogs and the power-off splash. The step runs after `mod_polish`
 in `tools/build.py`. It copies PNGs committed in `assets/overlays/` (`mod_overlays.py --generate` redraws them: Pillow, `rsvg-convert` for the splash), refuses any file that is not
-the pinned stock one (`tools/mod_overlays_pins.txt`, SHA-256, `--pins`), keeps the file mode and the stock pixel sizes. Preview: `uv run python -I tools/preview_overlays.py work/mod-release out/preview/overlays.png`
+the pinned stock one (`tools/mod_overlays_pins.txt`, SHA-256, `--pins`), keeps the file mode and the stock pixel sizes. Preview: `uv run python -I tools/preview/preview_overlays.py work/mod-release out/preview/overlays.png`
 (not tracked). The Update Library spinner, the charging bolt (`chargebg`) and the USB / Wi-Fi / Bluetooth mode pages are drawn by `tools/mod_icons.py` (`docs/modules/icons.md`), not here.
 
 - **Message and confirm dialogs** (`msginfo_bg`, `confirminfo_bg`, 260 x 180). A glass card, `mod_icons.glass_image(260, 180, 12, fill=DIALOG_FILL)`

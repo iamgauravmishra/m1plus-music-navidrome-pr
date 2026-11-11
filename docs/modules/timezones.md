@@ -71,7 +71,7 @@ width, ellipsis and scroll behaviour are unchanged. The page builder gives each 
 `list_item_create(..., h)`, and the list lays the items out by their own heights, so scrolling and tap
 hit-testing follow. `list_item_style` is a flat colour with a 1 px bottom border (no image), so the
 pressed and separator drawing is height independent. Only zone rows change: the auto time switch and
-header rows, and every other page, keep their words. Preview: `tools/preview_timezones.py WORKDIR OUT.png`
+header rows, and every other page, keep their words. Preview: `tools/preview/preview_timezones.py WORKDIR OUT.png`
 (stock 64 px beside the build). Device check: scroll, tap and the ticked row at 48 px.
 
 ## Limits

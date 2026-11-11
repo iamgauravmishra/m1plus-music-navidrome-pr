@@ -7,7 +7,7 @@ Settings is item 18 (`j`), hidden from the main menu by default. The Extras navb
 
 ## Cards
 
-The design is `tools/preview_settings.py` (it draws the built tree's own assets; `out/preview/settings-mock-3.png`). The numbers are `tools/pod_settings.py` (shared by `tools/pod_ui.py build_cards_page`, the preview and `test/pod/settings.py`); a page is a `Page(layout=[Row, Hdr, Note, GAP ...])` in `tools/pod_pages.py` and its kind is `cards`.
+The design is `tools/preview/preview_settings.py` (it draws the built tree's own assets; `out/preview/settings-mock-3.png`). The numbers are `tools/pod_settings.py` (shared by `tools/pod_ui.py build_cards_page`, the preview and `test/pod/settings.py`); a page is a `Page(layout=[Row, Hdr, Note, GAP ...])` in `tools/pod_pages.py` and its kind is `cards`.
 
 - The list is the stock `list_view` > `scroll_view` (310 wide) + `scroll_bar_m`, the rows stock `list_item`s (`list_item_style`, the stock 21 px `hscroll_label`).
 - **The layouter stacks the children.** The stock `list_view` layouter (`children_layouter_list_view`, `0x60b12c..`; see [recent](recent.md) "The shelf after the rows") ignores a child's `y`: it puts every **visible** child of the scroll_view at the running y in **child order**, sets x (0) and the width, and sums the heights into `virtual_h`. V2.1zWZKWAAAB had the cards as views of their own placed by `y`, so the layouter stacked them as a block above the rows. So the page is now only a column of full-width items in display order, nothing relying on the asset's y/x/w: a 10 px spacer (`pod_top`), the rows, headers (`pod_sec<n>`, 40), notes (`pod_note<n>`, 34), gaps (`pod_gap<n>`, 20), all insensitive views except the rows, and a 10 px spacer (`pod_end`). The asset's y is the stacked y anyway.

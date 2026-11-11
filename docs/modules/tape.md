@@ -7,7 +7,7 @@ are Sony's NW-A100/NW-ZX500 cassette screen and FiiO Tape mode.
 
 Sources: `patch/tape.c`, `tools/tape_art.py`, `tools/pod_ui.py` (`build_tape_page`),
 `tools/mod_icons.py`, and `TP_*` in `offsets.inc`. Tests: `test/pod/tape.py`; preview:
-`tools/preview_tape.py`. Emulated frames are written to `out/preview/tape-emu-*.png`.
+`tools/preview/preview_tape.py`. Emulated frames are written to `out/preview/tape-emu-*.png`.
 The release status records flashed builds; use the final checklist for validation of a new build.
 
 ## Themes and assets

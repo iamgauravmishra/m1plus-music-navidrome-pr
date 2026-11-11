@@ -92,6 +92,6 @@ purpose:
 - slider dots and tracks (`vol_dot`, `vol_progressbak`, `volume_bg`), which are already neutral
 - `charge_big` and `dac_charge`, which are already white
 
-`tools/preview_icons.py STOCK_TREE RELEASE_TREE OUT.png` draws before and after at 1:1 with a 3x status strip
+`tools/preview/preview_icons.py STOCK_TREE RELEASE_TREE OUT.png` draws before and after at 1:1 with a 3x status strip
 (blue **C** = custom glyph, orange **K** = stock kept). `test/navbars-stock.sha256` holds the digest of the images
 directory, so an intended image change updates it.

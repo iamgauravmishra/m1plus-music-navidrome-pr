@@ -1,7 +1,7 @@
 # Accent and the palette
 
-**Sources:** `patch/palette.c`, `patch/palette.h`, `tools/palette.py` (the model), `tools/palette_audit.py`, `tools/pod.py` (`STYLE_COLOR`, `IMAGE_ADD`, `STYLE_GRADIENT`, `LIGHT_PINS`), `tools/preview_settings.py`
-(`settings-light.png`), `tools/preview_accent.py` (the mock-up sheet), test `test/pod/palette.py`. After q2-pod's Light Mode and accents (`ringnav_style_color`, `ringnav_style_gradient`,
+**Sources:** `patch/palette.c`, `patch/palette.h`, `tools/palette.py` (the model), `tools/palette_audit.py`, `tools/pod.py` (`STYLE_COLOR`, `IMAGE_ADD`, `STYLE_GRADIENT`, `LIGHT_PINS`), `tools/preview/preview_settings.py`
+(`settings-light.png`), `tools/preview/preview_accent.py` (the mock-up sheet), test `test/pod/palette.py`. After q2-pod's Light Mode and accents (`ringnav_style_color`, `ringnav_style_gradient`,
 `ringnav_image_add`, `ui_ink`; `README.md`).
 
 The Accent feature lets the user pick the system accent colour, as the stock OS once had (its pressed row was `#362221`, from orange). It is built on **one palette layer**: every colour the painter gets
@@ -13,7 +13,7 @@ The stock theme1 is forced off (`tools/themeoff.py`, [theme](theme.md) "theme1 i
 ## Design (the whole feature)
 
 Settings picker: **Neutral** (default, today's look exactly), **Red** `#FF453A`, **Orange** `#FF9F0A`, **Green** `#30D158`, **Teal** `#40C8E0`, **Purple** `#BF5AF2`, **Champagne** `#C8A96A`.
-Mock-up: `tools/preview_accent.py WORKDIR` (`out/preview/accent-black.png`): rows are the accents, columns the screens. The background stays Black (no Graphite); Light is a later "background" option.
+Mock-up: `tools/preview/preview_accent.py WORKDIR` (`out/preview/accent-black.png`): rows are the accents, columns the screens. The background stays Black (no Graphite); Light is a later "background" option.
 
 Roles (Neutral keeps today's colour for every one):
 
@@ -41,7 +41,7 @@ the accent.
   `tools/light.py` -> `tools/palette.py`, `test/pod/light.py` -> `test/pod/palette.py`. `LIGHT_*` constants and the Light flip functions (`light_flip`, `light_is_neutral`, `light_image`) keep their names:
   they are the Light background's mapping.
 - Hid the Light Mode row from Settings > System (the picker page, its actions and strings stay; `test/pod/palette.py` opens the picker through a row it builds itself).
-- Merged the mock-up (`feat/accent-mockup`: `tools/preview_accent.py`, `preview_settings.draw_page(pal=..., pressed=...)`).
+- Merged the mock-up (`feat/accent-mockup`: `tools/preview/preview_accent.py`, `preview_settings.draw_page(pal=..., pressed=...)`).
 - No visible change with the defaults; no golden changed beyond what the cherry-pick needed (the new payload symbols and the new page).
 
 ### The palette API
@@ -119,7 +119,7 @@ The images are tinted by name at decode, which is global, so the cover-tinted pa
 
 ## The consistency pass (own bars, sheets, marks, rail, EQ, rings)
 
-An audit found six kinds of element that took the accent on some pages and not on others. Each follows it now; with Neutral nothing looks different (one role colour is one blue level off today's grey, see below). Previews: `out/preview/uic2/accent-*.png` (`tools/preview_accent.py`, `uic2`). Tests: `own_roles_tests` (palette), `rail_tests` and `collapse_and_select_tests` (songs), `accent_tests` (peq), `ring_accent_tests` (pcshow), `src_ring_accent_tests` (songs).
+An audit found six kinds of element that took the accent on some pages and not on others. Each follows it now; with Neutral nothing looks different (one role colour is one blue level off today's grey, see below). Previews: `out/preview/uic2/accent-*.png` (`tools/preview/preview_accent.py`, `uic2`). Tests: `own_roles_tests` (palette), `rail_tests` and `collapse_and_select_tests` (songs), `accent_tests` (peq), `ring_accent_tests` (pcshow), `src_ring_accent_tests` (songs).
 
 | Element | Mechanism | Neutral |
 |---|---|---|
@@ -161,7 +161,7 @@ Models: `tools/palette.py` (`ROLE_FILL`, `ROLE_SHEET_PRESS`, `SHEET_A`, `ring_pi
 - **Mixed pixels.** `other_progress` and `datetime_back` rendered per accent (`out/preview/accent-tints.png`): `datetime_back` only has its selector line to tint; `other_progress`'s antialiased edge pixels
   (fill over its grey track) were lightened towards grey by the old blend. FILL now sends a pixel as light as the fill to the accent, leaves one at the track or darker, and moves one between by its
   share of the way fill -> accent (`v + (accent - fill) * t`), which is the accent over the track.
-- **Previews.** `accent-picker.png` starts with the Appearance page. `tools/preview_accent.py` draws through the model (`map_colour`, `render_image`, which also tints the row glyphs; the neutral pressed row is `#333334`): `accent-black.png` (Settings, the M1+ menu, a song list, controls,
+- **Previews.** `accent-picker.png` starts with the Appearance page. `tools/preview/preview_accent.py` draws through the model (`map_colour`, `render_image`, which also tints the row glyphs; the neutral pressed row is `#333334`): `accent-black.png` (Settings, the M1+ menu, a song list, controls,
   Now Playing), `accent-picker.png`, `accent-tints.png` and the contrast table; `make preview` runs it.
 - **Contrast** (accent on the pressed card tint / on black / on the pressed row tint): Red 3.82 / 6.16 / 4.96, Orange 5.31 / 10.22 / 7.25, Green 5.41 / 10.39 / 7.34, Teal 5.43 / 10.56 / 7.42,
   Purple 3.61 / 5.96 / 4.77, Champagne 4.93 / 9.34 / 6.75.
@@ -176,7 +176,7 @@ Models: `tools/palette.py` (`ROLE_FILL`, `ROLE_SHEET_PRESS`, `SHEET_A`, `ring_pi
 - **A cover colour is never a role colour.** `pal_not_role` (`pal_tone`, `m1_shade`, `m1_bar_color`; model `not_role`) moves a cover-derived colour that equals `ROLE_PRESS_ROW`, `ROLE_PROGRESS`, `ROLE_PRESS_PILL` or `ROLE_PRESS_QPILL` one LSB of blue (`#333334` -> `#333333`, `#FFFFFE` -> `#FFFFFF`), so a cover averaging (31, 31, 32) is not a pressed row. Pure, applied in every state. Tests `findings_tests`.
 - **Menu glyphs.** The `pod_ic_*`, `fo_ic_*` and `pod_ci_*` glyphs are all tinted at decode (see Row glyphs).
 - **Cost** (Unicorn): style hook with Tinted 752 instr on a dark neutral, 623 on any other (Light on 916, was under 900; Black + Neutral about 650); image hook 2075 on a non-surface name; tint once per decode: `pod_cd_mid` 2.25 M, `mb_glass` 2.30 M, `nb_fade` 0.74 M, `pc_sheet`/`pc_sheet5` up to 13.6 M, pressed pieces 1.65 M; glyph tint 64.6 k per 24 x 24 decode.
-- **Previews:** `tools/preview_accent.py` draws through the model; `accent-tinted.png` (Tinted x accents: menu, Settings, Appearance, songs, pull-down, Now Playing). The mock-up sheets were removed. Contrast (8C grey on page / card, Teal) 5.40 / 4.03.
+- **Previews:** `tools/preview/preview_accent.py` draws through the model; `accent-tinted.png` (Tinted x accents: menu, Settings, Appearance, songs, pull-down, Now Playing). The mock-up sheets were removed. Contrast (8C grey on page / card, Teal) 5.40 / 4.03.
 - **Not covered / risks:** device untested; the at-rest glyph tint is device untested (open the menu right after boot; leave it behind another page and come back); the navbar fade `nb_fade` is global, so on a cover-tinted page it is a tinted black over the cover tone; slider/progress tracks (`#333`) stay neutral; Tinted + Light is not a combination.
 
 ## Open / later
@@ -231,4 +231,4 @@ guard arms is not covered by the guard: the SD kill switch is the way out.
   Now Playing and its More sheet, the album and Show pages, the lock screen (must stay dark), the pull-down, dialogs, stock Settings pages, the Auto switch at 07:00 / 19:00 with a page open.
 - Stock pages with colours of their own (Tidal, Hi-Res store, guides) keep their hues; their neutral parts flip.
 - The mini player's backdrop blur and the Daily Mix card's text over art are drawn from white label styles: in Light Mode their text is ink over art.
-- `tools/preview_settings.py` draws the Settings pages in Light Mode with the model; other pages have no light preview.
+- `tools/preview/preview_settings.py` draws the Settings pages in Light Mode with the model; other pages have no light preview.

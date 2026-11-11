@@ -100,8 +100,8 @@ repository, downloaded by CI with `GITHUB_TOKEN`.
 Start UI fixes with a failing emulation test or device capture. Previews use the shared AWTK
 layout/text model and the built font. Keep feature details and device checks in `docs/modules/`.
 
-Previews: `tools/preview*.py` write to `out/preview/` (gitignored). Generate the release sheet with
-`uv run python -I tools/preview.py WORKDIR`. Release packages and generated previews stay out of Git.
+Previews: `tools/preview/preview*.py` (the preview scripts live in `tools/preview/`, not the flat `tools/`) write to `out/preview/` (gitignored). Generate the release sheet with
+`uv run python -I tools/preview/preview.py WORKDIR`. Release packages and generated previews stay out of Git.
 
 ## Context budget
 
@@ -129,7 +129,7 @@ separate from functional changes and verify package hashes afterward.
 
 `make lint` runs pinned Ruff bug/syntax checks (pyflakes), without formatting. Test, dev and
 check targets run it first. Star-import exceptions cover `test/pod/*.py` and
-`tools/preview_tape.py`; the harness may import names for re-export.
+`tools/preview/preview_tape.py`; the harness may import names for re-export.
 
 ## Integration and restore
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The 10-Band editor's model (patch/tenband.c, docs/modules/peq.md "10-Band EQ"): the slider card's geometry, the touch maths, the card / thumb / pill bitmaps and the texts, in Python.
 
-tools/preview_tenband.py draws the page from it and test/pod/peq.py checks the payload against it (the bitmaps pixel by pixel, the touch maths and the texts). The numbers are patch/offsets.inc TB_*."""
+tools/preview/preview_tenband.py draws the page from it and test/pod/peq.py checks the payload against it (the bitmaps pixel by pixel, the touch maths and the texts). The numbers are patch/offsets.inc TB_*."""
 import math
 
 MINUS = '−'

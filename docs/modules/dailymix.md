@@ -179,7 +179,7 @@ Device checks cover card changes, flash-write avoidance without a card, panel ap
 AWTK title rendering, large-library query cost and playback resume after reboot.
 See [device checks](device-checks.md); emulation does not establish those results.
 
-## The page (`dp_*` in `patch/dailymix.c`, `ui/m1plus_dailymix.bin`, `tools/pod_ui.py build_dailymix_page`, `tools/pod_dailymix.py` DP_*, `patch/offsets.inc` DP_*, `test/pod/dmpage.py`, previews `tools/preview_dmpage.py` -> `out/dailymix-page/`)
+## The page (`dp_*` in `patch/dailymix.c`, `ui/m1plus_dailymix.bin`, `tools/pod_ui.py build_dailymix_page`, `tools/pod_dailymix.py` DP_*, `patch/offsets.inc` DP_*, `test/pod/dmpage.py`, previews `tools/preview/preview_dmpage.py` -> `out/dailymix-page/`)
 
 An Apple Music playlist page ("Heavy Rotation"), opened by a tap on the card (the disc still plays directly). No navbar, no new hook, no boot-path code:
 own window, the stock `list_view` > `scroll_view` (310 + the mobile bar) over the whole 450 px, one content view `view_dm` that paints (as the Albums list does) the art, the lines and the songs in its after-paint,

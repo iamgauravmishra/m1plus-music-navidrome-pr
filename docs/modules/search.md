@@ -6,9 +6,9 @@ page**. It replaces stock's `search_page` (a T9 dialog, then `SearchMusicByName`
 initials of its pinyin (`zjl` finds 周杰伦, below).
 
 Code: `patch/search.c` (all of it), `patch/search.h` (the entry point and the page's geometry), `patch/keyboard.c` (`keyboard_attach`, below), `patch/songs.c` `sg_on_search`. Asset: `ui/m1plus_search.bin` (`tools/pod_ui.py` `build_search_page` and `keyboard_pad_widgets`), `tools/pod_pages.py` `SEARCH`. Layout
-model: `tools/pod_search.py` (parses the `#define`s of `patch/search.h`: one set of numbers for the builder, `tools/preview_search.py` and the tests). Tests: `test/pod/search.py` (sections
+model: `tools/pod_search.py` (parses the `#define`s of `patch/search.h`: one set of numbers for the builder, `tools/preview/preview_search.py` and the tests). Tests: `test/pod/search.py` (sections
 `fold_tests`, `query_tests`, `rank_tests`, `incremental_tests`, `page_tests`, `chips_tests`, `live_tests`, `tap_tests`, `perf_tests`, `recent_tests`, `entry_tests`, `embed_tests`, `asset_tests`).
-Preview: `uv run python -I tools/preview_search.py work/mod-release out/preview/search.png` (Top Results with the keyboard up, the Albums chip with it hidden, the empty state, the empty state with recent searches, the Songs chip;
+Preview: `uv run python -I tools/preview/preview_search.py work/mod-release out/preview/search.png` (Top Results with the keyboard up, the Albums chip with it hidden, the empty state, the empty state with recent searches, the Songs chip;
 each panel also as `search-<name>.png`; thumbnails are stand-in colours). **No hook, no new import, no thread; one page-scoped timer; nothing else runs from outside the page's widgets.**
 Strings: `Top Results`, `Song`, `Playlist`, `Recently Searched` (new, 13 languages), `No Results`, `Artist`, `Search`, `Artists`, `Albums`, `Songs`, `Playlists` and the stock `album` (existing keys).
 

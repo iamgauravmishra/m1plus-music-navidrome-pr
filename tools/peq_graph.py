@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The preset page's model (patch/peqpage.c, docs/modules/peq.md "Preset page"): the response of a preset's bands at 48 kHz, the graph card's pixels and the band rows' texts, in Python.
 
-tools/preview_peqpage.py draws the page from it and test/pod/peq.py checks the payload against it (the response there is the test's own RBJ model, so the two agree only if the payload does):
+tools/preview/preview_peqpage.py draws the page from it and test/pod/peq.py checks the payload against it (the response there is the test's own RBJ model, so the two agree only if the payload does):
 the graph's bitmap pixel by pixel, the curve against peq_response, every string. A band is (enabled, type, frequency, gain, q): enabled 1 both sides, 2 left, 3 right, 0 off (kept in the record, never played: the page leaves it out); type 0 peak, 1 low shelf,
 2 high shelf (patch/peq.h).
 """

@@ -7,7 +7,7 @@ y 130: `list_view` `playmore_listview` > `scroll_view` `playmore_scrollview` > `
 The Playback speed row's icon (`image1`, stock `p_multiple`, used by no other widget) is the Lucide `gauge`, the glyph of the Podcasts sheet's speed row (`tools/mod_icons.py` `DIALOG_GLYPHS`, 28 px like the other rows).
 M1+ Music makes it an iOS style bottom sheet with two pages.
 
-Preview, both pages over Now Playing with the dim (each page with its own glass; the zoomed top edges are checked with `tools/peek.py crop`): `uv run python -I tools/preview_playmore.py work/mod-release out/preview/playmore.png` (not tracked).
+Preview, both pages over Now Playing with the dim (each page with its own glass; the zoomed top edges are checked with `tools/peek.py crop`): `uv run python -I tools/preview/preview_playmore.py work/mod-release out/preview/playmore.png` (not tracked).
 
 ## What the user sees
 
@@ -89,7 +89,7 @@ The sheet is the glass of the Home mini player bar and the lock screen's card (`
   the lock card), and a stretched middle would smear the gradient and rim.
 - **Failed start.** The asset keeps its look (as with the dim): the stock seven 50-60 px rows are transparent over a 320 x 200 glass in a 350 px dialog, so
   the rows below the glass lie directly on the dimmed page (legible, not pretty).
-- Preview: `tools/preview_playmore.py` draws the `bg_image`, the dim over the whole screen, the hairlines and a pressed Delete row: `out/preview/playmore-glass.png`.
+- Preview: `tools/preview/preview_playmore.py` draws the `bg_image`, the dim over the whole screen, the hairlines and a pressed Delete row: `out/preview/playmore-glass.png`.
 
 ## Positioning (the bottom sheet)
 

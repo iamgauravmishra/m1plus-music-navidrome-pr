@@ -6,11 +6,11 @@ and `IP_*` names; the device label is Pod. Hardware validation is tracked in the
 
 Sources: `patch/ipod.c`, `tools/pod_ui.py` (`build_ipod_page`, `ui/m1plus_ipod.bin`),
 `tools/mod_icons.py` (`ipod_wheel`) and `IP_*` in `offsets.inc`. Tests: `test/pod/ipod.py`;
-preview: `tools/preview_ipod.py` (light/dark menus, library rows, Now Playing, a transition
+preview: `tools/preview/preview_ipod.py` (light/dark menus, library rows, Now Playing, a transition
 contact sheet and GIF, the cross-fading cover pane and the reference palette).
 
 The Pod row's glyph (`pod_ic_ipod`) is `assets/icons/custom/ipod.svg`: Lucide's `smartphone` body
-with a screen bar and a click wheel, the pick from `tools/preview_pod_icon.py` (candidate B).
+with a screen bar and a click wheel, the pick from `tools/preview/preview_pod_icon.py` (candidate B).
 
 The Pod is its own view of the player's functions: every row opens a Pod level, never one of our full pages. A function without a Pod-designed level is left out of the Pod.
 

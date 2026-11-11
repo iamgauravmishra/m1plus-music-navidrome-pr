@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The Search page's layout model (patch/search.c, docs/modules/search.md): the Apple Music search screen on a 320 x 450 window.
 
-The numbers are the #defines of patch/search.h (parsed here, so there is one copy): tools/pod_ui.py builds ui/m1plus_search.bin from them, tools/preview_search.py draws the design from them
+The numbers are the #defines of patch/search.h (parsed here, so there is one copy): tools/pod_ui.py builds ui/m1plus_search.bin from them, tools/preview/preview_search.py draws the design from them
 and test/pod/search.py checks the built tree and the payload against them. Colours are neutral: white and grey, no accent; the selected chip is a light grey pill with dark text.
 """
 import os
