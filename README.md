@@ -17,11 +17,11 @@
 
 ## Features
 
-- **Browse:** Cover Flow, album grids/lists, Artists with photos, an A–Z Songs list, Playlists and Folders with covers.
-- **Search:** find music and podcasts with an on-screen QWERTY keyboard.
+- **Browse:** Cover Flow, album grids/lists, Artists with photos, A–Z indexes on Songs, Artists and Albums, Playlists and Folders with covers.
+- **Search:** find music and podcasts with an on-screen QWERTY keyboard, also in Tidal's search.
 - **Home:** Daily Mix, Recently Played and a floating mini player.
-- **Now Playing:** cover-colour backgrounds, rounded artwork and remaining time.
-- **Podcasts:** local episodes, top shows and episodes for your region, directory search, feed subscriptions and episode downloads.
+- **Now Playing:** cover-colour backgrounds, rounded artwork, remaining time, an idle display (cover, Cassette or Vinyl) and Continue Playing into the next album.
+- **Podcasts:** local episodes, top shows and episodes for your region, directory search, feed subscriptions with every episode, search, filters and episode order within a show, and episode downloads.
 - **Extras:** album/folder shuffle, internet radio, a virtual iPod, Cassette Mode, Vinyl Mode and an online cover and lyrics lookup.
 - **Subsonic:** browse a Subsonic server (Navidrome, Gonic, Airsonic) in the player's own Albums, Artists, Playlists and Songs pages, search it, stream over Wi-Fi, and download songs to the card for offline play. Based on a pull request by Gaurav Mishra and the work of shivaluma.
 - **Appearance:** an accent colour, a lock screen with a mini player, minimal theme, Lucide icons and Inter + Source Han Sans fonts.

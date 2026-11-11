@@ -25,6 +25,9 @@ and [UI reference](ui.md). Hardware observations below do not validate later bui
   mid-song and the stock Equalizer row, which now opens the Equalizer page.
 - **1.3.2, 2026-11-08:** a steady Now Playing quality line, a sharp enlarged cover and lyric
   lines that no longer clip their last letter.
+- **1.4.0, 2026-11-12:** Subsonic / Navidrome servers as a library source, artist photos, Continue
+  Playing, Idle Display, a Lock Screen with a mini player, own Display and Buttons & Power pages,
+  Charge Limit, Podcasts' full episode lists, search and filter, and Cassette Mode's quality tapes.
 
 ## Device findings
 
