@@ -7,7 +7,7 @@
  * (patch/ipod.c) it has no hook, no widget per thing drawn, one page-scoped timer set in place with timer_modify, and nothing at boot.
  *
  *   picture   LANDSCAPE, 480 x 320, on the portrait panel: the picture is turned 90 degrees clockwise into a 320 x 480 RGBA frame this file owns, so landscape (x, y) is the frame's
- *             row x, column 319 - y (tp_pix), the map Cover Flow's landscape captions use (patch/coverflow.c). The frame starts as tape_shell (the cassette, no text), and only what
+ *             row x, column 319 - y (tp_pix), the map Cover Flow's landscape captions use (patch/coverflow.c). The frame starts as tape_shell with the grain and the knurl laid on (tp_finish; the cassette, no text), and only what
  *             changes is drawn into it: the tape packs and hub sprites (the timer), the printed marks (the timer) and the text (the paint, which has the canvas and so the font). The
  *             paint blits the frame 1:1; the timer invalidates only the rectangle that changed.
  *   text      the device font's glyph alpha (font_get_glyph) blended into the frame through the same map: AWTK's text drawing does not rotate, this does not need it (Cover Flow's
@@ -153,6 +153,57 @@ static void *tp_load(const char *name, unsigned w, unsigned h) {
     return bmp;
 }
 
+/* A pixel moved by alpha a (of 256) towards white or black, channel by channel (tools/tape_art.py blend_to). */
+static unsigned tp_blend(unsigned v, unsigned a, unsigned white) {
+    unsigned o = v & 0xff000000u, k;
+    for (k = 0; k < 24; k += 8) {
+        unsigned c = v >> k & 255;
+        o |= (white ? c + ((255 - c) * a >> 8) : c - (c * a >> 8)) << k;
+    }
+    return o;
+}
+
+/* The shell's grain and knurl, laid on bmp (the page's own copy of tape_shell, TP_H x TP_W) once when the page opens, by tape_tex: red the knurl's strength (128 is the cell's
+ * own alpha), green the grain's amplitude (tools/tape_art.py finish, integer for integer). The grain is a hash of the pixel's place: light or dark by its top bit, alpha
+ * |n - 128| * amplitude >> 7. The knurl is a 4 x 4 cell at the landscape place (row, 319 - column): the groove, the lit top and left edge, the shaded bottom and right edge, the
+ * face. Both are texture no PNG packs: baked into the three shells they cost the rootfs about 600 KB. A tape_tex that will not load or has another size leaves the shell smooth. */
+static void tp_finish(void *bmp) {
+    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
+    static const unsigned char kn[4][2] = {{78, 0}, {58, 1}, {64, 0}, {14, 1}}; /* alpha, towards white */
+    unsigned bitmap[32], format, stride, *p = (unsigned *)0, x, y;
+    const unsigned char *m = (const unsigned char *)0;
+    memset(bitmap, 0, sizeof bitmap);
+    if (widget_load_image(tp.win, "tape_tex", bitmap)) return;
+    format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
+    if (format < 4 && bitmap[0] == TP_H && bitmap[1] == TP_W)
+        m = bitmap_lock_buffer_for_read(bitmap); /* read in place */
+    p = m ? (unsigned *)bitmap_lock_buffer_for_write(bmp) : (unsigned *)0;
+    if (p) {
+        stride = bitmap_get_line_length(bitmap);
+        for (y = 0; y < TP_W; ++y)
+            for (x = 0; x < TP_H; ++x) {
+                const unsigned char *t = m + y * stride + x * 4;
+                unsigned g = t[at[format][0]], a = t[at[format][1]], i = y * TP_H + x, v, n, u, w;
+                if (!(g | a)) continue;
+                v = p[i];
+                if (a) {
+                    n = (i + 1) * 0x9E3779B1u, n ^= n >> 16, n *= 0x85EBCA6Bu, n = (n ^ n >> 13) >> 8 & 255;
+                    v = tp_blend(v, (n >= 128 ? n - 128 : 128 - n) * a >> 7, n >= 128);
+                }
+                if (g) {
+                    u = y & 3, w = ~x & 3;
+                    n = u == 3 || w == 3 ? 0 : !u || !w ? 1 : u == 2 || w == 2 ? 2 : 3;
+                    u = kn[n][0] * g >> 7;
+                    v = tp_blend(v, u > 255 ? 255 : u, kn[n][1]);
+                }
+                p[i] = v;
+            }
+        bitmap_unlock_buffer(bmp);
+    }
+    if (m) bitmap_unlock_buffer(bitmap);
+    widget_unload_image(tp.win, bitmap);
+}
+
 static void tp_free(void) {
     void **b[6] = {&tp.frame, &tp.base, &tp.top, &tp.hubs, &tp.marks, &tp.screw};
     int i;
@@ -186,29 +237,40 @@ static void tp_flush(void) {
 /* ---------------------------------------------------------------------------
  * The reels: base, tape pack, tape_top, hub, per landscape pixel
  */
-#define PK_BODY 0xff0e1624u /* near-black brown #24160E */
-#define PK_EDGE 0xff05080cu
-#define PK_WIND 0xff101928u /* the windings are 1/3 px lines in the mock: a third of the way to #2E1C12 */
-#define PK_LIGHT 0xff304a6au /* the sheen: two soft lobes on the circle, upper left (the stronger) and lower right */
-#define PK_LIGHT2 0xff1c2a3eu
+/* The tape pack: a smooth near-black brown #22150E with a static bow-tie sheen towards #6C4F38 (the light does not turn with the reel): |cos|^14 of the angle from the
+ * upper left / lower right axis through the centre, the lower right lobe x 0.45; 2 px windings modulating both; a lighter ring just inside the edge and a dark edge.
+ * tools/tape_art.py pack_rgb is the same arithmetic. */
+static const unsigned char pk_wind[32] = {/* 32 + 32 sin(2 pi i / 32): the windings, one period per 2 px of distance */
+                                          32, 38, 44, 50, 55, 59, 62, 63, 64, 63, 62, 59, 55, 50, 44, 38,
+                                          32, 26, 20, 14, 9,  5,  2,  1,  0,  1,  2,  5,  9,  14, 20, 26};
 
-/* The pack of radius R (1/16 px) at distance d (1/16 px) laid over `under`; the pixel at (dx, dy) half pixels from the centre decides the highlight's sector (upper left, 190 to 240 degrees). */
+/* The pack of radius R (1/16 px) at distance d (1/16 px) laid over `under`; (dx, dy) are the pixel's half pixels from the centre. */
 static unsigned tp_pack(unsigned under, int d, int R, int dx, int dy) {
-    unsigned c;
-    int cov;
+    static const unsigned char base[3] = {0x22, 0x15, 0x0e}, rise[3] = {0x6c - 0x22, 0x4f - 0x15, 0x38 - 0x0e};
+    unsigned u, u2, d2, lobe, w, mb, k, e, c = 0xff000000u;
+    int cov, s = -dx - dy, i;
     if (d < 0 || d > R + 8) return under;
     cov = R + 8 - d;
     if (cov > 16) cov = 16;
-    if (d >= R - 16)
-        c = PK_EDGE;
-    else if (d >= R - 80 && d < R - 48 && -1008 * dy + 178 * dx >= 0 && -887 * dx + 512 * dy >= 0)
-        c = PK_LIGHT;
-    else if (d >= R - 80 && d < R - 48 && 1008 * dy - 178 * dx >= 0 && 887 * dx - 512 * dy >= 0)
-        c = PK_LIGHT2;
-    else if (d >= 16 * (TP_HUB_R + 2) && (d - 16 * (TP_HUB_R + 2)) % 48 < 16)
-        c = PK_WIND;
-    else
-        c = PK_BODY;
+    d2 = (unsigned)(dx * dx + dy * dy);
+    lobe = 0;
+    if ((unsigned)(s * s) >=
+        d2) { /* cos^2 >= 1/2; below it the lobe is under 513 of 65536 and adds nothing (same pixels as without this test) */
+        u = ((unsigned)(s * s) << 15) / d2; /* cos^2 of the angle, 16 bits (65536: on the axis) */
+        if (u > 65535u) u = 65535u;
+        u2 = u * u >> 16;
+        lobe = (u2 * u2 >> 16) * u2 >> 16; /* u^7 = cos^14 */
+        lobe = lobe * u >> 16;
+        if (s < 0) lobe = lobe * 115 >> 8;
+    }
+    w = pk_wind[d & 31];
+    mb = 236 + (w * 13 >> 5);
+    k = lobe * (179 + (w * 77 >> 6)) >> 8;
+    e = d > R - 16 ? 115 : d > R - 35 ? 287 : 256;
+    for (i = 0; i < 3; ++i) {
+        unsigned v = ((base[i] * mb >> 8) + (rise[i] * k >> 16)) * e >> 8;
+        c |= (v > 255 ? 255 : v) << 8 * i;
+    }
     return cov >= 16 ? c : tp_mix(under, c, (unsigned)cov * 255 / 16);
 }
 
@@ -754,6 +816,7 @@ int tape_open(void) {
         tp.theme = tape_theme(); /* read once: a change in Settings shows the next time the page opens */
         snprintf(name, sizeof name, "tape_shell_%s", theme_name[tp.theme]);
         tp.base = tp_load(name, TP_H, TP_W);
+        if (tp.base) tp_finish(tp.base);
         snprintf(name, sizeof name, "tape_hubs_%s", theme_name[tp.theme]);
         tp.hubs = tp_load(name, TP_HUB_PX, TP_HUB_PX * TP_SPRITES);
         snprintf(name, sizeof name, "tape_marks_%s", theme_name[tp.theme]);

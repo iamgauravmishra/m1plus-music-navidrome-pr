@@ -17,7 +17,7 @@ Settings → Now Playing → Theme cycles Normal, Chrome and Metal. The order is
 `tape_theme` accepts `1`/`2` with an optional newline and defaults to Normal for all other data.
 A failed save changes neither file nor label. The Tape page reads the setting once at open.
 
-Shared assets are `tape_top` and `tape_screw`. Each theme has `tape_shell_<theme>`,
+Shared assets are `tape_top`, `tape_screw` and `tape_tex`. Each theme has `tape_shell_<theme>`,
 `tape_hubs_<theme>` and `tape_marks_<theme>`, plus text colours and TYPE I NORMAL / TYPE II CHROME /
 TYPE IV METAL fine print. Current sizes and rootfs headroom come from the build output;
 `fwtool` enforces the stock limit.
@@ -56,15 +56,16 @@ blended into the frame at (pen + glyph.x + c, top + glyph.y + ascent + r), lands
 
   | Picture | Size (turned) | Holds |
   | --- | --- | --- |
-  | `tape_shell_<theme>` | 320 x 480, opaque (RGBA, alpha 255: the decoder gives 32 bit pixels for it, as for every picture the payload loads), 217 KB | the cassette: shell, screws, label paper, band, ruled lines, the panel, the holes, the clear window, the direction arrow. **No text, no marks, no tape, no rings, no hubs** |
+  | `tape_shell_<theme>` | 320 x 480, opaque (RGBA, alpha 255: the decoder gives 32 bit pixels for it, as for every picture the payload loads), 26 - 31 KB | the cassette, **smooth** (the page adds grain and knurl): shell, screws, label paper, band, ruled lines, the panel, the holes, the clear window, the direction arrow. **No text, no marks, no tape, no rings, no hubs** |
   | `tape_top` | 74 x 280, RGBA | the holes' gear rings and lips, the clear window's scale and bevel (what lies over the tape), by alpha extraction (drawn on black and on white at 3x) |
-  | `tape_hubs_<theme>` | 30 x 720, RGBA | the reel hub in **24 frames, 5 degrees apart**: a pale translucent plastic ring with six teeth round a dark opening and a pale disc with a dark 3-spoke drive; the ring repeats every 60 degrees, the drive every 120, so the picture repeats every **120 degrees** and 24 frames close the loop seamlessly (angle modulo 120 / 5; `tp.ang` counts sixteenths modulo 1920); stacked, pre-rotated with the picture |
+  | `tape_hubs_<theme>` | 30 x 720, RGBA | the reel hub in **24 frames, 5 degrees apart**: a pale translucent plastic ring with six teeth round a dark opening and a pale disc with a dark 3-spoke drive, lit from the top left with a soft shadow under it (about 24 KB a theme); the ring repeats every 60 degrees, the drive every 120, so the picture repeats every **120 degrees** and 24 frames close the loop seamlessly (angle modulo 120 / 5; `tp.ang` counts sixteenths modulo 1920); stacked, pre-rotated with the picture |
   | `tape_marks_<theme>` | 26 x 78, RGBA | the printed play mark, pause mark and repeat arrow, in the theme's band ink (white, Metal's gold) |
+  | `tape_tex` | 320 x 480, RGBA, 13 KB | the shell's texture as two maps, the same for every theme: **red the knurl's strength** (128 is the cell's own alpha, in steps of 4), **green the grain's amplitude** (alpha of 255, at most 24); see "Grain and knurl" |
   | `tape_screw` | 26 x 26, RGBA | the close screw pressed: darker, its slot turned 45 degrees (the same in every theme) |
 
   The sizes are above (the rebuilt rootfs may not exceed stock size and the build refuses otherwise).
 - **The reels** (`tp_reel_px`): per landscape pixel, the shell, then the **tape packs** (a disc of the pack's radius around each reel, seen only through the two holes and the clear window,
-  integer distance from a table `sqrt(d2h) * 8` made at open: 1/16 px, an anti-aliased edge, a dark edge ring, 1 px winding lines every 3 px, the highlight arc in the upper left), then
+  integer distance from a table `sqrt(d2h) * 8` made at open: 1/16 px, an anti-aliased edge, the look below), then
   `tape_top` by its alpha, then the hub sprite by its alpha. The pack radii follow the position: `r_supply^2 + r_takeup^2 = 66^2 + 16^2` (the tape's area), the take-up's area growing
   linearly with `pos / len` (`tp_radii`, fixed point). A pack is redrawn when its radius changes by 1/4 px, so about every 0.4 s on a 5 minute track; a hub when its 5 degree frame changes.
 - **The hubs turn while playing**, counterclockwise, both the same way, at the speed of constant tape speed: angular speed x pack radius = 76,800 sixteenths of a degree x px a second
@@ -89,6 +90,23 @@ blended into the frame at (pen + glyph.x + c, top + glyph.y + ascent + r), lands
   first, then the format** (`tape_art.status_line`, the same function the mock and the test use). A missing status bar gives `VOL 0`.
 - **Refresh only on change**: the timer looks at the track, the position, the play state, the repeat mode, the battery, the volume text and the clock minute each tick and redraws only what
   differs; the text itself is drawn by the next paint, not by the timer.
+
+### Grain and knurl (laid on by the page)
+
+The shell pictures hold the cassette **smooth**: shapes, colours and the light, but neither the paper's and plastic's grain nor the knurl. Both are texture no PNG packs (with them baked in,
+the three shells were 695 KB: about two thirds of each was the grain, a fifth the knurl), so the page lays them on its own copy of the shell **once, when it opens** (`tp_finish`; `tape_art.finish`
+is the same arithmetic in Python, integer for integer, and the test's reference). The shells and `tape_tex` together are about 100 KB.
+
+- **Grain**: for pixel i = row x 320 + column of the turned picture, n = a byte of a hash of i (the multiply-xorshift hash Vinyl Mode's grain uses); the pixel moves towards white (n >= 128) or
+  black by alpha `|n - 128| * amplitude >> 7` (of 256), the amplitude from `tape_tex`'s green: 14 on the shell, 16 on the paper, 13 on the band, 22 on the panel, 20 on the arrow, 0 on the
+  screws, the holes, the window and off the cassette. The map is **measured**, not drawn (`shell_parts`: the picture drawn with flat white and flat black where the grain goes differs from
+  the clean one by exactly the grain's alpha, whatever was drawn over it later).
+- **Knurl**: the 4 x 4 cell at the landscape place (row, 319 - column): the groove (black, alpha 78), the lit top and left edge (white, 58), the shaded bottom and right edge (black, 64), the
+  face (white, 14), each times `tape_tex`'s red `>> 7`. The red is the knurl's mask times the light's gain (the knurl's contrast follows the light), told for the lit pixel.
+- **One map for every theme** (the Normal theme's: the themes share the geometry). Metal's two gold hairlines take the band's grain (13) instead of the arrow's (20).
+- **Against the baked pictures**: the knurl and the light are within 11 levels of the pictures the material pass installed (mean 0.6); the grain is other noise of the same amplitude.
+- **Cost**: about 14 M instructions once at open (emulation; the whole open 20.6 M, budget `OPEN_MAX` in `test/pod/tape.py` `life_tests`), nothing a tick. No memory beyond the decoded
+  `tape_tex` while it is read (614 KB, transient). A `tape_tex` that is missing or of another size leaves the shell smooth; the page still opens.
 
 ## Touch
 
@@ -148,12 +166,12 @@ news.mynavi.jp/article/20191016-910000/, the FiiO M21 manual (Tape mode, Setting
 
 ## The cassette (follows a real one and Sony's screen turned sideways)
 
-- **Symmetry:** everything static is symmetric about x 240 (the cassette 5 .. 475, the label 37 .. 443 with 32 px of shell each side, the panel, the window, the reels 132 / 348, the screws 24 / 456, the bottom section and its holes, the knurl mask); `test/pod/tape.py` `symmetry_tests` checks the constants and the shell picture. V2.1oXTR had the label at 30 .. 436 (25 px left, 39 right); the text, marks, arrow and the A moved 7 px with it. The only intended asymmetries are the light (the drop shadow falls right and down, a hole's highlight and the bevels are lit from the top left).
-- **Shell (material pass, after Sony's METALLIC 46 as the reference):** a matte moulded plastic with a **crisp knurl of raised squares on a 4 px pitch, drawn at 1:1 on the pixel grid** (`knurl`: a 3 x 3 square with a 1 px light top and left edge, a 1 px dark bottom and right edge and a 1 px groove; never downsampled from 3x, which smeared the old one), a **smooth flat rim band** inside the outer edge, fine deterministic grain, a 1.8 px bevel, a moulded step, one soft light from the top left. The knurl is masked off the label, the screws and the holes. No brand mark; the moulded word on the side rim was left out (nothing is better than a generic one the font cannot carry at build time).
-- **Screws:** four recessed Phillips screws in the corners and one at the bottom centre: a dark countersunk ring, a metal head, a cross slot, a specular spot.
+- **Symmetry:** everything static is symmetric about x 240 (the cassette 5 .. 475, the label 37 .. 443 with 32 px of shell each side, the panel, the window, the reels 132 / 348, the screws 24 / 456, the bottom section and its holes, the knurl mask); `test/pod/tape.py` `symmetry_tests` checks the constants and the shell picture. V2.1oXTR had the label at 30 .. 436 (25 px left, 39 right); the text, marks, arrow and the A moved 7 px with it. The intended asymmetries are the light (the drop shadow falls right and down, a hole's highlight and the bevels are lit from the top left; since the material pass also the shell's light falloff, the frame's shadow on the paper, the sheen, the lit hubs and the screws' slot angles); `symmetry_tests` finds the shapes by colour with a tolerance wide enough for that shading and asserts the left rim is lighter than the right.
+- **Shell (material pass, after Sony's METALLIC 46 as the reference):** a matte moulded plastic with a **crisp knurl of raised squares on a 4 px pitch, laid on at 1:1 on the pixel grid** by the page ("Grain and knurl"; `KNURL`: a 3 x 3 square with a 1 px light top and left edge, a 1 px dark bottom and right edge and a 1 px groove; never downsampled from 3x, which smeared the old one), a **smooth flat rim band** inside the outer edge, fine deterministic grain, a 1.8 px bevel, a moulded step, one soft light from the top left that falls off across the shell (`shell_parts`: brightness 1.18 at the top left to about 0.72 at the bottom right, the knurl's contrast following it, a faint diagonal sheen on shell and label; deterministic, per pixel). The label has the paper's grain and a soft shade on the band, the frame's shadow on the paper (top and left) and the panel's cut-edge shadow. The knurl is masked off the label, the screws and the holes. No brand mark; the moulded word on the side rim was left out (nothing is better than a generic one the font cannot carry at build time).
+- **Screws:** four recessed Phillips screws in the corners and one at the bottom centre: a dark countersunk ring, a metal head, a cross slot (each screw has its own slot angle, `SCREW_TURN`; the close screw's is 0), a specular spot.
 - **Label:** paper (faint grain) on a raised frame, covering most of the upper face. Index lines with the title (22 px), artist and album written on them,
   elapsed and -remaining in small type on the album line, plain paper at the top right (the title may use the full width), a colour band across the middle with a big "A",
-  below it the fine print (type and grade, 12 px), the direction arrow (**foil**: a metallic light-to-dark gradient of the theme's print colour, a faint diagonal highlight, very fine grain, sharp edge; the Metal band's hairlines too) and a status line.
+  below it the fine print (type and grade, 12 px), the direction arrow (**printed ink**, `foil()`: the theme's print colour with a hint of light at the top (+10 % white) and shade at the bottom (-12 % black) and the paper's grain, flat and not glossy, sharp edge; the Metal band's gold hairlines too) and a status line.
   Play / pause (a triangle or two bars) and the repeat (auto-reverse) arrow are printed marks at the band's right end.
 - **Live label fields** (printed in the label's ink and small type, so the label still reads as a label; each is refreshed on the page timer only when its value changed):
 
@@ -172,7 +190,7 @@ fields dropped in this order when it does not fit: the clock, then the format (`
   area conserved), the supply shrinking from 66 to 16 px and the take-up growing from 16 to 66 px (clipped to the holes and the window). Sony's pack does not change with position; ours does.
 - **Depth:** the label is set into the shell (a soft shadow round its frame); the bottom section is a raised, separately moulded trapezoid with its own shadow and a visible 3 px thickness edge, the same knurl and bevel; two pinch-roller holes, two small square holes and the head opening with real depth (dark inside, an inner shadow, a lit lower lip on whole pixels). The Metal shell is warm brown-black, Chrome and Normal get the same depth in their own colours.
 - Nothing off the cassette: no LED, no counter box. Paused: the reels stand still and the label shows the pause mark.
-- **Hub, packs, window:** `hub_sprite(angle, colour)` is one function of the angle, quantised to 24 frames (5 degree steps, the 120 degree cycle above). The tape pack is near-black brown (#24160E, windings a shade lighter) with a subtle circular sheen: two soft lobes on the circle, upper left (stronger) and lower right (`PK_LIGHT`, `PK_LIGHT2`). The centre window is smoked glass: a dark gradient (`#3E4044` to `#141518`) in `tape_shell`, and in `tape_top` a soft diagonal reflection, an inner shadow at the frame edge and a fine white scale (a 1 px centre line and ticks on whole pixels).
+- **Hub, packs, window:** `hub_sprite(angle, colour)` is one function of the angle, quantised to 24 frames (5 degree steps, the 120 degree cycle above). The tape pack is a smooth near-black brown (#22150E) with the static bow-tie sheen of wound tape towards #6C4F38 (see "The pack" below). The centre window is smoked glass: a dark gradient (`#3E4044` to `#141518`) in `tape_shell`, and in `tape_top` a soft diagonal reflection, an inner shadow at the frame edge and a printed scale (a 1 px centre line and ticks on whole pixels, #D8DADE, with its shadow a pixel right and down). `tape_top` also has the lip's shadow on the tape, the hole ring lit at the lower right and shaded at the upper left, the reflection fading top to bottom, and three faint hairline scratches.
 
 ## Frames (the mock)
 
@@ -184,13 +202,29 @@ fields dropped in this order when it does not fit: the clock, then the format (`
 Open Now Playing on a playing track, More (page 1), tap **Cassette Mode**: the sheet closes and the cassette appears, readable when the player is held with its **right edge up**.
 - Is the sheet's top edge right now on both pages (page 1 five rows with its own 250 px glass, page 2 four rows, 200 px, rounded corners and rim)?
 - Is the picture the right way up (title at the top, the label's text readable, not mirrored)? If it is upside down, the rotation sign is wrong (`tp_pix` / the touch map).
-- Do the reels turn smoothly while playing (about 14 frames a second; the left one slower at the start, the right one faster) and **stop** when paused? Any shimmer, tearing or lag? Does the tape pack grow on the right and shrink on the left as the track plays?
+- Do the reels turn smoothly while playing (about 14 frames a second; the left one slower at the start, the right one faster) and **stop** when paused? Any shimmer, tearing or lag? Does the tape pack grow on the right and shrink on the left as the track plays, and does its sheen (a bow tie from the upper left to the lower right, the lower right fainter, fine 2 px windings, a darker rim) stay still while the reel turns, without shimmer in the windings?
 - Is the text readable rotated: title 22 px, artist 16, album 13, times 12, status 12 (11)? Any clipped descender or leftover glyph when the track changes?
 - Tap the middle: pause / play, with the pause bars shown at once? Tap the top left screw: does it darken and turn while held, and close the page on release? Is a swipe from the top edge still opening
   the control centre (pull-down) with the page open, playing and paused? Does a long drag do nothing? Is 14 px too easy / too hard for a tap, is the 50 px screw area right?
-- Material: is the knurl crisp (4 px cells, no moire), the foil arrow and hairlines metallic, the smoked window, the pale hubs with their 3-spoke drive, and the reels still smooth at 24 frames? Does the pack's sheen look right?
+- Material: is the knurl crisp (4 px cells, no moire), the arrow and the Metal hairlines read as printed ink (not glossy), the shell's light falling off from the top left, the label's grain and frame shadow, the smoked window with its scratches and fading reflection, the lit hubs with their shadow, the screws' different slot angles, and the reels still smooth at 24 frames?
 - Settings > Now Playing > Theme: tap cycles Normal, Chrome, Metal; reopen the page: the new look (shell, hubs, ink, fine print)? It survives a reboot?
 - Battery number, `+` while charging, volume (change it with the keys: the line follows within half a second while paused), the format (file extension), the clock?
 - Does the screen still sleep after the usual idle time with the page open (playing and paused)? Does it wake and keep going, the reels on the right turn and the text current at once (no jump)? Battery: leave it playing with the screen off for an hour (screen-off ticks are 1 s and draw nothing) and compare the drain with Now Playing; is the lit 70 ms tick warm?
 - Back to Now Playing, More again, Tape again: opens every time, no leaked state. Does the page keep playing through a track change and a phone-style lock / unlock?
 Open questions: the cost of the 70 ms tick on battery (relax `TP_PLAY_MS` to 100 if warm); whether to drop 5 degree frames for fewer redraws; whether 24 h time is wanted.
+
+## The pack (material pass, phase 2)
+
+The tape packs are drawn at run time per pixel by `tp_pack` (`patch/tape.c`), the arithmetic being `pack_rgb` in `tools/tape_art.py` (the test's `py_pack` and the preview's `packs()` call it,
+so the emulated frame and the preview are the payload to the bit). Visual target: `packs2` of the approved scratch mock (the pixels agree with its float version within 1 - 2 levels almost
+everywhere, a few near the hub up to 36):
+
+- base #22150E, highlight #6C4F38. `s = -dx - dy` (half pixels from the reel's centre); `u = s^2 << 15 / (dx^2 + dy^2)` is cos^2 of the angle from the upper-left / lower-right axis, 16 bits;
+  `lobe = u^7` (four 16 bit multiplies, = |cos|^14), times 115 / 256 (0.45) where `s < 0`. No table; the sheen is static, the light does not turn with the reel. Where `s^2 < dx^2 + dy^2`
+  (cos^2 < 1/2) the lobe is below 513 / 65536 and adds nothing, so the division and the multiplies are skipped there (identical pixels).
+- Windings: `w = pk_wind[d & 31]` = 32 + 32 sin(2 pi d / 32) (`d` in 1/16 px: a 2 px period; a 32 byte rodata table, mirrored by `PK_WIND`); base x (236 + 26 w / 64) / 256 (0.92 .. 1.02),
+  lobe x (179 + 77 w / 64) / 256 (0.70 .. 1.00).
+- Edge: x 287 / 256 (1.12) from `R - 35` (r - 2.2 px), x 115 / 256 (0.45) from `R - 16` (r - 1 px), clamped at 255; the rim is the coverage blend as before (1 px).
+- The old two arcs and the 3 px winding lines are gone; the hub radius no longer limits the windings. Cost (emulated instructions, whole `tp_tick`): a hub-only tick 279,639 before, 459,656 after
+  (about +0.4 ms on the 70 ms tick: two 30 px squares); a pack redraw (`tp_reels(1)`, the radius changed) 2.43 M before, 2.95 M after. A pack is still redrawn only when a radius changes by 1/4 px.
+  No new memory: the payload gained the 32 byte table, `.scratch` is unchanged.

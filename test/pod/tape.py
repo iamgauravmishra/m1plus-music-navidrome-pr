@@ -255,20 +255,26 @@ def asset_tests(ctx):
         got = stock_target(m, root, x, y)
         expect(got[-1] == 'tape_view', f'a touch at ({x}, {y}) reaches tape_view ({got})')
     # the pictures: sizes the payload loads, the generator's output pixel for pixel, no image in the tree is bigger than the budget
-    sizes = {'tape_top': (74, 280), 'tape_screw': (26, 26)}
+    sizes = {'tape_top': (74, 280), 'tape_screw': (26, 26), 'tape_tex': (320, 480)}
     for t in THEMES: sizes.update({f'tape_shell_{t}': (320, 480), f'tape_hubs_{t}': (30, 720), f'tape_marks_{t}': (26, 78)})
     gen = tape_art.images()
     for n, size in sizes.items():
         im = asset_image(n)
         built = open(asset_path(n), 'rb').read()
         expect(im.size == size == gen[n].size and built == open(os.path.join(mod_icons.PNG, n + '.png'), 'rb').read() and same_pixels(built, gen[n]), f'{n}: {size}, the generator\'s PNG pixel for pixel')
-    expect(set(sizes) == set(tape_art.NAMES) and len(sizes) == 11, 'the pictures: two shared (tape_top, tape_screw) and three a theme (shell, hubs, marks)')
+    expect(set(sizes) == set(tape_art.NAMES) and len(sizes) == 12, 'the pictures: three shared (tape_top, tape_screw, tape_tex) and three a theme (shell, hubs, marks)')
     expect((tape_art.TOP_RECT[2] - tape_art.TOP_RECT[0], tape_art.TOP_RECT[3] - tape_art.TOP_RECT[1]) == (280, 74), 'tape_top: 280 x 74 landscape, 74 x 280 turned')
     total = sum(os.path.getsize(asset_path(n)) for n in sizes) + os.path.getsize(asset_path('pod_ic_tape'))
     per = {t: sum(os.path.getsize(asset_path(f'{n}_{t}')) for n in tape_art.PER_THEME) for t in THEMES}
     shared = sum(os.path.getsize(asset_path(n)) for n in tape_art.SHARED)
     print('  tape pictures: shared %d bytes, a theme %s (row icon %d)' % (shared, per, os.path.getsize(asset_path('pod_ic_tape'))))
-    expect(total < 700000, f'the pictures add {total} bytes to the rootfs (the space step leaves 2.5 MB; fwtool enforces the stock size)')
+    expect(total < 250000, f'the pictures add {total} bytes to the rootfs (the grain and the knurl are laid on by the page, not shipped: with them baked in the shells alone were 695 KB)')
+    tex = asset_image('tape_tex'); tr, tg = tex.getchannel('R'), tex.getchannel('G')
+    expect(tex.getextrema()[3] == (255, 255) and tg.getextrema()[1] <= 24 and tr.getextrema()[1] <= 200 and all(v % tape_art.GAIN_STEP == 0 for v in set(tr.tobytes())),
+           f'tape_tex: opaque, the grain\'s amplitude at most 24 ({tg.getextrema()}), the knurl\'s strength in steps of {tape_art.GAIN_STEP} ({tr.getextrema()})')
+    land = tex.transpose(Image.ROTATE_90)   # landscape: the knurl is on the shell and not on the label, the grain on both and not on the surface round the cassette
+    expect(land.getpixel((20, 150))[0] > 0 and land.getpixel((240, 50))[0] == 0 and land.getpixel((20, 150))[1] > 0 and land.getpixel((240, 50))[1] > 0 and land.getpixel((1, 1))[:2] == (0, 0),
+           'tape_tex: the knurl on the shell only, the grain on shell and paper, nothing off the cassette')
     for t in THEMES:
         shell = asset_image(f'tape_shell_{t}')
         expect(shell.getpixel((0, 0))[3] == 255 and shell.convert('RGB').getpixel((0, 0)) != (0, 0, 0) and shell.convert('RGB').getpixel((160, 5)) != shell.convert('RGB').getpixel((160, 240)), f'{t}: the shell is opaque')
@@ -296,7 +302,9 @@ _CACHE = {}
 
 
 def shell_land(theme='normal'):
-    if ('shell', theme) not in _CACHE: _CACHE['shell', theme] = asset_image(f'tape_shell_{theme}').transpose(Image.ROTATE_90)   # the frame is the picture turned clockwise: counterclockwise gives landscape back
+    # the installed shell with the grain and the knurl the page lays on when it opens (tape_art.finish, the page's tp_finish), then turned: the frame is the picture turned clockwise,
+    # counterclockwise gives landscape back
+    if ('shell', theme) not in _CACHE: _CACHE['shell', theme] = tape_art.finish(asset_image(f'tape_shell_{theme}'), asset_image('tape_tex')).convert('RGBA').transpose(Image.ROTATE_90)
     return _CACHE['shell', theme].copy()
 
 
@@ -324,17 +332,11 @@ def py_radii(pos, length):
     return math.isqrt(66 * 66 * 256 + 16 * 16 * 256 - take2), math.isqrt(take2)   # (supply, take-up)
 
 
-PK_BODY, PK_EDGE, PK_WIND, PK_LIGHT, PK_LIGHT2 = (0x24, 0x16, 0x0e, 255), (0x0c, 0x08, 0x05, 255), (0x28, 0x19, 0x10, 255), (0x6a, 0x4a, 0x30, 255), (0x3e, 0x2a, 0x1c, 255)
-
-
 def py_pack(under, d, R, dx, dy):
+    """tp_pack: the colour is tape_art.pack_rgb (the device's integer arithmetic, written once for the preview and here), the rim blended by the pixel's coverage."""
     if d < 0 or d > R + 8: return under
     cov = min(16, R + 8 - d)
-    if d >= R - 16: c = PK_EDGE
-    elif R - 80 <= d < R - 48 and -1008 * dy + 178 * dx >= 0 and -887 * dx + 512 * dy >= 0: c = PK_LIGHT
-    elif R - 80 <= d < R - 48 and 1008 * dy - 178 * dx >= 0 and 887 * dx - 512 * dy >= 0: c = PK_LIGHT2
-    elif d >= 16 * 16 and (d - 256) % 48 < 16: c = PK_WIND
-    else: c = PK_BODY
+    c = tape_art.pack_rgb(d, R, dx, dy) + (255,)
     return c if cov >= 16 else blend(under, c, cov * 255 // 16)
 
 
@@ -473,7 +475,7 @@ def draw_tests(ctx):
     m.timers = []
     m.paint()
     fr = m.frame()
-    shell = asset_image('tape_shell_normal').tobytes()
+    shell = shell_land().transpose(Image.ROTATE_270).tobytes()   # the shell as the page finished it (grain and knurl), turned as the frame is
     expect(fr[:4] == shell[:4] and sum(1 for i in range(0, len(fr), 4096) if fr[i:i + 4] != shell[i:i + 4]) < 40, 'the frame starts as the shell (before the first look, the paint draws the model and the A)')
     settle(m)
     got = m.landscape()
@@ -830,6 +832,9 @@ def idle_touch_tests(ctx):
     expect(m.cmds == [('playpause',)], 'a fresh More-opened page plays / pauses')
 
 
+OPEN_MAX = 30000000   # instructions: tape_open, the five decoded pictures copied and tp_finish's pass over the shell
+
+
 def life_tests(ctx):
     expect = ctx.expect
     font = real_font()
@@ -842,6 +847,17 @@ def life_tests(ctx):
     expect(m.open() == 0xffffffff and 'navigator_back' in m.names() and 'timer_add' not in m.names() and len(m.bitmaps) == 0, 'a picture that will not load: the window goes again, nothing stays allocated')
     m = machine(font=font); m.images['tape_screw'] = (10, 10, bytes(400))
     expect(m.open() == 0xffffffff and 'navigator_back' in m.names() and len(m.bitmaps) == 0, 'a picture of another size is refused (the payload and the pictures are one build): the window goes again, bitmaps freed')
+    # tape_tex (the grain and the knurl the page lays on the shell): one of another size, or none, leaves the shell smooth and the page still opens
+    smooth = asset_image('tape_shell_normal').tobytes()
+    m = machine(font=font); m.images['tape_tex'] = (10, 10, bytes(400))
+    expect(m.open() == 0 and m.frame() == smooth, 'a tape_tex of another size: the page opens with the smooth shell')
+    m = machine(font=font); del m.images['tape_tex']; m.count()
+    expect(m.open() == 0 and m.frame() == smooth, 'no tape_tex: the page opens with the smooth shell')
+    plain = m.icount
+    m = machine(font=font); m.count()
+    expect(m.open() == 0 and m.frame() == shell_land().transpose(Image.ROTATE_270).tobytes() != smooth, 'with tape_tex the frame starts as the shell with its grain and knurl')
+    print('  open: %d instructions, %d of them the grain and the knurl once over 320 x 480' % (m.icount, m.icount - plain))
+    expect(m.icount < OPEN_MAX, f'opening the page costs {m.icount} instructions (budget {OPEN_MAX})')
     m = machine(font=font); m.bitmap_ok = False
     expect(m.open() == 0xffffffff and 'navigator_back' in m.names() and 'timer_add' not in m.names(), 'no memory for the frame: the window goes again')
     m = machine(font=font)
@@ -940,8 +956,8 @@ def theme_tests(ctx):
         expect(m.open() == 0, f'{t}: the page opens')
         m.timers = []; settle(m)
         names = sorted(set(m.loads))
-        want = sorted([f'tape_shell_{t}', f'tape_hubs_{t}', f'tape_marks_{t}', 'tape_top', 'tape_screw'])
-        expect(names == want, f'{t}: the pictures loaded are the theme\'s three and the two shared ones ({names})')
+        want = sorted([f'tape_shell_{t}', f'tape_hubs_{t}', f'tape_marks_{t}', 'tape_top', 'tape_screw', 'tape_tex'])
+        expect(names == want, f'{t}: the pictures loaded are the theme\'s three and the three shared ones ({names})')
         got = m.landscape()
         n, first = diff(got, ref_frame(m, font, theme=t, playing=False))
         expect(n == 0, f'{t}: the frame is the design\'s picture in the theme\'s colours, hubs, marks, model name {tape_art.THEMES[t]["model"]!r} ({n} {first})')
@@ -1042,7 +1058,9 @@ def setting_tests(ctx):
 
 def symmetry_tests(ctx):
     """The static art is symmetric about the cassette's centre line x 240 (479.5 in pixel terms): the label is centred (32 px of shell each side, a bug in V2.1oXTR had 25 and 39), and so
-    are the panel, the window, the reels, the bottom section and its holes, the screws; the pairs and the centred parts from the layout constants, and the shell picture's own shapes."""
+    are the panel, the window, the reels, the bottom section and its holes, the screws; the pairs and the centred parts from the layout constants, and the shell picture's own shapes.
+    The shell's LIGHT is deliberately not symmetric (material pass: it falls off from the top left, the label sits in the frame's shadow on its top and left, a diagonal sheen): the shapes are
+    found by colour with a tolerance wide enough for that shading, and one assertion states the asymmetry (the shell's left rim is lighter than its right)."""
     expect = ctx.expect
     A = tape_art
     C = 240
@@ -1074,11 +1092,11 @@ def symmetry_tests(ctx):
         expect(panel and (panel[0][0] + panel[-1][1]) in (479, 480, 478), f'{t}: the dark panel spans {panel[0][0]} .. {panel[-1][1]}, centred on x 240')
         paper_t = A.THEMES[t]['paper'][0]
         near = lambda p: sum(abs(p[i] - paper_t[i]) for i in range(3)) < 60
-        pr = runs(50, near, 20, 460)
-        expect(pr and abs((pr[0][0] + pr[-1][1]) - 479) <= 3, f'{t}: the paper spans {pr[0][0]} .. {pr[-1][1]} (centre {(pr[0][0] + pr[-1][1]) / 2}), centred on x 240')
+        pr = runs(50, near, 20, 460)   # (its left end lies in the frame's shadow, 2.5 px wide, under the page's grain: the run may start up to 5 px in)
+        expect(pr and abs((pr[0][0] + pr[-1][1]) - 479) <= 5, f'{t}: the paper spans {pr[0][0]} .. {pr[-1][1]} (centre {(pr[0][0] + pr[-1][1]) / 2}), centred on x 240')
         band = A.THEMES[t]['band']
         if t != 'metal':   # (the Metal band is nearly the shell's colour: its paper stands for it)
-            bn = runs(150, lambda p: sum(abs(p[i] - band[i]) for i in range(3)) < 30, 20, 460)
+            bn = runs(150, lambda p: sum(abs(p[i] - band[i]) for i in range(3)) < 90, 20, 460)
             expect(bn and abs((bn[0][0] + bn[-1][1]) - 479) <= 3 and bn[0][0] <= A.LABEL[0] + 1, f'{t}: the band spans {bn[0][0]} .. {bn[-1][1]}, the label\'s width, centred on x 240')
         dk = lambda p: max(p) < 14
         left, right = runs(290, dk, 130, 171), runs(290, dk, 309, 350)
@@ -1088,6 +1106,8 @@ def symmetry_tests(ctx):
     sh = shell_land('normal').convert('RGB').load()
     lit = [x for x in range(0, 480) if sum(sh[x, 160]) > sum(A.BG) + 60]
     expect(lit and abs(lit[0] + lit[-1] - 479) <= 8, f'the body\'s lit outline at y 160 spans {lit[0]} .. {lit[-1]}: centred on x 240 (a few px of the drop shadow aside)')
+    lum = lambda x0, x1: sum(sum(sh[x, y]) for x in range(x0, x1) for y in range(140, 181)) / ((x1 - x0) * 41)
+    expect(lum(16, 30) > lum(450, 464) + 6, 'the shell is lit from the top left: its left rim is lighter than the right one (intended asymmetry)')
     # the knurl: its cell grid is aligned the same on both sides (4 px pitch from x 0), and the unknurled rim band is as wide each side
     expect(480 % 4 == 0 and (A.CASS[0] - 5) % 4 == 0, 'the knurl grid starts at x 0 and 480 is a whole number of cells: the cells mirror about x 240')
 
