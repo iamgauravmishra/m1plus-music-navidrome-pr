@@ -60,7 +60,7 @@ class TM(Machine):
         self.mode = 0
         self.font = font
         self.mock_ms = 1000
-        self.info = dict(bitrate=915000, rate=44100, fmt='FLAC', bits=16)   # mclGetInfo's record; None: the player has no stream
+        self.info = dict(bitrate=915000, rate=44100, fmt='FLAC', bits=16)   # mclGetInfo's record (optional 'pos' and 'len' at +8 and +0xc: 0 is a record the player has not filled in yet); None: the player has no stream
         self.info_calls = 0
         self.view = self.widgets['tape_view']
         # the view as a widget struct (demo's own widget_to_local walks x, y and the parent): window (0, 0) > view (0, 0)
@@ -85,7 +85,7 @@ class TM(Machine):
         elif name == 'mclGetInfo':   # the 0x34 byte record: bit/s, Hz, the codec's name at 0x10, bits at 0x30
             self.info_calls += 1
             i = self.info or dict(bitrate=0, rate=0, fmt='', bits=0)
-            self.u.mem_write(a0, struct.pack('<ii8x32si', i['bitrate'], i['rate'], i['fmt'].encode(), i['bits'])); ret = 1
+            self.u.mem_write(a0, struct.pack('<iiii32si', i['bitrate'], i['rate'], i.get('pos', 0), i.get('len', 0), i['fmt'].encode(), i['bits'])); ret = 1
         elif name == 'playpause_quick_click':
             self.calls.append(('playpause_quick_click',)); self.cmds.append(('playpause',)); self.status = 2 if self.status != 2 else 3; ret = 1
         elif name in ('next_quick_click', 'prev_quick_click'):
@@ -517,8 +517,8 @@ def draw_tests(ctx):
            and not any(r[0] <= x < r[2] and r[1] <= y < r[3] for r in [tape_art.TEXT[f]['rect'] for f in FIELDS + ('badge',)] + [(100, 110, 380, 184), (410, 115, 436, 141), (410, 153, 436, 179)])]
     expect(not out, f'nothing outside the fields, the reel window and the marks differs from the shell ({out[:3]})')
     # a new track: the old text is gone
-    m.play([m.song('Teardrop', 'Massive Attack', 'Mezzanine', path='/mnt/mmc/m/t.mp3', name='t.mp3')], 0); m.pt = (150, 330)
-    m.tick(500); m.paint()
+    m.play([m.song('Teardrop', 'Massive Attack', 'Mezzanine', path='/mnt/mmc/m/t.mp3', name='t.mp3')], 0); m.pt = (150, 330); m.info = None
+    m.tick(70); m.tick(600); m.paint()   # the change is held for 600 ms
     want = ref_frame(m, font, pos=150, length=330, playing=False, title='Teardrop', artist='Massive Attack', album='Mezzanine', fmt='MP3')
     n, first = diff(m.landscape(), want)
     expect(n == 0, f'a new track replaces title, artist, album, format and the packs, the old text left no trace ({n} {first})')
@@ -538,6 +538,101 @@ def hub_frames(m, font, pos, length):
             if r.img.crop((hx, hy, hx + 30, hy + 30)).tobytes() == sq: found.append(i)
         out.append(found)
     return out
+
+
+def change_tests(ctx):
+    """A change of track is one event: the texts, time, format, sticker and tape of the last track stay until the player's record is the new track's (a stream, a length, and a
+    length or position other than the last track's), then all change in one update; TP_INFO_MS is the fallback; no hold for the same file or nothing playing."""
+    expect = ctx.expect
+    font = real_font()
+    I = lambda fmt, rate, bits, bitrate=320000, pos=0, len=0: dict(bitrate=bitrate, rate=rate, fmt=fmt, bits=bits, pos=pos, len=len)
+    OLD = I('MP3', 44100, 16, 320000, 200, 300)    # the last track's record: 3:20 of 5:00
+
+    def fresh():
+        m = machine(font=font, status=3, theme=3, path='/mnt/mmc/m/a.mp3'); m.info = OLD
+        assert m.open() == 0
+        m.timers = []; settle(m); m.tick(70); m.tick(70)   # the record is looked at: its length and position are the last track's
+        return m
+
+    def change(m, title, name, rec, zeroed=True):
+        m.play([m.song(title, 'Artist', 'Album', path='/mnt/mmc/m/' + name, name=name)], 0); m.pt = (1, rec['len'] or 300)
+        m.info = dict(OLD, pos=0, len=0) if zeroed else rec   # the start command zeroes the position and length only
+        m.loads.clear(); m.info_calls = 0
+
+    def shows(m, title=None, fmt=None, theme='normal', badge=0, pos=14, length=562):
+        n, first = diff(m.landscape(), ref_frame(m, font, pos=pos, length=length, theme=theme, playing=False, title=title or 'So What', artist='Artist' if title else 'Miles Davis',
+                                                 album='Album' if title else 'Kind of Blue', fmt=fmt or 'MP3 320', badge=badge))
+        return n == 0
+
+    # the new track's record has a new length: everything changes in that update, a few ticks after the change and not 600 ms
+    m = fresh()
+    change(m, 'Hi', 'b.flac', I('FLAC', 96000, 24, 900000, 1, 250))
+    m.tick(70); m.tick(70); m.paint()
+    expect(shows(m) and not m.loads, 'the position and length zeroed: the last track stays (text, time, packs, format, tape, sticker)')
+    m.info = I('FLAC', 96000, 24, 900000, 1, 250); m.loads.clear(); m.tick(70); m.paint()
+    expect(shows(m, 'Hi', 'FLAC 24/96', 'metal', 1, 30 if False else 1, 250) and sorted(m.loads) == ['tape_hubs_metal', 'tape_marks_metal', 'tape_shell_metal', 'tape_tex'],
+           f'a record with a new length: the text, time, format, sticker and tape all change in that update, 210 ms after the change ({sorted(m.loads)})')
+    dump(m, 'change-early')
+    # the same length, a position below the last track's: also the new track's
+    m = fresh()
+    change(m, 'Same', 'c.flac', I('FLAC', 44100, 16, 900000, 2, 300)); m.tick(70)
+    m.info = I('FLAC', 44100, 16, 900000, 2, 300); m.tick(70); m.paint()
+    expect(shows(m, 'Same', 'FLAC 16/44.1', 'chrome', 0, 1, 300), 'the same length and an earlier position: taken as the new track\'s')
+    # the last track's record arriving late (the same length, a later position): held, then taken as it is at the time-out
+    m = fresh()
+    change(m, 'Late', 'd.mp3', I('MP3', 44100, 16, 320000, 205, 300), zeroed=False)
+    for _ in range(9): m.tick(70)   # the first one starts the wait
+    m.paint()
+    expect(shows(m) and not m.loads, 'the same length and a later position (the last track arriving late): still the last track after 560 ms')
+    m.tick(70); m.paint()
+    expect(shows(m, 'Late', 'MP3 320', 'normal', 0, 1, 300), 'and at the time-out the record is taken as it is')
+    # zeroed records for ever: the time-out
+    m = fresh()
+    change(m, 'Zero', 'e.mp3', I('MP3', 44100, 16, 320000, 0, 300))
+    for _ in range(9): m.tick(70)   # the first one starts the wait
+    m.paint()
+    expect(shows(m), 'a record with no length: still the last track after 560 ms')
+    m.tick(70); m.paint()
+    expect(shows(m, 'Zero', 'MP3 320', 'normal', 0, 1, 300), 'and at TP_INFO_MS the page takes it (the record\'s stream is still the last track\'s here)')
+    # a second change inside the hold: the newest track only, the hold restarts
+    m = fresh()
+    change(m, 'Skipped', 'x.flac', I('FLAC', 96000, 24, 900000, 1, 250)); m.tick(70); m.tick(300)
+    change(m, 'Newest', 'y.mp3', I('MP3', 48000, 16, 128000, 1, 200)); m.tick(70); m.paint()
+    expect(shows(m) and not m.loads, 'a second change: still the last track shown, the skipped one never')
+    m.info = I('MP3', 48000, 16, 128000, 1, 200); m.tick(70); m.paint()
+    expect(shows(m, 'Newest', 'MP3 128', 'normal', 0, 1, 200) and not m.loads, 'its record arrives: the newest track, with its own format')
+    # the new track's record is there before the page's first look at the change: compared with the last track's, not with itself, so it is taken at once
+    m = fresh()
+    change(m, 'Ready', 'r.flac', I('FLAC', 96000, 24, 900000, 1, 250), zeroed=False); m.tick(70); m.paint()
+    expect(shows(m, 'Ready', 'FLAC 24/96', 'metal', 1, 1, 250), 'a record that is already the new track\'s: everything in the first update after the change')
+    # held for a track of a CUE image, then the image's next track: the file compared is the shown track's, so the hold goes on and the last track's stream is not used
+    m = fresh()
+    change(m, 'B1', 'img.flac', I('FLAC', 96000, 24, 900000, 1, 250)); m.tick(70)
+    change(m, 'B2', 'img.flac', I('FLAC', 96000, 24, 900000, 1, 250)); m.tick(70); m.paint()
+    expect(shows(m) and not m.loads, 'the same file as a track that was never shown: still held, the last track shown')
+    m.info = I('FLAC', 96000, 24, 900000, 1, 250); m.tick(70); m.paint()
+    expect(shows(m, 'B2', 'FLAC 24/96', 'metal', 1, 1, 250), 'and its record brings the image\'s track with its own tape')
+    # held for B, then back to the track shown: the wait is over (the format keeps its stream's details), and B chosen again starts a wait of its own
+    m = fresh()
+    change(m, 'B', 'b.flac', I('FLAC', 96000, 24, 900000, 1, 250)); m.tick(70); m.tick(70)
+    m.play([m.song('So What', 'Miles Davis', 'Kind of Blue', path='/mnt/mmc/m/a.mp3', name='a.mp3')], 0); m.pt = (14, 562); m.tick(70); m.paint()
+    expect(shows(m) and not m.loads, 'back to the track shown inside the hold: its text, time and "MP3 320" as before')
+    m.tick(500)
+    change(m, 'B', 'b.flac', I('FLAC', 96000, 24, 900000, 1, 250)); m.tick(70); m.tick(70); m.paint()
+    expect(shows(m) and not m.loads, 'B again, more than 600 ms after it was first chosen: held anew, not shown on the first wait\'s time-out')
+    m.info = I('FLAC', 96000, 24, 900000, 1, 250); m.tick(70); m.paint()
+    expect(shows(m, 'B', 'FLAC 24/96', 'metal', 1, 1, 250), 'and shown when its record arrives')
+    # the same file (the next track of a CUE image): no hold
+    m = fresh()
+    m.play([m.song('Part 2', 'Artist', 'Album', path='/mnt/mmc/m/a.mp3', name='a.mp3')], 0); m.pt = (1, 300); m.info = dict(OLD, pos=0, len=0)
+    m.tick(70); m.paint()
+    expect(shows(m, 'Part 2', 'MP3 320', 'normal', 0, 1, 300), 'the same file: the new text and time at once')
+    # nothing playing: Not Playing at once
+    m = fresh()
+    m.play([], 0); m.pt = None
+    m.tick(70); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=0, length=0, playing=False, title='Not Playing', artist='', album='', fmt=''))
+    expect(n == 0, f'nothing playing: Not Playing at once ({n} {first})')
 
 
 def reel_tests(ctx):
@@ -665,13 +760,13 @@ def status_tests(ctx):
     seen = set()
     for extra in (0, 2, 3, 4, 6, 8, 14, 20):
         font = WideFont(base, extra) if extra else base
-        m = machine(font=font, status=3)
+        m = machine(font=font, status=3); m.info = None   # no record: the status line's format is the extension
         m.open(); m.timers = []; settle(m)
         for vol, batt, ch, fmt in ((42, 60, False, 'FLAC'), (100, 100, True, 'WAVE'), (0, 20, False, 'MP3'), (7, 0, True, 'M4A')):
             m.volume, m.battery_img = str(vol), 'bar_charge' if ch else 'bar_power'
             m.props[(m.widgets['pgbar_battery'], 'value')] = batt
             m.play([m.song('So What', 'Miles Davis', 'Kind of Blue', path=f'/mnt/mmc/m/x.{fmt.lower()}', name=f'x.{fmt.lower()}')], 0)
-            m.tick(500); m.paint()
+            m.tick(70); m.tick(600); m.paint()   # the change is held for 600 ms
             text, size = tape_art.status_line(font, dict(batt=batt, charging=ch, vol=vol, fmt=fmt, clock=clock_of(m)))
             seen.add((size, text.count('|')))
             want = ref_frame(m, font, playing=False, vol=vol, batt=batt, charging=ch, fmt=fmt)
@@ -1133,7 +1228,7 @@ def quality_tests(ctx):
     track does and when; a tape whose pictures will not load."""
     expect = ctx.expect
     font = real_font()
-    I = lambda fmt, rate, bits, bitrate=900000: dict(bitrate=bitrate, rate=rate, fmt=fmt, bits=bits)
+    I = lambda fmt, rate, bits, bitrate=900000, pos=0, len=0: dict(bitrate=bitrate, rate=rate, fmt=fmt, bits=bits, pos=pos, len=len)
     CASES = (   # the player's record, the file, the status line's format, Auto's tape, the sticker
         (I('MP3', 44100, 16, 320000), 'a.mp3', 'MP3 320', 'normal', 0), (I('AAC', 44100, 16, 256999), 'a.m4a', 'M4A 256', 'normal', 0), (I('OGG', 48000, 16, 0), 'a.ogg', 'OGG', 'normal', 0),
         (I('MP3', 96000, 24, 320000), 'a.mp3', 'MP3 320', 'normal', 0),
@@ -1183,17 +1278,20 @@ def quality_tests(ctx):
     n, first = diff(m.landscape(), ref_frame(m, font, theme='metal', playing=False, fmt='FLAC 24/96', badge=0))
     expect(n == 0, f'no tape_badge: the hi-res track shows no sticker, everything else as designed ({n} {first})')
 
-    # a change of track, Auto: the text at once with the extension as the format; the player is not asked for TP_INFO_MS; then the tape, the format and the sticker
+    # a change of track, Auto: one event at TP_INFO_MS, the text, time, format, sticker and tape all of the last track until then; the player is not asked meanwhile
     m = page(I('MP3', 44100, 16, 320000), 'a.mp3', 3)
     def change(title, name, info, pos=30, length=300):
         m.play([m.song(title, 'Artist', 'Album', path='/mnt/mmc/m/' + name, name=name)], 0); m.pt = (pos, length); m.info = info
         m.loads.clear(); m.info_calls = 0
+    old = lambda: ref_frame(m, font, pos=14, length=562, theme='normal', playing=False, title='So What', artist='Miles Davis', album='Kind of Blue', fmt='MP3 320')
     change('Hi', 'b.flac', I('FLAC', 96000, 24))
     m.tick(70); m.paint()
-    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='normal', playing=False, title='Hi', artist='Artist', album='Album', fmt='FLAC'))
-    expect(n == 0 and not m.loads and m.info_calls == 1, f'the new track\'s first look: its text on the old tape, "FLAC" alone, the record read once to tell a later one from and not used, nothing loaded ({n} {first}, {m.loads}, {m.info_calls})')
-    for _ in range(8): m.tick(70)
-    expect(not m.loads and m.info_calls == 1 and O['TP_INFO_MS'] == 600, 'for 600 ms the player\'s record is not looked at (it may be the last track\'s)')
+    n, first = diff(m.landscape(), old())
+    expect(n == 0 and not m.loads and m.info_calls >= 1, f'the new track\'s first update: the last track\'s text, time, packs, format and tape still, the record (still length 0 here) not used, nothing loaded ({n} {first}, {m.loads}, {m.info_calls})')
+    for _ in range(8): m.tick(70)   # 560 ms since the first update
+    m.paint()
+    n, first = diff(m.landscape(), old())
+    expect(not m.loads and m.info_calls > 8 and n == 0 and O['TP_INFO_MS'] == 600, f'a record with no length is not the new track\'s: for 600 ms nothing of it shows, the player is asked at every look ({n} {first}, {m.info_calls})')
     before = len(m.bitmaps)
     m.count(); m.tick(70); cost = m.icount
     destroyed = [c_[0] for c_ in m.calls].count('bitmap_destroy')
@@ -1211,11 +1309,19 @@ def quality_tests(ctx):
     # the same tape for the next track: nothing loaded, the sticker stays through the wait and is right after it
     change('Dsd', 'c.dsf', I('DSD', 2822400, 1))
     m.tick(70); m.paint()
-    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Dsd', artist='Artist', album='Album', fmt='DSF', badge=1))
-    expect(n == 0, f'a DSD track after it: during the wait the old sticker stays and the format is the extension ({n} {first})')
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Hi', artist='Artist', album='Album', fmt='FLAC 24/96', badge=1))
+    expect(n == 0, f'a DSD track after it: during the wait the last track\'s text, format and sticker stay ({n} {first})')
     m.tick(600); m.paint()
     n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Dsd', artist='Artist', album='Album', fmt='DSD64', badge=2))
     expect(n == 0 and not m.loads, f'then "DSD64" and the DSD sticker on the same tape, nothing loaded ({n} {first}, {m.loads})')
+    # a second change inside the wait restarts it with the newest track: the skipped one is never shown, not even with its own tape
+    change('Skipped', 'x.flac', I('FLAC', 96000, 24)); m.tick(70); m.tick(300)
+    change('Newest', 'y.mp3', I('MP3', 44100, 16, 320000)); m.tick(70); m.tick(400); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='metal', playing=False, title='Dsd', artist='Artist', album='Album', fmt='DSD64', badge=2))
+    expect(n == 0 and not m.loads, f'a change 370 ms into the wait: 800 ms after the first, still the last shown track, nothing loaded ({n} {first})')
+    m.tick(200); m.paint()
+    n, first = diff(m.landscape(), ref_frame(m, font, pos=30, length=300, theme='normal', playing=False, title='Newest', artist='Artist', album='Album', fmt='MP3 320'))
+    expect(n == 0, f'600 ms after the newest change: its text, format and tape, and not the skipped track\'s ({n} {first})')
     # the player's record arrives late (still empty after the wait): the extension's tape first, the stream's when it is there
     change('Late', 'd.flac', None)
     m.tick(70); m.tick(600); m.paint()
@@ -1241,7 +1347,7 @@ def quality_tests(ctx):
     # the page leaves the front and comes back inside the wait (a full redraw of the same track): the wait and the doubt are kept
     change('Front', 'h.mp3', I('MP3', 44100, 16, 128000)); m.tick(70)
     m.fire(EVT_BG, WIN); m.fire(EVT_FG, WIN); m.info_calls = 0; m.mock_ms += 70; m.first(); m.paint()
-    expect(m.info_calls == 0 and shown('Front', 'MP3'), f'back in front 140 ms after the change: the record is still not used ({m.info_calls} reads)')
+    expect(shown('Front', 'MP3'), 'back in front 140 ms after the change: the new text at once, the record (no length) still not used')
     m.tick(600); m.info = I('MP3', 44100, 16, 320000); m.tick(70); m.paint()
     expect(shown('Front', 'MP3 320'), 'and the track\'s own record, arriving after the wait, is taken ("MP3 320")')
     # the page opened right after a change of track, the record still the last track's: shown as it is, the track's own taken when it arrives
@@ -1280,4 +1386,4 @@ def quality_tests(ctx):
            'stock: mclGetInfo copies 0x34 bytes of the player\'s record (0xa0ab50) to its argument')
 
 
-SECTIONS = [number_tests, symmetry_tests, asset_tests, theme_tests, setting_tests, draw_tests, quality_tests, reel_tests, hub_tests, mark_tests, status_tests, live_tests, touch_tests, idle_touch_tests, life_tests, paint_tests]
+SECTIONS = [number_tests, symmetry_tests, asset_tests, theme_tests, setting_tests, draw_tests, quality_tests, change_tests, reel_tests, hub_tests, mark_tests, status_tests, live_tests, touch_tests, idle_touch_tests, life_tests, paint_tests]

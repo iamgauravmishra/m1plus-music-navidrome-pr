@@ -1369,13 +1369,15 @@
 #define TP_SCREW_Y 12
 #define TP_LUT_N 18500            /* the distance table: sqrt(d2h) for d2h = (2 dx + 1)^2 + (2 dy + 1)^2 up to this, in 1/16 px */
 #define TP_THEME_AUTO 3           /* the saved theme "by the track's quality": lossy Normal, lossless Chrome, hi-res and DSD Metal (the page's own theme is always 0 .. 2) */
-#define TP_INFO_MS 600            /* after a change of track the player's stream information is not looked at for this long (it may still be the last track's) */
+#define TP_INFO_MS 600            /* the longest the page holds the last track after a change of track, waiting for the player's record to be the new track's (then it is taken as it is) */
 #define TP_BADGE_X 33             /* the sticker tape_badge (TP_BADGE_W x TP_BADGE_H) on the shell, its top left; HI-RES or DSD is written on it */
 #define TP_BADGE_Y 237
 #define TP_BADGE_W 52
 #define TP_BADGE_H 24
 #define PLAYINFO_BITRATE 0        /* mclGetInfo's record (0x34 bytes): bit/s, Hz, the codec's name (0x20 bytes), bits a sample (1: DSD) */
 #define PLAYINFO_RATE 4
+#define PLAYINFO_POS 8            /* the position and the length: mclSyncPlayerStatus (0x5d144c) rewrites the whole record from the player's reply every 200 ms in one lock section; mclStartPlayer, */
+#define PLAYINFO_LEN 0xc          /* mclNextSong and mclPrevSong zero only these two (under the mutex) when another track is started, rate, bits and name stay the last track's until a poll answers */
 #define PLAYINFO_FMT 0x10
 #define PLAYINFO_BITS 0x30
 #define PLAYINFO_SIZE 0x34

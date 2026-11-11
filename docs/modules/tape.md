@@ -167,8 +167,17 @@ rate in Hz at 4, the codec's name at 0x10, the bits a sample at 0x30 (1 for DSD)
   ALAC `.m4a` is lossless by its codec and an AAC one is not.
 - **No record** (no rate or no name: nothing playing yet, a stream the player does not describe): everything follows the extension: `FLAC` alone on the status line, Chrome for a
   lossless extension, Metal and `DSD` for `.dsf` / `.dff`, Normal otherwise.
-- **A change of track:** the text changes at once and the format is the extension alone; the player is not asked for `TP_INFO_MS` (600 ms: its record may still be the last
-  track's), the tape and the sticker stay. Then the record is read at every look and the format, the sticker and the tape follow when its rate, bits or name differ from the ones
+- **The record's writer:** one thread, `mclSyncPlayerStatus` (`0x5d144c`), asks the player process for `get-music-info` every 200 ms and writes the whole record from the reply
+  in one lock section (`0x5d1588` .. `0x5d17f0`), with the position at 8 and the length at 0xc (`PLAYINFO_POS`, `PLAYINFO_LEN`; `mclGetPlayTime` returns them). A copy is
+  always one reply. `mclStartPlayer`, `mclNextSong` and `mclPrevSong` zero only the position and the length when another track is started; the rate, bits and name stay the
+  last track's until a later reply.
+- **A change of track is one event:** the page holds the last track (title, artist, album, time, packs, format, sticker, tape; the hubs go on turning) until the record is the
+  new track's, then everything changes in that update. The record is read at every look meanwhile and is the new track's when it has a stream (rate, name), a length, and
+  that length is not the last track's (`tp.r_len`, the last one seen before the change) or its position is below the last track's (`tp.r_pos`). No length: not yet. The old
+  length and a position not below the old one: the last track's, arriving late. `TP_INFO_MS` (600 ms) is the fallback, after which the record is taken as it is (tracks of
+  equal length, a skip while paused, a player that says nothing). Not held: the page's first look, a full redraw, nothing playing, and the same file as the track shown
+  (`tp.p_hash`: the next track of a CUE image is the same stream). A second change inside the hold starts it again for the newest track; the skipped one is never shown. Back to the track shown inside the hold ends the wait (changes are told by `tp.q_key`, the track the quality is for, not by the track shown).
+  After the hold the format, the sticker and the tape follow when the record's rate, bits or name differ from the ones
   last used. The bit rate is not part of that: a VBR file shows the bit rate of the first look and the line is not redrawn as it moves. The exception is a record that is
   still the one read at the change of track (`tp.unsure`; one `mclGetInfo` at the change keeps it): it may be the last track's, arriving late, so until a record differs from
   it the bit rate is compared too. A track after one of the same codec, rate and bits then gets its own bit rate when its record arrives; a VBR track whose record was already
@@ -181,7 +190,8 @@ rate in Hz at 4, the codec's name at 0x10, the bits a sample at 0x30 (1 for DSD)
 - **The tape's colour** follows the theme too (`theme_pack`, `THEMES[..]['pack']`): ferric brown for Normal (#22150E to #6C4F38, as before), a darker, greyer brown for Chrome
   (#1A1412 to #5A4C46), blue-black for Metal (#121215 to #505058), the same sheen and windings.
 
-Open: how soon after a track starts the player's record is the new track's (the 600 ms wait is a guess), what name it gives an ALAC or AAC `.m4a`, and how
+Open: how soon after a track starts the player's record is the new track's (the hold ends with it: a poll of 200 ms and the player's time to open the file), whether the player
+answers a poll with the last track's record after the start (the rule holds through it), what name it gives an ALAC or AAC `.m4a`, and how
 long the tick that changes the tape takes on the panel.
 
 ## Themes

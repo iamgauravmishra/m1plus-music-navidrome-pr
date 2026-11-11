@@ -99,13 +99,18 @@ static struct {
     int playing, repeat, pos, len;
     char title[96], artist[64], album[64], fmt[24], times[24];
     /* the stream's quality (tp_quality): what the status line, the sticker and an automatic theme show */
-    unsigned t_key; /* when the track changed (ms, never 0), 0 once the player's information is looked at again */
+    unsigned
+        t_key; /* when the track changed (ms, never 0), 0 once the player's information is looked at again; until then the page holds the last track (tp.key is the last one's) */
     int q_rate, q_bits; /* the stream the quality was last worked out from (-1: the file name alone) */
     unsigned q_name; /* its codec name's hash */
     int q_br; /* and its bit rate (bit/s), compared only while the record is not known to be this track's */
     int o_rate, o_bits, o_br; /* the player's record as it was when the track changed */
     unsigned o_name;
     int unsure; /* the record read since the change is still that one: it may be the last track's */
+    int r_pos,
+        r_len; /* the record's position and length at its last look with a length, before a change of track: the last track's */
+    unsigned
+        p_hash; /* the shown track's file (a hash, set with its texts), 0 none: a change to the same file is not held */
     unsigned q_key; /* the track all of this is for (tp.key is forgotten by a full redraw, this is not) */
     int q_seen; /* 0 until the page's first look */
     int badge; /* 0 none, 1 HI-RES, 2 DSD */
@@ -579,7 +584,7 @@ static void tp_format(
  * without it, or while the player has no stream (no rate, no name), everything follows the extension. Lossless is by the codec's name as stock's get_hrflag spells it, or by
  * the extension; hi-res is get_hrflag's rule (over 48 kHz, or 24 bit from 44.1 kHz), DSD is 1 bit. rate / bits / name tell one stream from the next (-1, -1, 0: the extension). */
 struct tp_q {
-    int theme, badge, rate, bits, br;
+    int theme, badge, rate, bits, br, pos, len; /* pos, len: the record's position and length (0 without a record) */
     unsigned name;
     char fmt[24];
 };
@@ -601,6 +606,7 @@ static void tp_quality(void *t, int look, struct tp_q *q) {
     const char *name;
     memset(in, 0, sizeof in);
     if (t && look) mclGetInfo(in);
+    q->pos = in[PLAYINFO_POS / 4], q->len = in[PLAYINFO_LEN / 4];
     codec[PLAYINFO_BITS - PLAYINFO_FMT - 1] = 0;
     rate = in[PLAYINFO_RATE / 4], bits = in[PLAYINFO_BITS / 4], kbps = in[PLAYINFO_BITRATE / 4] / 1000;
     ok = rate > 0 && codec[0];
@@ -655,17 +661,31 @@ static int tp_theme_load(int theme) {
     return s != (const unsigned *)0;
 }
 
-/* The quality looked at again: the status line's format, the sticker and, with the automatic theme, the tape. After a change of track the player is not asked for TP_INFO_MS
- * (its record may still be the last track's): the format is the extension until then, the sticker and the tape stay. A VBR file's bit rate is the one of the first look
- * (the rate is not part of what tells streams apart), once the record is known to be this track's: while it is still word for word the one read when the track changed
- * (tp.unsure) it may be the last track's, arriving late, so the bit rate is compared too and the first record that differs is the track's. 1: the theme changed, everything
- * is to be drawn again. */
-static int tp_look(void *t, unsigned now) {
+/* The quality looked at again: the status line's format, the sticker and, with the automatic theme, the tape. After a change of track (tp.t_key) the page holds the last track
+ * (tp_update shows its texts, time, format, sticker and tape) until the player's record is the new track's, and then all of the new track comes at once. The player is asked at
+ * every look meanwhile. The record is the new track's when it has a stream (rate, name), a length, and that length is not the last track's (tp.r_len) or its position is below the
+ * last track's (tp.r_pos): the player updates the whole record every 200 ms and a change of track zeroes the position and length first, so a record with no length is not yet
+ * and one with the old length and a later position is the last track's arriving late. TP_INFO_MS is the fallback (equal lengths, a pause, a player that says nothing): the record
+ * is taken as it is. A VBR file's bit rate is the one of the first look (the rate is not part of what tells streams apart); while the record is word for word the one read when
+ * the track changed (tp.unsure) it may be the last track's, so the bit rate is compared too and the first record that differs is the track's (not needed once the length or
+ * position has told). `hold`: the texts of the new track are not shown yet, so nothing changes until the record is ready. 1: the theme changed, everything is to be drawn again. */
+static int tp_look(void *t, unsigned now, int hold) {
     struct tp_q q;
-    int look = !tp.t_key || now - tp.t_key >= TP_INFO_MS;
-    if (look) tp.t_key = 0;
-    tp_quality(t, look, &q);
-    if (!look) q.rate = -3;
+    int look = !tp.t_key;
+    if (tp.t_key) {
+        tp_quality(t, 1, &q);
+        if (now - tp.t_key >= TP_INFO_MS)
+            look = 1;
+        else if (q.rate > 0 && q.len > 0 && (q.len != tp.r_len || q.pos < tp.r_pos))
+            look = 1, tp.unsure = 0;
+        if (look)
+            tp.t_key = 0;
+        else if (hold)
+            return 0;
+    } else
+        tp_quality(t, 1, &q);
+    if (look && q.len > 0) tp.r_pos = q.pos, tp.r_len = q.len;
+    if (!look) tp_quality(t, 0, &q), q.rate = -3;
     if (q.rate == tp.q_rate && q.bits == tp.q_bits && q.name == tp.q_name && (!tp.unsure || q.br == tp.q_br)) return 0;
     if (look && (q.rate != tp.o_rate || q.bits != tp.o_bits || q.name != tp.o_name || q.br != tp.o_br)) tp.unsure = 0;
     tp.q_rate = q.rate, tp.q_bits = q.bits, tp.q_name = q.name, tp.q_br = q.br;
@@ -702,7 +722,7 @@ static void tp_update(int force) {
     void *t = cc_playing();
     int pos = 0, len = 0, charging, batt, vol, playing = mclGetPlayStatus() == 2, mode = mclGetPlayMode(),
         repeat = mode == MODE_REPEAT_ONE || mode == MODE_REPEAT_ALL;
-    int rs, rt, k, all = 0, hubs = 0, marks = 0, i;
+    int rs, rt, k, all = 0, hubs = 0, marks = 0, i, held = 0;
     unsigned key = t ? tp_track_key(t) : 0, now = time_now_ms(), dt = now - tp.t_last;
     long secs = time((long *)0);
     const int *tm = secs > 1577836800L ? localtime(&secs) : (const int *)0;
@@ -715,19 +735,29 @@ static void tp_update(int force) {
     if (pos < 0) pos = 0;
     if (pos > len) pos = len;
     if (len > 65535) len = 65535, pos = pos > len ? len : pos;
-    if (key != tp.key) {
+    /* Another track than the one the quality is for (tp.q_key, not the track shown: a full redraw forgets tp.key and is no change, and a held track that is left for the one
+     * shown again is a change, which ends its wait): the page's first look asks the player at once, a change waits (and holds the page, below), unless it is the same file as
+     * the track shown (the next track of a CUE image, or the shown track itself come back: the same stream). Either way the record as it is now may be the last track's (the
+     * page may open, or come back to the front, right after a change), so it is kept to tell this track's from. Its position and length are not taken here: the record may
+     * already be the new track's, and the ones to compare with are the last track's (tp.r_pos, tp.r_len: tp_look keeps them while nothing is held). The file compared is the
+     * one of the track shown (tp.p_hash), not of a track skipped while held. */
+    if (key != tp.q_key || !tp.q_seen) {
+        struct tp_q q;
+        unsigned file = t ? cc_fnv(FNV_SEED, cc_str(t, REC_PATH)) | 1u : 0;
+        tp.t_key = tp.q_seen && file && tp.p_hash && file != tp.p_hash ? now | !now : 0;
+        tp.q_rate = -2, tp.tried = -1;
+        tp_quality(t, 1, &q);
+        tp.o_rate = q.rate, tp.o_bits = q.bits, tp.o_name = q.name, tp.o_br = q.br;
+        tp.unsure = 1, tp.q_key = key, tp.q_seen = 1;
+    }
+    /* A change of track while a track plays is one event: the texts, the position, the format, the sticker and the tape stay as they were until the player's record is the new
+     * track's, and all change in that update (tp_look). Not held: the first look, a full redraw, the same file, nothing playing. */
+    k = tp_look(t, now, key != tp.key && t && !force);
+    held = key != tp.key && t && !force && tp.t_key;
+    if (key != tp.key && !held) {
         const char *s;
-        /* Another track, not the same one drawn again (force): the page's first look asks the player at once, a change waits. Either way the record as it is now may be
-         * the last track's (the page may open, or come back to the front, right after a change), so it is kept to tell this track's from. */
-        if (key != tp.q_key || !tp.q_seen) {
-            struct tp_q q;
-            tp.t_key = tp.q_seen ? now | !now : 0;
-            tp.q_rate = -2, tp.tried = -1;
-            tp_quality(t, 1, &q);
-            tp.o_rate = q.rate, tp.o_bits = q.bits, tp.o_name = q.name, tp.o_br = q.br;
-            tp.unsure = 1, tp.q_key = key, tp.q_seen = 1;
-        }
         tp.key = key;
+        tp.p_hash = t ? cc_fnv(FNV_SEED, cc_str(t, REC_PATH)) | 1u : 0;
         s = t ? cc_str(t, REC_TITLE) : "";
         if (t && !*s) s = cc_str(t, REC_NAME);
         tp_copy(tp.title, sizeof tp.title, t ? s : TR("Not Playing"));
@@ -735,8 +765,9 @@ static void tp_update(int force) {
         tp_copy(tp.album, sizeof tp.album, t ? cc_str(t, REC_ALBUM) : "");
         tp.pending |= 1u << F_TITLE | 1u << F_ARTIST | 1u << F_ALBUM | 1u << F_STATUS;
         tp.pos = -1;
-    }
-    if (tp_look(t, now)) { /* another tape: the frame is the new shell, everything on it is drawn again */
+    } else if (held)
+        pos = tp.pos, len = tp.len; /* the time and the packs stay too (the hubs go on turning) */
+    if (k) { /* another tape: the frame is the new shell, everything on it is drawn again */
         force = 1, tp.rs = -1;
         tp_dirty(0, 0, TP_W, TP_H);
     }
