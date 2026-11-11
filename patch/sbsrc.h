@@ -37,6 +37,8 @@ void *sbs_playlist_scan(
  * downloaded file played from the card's own library is the card's, 0). sbs_playing_album / sbs_playing_artist: that track's album / artist as a list of one record of lib_nd (the caller destroys it) for
  * album_open_src / albums_open_src; NULL when it is not known (a track without an album id; an artist the sync has not listed). Files only, no request. */
 int sbs_playing_ours(void);
+int sbs_playing_stream(
+    void); /* the player is on a stream address in a library queue (a Subsonic stream), told by the path and the play type: it holds without the queue map */
 void *sbs_playing_album(void);
 void *sbs_playing_artist(void);
 int sbs_playing_server(

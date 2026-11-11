@@ -51,6 +51,9 @@
     100 /* the Find Cover & Lyrics row's opacity (of 255) while the Wi-Fi is off: dimmed, and it takes no tap */
 #define GO_ALBUM 4 /* listitem4, Look up album */
 #define PM_DELETE 6 /* listitem6, Delete song */
+#define PM_ADDPL 2 /* listitem2, Add to playlist */
+#define PM_DEL_FILE \
+    0x14 /* the Delete confirm's second answer (stock 0x4792a8: delete_playqueue_file(1), the file too; 0xa, CONFIRM_YES, is delete_playqueue_file(0)) */
 #define GO_ARTIST 5 /* listitem5, Look up artist */
 extern int album_open_src(const lib_src_t *src, unsigned cls, void *row); /* patch/albumpage.c */
 extern int albums_open_src(const lib_src_t *src, void *artist); /* patch/albums.c */
@@ -91,7 +94,8 @@ static int pm_set(void) { return pm.page ? 1 : pm.ep ? 2 : 0; }
  * children stacked in that order; the sheet PM_PAGE_N rows high on the bottom of the screen. */
 static void pm_arrange(void) {
     unsigned char used[PM_ROWS];
-    int set = pm_set();
+    int set = pm_set(),
+        stream = sbs_playing_stream(); /* (the track now: the sheet can stay open across a track change) */
     unsigned i, k = 0, n = pm_rows[set];
     int h = (int)n * PM_ROW_H;
     memset(used, 0, sizeof used);
@@ -122,6 +126,15 @@ static void pm_arrange(void) {
         widget_set_sensitive(pm.row[PM_ART], online);
     } else
         widget_set_opacity(pm.row[PM_ART], 255);
+    /* a Subsonic stream (sbs_playing_stream: no file on the card) takes neither Add to playlist nor Delete: stock's Add to playlist would copy the record, whose path is the stream address with the login
+     * token, into a card playlist; stock's Delete would drop it from the queue and report a deleted song. Dimmed and insensitive; a downloaded track is a file and keeps both. The track is the one playing
+     * when the rows are laid out, and the handlers ask again at the tap (pm_stream_now): the sheet can stay open while the queue moves on to a stream. */
+    widget_set_opacity(pm.row[PM_ADDPL], stream ? PM_ART_DIM : 255);
+    widget_set_opacity(pm.row[PM_DELETE], stream ? PM_ART_DIM : 255);
+    if (stream) {
+        widget_set_sensitive(pm.row[PM_ADDPL], 0);
+        widget_set_sensitive(pm.row[PM_DELETE], 0);
+    }
     for (i = 0; i < PM_ROWS; i++)
         if (!used[i]) widget_restack(pm.row[i], k++);
     widget_resize(
@@ -457,16 +470,75 @@ static int pm_on_lookup_artist(void *ctx, void *e) {
     return RET_STOP;
 }
 
-/* Delete (listitem6): the sheet closes BEFORE the stock handler (0x4791f4) opens its confirm. That handler is modal (navigator_to_with_context
- * returns the answer, 0xa yes / 0x14 no; it never touches its ctx, the dialog), so it runs on unchanged after the sheet is gone: only on Yes does it
- * delete_playqueue_file(0) and show the result. The glass confirm card is translucent, so an open sheet behind it showed through. Stock's own Add to
- * playlist (0x4798f0) closes the sheet the same way (window_close, then goes on with the same handler), so continuing after window_close is the stock
- * pattern. Speed, A-B and Look up open no dialog; Look up album / artist and Cassette Mode close the sheet themselves. A No leaves Now Playing, no sheet. */
+/* The player is on a Subsonic stream at this moment (not when the sheet opened): Add to playlist and Delete are refused, and the rows are laid out again so that they show it (a sheet opened on a
+ * downloaded song whose queue has moved on to a stream still had them live). */
+static int pm_stream_now(void) {
+    if (!sbs_playing_stream()) return 0;
+    pm_arrange();
+    return 1;
+}
+
+/* The track Delete was asked for: the queue record's id and path, compared again after the confirm. */
+#define PM_DEL_PATH 768
+static int pm_same_track(int id, const char *path) {
+    void *rec = cc_playing();
+    return rec && *(int *)((char *)rec + REC_ID) == id && !strcmp(cc_str(rec, REC_PATH), path);
+}
+
+/* Delete (listitem6) is stock's handler (0x4791f4) done here, and stock's never runs (RET_STOP). Stock's: with a track in the queue, the modal confirm (dialog/confirminfo_dialog, kind 3, the text
+ * msg_delsong), then delete_playqueue_file(0) for the answer 0xa and delete_playqueue_file(1) for 0x14, the message msg_delsongsuccess and the refresh flag; any other answer does nothing; with no
+ * track the message msg_delsongfailed. Two things differ. The sheet closes BEFORE the confirm opens (the glass confirm card is translucent, so an open sheet behind it showed through; stock's own Add
+ * to playlist, 0x4798f0, closes the sheet the same way). And the track is looked at again AFTER the answer: the confirm is modal but the main loop runs under it, the queue moves on, and
+ * delete_playqueue_file takes whatever plays when it is called. So the answer counts only while the player is still on the track the question was asked for (the same queue id and path) and that
+ * track is not a Subsonic stream; otherwise nothing is deleted and the message is msg_delsongfailed. (Stock deleted the next song when the track changed under the question.) */
 static int pm_on_delete(void *ctx, void *e) {
+    struct {
+        int kind, ms;
+        char text[0x400];
+    } info; /* stock's 0x408 bytes */
+    char path[PM_DEL_PATH];
+    const char *text;
+    void *rec;
+    unsigned i;
+    int id, ans;
     (void)e;
     if (!pm.dlg || ctx != pm.dlg) return RET_OK;
+    if (pm_stream_now()) return RET_STOP;
+    rec = cc_playing();
     window_close(ctx);
-    return RET_OK;
+    if (!rec) {
+        pod_toast(TR("msg_delsongfailed"));
+        return RET_STOP;
+    }
+    id = *(int *)((char *)rec + REC_ID);
+    text = cc_str(rec, REC_PATH);
+    for (i = 0; text[i] && i < sizeof path - 1; ++i) path[i] = text[i];
+    path[i] = 0;
+    if (text[i]) { /* a path that does not fit cannot be told apart later */
+        pod_toast(TR("msg_delsongfailed"));
+        return RET_STOP;
+    }
+    memset(&info, 0, sizeof info);
+    info.kind = 3;
+    text = TR("msg_delsong");
+    for (i = 0; text[i] && i < 0x200 - 1; ++i) info.text[i] = text[i];
+    ans =
+        navigator_to_with_context("dialog/confirminfo_dialog", &info); /* (pm is gone from here on: the sheet closed) */
+    if (ans != CONFIRM_YES && ans != PM_DEL_FILE) return RET_STOP;
+    if (!pm_same_track(id, path) || sbs_playing_stream()) {
+        pod_toast(TR("msg_delsongfailed"));
+        return RET_STOP;
+    }
+    delete_playqueue_file(ans == PM_DEL_FILE);
+    pod_toast(TR("msg_delsongsuccess"));
+    *(unsigned char *)FORCE_REFRESH = 1;
+    return RET_STOP;
+}
+
+/* Add to playlist (listitem2) is stock's (0x4798f0); for a Subsonic stream it does not run (the row is dimmed and insensitive; this is the second look). */
+static int pm_on_addpl(void *ctx, void *e) {
+    (void)e;
+    return pm.dlg && ctx == pm.dlg && pm_stream_now() ? RET_STOP : RET_OK;
 }
 
 static void pm_start(void *dlg) {
@@ -523,6 +595,7 @@ static void pm_start(void *dlg) {
     if (!widget_on(pm.row[GO_ALBUM], EVT_CLICK, pm_on_lookup_album, dlg)) goto fail;
     if (!widget_on(pm.row[GO_ARTIST], EVT_CLICK, pm_on_lookup_artist, dlg)) goto fail;
     if (!widget_on(pm.row[PM_DELETE], EVT_CLICK, pm_on_delete, dlg)) goto fail;
+    if (!widget_on(pm.row[PM_ADDPL], EVT_CLICK, pm_on_addpl, dlg)) goto fail;
     pm.page = 0;
     track = cc_playing();
     pm.ep = track && pc_is_path(cc_str(track, REC_PATH));

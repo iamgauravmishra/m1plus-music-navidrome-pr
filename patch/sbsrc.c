@@ -14,6 +14,7 @@
 #include "stock.h"
 #include "common.h"
 #include "covercache.h"
+#include "home.h" /* KILL_SD */
 #include "i18n.h"
 #include "songops.h"
 #include "libsrc.h"
@@ -562,9 +563,25 @@ int sbs_playing_server(void) {
     return rec && sba_rec_track(I(rec, REC_ID))[0] && sbn_http_url(P(rec, REC_PATH));
 }
 
+/* The player is on a stream address in a library queue: a Subsonic stream, told without the queue map (sba_queue_note builds the queue even when the map cannot be allocated, and the map is memory
+ * only). A library play type (& 0xf000) never holds an address of stock's: Tidal, DLNA and the stock stream lists play under their own types (2, 3, 0xf0, 0xf1), which keep stock's behaviour. */
+int sbs_playing_stream(void) {
+    void *rec = cc_playing();
+    return rec && sbn_http_url(P(rec, REC_PATH)) && (sba_rec_track(I(rec, REC_ID))[0] || (mclGetPlayType() & 0xf000));
+}
+
 int sbs_playing_ours(void) {
     void *rec = cc_playing();
     return rec && sba_rec_track(I(rec, REC_ID))[0];
+}
+
+/* The hook (tools/pod.py PLAYREC_SITE, payload hook 28): stock's add_playrecord, called by on_wm_idle_status once per track start, writes the queue record of a list play into recentplay and oftenplay
+ * (/mnt/data/database.db). A stream's record is an address with the login token: it is not written (no dead row in the card's Recently Played and Most Played, no token in the database). The test is
+ * the path alone, so it holds without the queue map; a downloaded file is a file and is written as any other. With the kill switch it is stock's call. */
+int sbs_play_record(void) {
+    void *rec;
+    if (access(KILL_SD, F_OK) != 0 && (rec = cc_playing()) && sbn_http_url(P(rec, REC_PATH))) return 0;
+    return add_playrecord();
 }
 
 /* The album of the track the player is on, as a list of one album record: the cached album row (albums.idx) when the sync has it, else a row made of what the queue and the player's record know (the id,

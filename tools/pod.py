@@ -494,6 +494,8 @@ FUNCTIONS.update({
     # is told apart from a stream by mclGetPlayType and the network state, @0x479ff4..0x47a028)
     'start_playqueue':         ('int', 'int', 0x4e47d0),
     'mclGetPlayType':          ('int', 'void', 0x5d3658),
+    'delete_playqueue_file':   ('int', 'int', 0x4e48d8),   # Now Playing's Delete (patch/playmore.c pm_on_delete): the playing row out of the queue and the library, the file too for 1
+    'add_playrecord':          ('int', 'void', 0x4efb08),   # stock's play-history writer (recentplay / oftenplay), called through patch/sbsrc.c sbs_play_record (PLAYREC_SITE)
     # Now Playing's mode button picture (@0x539888): widget_lookup(window, "btn_playmode"), then the style of mclGetPlayMode()'s mode (btn_imgorder / cycle1 / random / cycle). Stock runs it from the page init and
     # from the button's own click handler 0x53b5fc (mclSetPlayMode, write_int_config, this, notifyPlayMode, dmrSendPlayMode) and nowhere else, so a mode set by another page leaves the picture stale
     # until patch/nowplaying.c calls it again when the page is back in front.
@@ -875,6 +877,16 @@ BATTERY_PINS = (   # (address, stock word, what it proves)
 # (the pull-down's own bar copy and timer) strcpy "LO" instead of the volume number into a buffer (s6) and join the number path at one call, widget_set_text_utf8(label_volume = s7, buffer): `lw t9, GOT` /
 # `move a1, s6` / `jalr t9` / delay slot `move a0, s7`. Each jalr becomes `jal lo_set_text` (the delay slot stays stock's). Both functions set label_volume visible (`jalr widget_set_visible`, a1 = 1, a0 = s7)
 # earlier in the same call, so the hook's hide wins. Not on the boot path (tools/reach.py: the same page-init dispatcher as the battery hook).
+# Play history (patch/sbsrc.c sbs_play_record, docs/modules/payload.md hook 28, docs/modules/subsonic.md "Stock's play history"): on_wm_idle_status (0x4ce7d8) calls add_playrecord (0x4efb08) once per
+# track start (mclGetPlayRecord set), its only caller. For a list play type (& 0xf000) that writes the queue record into recentplay and oftenplay of /mnt/data/database.db; a Subsonic stream's record
+# holds the stream address with the login token. The `jalr` becomes `jal sbs_play_record` (the delay slot is a nop, the result is not read): a stream address is not written, everything else is stock's call.
+PLAYREC_SITE = 0x4ce930
+PLAYREC_PINS = (   # (address, stock word, what it proves)
+    (0x4efb08, 0x3c1c0051, 'add_playrecord prologue'), (0x4efb0c, 0x279c43c8, 'add_playrecord prologue'), (0x4efb10, 0x0399e021, 'add_playrecord prologue'),
+    (0x4ce928, 0x8fbc0010, 'on_wm_idle_status: lw gp, 0x10(sp)'), (0x4ce92c, 0x8f99b3e8, 'on_wm_idle_status: lw t9, GOT add_playrecord'),
+    (PLAYREC_SITE, 0x0320f809, 'on_wm_idle_status: jalr add_playrecord'), (0x4ce934, 0x00000000, 'on_wm_idle_status: nop (the delay slot)'),
+    (0x4ce938, 0x8fbc0010, 'on_wm_idle_status: lw gp, 0x10(sp) (the $gp is reloaded after the call; the result is not read)'),
+)
 LINEOUT_SITES = ((0x544f90, 0x544f88), (0x475ad8, 0x475ad0))   # (the jalr widget_set_text_utf8, the lw t9 that loads it)
 LINEOUT_PINS = (   # (address, stock word, what it proves)
     (0x544f60, 0x8f82a950, 'show_sysbar_face: lw v0, GOT 0xa05aa7 (the Line Out byte)'), (0x544f64, 0x90420000, 'show_sysbar_face: lbu v0, (v0)'),
@@ -1389,6 +1401,10 @@ PLAYMORE_INIT = 0x479cc4
 PLAYMORE_INIT_PROLOGUE = (0x3c1c0059, 0x279ca20c, 0x0399e021)
 PLAYMORE_PINS = (   # (address, stock word, what it proves)
     (0x479cd0, 0x10800059, 'init: beqz a0 (the trampoline resumes here)'),
+    # stock's Delete handler 0x4791f4, which patch/playmore.c pm_on_delete does over (and stops): the confirm's kind, its two answers and what each deletes
+    (0x479260, 0x24020003, 'Delete: the confirm is kind 3'), (0x47929c, 0x2403000a, 'Delete: the answer 0xa'), (0x4792a8, 0x24030014, 'Delete: the answer 0x14'),
+    (0x4792b0, 0x24040001, 'Delete: delete_playqueue_file(1) for 0x14 (the delay slot of its branch)'), (0x4792d8, 0x0320f809, 'Delete: jalr delete_playqueue_file'),
+    (0x4e48d8, 0x3c1c0052, 'delete_playqueue_file prologue'), (0x4e49b0, 0x0320f809, 'delete_playqueue_file: jalr toolsClearDeqItem (the playing row leaves the queue)'),
     (0x479d10, 0x24060082, 'init: widget_move(dialog, 0, 130): the sheet is pinned at y 130'),
     (0x4d1238, 0x24a59f78, 'dispatcher: "dialog/playmore_dialog" string'),
     (0x4d1244, 0x8f99b5d4, 'dispatcher: loads dialog_playmore_dialog_init from the GOT'),
@@ -1800,7 +1816,7 @@ def compile_payload(out, demo_path, tag=TAG):
             '--undefined=m1plus_playmore_init', '--undefined=stock_playmore_init_trampoline', '--undefined=m1plus_pulldown_init', '--undefined=pd_open_settings', '--undefined=stock_pulldown_init_trampoline', '--undefined=rd_start_player', '--undefined=rd_step', '--undefined=stock_start_player_trampoline', '--undefined=rd_save_stop', '--undefined=rd_save_start', '--undefined=stock_save_stop_trampoline', '--undefined=stock_save_start_trampoline', '--undefined=rn_backtoplayer', '--undefined=stock_backtoplayer_trampoline', '--undefined=pc_id3_path', '--undefined=pc_library_query', '--undefined=pc_sorted_query', '--undefined=stock_dbquery_trampoline', '--undefined=stock_sorted_query_trampoline',
             '--undefined=sba_parse_tracks', '--undefined=sba_parse_albums', '--undefined=sba_parse_artists', '--undefined=sba_parse_playlists', '--undefined=sba_parse_ping',   # (sbparse.c until sbapi.c calls them)
             '--undefined=m1plus_style_color', '--undefined=m1plus_style_gradient', '--undefined=m1plus_image_add', '--undefined=stock_style_color_trampoline', '--undefined=stock_image_add_trampoline', '--undefined=pal_map', '--undefined=pal_active', '--undefined=pal_background', '--undefined=pal_accent', '--undefined=pal_accent_saved', '--undefined=pal_accent_set', '--undefined=pal_accent_color', '--undefined=pal_fill',
-            '--undefined=bc_timed_open', '--undefined=m1_scan_dir', '--undefined=sh_set_mode', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=pod_na_site', '--undefined=na_next_key', '--undefined=na_set_cur', '--undefined=na_cur', '--undefined=na_active', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=tidal_kb_focus', '--undefined=pod_eq_site', '--undefined=pod_lock_site', '--undefined=pf_items', '--undefined=pf_seen', '--undefined=so_play_src', '--undefined=lib_navidrome', '--undefined=sba_songs_window', '--undefined=sbs_playing', '--undefined=sbs_track']   # (pf_items, pf_seen: accessors of the parser the tests read; so_play_src, albums_open_src: the library seam, no caller yet)
+            '--undefined=bc_timed_open', '--undefined=m1_scan_dir', '--undefined=sh_set_mode', '--undefined=sbs_play_record', '--undefined=sh_load_playlist', '--undefined=sh_display_mode', '--undefined=sh_clear_queue', '--undefined=pod_na_site', '--undefined=na_next_key', '--undefined=na_set_cur', '--undefined=na_cur', '--undefined=na_active', '--undefined=stock_setmode_trampoline', '--undefined=stock_loadplaylist_trampoline', '--undefined=ft_created', '--undefined=stock_file_created_trampoline', '--undefined=tz_select', '--undefined=tz_row', '--undefined=tz_label', '--undefined=stock_timezone_trampoline', '--undefined=bp_capacity', '--undefined=lo_set_text', '--undefined=wifi_hub_open', '--undefined=tidal_kb_focus', '--undefined=pod_eq_site', '--undefined=pod_lock_site', '--undefined=pf_items', '--undefined=pf_seen', '--undefined=so_play_src', '--undefined=lib_navidrome', '--undefined=sba_songs_window', '--undefined=sbs_playing', '--undefined=sbs_track']   # (pf_items, pf_seen: accessors of the parser the tests read; so_play_src, albums_open_src: the library seam, no caller yet)
     keep += ['--undefined=' + n for n in ND_KEEP]   # (the Navidrome data layer has no caller until the pages land: patch/sbapi.h; the tests call these)
     run(LD, '-m', 'elf32ltsmip', '--gc-sections', '-T', os.path.join(PATCH, 'link.ld'),
         '-e', 'm1plus_home_click', '--undefined=m1plus_home_click', '--undefined=stock_home_click_trampoline',
@@ -1978,7 +1994,7 @@ def patch_demo(raw, payload, ps, demo_path):
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     patch_radio(patched, ps, len(payload))
-    for a, old, what in LOCKROW_PINS + KEYSPOWER_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
+    for a, old, what in LOCKROW_PINS + KEYSPOWER_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + PLAYREC_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS:   # stock code the Playlists and Songs pages call: checked, not written
         got = struct.unpack_from('<I', patched, fileoff(patched, a))[0]
         check(got == old, f'{a:#x} ({what}): {got:#010x} != pinned {old:#010x}')
     for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf
@@ -1998,6 +2014,8 @@ def patch_demo(raw, payload, ps, demo_path):
     struct.pack_into('<I', patched, fileoff(patched, WIFIHUB_SITE), jal(ps['wifi_hub_open'], WIFIHUB_SITE))   # (SETTINGS_PINS checked the site's word, its delay slot and the thunk around it)
     check(BASE <= ps['tidal_kb_focus'] < BASE + len(payload), 'Tidal keyboard hook symbol outside payload')
     struct.pack_into('<I', patched, fileoff(patched, TIDALKB_SITE), jal(ps['tidal_kb_focus'], TIDALKB_SITE))   # (TIDALKB_PINS checked the site's word, its delay slot and the bind callback around it)
+    check(BASE <= ps['sbs_play_record'] < BASE + len(payload), 'play history hook symbol outside payload')
+    struct.pack_into('<I', patched, fileoff(patched, PLAYREC_SITE), jal(ps['sbs_play_record'], PLAYREC_SITE))   # (PLAYREC_PINS checked the site's word, its delay slot and its neighbours)
     check(BASE <= ps['lo_set_text'] < BASE + len(payload), 'Line Out hook symbol outside payload')
     for a, _ in LINEOUT_SITES: struct.pack_into('<I', patched, fileoff(patched, a), jal(ps['lo_set_text'], a))   # (the pins checked each site's lw t9 GOT widget_set_text_utf8, a1, the jalr and the delay slot)
     check(BASE <= target8 < BASE + len(payload), 'battery hook symbol outside payload')
@@ -2085,6 +2103,7 @@ def main():
         'hook_wifihub': {'addr': WIFIHUB_SITE, 'target': ps['wifi_hub_open']},
         'hook_idle': {'addr': IDLE_SITE, 'target': ps['bc_timed_open']},
         'hook_tidalkb': {'addr': TIDALKB_SITE, 'target': ps['tidal_kb_focus']},
+        'hook_playrecord': {'addr': PLAYREC_SITE, 'target': ps['sbs_play_record']},
         'hook_lineout': {'sites': [hex(a) for a, _ in LINEOUT_SITES], 'target': ps['lo_set_text']},
         'hook_timezone': {'addr': timezones.SELECT, 'target': ps['tz_select']}, 'timezone_row': {'addr': timezones.ROW_CALL, 'target': ps['tz_row']}, 'timezone_label': {'addr': timezones.LABEL_CALL, 'target': ps['tz_label']},
         'hook_style_color': {'addr': STYLE_COLOR, 'target': ps['m1plus_style_color']}, 'hook_style_gradient': {'addr': STYLE_GRADIENT, 'target': ps['m1plus_style_gradient']},

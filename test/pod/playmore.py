@@ -174,6 +174,10 @@ class PM(pulldown.SM):
             self.calls.append(('tape_open',)); u.reg_write(UC_MIPS_REG_V0, self.tape_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'podcasts_go':
             self.calls.append(('podcasts_go',)); u.reg_write(UC_MIPS_REG_V0, self.ep_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+        if name == 'delete_playqueue_file':   # stock's delete of the playing row (patch/playmore.c pm_on_delete): (the file too, the position it would take)
+            self.calls.append(('delete_playqueue_file', u.reg_read(UC_MIPS_REG_A0), self.play_pos)); u.reg_write(UC_MIPS_REG_V0, 0); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
+        if name == 'mclGetPlayType':   # the play type: a library class (& 0xf000) by default; 2, 3, 0xf0, 0xf1 are stock's stream lists
+            u.reg_write(UC_MIPS_REG_V0, getattr(self, 'play_type', 0xf001)); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == 'vinyl_open':
             self.calls.append(('vinyl_open',)); u.reg_write(UC_MIPS_REG_V0, self.vinyl_ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name in ('sbs_playing_album', 'sbs_playing_artist'):
@@ -240,7 +244,7 @@ class PM(pulldown.SM):
 
     def stock_kept(self):
         """Every handler the stock init registered is still registered, first and in order, and still the latest for its widget and event."""
-        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items() if k not in ((self.rows[GO_ALBUM], O['EVT_CLICK']), (self.rows[GO_ARTIST], O['EVT_CLICK']), (self.rows[DELETE], O['EVT_CLICK'])))   # (Look up album, artist and Delete are ours, bound after the stock ones)
+        return self.stock_reg == self.reg[:len(self.stock_reg)] and all(self.bound[k] == v for k, v in self.stock_bound.items() if k not in ((self.rows[GO_ALBUM], O['EVT_CLICK']), (self.rows[GO_ARTIST], O['EVT_CLICK']), (self.rows[DELETE], O['EVT_CLICK']), (self.rows[ADD], O['EVT_CLICK'])))   # (Look up album, artist, Delete and Add to playlist are ours, bound after the stock ones)
     def handlers_of(self, w, e): return [(fn, ctx) for ww, ee, fn, ctx in self.reg if (ww, ee) == (w, e)]
     def added(self): return [(self.name(w), e) for w, e, fn, ctx in self.reg[len(self.stock_reg):]]
 
@@ -503,8 +507,8 @@ def run(ctx):
     expect(m.stock_kept(),
            'every stock handler is still bound to the same function and context after the hook, and still first in the order')
     expect(sorted(m.added()) == sorted([('pod_more', O['EVT_CLICK']), ('pod_back', O['EVT_CLICK']), ('pod_tape', O['EVT_CLICK']), ('pod_vinyl', O['EVT_CLICK']), ('pod_goep', O['EVT_CLICK']),  ('pod_art', O['EVT_CLICK']), ('pod_sleep', O['EVT_CLICK']), ('playmore_dialog', O['EVT_DESTROY']), ('playmore_listview', O['EVT_WINDOW_TO_BG']),
-                                        ('listitem4', O['EVT_CLICK']), ('listitem5', O['EVT_CLICK']), ('listitem6', O['EVT_CLICK'])]),
-           f'the hook adds the More, back, Tape, Vinyl, Find Cover & Lyrics and Sleep Timer clicks, the Look up album, artist and Delete clicks, the destroy and the to-background handlers and nothing else ({m.added()})')
+                                        ('listitem4', O['EVT_CLICK']), ('listitem5', O['EVT_CLICK']), ('listitem6', O['EVT_CLICK']), ('listitem2', O['EVT_CLICK'])]),
+           f'the hook adds the More, back, Tape, Vinyl, Find Cover & Lyrics and Sleep Timer clicks, the Look up album, artist, Delete and Add to playlist clicks, the destroy and the to-background handlers and nothing else ({m.added()})')
     expect(not any(c[0] in ('widget_off_by_func',) for c in m.calls), 'no stock handler is taken off')
 
     # -- 2. hit tests on page 1: a touch reaches the row that is drawn there, a hidden row never takes it -----------------------
@@ -1039,14 +1043,103 @@ def run(ctx):
     expect(m.handlers_of(m.rows[DELETE], CLICK) == [(STOCK_CLICK['listitem6'], m.dialog), (PSYMS['pm_on_delete'], m.dialog)],
            'Delete: the stock handler first in the list, ours bound after it (so ours runs before it, the emitter runs the newest first)')
     fn, c = m.bound[(m.rows[DELETE], CLICK)]
-    ret = m.call(fn, a0=c, a1=0, count=200000); m.sync()
-    expect(ret == 0 and m.calls.count(('window_close', m.dialog)) == 1 and 'navigator_to_with_context' not in [x[0] for x in m.calls],
-           f'Delete: ours closes the sheet and returns RET_OK, so the stock handler (the modal confirm, delete only on Yes) still runs and nothing else opens ({ret})')
     m.calls.clear(); m.call(fn, a0=0x1234, a1=0, count=200000)
-    expect(('window_close', m.dialog) not in m.calls, 'Delete: a click handler left behind for another dialog does nothing')
+    expect(('window_close', m.dialog) not in m.calls and not [x for x in m.calls if x[0] == 'confirm'], 'Delete: a click handler left behind for another dialog does nothing')
+    # ours is stock's handler done over (it answers RET_STOP, stock's never runs): the sheet closes, then the modal confirm (kind 3, msg_delsong), then the answer counts only for the track it was asked for
+    REFRESH = pod.DATA['FORCE_REFRESH'][0]
+    A, B = '/mnt/mmc/Music/a.flac', '/mnt/mmc/Music/b.flac'
+    STREAM_URL = 'http://nd.example:4533/rest/stream.view?id=t6&t=tok&s=salt'
+    def delete(answer=None, during=None, queue=None, pos=0):
+        m = PM(); m.sbtrack[-6] = 't6'
+        m.play([m.record(path=p, rid=i) for p, i in (queue if queue is not None else [(A, 1), (B, 2), (STREAM_URL, -6), (A, 1)])], pos)
+        m.open(); m.click_more(); m.u.mem_write(REFRESH, bytes([0])); m.calls = []
+        m.confirm_answer = answer
+        if during: m.on_confirm = during
+        ret = m.call(PSYMS['pm_on_delete'], a0=m.dialog, a1=0, count=2000000)
+        names = [x[0] for x in m.calls]
+        order = names.index('window_close') < names.index('confirm') if 'confirm' in names and 'window_close' in names else None
+        return (ret, [x[1:] for x in m.calls if x[0] == 'confirm'], order, [x[1:] for x in m.calls if x[0] == 'delete_playqueue_file'],
+                [x[1] for x in m.calls if x[0] == 'toast'], m.u.mem_read(REFRESH, 1)[0], m.calls.count(('window_close', m.dialog)))
+    STOP = O['RET_STOP']
+    r = delete(answer=0)
+    expect(r == (STOP, [('msg_delsong', 3)], True, [], [], 0, 1), f'Delete, the confirm refused: the sheet closed once before the stock confirm (kind 3, msg_delsong), nothing deleted, no message ({r})')
+    r = delete(answer=O['CONFIRM_YES'])
+    expect(r == (STOP, [('msg_delsong', 3)], True, [(0, 0)], ['msg_delsongsuccess'], 1, 1), f'the answer 0xa: delete_playqueue_file(0) on the playing row, stock\'s success message and the refresh flag ({r})')
+    r = delete(answer=0x14)
+    expect(r[3] == [(1, 0)] and r[4] == ['msg_delsongsuccess'] and r[5] == 1, f'the answer 0x14: delete_playqueue_file(1), the file too, as stock ({r})')
+    r = delete(answer=O['CONFIRM_YES'], queue=[], pos=-1)
+    expect(r == (STOP, [], None, [], ['msg_delsongfailed'], 0, 1), f'nothing playing: stock\'s failure message, no confirm ({r})')
+    # the queue moves on while the question is up (the main loop runs under the modal dialog): the answer is void
+    for answer in (O['CONFIRM_YES'], 0x14):
+        r = delete(answer=answer, during=lambda m: setattr(m, 'play_pos', 1))
+        expect(r[3] == [] and r[4] == ['msg_delsongfailed'] and r[5] == 0, f'the next card song plays when the answer {answer:#x} comes: nothing is deleted (stock deleted that next song), the failure message ({r})')
+        r = delete(answer=answer, during=lambda m: setattr(m, 'play_pos', 2))
+        expect(r[3] == [] and r[4] == ['msg_delsongfailed'] and r[5] == 0, f'a Subsonic stream plays when the answer {answer:#x} comes: its row is not taken out of the queue, the failure message ({r})')
+    r = delete(answer=O['CONFIRM_YES'], during=lambda m: setattr(m, 'play_pos', 3))
+    expect(r[3] == [(0, 3)] and r[4] == ['msg_delsongsuccess'], f'the same song at another place of the queue (the same id and path) is the song asked for ({r})')
+    r = delete(answer=O['CONFIRM_YES'], during=lambda m: setattr(m, 'play_pos', -1))
+    expect(r[3] == [] and r[4] == ['msg_delsongfailed'], f'playback ended under the question: nothing is deleted ({r})')
+    r = delete(answer=O['CONFIRM_YES'], queue=[('/mnt/mmc/' + 'd' * 800 + '.flac', 4)])
+    expect(r == (STOP, [], None, [], ['msg_delsongfailed'], 0, 1), f'a path longer than the copy (PM_DEL_PATH, 768 bytes) cannot be told apart after the answer: no question, the failure message ({r})')
     # the other rows: Add to playlist closes the sheet itself in stock (window_close at 0x47994c, then playlist_page); Speed / A-B open no dialog; none of them gets a handler of ours
     m = PM(); alib(m)
-    expect(all(m.handlers_of(m.rows[i], CLICK) == [(STOCK_CLICK[ROWS[i]], m.dialog)] for i in (ADD, AB)), 'Add to playlist and A-B repeat keep the stock handler alone (stock closes the sheet for Add to playlist itself)')
+    expect(m.handlers_of(m.rows[AB], CLICK) == [(STOCK_CLICK[ROWS[AB]], m.dialog)], 'A-B repeat keeps the stock handler alone')
+    expect(m.handlers_of(m.rows[ADD], CLICK) == [(STOCK_CLICK['listitem2'], m.dialog), (PSYMS['pm_on_addpl'], m.dialog)],
+           'Add to playlist: the stock handler first in the list (it closes the sheet itself), ours bound after it, so ours runs before it')
+    fn, c = m.bound[(m.rows[ADD], CLICK)]
+    ret = m.call(fn, a0=c, a1=0, count=200000); m.sync()
+    expect(ret == 0 and ('window_close', m.dialog) not in m.calls and m.live(ADD), f'Add to playlist on a card track: ours returns RET_OK and does nothing, stock\'s handler runs ({ret})')
+
+    # -- 7e. A Subsonic stream is no file: Add to playlist and Delete are dimmed, insensitive and their stock handlers do not run; a downloaded track keeps both ------
+    def opac(m, i): return [c[2] for c in m.calls if c[0] == 'widget_set_opacity' and c[1] == m.rows[i]]
+    m = PM(); m.sbtrack[-5] = 't5'; m.play([m.record(path='http://nd.example:4533/rest/stream.view?id=t5&t=tok&s=salt', rid=-5)], 0); m.open()
+    expect(m.shown() == PAGE1 and not m.live(ADD) and (m.flags(m.rows[ADD]) & F_VISIBLE) and opac(m, ADD)[-1] == 100 and 'listitem2' not in m.tap_row(ADD) and m.live(GO_ALBUM) and m.live(MORE),
+           f'a stream: Add to playlist is shown dimmed (opacity 100) and takes no tap; the other rows are live ({opac(m, ADD)})')
+    m.calls = []; m.click_more()
+    expect(m.shown() == PAGE2 and not m.live(DELETE) and (m.flags(m.rows[DELETE]) & F_VISIBLE) and opac(m, DELETE)[-1] == 100 and 'listitem6' not in m.tap_row(DELETE) and m.live(SPEED) and m.live(SLEEP),
+           f'a stream, page 2: Delete is shown dimmed and takes no tap ({opac(m, DELETE)})')
+    m.click_back()
+    expect(m.shown() == PAGE1 and not m.live(ADD), 'back on page 1 the row is still off')
+    for row, name in ((ADD, 'pm_on_addpl'), (DELETE, 'pm_on_delete')):
+        m.calls = []; ret = m.call(PSYMS[name], a0=m.dialog, a1=0, count=200000)
+        expect(ret == O['RET_STOP'] and ('window_close', m.dialog) not in m.calls and 'navigator_to_with_context' not in [c[0] for c in m.calls],
+               f'a stream: {name}, should the click still run, stops stock\'s handler and closes nothing ({ret})')
+    m = PM(); m.sbtrack[-5] = 't5'; m.play([m.record(path='/mnt/mmc/Subsonic/Artist/Album/01 Song.flac', rid=-5)], 0); m.open()
+    live1 = m.live(ADD) and opac(m, ADD)[-1] == 255; m.click_more()
+    expect(live1 and m.live(DELETE) and opac(m, DELETE)[-1] == 255, 'a downloaded Subsonic track is a file: both rows are live at full opacity')
+    ret = m.call(PSYMS['pm_on_addpl'], a0=m.dialog, a1=0, count=200000); m.calls = []; m.confirm_answer = 0x14; ret2 = m.call(PSYMS['pm_on_delete'], a0=m.dialog, a1=0, count=2000000)
+    expect(ret == 0 and ret2 == O['RET_STOP'] and ('delete_playqueue_file', 1, 0) in m.calls, f'Add to playlist lets stock\'s run, and Delete deletes the download after its question ({ret}, {ret2})')
+    # the track changes under an open sheet: the guards follow the track that plays at the tap, not the one the sheet opened on
+    STREAM, FILE = 'http://nd.example:4533/rest/stream.view?id=t6&t=tok&s=salt', '/mnt/mmc/Subsonic/Artist/Album/01 Song.flac'
+    for row, name, page2 in ((ADD, 'pm_on_addpl', False), (DELETE, 'pm_on_delete', True)):
+        m = PM(); m.sbtrack[-5] = 't5'; m.sbtrack[-6] = 't6'; m.play([m.record(path=FILE, rid=-5), m.record(path=STREAM, rid=-6)], 0); m.open()
+        if page2: m.click_more()
+        was = m.live(row)
+        m.play_pos = 1; m.calls = []   # the queue moves on to the stream, the sheet still open
+        fn, c = m.bound[(m.rows[row], CLICK)]
+        ret = m.call(fn, a0=c, a1=0, count=400000); m.sync()
+        expect(was and ret == O['RET_STOP'] and ('window_close', m.dialog) not in m.calls and 'navigator_to_with_context' not in [x[0] for x in m.calls],
+               f'opened on a downloaded song, the queue then on a stream: {name} stops stock\'s handler at the tap ({was}, {ret})')
+        expect(not m.live(row) and (m.flags(m.rows[row]) & F_VISIBLE) and opac(m, row)[-1:] == [100] and m.shown() == (PAGE2 if page2 else PAGE1),
+               f'and the row is dimmed and insensitive from then on, the page unchanged ({opac(m, row)})')
+        m.play_pos = 0; m.click_more() if not page2 else m.click_back(); m.click_back() if not page2 else m.click_more()
+        live = m.live(row); m.calls = []; ret = m.call(fn, a0=c, a1=0, count=2000000)
+        expect(live and (ret == 0 if row == ADD else ret == O['RET_STOP'] and [x for x in m.calls if x[0] == 'confirm']),
+               f'back on the downloaded song: the row is live again once the page is laid out, and {name} goes on (stock\'s Add to playlist runs; Delete asks) ({ret})')
+    # without the queue map (sba_queue_note builds the queue even when the map's allocation fails): an address in a library queue is a stream all the same
+    m = PM(); m.play([m.record(path=STREAM, rid=-6)], 0); m.open()
+    off1 = not m.live(ADD) and opac(m, ADD)[-1] == 100; m.click_more()
+    expect(off1 and not m.live(DELETE) and opac(m, DELETE)[-1] == 100, 'a stream address the queue map does not know, in a library queue: both rows are dimmed and insensitive')
+    for name in ('pm_on_addpl', 'pm_on_delete'):
+        m.calls = []; m.confirm_answer = 0x14; ret = m.call(PSYMS[name], a0=m.dialog, a1=0, count=2000000)
+        expect(ret == O['RET_STOP'] and not [x for x in m.calls if x[0] in ('confirm', 'delete_playqueue_file', 'window_close')], f'and {name} stops stock\'s handler: nothing is asked, deleted or closed ({ret})')
+    m = PM(); m.play([m.record(path=FILE, rid=3), m.record(path=STREAM, rid=-6)], 0); m.open(); m.click_more(); m.calls = []
+    m.confirm_answer = O['CONFIRM_YES']; m.on_confirm = lambda mm: setattr(mm, 'play_pos', 1)
+    m.call(PSYMS['pm_on_delete'], a0=m.dialog, a1=0, count=2000000)
+    expect(not [x for x in m.calls if x[0] == 'delete_playqueue_file'] and [x[1] for x in m.calls if x[0] == 'toast'] == ['msg_delsongfailed'], 'nor is it deleted when the queue reaches it under Delete\'s question')
+    for t in (2, 3, 0xf0, 0xf1):
+        m = PM(); m.play_type = t; m.play([m.record(path='http://tidal.example/track', rid=9)], 0); m.open()
+        expect(m.live(ADD), f'an address under a stream play type of stock\'s ({t:#x}: Tidal, DLNA) is not ours: the row is stock\'s')
 
     # -- 8. the texts in every language, and the room they have ------------------------------------------------------------------------
     stock_raw = os.path.join(paths.find_stock(paths.ZIP), RAW)

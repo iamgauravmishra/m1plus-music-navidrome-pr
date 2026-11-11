@@ -251,6 +251,7 @@ def rows_tests(expect):
     allowed.update(pod.fileoff(built, a) for a, _ in pod.LINEOUT_SITES)                                  # the jalr widget_set_text_utf8 of label_volume in show_sysbar_face and dropdown_showface (patch/lineout.c)
     allowed.add(pod.fileoff(built, pod.IDLE_SITE))                                                       # the timed open's navigator_to call (patch/bigcover.c bc_timed_open)
     allowed.add(pod.fileoff(built, pod.WIFIHUB_SITE))                                                  # the All System Settings Wi-Fi row's navigator_to call (patch/wifipage.c wifi_hub_open)
+    allowed.add(pod.fileoff(built, pod.PLAYREC_SITE))                                                    # on_wm_idle_status's add_playrecord call (patch/sbsrc.c sbs_play_record)
     allowed.add(pod.fileoff(built, pod.TIDALKB_SITE))                                                    # the stock Tidal search page's edit_set_focus call (patch/tidalkb.c tidal_kb_focus)
     allowed.update(pod.fileoff(built, a) for a in pod.PULLDOWN_OPEN_SITES)                               # on_wm_tsmove_fun's two navigator_to calls that open the page a pull-down tile chose (patch/pulldown.c pd_open_settings)
     allowed.add(pod.fileoff(built, pod.BATTERY_SITE))                                                    # show_sysbar_face's get_battery_capacity call (patch/battery.c)

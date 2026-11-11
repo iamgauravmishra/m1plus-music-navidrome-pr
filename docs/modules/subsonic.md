@@ -271,6 +271,10 @@ while offline, gives no record.
 
 **Recently Played.** A server track never enters the Recently Played shelf: `recent_note` skips a record whose `REC_PATH` is a stream address (`http://`, `https://`, `nd://`), which would write the credential in the address to the card and show a dead entry.
 
+**Stock's play history.** Stock's `add_playrecord` `0x4efb08` (one caller, `on_wm_idle_status` `0x4ce930`, once per track start) writes the queue record of a list play type (`& 0xf000`, which a source's queue has) into `recentplay` and `oftenplay` of `/mnt/data/database.db`. For a stream that record is the address with the login token, and the card's Recently Played and Most Played lists would show a row that cannot play. The call site is `jal sbs_play_record` ([payload](payload.md) hook 28, `patch/sbsrc.c`): a record whose path is an http address is not written, everything else (a downloaded file included) is stock's call, and with the kill switch it is always stock's call. The test is the path alone, so it needs no queue map. Tests: `sbsrc` `playrecord`.
+
+**Reboot.** Not checked on a device: stock's `save_memoryplay_info` `0x4e3340` saves the playing record (the stream address included) and `memeory_startplayer` `0x4e34dc` rebuilds the class's own list at boot and tests the saved file with `access`, which a stream address fails, so a stream should not resume; the queue map is memory only, so a resumed stream would not be known as a server track.
+
 **Scrobble.** A server track that has played for half its length, or four minutes when that is sooner or the length is unknown, is reported to the server once: `sba_scrobble`
 (`scrobble.view?id=..&submission=true`, request kind `SBA_K_SCROBBLE` on the metadata worker; no status record, no generation move, the answer is nobody's news), so the server's play
 count and last played move and it forwards the play where it is set up to (Last.fm, ListenBrainz). `nl_scrobble` (`patch/sbsrc.c`) runs in the keep-awake tick: it counts the clock

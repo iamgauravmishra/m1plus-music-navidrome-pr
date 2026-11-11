@@ -49,6 +49,8 @@ class SM(SD.DM):
             u.reg_write(UC_MIPS_REG_V0, ret)
             u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
             return
+        if name == 'add_playrecord':   # stock's play-history writer (the call-site hook sbs_play_record, section playrecord)
+            self.calls.append(('add_playrecord',)); u.reg_write(UC_MIPS_REG_V0, 7); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return
         if name == '_deque_push_back':
             a0, a1 = u.reg_read(UC_MIPS_REG_A0), u.reg_read(UC_MIPS_REG_A1)
             rec = bytearray(bytes(u.mem_read(a1, 0x58)))
@@ -1146,7 +1148,39 @@ def scrobble(ctx):
     expect(urls == [], 'nothing of ours playing: nothing is sent')
 
 
-SECTIONS = [lists, songs, play, extras, trackcover, sheet, awake, scrobble, messages, queue_star, dlalbum]
+def playrecord(ctx):
+    """Stock's play history (add_playrecord: recentplay / oftenplay) never takes a stream address: the call-site hook sbs_play_record (tools/pod.py PLAYREC_SITE, payload hook 28)."""
+    expect = ctx.expect
+    import paths
+    stock_demo = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    built = open(DEMO, 'rb').read()
+    w = lambda b, a: struct.unpack_from('<I', b, pod.fileoff(b, a))[0]
+    site = pod.PLAYREC_SITE
+    expect(site == 0x4ce930 and w(stock_demo, site) == 0x0320f809 and w(built, site) >> 26 == 3 and (w(built, site) & 0x3ffffff) << 2 == PSYMS['sbs_play_record'],
+           'the build replaced stock\'s `jalr t9` (add_playrecord) in on_wm_idle_status by `jal sbs_play_record`')
+    expect(all(w(stock_demo, a) == old and (a == site or w(built, a) == old) for a, old, _ in pod.PLAYREC_PINS) and pod.FUNCTIONS['add_playrecord'][2] == 0x4efb08,
+           'every pinned word is stock\'s in the stock demo and unchanged in the build, but the site (the delay slot is a nop, the result is not read)')
+    expect(MANIFEST['hook_playrecord'] == {'addr': site, 'target': PSYMS['sbs_play_record']}, 'the manifest records the hook')
+
+    def run(path, kill=False, pos=0):
+        m = machine()
+        if kill: m.present.add('/mnt/mmc/m1plus-off')
+        rec = m.alloc(0x58)
+        m.setword(rec + REC_ID, -77 & 0xffffffff); m.setword(rec + REC_PATH, m.cstr(path))
+        m.setword(pod.DATA['PLAY_QUEUE'][0], m.new_deque([rec]))
+        m.play_pos = pos
+        r = m.call(PSYMS['sbs_play_record'], count=2000000)
+        n = m.calls.count(('add_playrecord',))
+        assert r == (7 if n else 0), r   # stock's answer is passed on
+        return n
+    expect(run('http://nd.example:4533/rest/stream.view?id=t1&u=me&t=tok&s=salt') == 0 and run('https://nd.example/rest/stream.view?id=t1') == 0,
+           'a stream address (http or https): stock\'s writer is not called, so the address and its token reach neither recentplay nor oftenplay')
+    expect(run('/mnt/mmc/Subsonic/Artist/Album/01 Song.flac') == 1, 'a downloaded track is a file: stock\'s call, as for any card track')
+    expect(run('/mnt/mmc/Music/a.flac') == 1 and run('', pos=-1) == 1, 'a card track, and nothing playing: stock\'s call (it does its own checks)')
+    expect(run('http://nd.example:4533/rest/stream.view?id=t1', kill=True) == 1, '/mnt/mmc/m1plus-off: stock\'s call whatever plays')
+
+
+SECTIONS = [lists, songs, play, extras, trackcover, sheet, awake, scrobble, messages, queue_star, dlalbum, playrecord]
 
 
 def run(ctx):
