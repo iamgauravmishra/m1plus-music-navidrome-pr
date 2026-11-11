@@ -262,6 +262,9 @@ def rows_tests(expect):
     import mod_nowplaying   # the A-B marker immediates (five pinned words, disjoint from the row edits)
     expect(not {hex(a) for a in mod_nowplaying.MARKER_WORDS} & {e[0] for e in edits}, 'the 5 A-B marker sites are not among the row edits')
     allowed |= {pod.fileoff(built, a) for a in mod_nowplaying.MARKER_WORDS}
+    import mod_lockscreen
+    allowed |= {pod.fileoff(built, a) + k & ~3 for _, addrs, olds, _ in mod_lockscreen.DATE_NAMES for a, old in zip(addrs, olds) for k in range(len(old))}   # and its shortened weekday and month names
+    allowed |= {pod.fileoff(built, mod_lockscreen.DATE_W_VA + 16 + 4 * k) for k in range(6)}             # the lock date's weekday takes the month's path in wstr_format_date_time (mod_lockscreen.patch_date_names)
     # the lock screen also sets the cover file size in four `addiu a3/a2, zero, 0xfe` words
     # (mod_lockscreen.COVER_IMM); they must be disjoint from the row edits and only change the 16-bit value
     cover_sites = (0x4df1dc, 0x4df1e0, 0x4df21c, 0x4df220)

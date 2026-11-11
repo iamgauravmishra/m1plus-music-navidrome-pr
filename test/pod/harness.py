@@ -510,6 +510,8 @@ class Machine:
         elif name == 'locale_info_tr':   # the stock table lookup: the key itself when the table lacks it
             raw = self.tr(self.read_cstr(a1)).encode('latin-1')   # (the text as UTF-8 bytes; the key itself when the table lacks it)
             ret = self.alloc(len(raw) + 1); self.u.mem_write(ret, raw + b'\0')
+        elif name == 'digit_clock_set_format':   # the lock screen's date (patch/lockscreen.c lk_date)
+            self.calls.append(('digit_clock_set_format', a0, self.read_cstr(a1))); ret = 0
         elif name == 'widget_set_tr_text':
             key = self.read_cstr(a1)
             self.calls.append(('widget_set_tr_text', a0, key)); self.calls.append(('widget_set_text_utf8', a0, self.tr(key))); ret = 0

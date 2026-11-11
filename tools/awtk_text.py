@@ -109,13 +109,15 @@ def fit_size(ttf, text, avail, start):
     while size > 1 and awtk_width(ttf, text, size) > avail: size -= 1
     return size
 
-MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sept Oct Nov Dec'.split()     # demo's MMM table ("Sept")
-WEEKDAYS = 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday'.split()   # W (English UI; CN: 星期日..)
+# demo's name tables as the build leaves them (tools/mod_lockscreen.py patch_date_names shortens stock's "Sunday".. and "Sept" in place); the formatter translates both
+# (the keys of tools/pod_i18n.py WEEKDAY_KEYS / MONTH_NAME_KEYS), so these are the English texts
+MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec'.split()      # MMM
+WEEKDAYS = 'Sun Mon Tue Wed Thu Fri Sat'.split()                        # W
 
-def worst_case_text(fmt, ttf=None):
+def worst_case_text(fmt, ttf=None, weekdays=WEEKDAYS, months=MONTHS):
     """Widest string a digit_clock format can produce. Digits are written as '0' (the stock font has
-    tabular digits); with ttf given, as the font's widest digit, and W / MMM as the widest English
-    weekday / month name of demo's tables."""
+    tabular digits); with ttf given, as the font's widest digit, and W / MMM as the widest
+    weekday / month name of `weekdays` / `months` (demo's tables, English by default)."""
     d = max(DIGITS, key=ttf.advance) if ttf else '0'
     wide = lambda names: max(names, key=lambda s: sum(ttf.advance(c) for c in s)) if ttf else 'WWW'
     out, i = '', 0
@@ -124,11 +126,11 @@ def worst_case_text(fmt, ttf=None):
         while i + n < len(fmt) and fmt[i + n] == c: n += 1
         if c in 'YMDhHmsT' or c == 'w':
             if c == 'Y': out += d * (2 if n == 2 else 4)
-            elif c == 'M' and n == 3: out += wide(MONTHS)      # month name: generous without a font
+            elif c == 'M' and n == 3: out += wide(months)     # month name: generous without a font
             elif c == 'T' and n == 2: out += d * 2 + ' PM'
             elif c == 'w': out += d
             else: out += d * 2
-        elif c == 'W': out += wide(WEEKDAYS)
+        elif c == 'W': out += wide(weekdays)
         else: out += c * n
         i += n
     return out

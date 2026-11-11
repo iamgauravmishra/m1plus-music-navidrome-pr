@@ -121,7 +121,7 @@ Shanling-modified `wstr_format_date_time` supports:
 | `Y` / `YY` | 2026 / 26 | `h` / `hh` | hour 0-23 / 00-23 |
 | `M` / `MM` / `MMM` | 1-12 / 01-12 / month name | `H` / `HH` | hour 0-23 unpadded / 01-12 |
 | `D` / `DD` | 1-31 / 01-31 | `m` / `mm`, `s` / `ss` | minute, second |
-| `w` / `W` | weekday 0-6 / name (EN or CN) | `T` / `TT` | minute / minute + ` AM` or ` PM` |
+| `w` / `W` | weekday 0-6 / name (EN or CN; short and translated in the build, [lock screen](modules/lockscreen.md) "The date") | `T` / `TT` | minute / minute + ` AM` or ` PM` |
 
 `HH:TT` renders `05:30 PM` on M1 Plus, but `05:PM` on Q2's different AWTK build: tokens are
 not portable. A lock clock using this format would stay 12 h regardless of the setting.

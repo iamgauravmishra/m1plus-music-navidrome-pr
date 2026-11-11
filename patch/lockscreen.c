@@ -20,6 +20,7 @@
 #include "common.h"
 #include "palette.h"
 #include "battery.h"
+#include "i18n.h"
 
 #define LK_N 6
 
@@ -277,11 +278,21 @@ static void lk_start(void *win, void *const *w) {
     widget_set_visible(lk.icon, 0, 0);
 }
 
+/* The date line in the language's own order (docs/modules/lockscreen.md "The date"). The asset's format is the key "W, MMM D" ("Wed, Nov 11"); its translation is the
+ * language's format ("M月D日 W", "W, D. MMM", ..: tools/pod_i18n.py), and demo's formatter looks the weekday and month names up in the same table (tools/mod_lockscreen.py
+ * patch_date_names). digit_clock_set_format copies the string (under 64 bytes, checked at build) and formats the time at once; the widget then keeps the format for its own
+ * 1 s timer, so the date still turns at midnight on a page left open. English, a missing table or a missing widget: the asset's format stays. */
+static void lk_date(void *win) {
+    void *w = widget_lookup(win, LK_DATE_NAME, 1);
+    if (w) digit_clock_set_format(w, TR("W, MMM D"));
+}
+
 /* The hook (tools/pod.py LOCKSCREEN_INIT): stock first, then ours. */
 int m1plus_lockscreen_init(void *win, void *ctx) {
     int ret = stock_lockscreen_init_trampoline(win, ctx);
     void *w[LK_N];
     if (ret == RET_OK && win && access(KILL_SD, F_OK) != 0) {
+        lk_date(win);
         bp_lock(win); /* the Battery Percentage beside the page's gauge (patch/battery.c) */
         if (lk_layout() == 1 && lk_mini(win, w)) lk_start(win, w);
     }

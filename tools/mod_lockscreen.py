@@ -22,6 +22,7 @@ Names are kept, app-driven widgets are only moved/restyled.
 
 Digit_clock format tokens in this AWTK build (wstr_format_date_time in demo, Shanling-modified):
   Y 2026   YY 26   M 1..12  MM 01..12  MMM month name   D / DD day   w weekday 0..6   W weekday name
+  (MMM and W: short and in the UI language in the build, see patch_date_names)
   h / hh hour 0..23 (00..23)   H hour 0..23 unpadded   HH hour 01..12
   m / mm minute   s / ss second   T minute   TT minute + " AM"/" PM" (so "HH:TT" shows "05:30 PM")
   anything else is copied literally.
@@ -39,7 +40,8 @@ import awtk_ui
 import battery_art
 import cdefs
 import statusbar
-from awtk_text import Ttf, awtk_width, fit_size, worst_case_text
+import pod_i18n
+from awtk_text import MONTHS, WEEKDAYS, Ttf, awtk_width, fit_size, worst_case_text
 from modlib import clone_workdir, edit_ui
 
 from awtk_ui import RAW
@@ -77,6 +79,7 @@ NEXT_GLYPH = ('np_next', 'np_next_down')
 # The mini player layout (payload hook 24, patch/lockscreen.c): the numbers are patch/offsets.inc's (LK_*, and the Home bar's MB_*), read here so the C and the
 # preview / tests cannot drift. Card in window coordinates, the other widgets in the card; apply_mini() is the layout the hook gives the same tree at run time.
 _C = cdefs.defines(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'patch', 'offsets.inc'), strings=True)
+DATE_WIDGET = _C['LK_DATE_NAME']
 MINI_GLASS = 'mb_glass'
 MINI_RECT = {'view_bottomview': (_C['LK_MINI_X'], _C['LK_MINI_Y'], _C['MB_W'], _C['MB_H']),
              'view_img_icon': (_C['MB_ART_X'], _C['MB_ART_Y'], _C['MB_ART'], _C['MB_ART']),
@@ -140,6 +143,69 @@ def patch_cover_src(out, size):
         o = va_to_off(b, va); w = struct.unpack_from('<I', b, o)[0]
         assert w in (0x240700fe, 0x240600fe), hex(w)
         struct.pack_into('<I', b, o, (w & 0xffff0000) | size)
+    mode = stat.S_IMODE(os.stat(path).st_mode)
+    os.chmod(path, mode | 0o200); open(path, 'wb').write(b); os.chmod(path, mode)
+
+# The date's names. demo's wstr_format_date_time (0x64e7b0, the digit_clock formatter; its only other caller is the unused file browser's "YY-MM-DD hh:mm:ss") writes MMM as
+# locale_info_tr of the table 0x90497c's entry (stock's language files have no such keys, so English everywhere) and W by strcpy from one of two pointer tables in .data:
+# 0x904960 ("星期日"..) when the locale's country is "CN" and its language "zh", 0x904944 ("Sunday"..) for every other language. Nothing else refers to the tables or loads
+# their strings, and the lock screen's date is the only format with W or MMM. Two edits make the date the language's short one:
+# - the English names are shortened where they are ("Sunday".. to "Sun".., "Sept" to "Sep"), which also makes them the keys of tools/pod_i18n.py (WEEKDAY_KEYS, MONTH_NAME_KEYS);
+# - W takes the month's path. Its block begins at 0x64e934 (lw fp = wday; sltiu 7; beqz to the append; lw t9 in the delay slot, the same GOT word the month loads at
+#   0x64ea90) and then clears a 32 byte buffer with six `sw zero` (0x64e944..0x64e958) before the locale test. Those six words become the month's own four (0x64ea94..0x64eaa0:
+#   bal locale_info; nop; sll a2, fp, 2; addiu fp, s7, table) with the English weekday table, then `b 0x64eaa4; nop`, the month's tail: locale_info_tr of the entry,
+#   tk_utf8_to_utf16 into the 32 character buffer, wstr_append. So every language's weekday is its language file's text of "Sun".. (English without one); the rest of the old
+#   block (the locale test, the strcpy) and the zh_CN table are dead.
+DATE_W_VA, DATE_M_VA, DATE_TAIL_VA = 0x64e934, 0x64ea90, 0x64eaa4
+DATE_W_CODE = bytes.fromhex('10003e8e0700c22f670040105880998f9800a0af9c00a0afa000a0afa400a0afa800a0afac00a0af')   # 0x64e934..0x64e958, stock
+DATE_M_CODE = bytes.fromhex('5880998f862711040000000080301e007c49fe261000bc8f252040002130de0064a8998fbf2811040000c58c200006241000bc8f252880022520400040d0998f'
+                            '09f82003000000001000bc8f28da998f')                                              # 0x64ea90..0x64eadc, stock: the month's path
+LOCALE_INFO_VA = 0x6588b0
+STOCK_WEEKDAYS = 'Sunday Monday Tuesday Wednesday Thursday Friday Saturday'.split()
+STOCK_MONTHS = 'Jan Feb Mar Apr May Jun Jul Aug Sept Oct Nov Dec'.split()
+WEEKDAY_TABLE, MONTH_TABLE = 0x904944, 0x90497c
+DATE_NAMES = (   # table, its strings' addresses, stock's strings, ours
+    (WEEKDAY_TABLE, (0x75d0b8, 0x75d0c0, 0x75d0c8, 0x75d0d0, 0x75d0dc, 0x75d0e8, 0x75d0f0), STOCK_WEEKDAYS, WEEKDAYS),
+    (MONTH_TABLE, (*range(0x75d150, 0x75d174, 4), 0x75d178, 0x75d17c, 0x75d180), STOCK_MONTHS, MONTHS),
+)
+assert tuple(WEEKDAYS) == pod_i18n.WEEKDAY_KEYS and tuple(MONTHS) == pod_i18n.MONTH_NAME_KEYS and DATE_FORMAT == pod_i18n.LOCK_DATE_KEY
+
+def date_samples(ttf):
+    """locale -> the widest date its format and names can make (the payload sets the format's translation, patch/lockscreen.c lk_date)."""
+    out = {}
+    for loc in pod_i18n.LOCALES:
+        fmt, days, months = pod_i18n.lock_date(loc)
+        assert len(fmt.encode()) < 0x40, (loc, fmt)        # digit_clock formats nothing for a longer one (0x626b60)
+        assert all(len(s.encode('utf-16-le')) // 2 < 0x20 for s in days + months), loc      # the formatter's 32 character buffer
+        out[loc] = worst_case_text(fmt, ttf, days, months)
+    return out
+
+def date_w_words():
+    """The six words that send W down the month's path (see above)."""
+    bal = lambda pc, to: 0x04110000 | ((to - pc - 4) >> 2) & 0xffff
+    b = lambda pc, to: 0x10000000 | ((to - pc - 4) >> 2) & 0xffff
+    at = DATE_W_VA + 16
+    return (bal(at, LOCALE_INFO_VA), 0, 0x001e3080, 0x26fe0000 | WEEKDAY_TABLE & 0xffff, b(at + 16, DATE_TAIL_VA), 0)
+
+def patch_date_names(out):
+    """demo's weekday and month names become the short English ones (in place, NUL padded), and the weekday is translated as the month is."""
+    path = os.path.join(out, DEMO); b = bytearray(open(path, 'rb').read())
+    for va, code in ((DATE_W_VA, DATE_W_CODE), (DATE_M_VA, DATE_M_CODE)):
+        o = va_to_off(b, va)
+        if b[o:o + len(code)] != code: raise SystemExit(f'{DEMO}: wstr_format_date_time is not the stock code at {va:#x}')
+    m = struct.unpack_from('<5I', DATE_M_CODE)
+    assert m[0] == struct.unpack_from('<I', DATE_W_CODE, 12)[0] and m[1] == 0x04110000 | ((LOCALE_INFO_VA - DATE_M_VA - 8) >> 2) and m[3] == 0x001e3080 \
+        and m[4] == 0x26fe0000 | MONTH_TABLE & 0xffff and MONTH_TABLE >> 16 == WEEKDAY_TABLE >> 16, 'the month path is what the weekday copies'
+    struct.pack_into('<6I', b, va_to_off(b, DATE_W_VA + 16), *date_w_words())
+    for table, addrs, olds, news in DATE_NAMES:
+        assert len(addrs) == len(olds) == len(news), hex(table)
+        got = struct.unpack_from(f'<{len(addrs)}I', b, va_to_off(b, table))
+        if got != tuple(addrs): raise SystemExit(f'{DEMO}: the name table {table:#x} is not stock\'s')
+        for va, old, new in zip(addrs, olds, news):
+            o, old, new = va_to_off(b, va), old.encode() + b'\0', new.encode()
+            if b[o:o + len(old)] != old: raise SystemExit(f'{DEMO}: {va:#x} is not {old[:-1].decode()!r}')
+            assert len(new) < len(old), (old, new)       # stock's has its NUL
+            b[o:o + len(old)] = new.ljust(len(old), b'\0')
     mode = stat.S_IMODE(os.stat(path).st_mode)
     os.chmod(path, mode | 0o200); open(path, 'wb').write(b); os.chmod(path, mode)
 
@@ -277,7 +343,7 @@ def apply(root, ttf):
     # --- date (small) over the clock, both centred at the top; nothing app-driven moves them
     for w in (clock, date, img, pg): w.remove('visible'); w.remove('sensitive')
     date.set('format', DATE_FORMAT)
-    dsample = worst_case_text(DATE_FORMAT, ttf)
+    dsample = max(date_samples(ttf).values(), key=lambda s: awtk_width(ttf, s, DATE_SIZE))      # the widest date of the 13 languages
     dw = awtk_width(ttf, dsample, DATE_SIZE)
     pct_w = awtk_width(ttf, '100%', statusbar.PCT_PX)
     side = SCREEN_W - (GAUGE_RIGHT - GAUGE_W - PCT_GAP - pct_w) + 4    # keep clear of the gauge and its percentage in the top right corner
@@ -337,8 +403,10 @@ def main():
     extra = f'; {PAGE_STYLE} {len(so)} -> {len(sn)} bytes'
     for rel, (n0, n1) in replace_stock_images(out, images).items(): extra += f'; {rel} {n0} -> {n1} bytes'
     patch_cover_src(out, COVER_SIZE)
+    patch_date_names(out)
     extra += f'; {DEMO}: parseplaycover_thd writes the cover at {COVER_SIZE} x {COVER_SIZE} (4 immediates at ' \
-             + ', '.join(f'{va:#x}' for va in COVER_IMM) + f', {COVER_SRC} -> {COVER_SIZE})'
+             + ', '.join(f'{va:#x}' for va in COVER_IMM) + f', {COVER_SRC} -> {COVER_SIZE}); short weekday and month names (tables ' \
+             + ', '.join(f'{t:#x}' for t, *_ in DATE_NAMES) + ')'
     print(f'lockscreen: {UI} {len(old)} -> {len(new)} bytes{extra}')
     print(f'  clock "{info["clock_format"]}" {info["clock_size"]} px (widest {info["clock_px"]} px), date "{info["date_format"]}" '
           f'{DATE_SIZE} px (widest {info["date_px"]} px), card {info["card"]}, cover {info["cover"]}')

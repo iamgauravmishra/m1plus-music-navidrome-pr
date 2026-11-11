@@ -376,6 +376,8 @@ FUNCTIONS.update({
     'locale_info':             ('void *', 'void', 0x6588b0),
     'locale_info_tr':          ('const char *', 'void *, const char *', 0x658db4),
     'widget_set_tr_text':      ('int', 'void *, const char *', 0x66f994),
+    # patch/lockscreen.c lk_date: copies the format (tk_str_copy into digit_clock +0x78) and formats the time at once (0x626b08); RET_BAD_PARAMS for a null widget
+    'digit_clock_set_format':  ('int', 'void *, const char *', 0x626bbc),
 })
 # Light Mode (patch/palette.c): a change of the effective mode drops the cached images (the image manager: AWTK's image_manager() and image_manager_unload_all, which the window manager's
 # locale handler also calls) and repaints the window manager

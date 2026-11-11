@@ -6,7 +6,7 @@ usage: python3 -I test/demo_diff.py <stock demo> <built demo>
 Allowed differences: the zeroed .pdr section (space step), the program headers (the payload PT_LOAD),
 the 8-byte Home-icon hook at 0x533b80, the 8-byte boot guard hook at home_page_init 0x534cd4, the 8-byte
 Now Playing hook at playing_page_init
-0x53d1e4, the 8-byte timed cover page hook at bigcover_page_init 0x529a24, the one word of the timed open's navigator_to call at 0x53d0ec (the idle view), the 8-byte lock screen hook at screensaver_page_init 0x53fd44, the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the 8-byte pull-down hook at dialog_dropdown_dialog_init 0x475f04, the pinned literals of tools/autotime.py (hwclock -su/-wu), the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the four cover-size immediates of the lock screen (each must be
+0x53d1e4, the 8-byte timed cover page hook at bigcover_page_init 0x529a24, the one word of the timed open's navigator_to call at 0x53d0ec (the idle view), the 8-byte lock screen hook at screensaver_page_init 0x53fd44, the 8-byte More dialog hook at dialog_playmore_dialog_init 0x479cc4, the 8-byte pull-down hook at dialog_dropdown_dialog_init 0x475f04, the pinned literals of tools/autotime.py (hwclock -su/-wu), the one word at get_id3info 0x4dff4c (the tag reader's strcpy call, now a jal into the payload), the one data word g_scroll_view_vtable + 0x98 (0x97a330, patch/scroll.c), the words listed in patch/rows.json, the lock screen date's six words in wstr_format_date_time (0x64e944) and its shortened weekday and month names (tools/mod_lockscreen.py DATE_NAMES), the four cover-size immediates of the lock screen (each must be
 stock | 264), the five A-B marker immediates of Now Playing (tools/mod_nowplaying.py marker_edits) and bytes
 the four pinned branch words of tools/coex.py (Wi-Fi and Bluetooth together), the pinned words of tools/themeoff.py (theme1 off), appended after the stock file. Anything else is an error. Exit status 0 = clean.
 """
@@ -16,6 +16,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(ROOT, 'tools'))
 import mod_nowplaying as mn
 import autotime, coex, themeoff, timezones
+import mod_lockscreen as ml
 import pod   # the Shuffle hooks and display sites (tools/pod.py SETMODE, LOADPL, MODE_SITES)
 HOOK = (0x533b80, 8)
 HOME_INIT = (0x534cd4, 8)   # home_page_init: the boot guard's hook (docs/architecture.md)
@@ -126,6 +127,9 @@ def main():
     rows = rows_words()
     for va in rows: allow(va_to_off(s, va), 4, 'rows')
     for va in COVER_IMM: allow(va_to_off(s, va), 4, 'cover')
+    allow(va_to_off(s, ml.DATE_W_VA + 16), 24, 'lock date: the weekday takes the month\'s path')
+    for _, addrs, olds, _ in ml.DATE_NAMES:
+        for va, old in zip(addrs, olds): allow(va_to_off(s, va), len(old), 'lock date names')
     diff = [k for k in range(len(s)) if s[k] != m[k]]
     bad = [k for k in diff if k not in allowed]
     count = {}
@@ -269,6 +273,14 @@ def main():
         o = va_to_off(s, a); good = s[o:o + len(old)] == old and m[o:o + len(new)] == new
         print(f'auto time literal {a:#x}: {old.rstrip(bytes(1))!r} -> {new.rstrip(bytes(1))!r}', 'ok' if good else 'WRONG')
         ok = ok and good
+    o = va_to_off(s, ml.DATE_W_VA + 16); good = m[o:o + 24] == struct.pack('<6I', *ml.date_w_words())      # docs/modules/lockscreen.md "The date"
+    print(f'lock date weekday path {ml.DATE_W_VA + 16:#x}: {s[o:o + 24].hex()} -> {m[o:o + 24].hex()}', 'ok' if good else 'WRONG')
+    ok = ok and good
+    for _, addrs, olds, news in ml.DATE_NAMES:
+        for va, old, new in zip(addrs, olds, news):
+            o = va_to_off(s, va); good = s[o:o + len(old) + 1] == old.encode() + b'\0' and m[o:o + len(old) + 1] == new.encode().ljust(len(old) + 1, b'\0')
+            if old != new or not good: print(f'lock date name {va:#x}: {old!r} -> {new!r}', 'ok' if good else 'WRONG')
+            ok = ok and good
     for a, text in autotime.NEIGHBOURS:
         o = va_to_off(s, a); good = s[o:o + len(text)] == m[o:o + len(text)] == text
         print(f'auto time neighbour {a:#x}', 'ok' if good else 'WRONG')

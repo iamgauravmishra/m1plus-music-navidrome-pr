@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Approximate PIL mock-up of the 320x480 lock screen (ui/screensaver_page.bin); not pixel-exact AWTK.
 
-  preview_lockscreen.py RAW_DIR OUT.png LABEL=UI.bin[,pct=N][,charging][,number][,idle][,mini][,raw=DIR] ...  [--wallpaper KIND]
+  preview_lockscreen.py RAW_DIR OUT.png LABEL=UI.bin[,pct=N][,charging][,number][,idle][,mini][,lang=LOCALE][,raw=DIR] ...  [--wallpaper KIND]
 
 RAW_DIR is rootfs/release/assets/default/raw (images/, fonts/default.ttf, styles/); raw=DIR overrides it
 for one panel (e.g. a "before" tree). Text is sized like AWTK's stb font backend (font_size = ascender -
@@ -9,6 +9,7 @@ descender) and placed by its middle/left/right rules. Button icons come from the
 (styles/screensaver_page.bin, then default.bin) like AWTK's window theme lookup.
 App-driven content is sample data: the cover is a synthetic picture, title/artist sample strings;
 `number` shows the Battery Percentage's label (pod_pct_lk, hidden in the asset; patch/battery.c);
+`lang=zh_CN` (a locale of tools/pod_i18n.py) draws the date as that language shows it (its format and names; English by default);
 `idle` draws the nothing-queued state (the app hides view_bottomview); `mini` gives the tree the mini player layout
 (mod_lockscreen.apply_mini, the model of what patch/lockscreen.c does when /mnt/data/m1plus/lockscreen-layout is 1). The wallpaper is app-driven too;
 by default a plain gradient stands in for it; --wallpaper busy draws a synthetic busy picture (to show
@@ -19,12 +20,13 @@ import argparse, datetime, os, sys
 from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import awtk_ui, awtk_style, mod_lockscreen, preview_minibar
+import pod_i18n
 from awtk_text import MONTHS, WEEKDAYS as WDAYS
 
 W, H = 320, 480
 NOW = datetime.datetime(2026, 10, 19, 9, 41, 7)
 
-def fmt_time(fmt, t):
+def fmt_time(fmt, t, wdays=WDAYS, months=MONTHS):
     """digit_clock formatting as implemented by the M1 Plus AWTK build (see mod_lockscreen.py)."""
     out, i = '', 0
     while i < len(fmt):
@@ -35,8 +37,8 @@ def fmt_time(fmt, t):
              'm': t.minute, 's': t.second, 'T': t.minute, 'w': (t.weekday() + 1) % 7}.get(c)
         if c == 'H' and n == 2: out += f'{h12:02d}'
         elif c == 'T' and n == 2: out += f'{t.minute:02d} ' + ('AM' if t.hour < 12 else 'PM')
-        elif c == 'M' and n == 3: out += MONTHS[t.month - 1]
-        elif c == 'W': out += WDAYS[(t.weekday() + 1) % 7]
+        elif c == 'M' and n == 3: out += months[t.month - 1]
+        elif c == 'W': out += wdays[(t.weekday() + 1) % 7]
         elif v is not None: out += f'{v:02d}' if n == 2 and c != 'w' else str(v)
         else: out += c * n
         i += n
@@ -98,8 +100,8 @@ class Painter:
         layer = Image.new('RGBA', (W, H)); ImageDraw.Draw(layer).text((x, top + f.getmetrics()[0]), s, font=f,
                                                                    fill=wd.get('style:normal:text_color', '#FFFFFF'), anchor='ls')
         im.alpha_composite(layer.crop(clip), clip[:2])
-    def render(self, root, pct, charging, idle, mini=False, number=False):
-        self.number = number
+    def render(self, root, pct, charging, idle, mini=False, number=False, lang='en_US'):
+        self.number = number; self.date = pod_i18n.lock_date(lang)
         if self.wallpaper == 'stock':
             im = self.icon('screensaver_default').resize((W, H))
         elif self.wallpaper == 'busy':
@@ -145,7 +147,7 @@ class Painter:
                 if wd.get('draw_type') == 'scale_auto': img = img.resize((r[2], r[3]), Image.LANCZOS)
                 im.alpha_composite(img.crop((c[0] - r[0], c[1] - r[1], c[2] - r[0], c[3] - r[1])), c[:2])
         elif t == 'digit_clock':
-            self.text(im, c, r, fmt_time(wd.get('format', 'hh:mm:ss'), NOW), wd)
+            self.text(im, c, r, fmt_time(self.date[0] if wd.get('format') == pod_i18n.LOCK_DATE_KEY else wd.get('format', 'hh:mm:ss'), NOW, *self.date[1:]), wd)   # the payload translates our asset's format (lk_date); any other tree's format (a stock "before" panel) is drawn as it is
         elif t == 'label' and name == mod_lockscreen.PCT_WIDGET:
             self.text(im, c, r, f'{pct}%', wd)
         elif t == 'hscroll_label':
@@ -172,7 +174,7 @@ def main():
         state = ('nothing queued, ' if idle else '') + f'{pct}%{", charging" if charging else ""}'
         root = awtk_ui.parse(open(path, 'rb').read())
         if mini: mod_lockscreen.apply_mini(root)
-        shots.append((f'{label}  ({state})', p.render(root, pct, charging, idle, mini, number)))
+        shots.append((f'{label}  ({state})', p.render(root, pct, charging, idle, mini, number, next((o[5:] for o in opts if o.startswith('lang=')), 'en_US'))))
     top, pad = 18, 10
     out = Image.new('RGB', (len(shots) * (W + pad) + pad, H + top + 18), (40, 40, 40)); d = ImageDraw.Draw(out)
     for i, (label, im) in enumerate(shots):

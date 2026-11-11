@@ -896,4 +896,120 @@ def redirect_tests(ctx):
             expect(on_top and r == 0 and (navs(m), opened(m)) == want, f'Display {label}, kill switch {"on" if kill else "off"}: one Display window in front, then the Lock Screen row gives {want[0] or want[1]}')
 
 
-SECTIONS = [hook_tests, layout_tests, life_tests, bar_tests, setting_tests, wallpaper_tests, redirect_tests]
+def date_tests(ctx):
+    """The date line (docs/modules/lockscreen.md "The date"): demo's formatter run for real on the built demo in every language, against the model the preview draws with."""
+    expect = ctx.expect
+    import datetime, paths
+    import pod_i18n
+    import preview_lockscreen as PL
+    stock = open(os.path.join(paths.find_stock(paths.ZIP), 'rootfs', pod.DEMO), 'rb').read()
+    built = open(DEMO, 'rb').read()
+    at = lambda b, a, n: bytes(b[pod.fileoff(b, a):pod.fileoff(b, a) + n])
+    FMT, KEY = pod.FUNCTIONS['digit_clock_set_format'][2], pod_i18n.LOCK_DATE_KEY
+
+    # -- 0. the pins and the edits
+    expect(at(stock, ML.DATE_W_VA, len(ML.DATE_W_CODE)) == ML.DATE_W_CODE and at(stock, ML.DATE_M_VA, len(ML.DATE_M_CODE)) == ML.DATE_M_CODE, 'stock has the weekday block\'s head and the month\'s path the build pins')
+    words = struct.unpack('<6I', at(built, ML.DATE_W_VA + 16, 24))
+    expect(words == ML.date_w_words() == (0x041127da, 0, 0x001e3080, 0x26fe4944, 0x10000053, 0) and at(built, ML.DATE_W_VA, 16) == ML.DATE_W_CODE[:16] and at(built, ML.DATE_M_VA, len(ML.DATE_M_CODE)) == ML.DATE_M_CODE,
+           'the build: bal locale_info; nop; sll a2, fp, 2; addiu fp, s7, the English weekday table; b the month\'s tail; nop over the six buffer-clearing words, nothing else of the two paths moved')
+    for table, addrs, olds, news in ML.DATE_NAMES:
+        expect(struct.unpack(f'<{len(addrs)}I', at(stock, table, 4 * len(addrs))) == tuple(addrs) == struct.unpack(f'<{len(addrs)}I', at(built, table, 4 * len(addrs)))
+               and all(at(stock, a, len(o) + 1) == o.encode() + b'\0' and at(built, a, len(o) + 1) == n.encode().ljust(len(o) + 1, b'\0') for a, o, n in zip(addrs, olds, news)),
+               f'the name table {table:#x}: stock\'s pointers, {olds[0]}.. in stock and {news[0]}.. in the build, in place')
+    expect(tuple(ML.DATE_NAMES[0][3]) == pod_i18n.WEEKDAY_KEYS and tuple(ML.DATE_NAMES[1][3]) == pod_i18n.MONTH_NAME_KEYS and ML.DATE_FORMAT == KEY
+           and awtk_ui.parse(open(UI, 'rb').read()).find(ML.DATE_WIDGET).get('format') == KEY, 'the build\'s names are the i18n keys, and the asset\'s format is the format\'s key')
+    expect(FMT == 0x626bbc and at(stock, FMT, 12) == bytes.fromhex('3e001c3c14d39c2721e09903'), 'digit_clock_set_format is stock\'s function (its prologue)')
+
+    # -- 1. the formats: no letter of a language's own is a token, and the texts fit the formatter's buffers
+    for loc in pod_i18n.LOCALES:
+        fmt, days, months = pod_i18n.lock_date(loc)
+        lit = fmt.replace('MMM', '').replace('M', '', 1).replace('D', '', 1).replace('W', '', 1)
+        expect(not set(lit) & set('YMDhHmsTwW') and fmt.count('W') == 1 and fmt.count('D') == 1 and len(fmt.encode()) < 0x40 and all(0 < len(s) < 0x20 for s in days + months)
+               and len(set(days)) == 7 and len(set(months)) == 12, f'{loc}: {fmt!r} has one weekday, one day, a month, no stray token; 7 weekdays and 12 months, each under 32 characters')
+
+    # -- 2. the payload sets the language's format at the page's init
+    def opened(loc, kill=False, widget=True, ret=0):
+        m = LK(setting=None, names=NAMES + ((ML.DATE_WIDGET,) if widget else ())); m.set_language(None if loc == 'en_US' else loc); m.init_ret = ret
+        if kill: m.present.add(KILL)
+        m.open()
+        return m, [c for c in m.calls if c[0] == 'digit_clock_set_format']
+    for loc in pod_i18n.LOCALES:
+        m, sets = opened(loc)
+        want = pod_i18n.TEXT[KEY][loc].encode('utf-8').decode('latin-1')
+        expect(len(sets) == 1 and sets[0][1] == m.w[ML.DATE_WIDGET] and sets[0][2] == want and m.calls.index(sets[0]) > 0, f'{loc}: after stock\'s init the date\'s format is set to {pod_i18n.TEXT[KEY][loc]!r}, once')
+    expect(not opened('zh_CN', kill=True)[1] and not opened('zh_CN', widget=False)[1] and not opened('zh_CN', ret=0x10)[1], 'the kill switch, a missing widget, a failed stock init: no format is set (the asset\'s stays)')
+
+    # -- 3. demo's formatter, run for real on the built demo: every weekday and month in every language is the model's text
+    WS = {0x71324c: 'wstr_init', 0x713490: 'wstr_set_utf8', 0x7141b0: 'wstr_reset', 0x713770: 'wstr_append_with_len', 0x713940: 'wstr_push_int', 0x70ec88: 'tk_utf8_to_utf16', 0x713834: 'wstr_append'}
+
+    class FM(Machine):
+        """wstr_format_date_time itself runs; the string helpers it calls (the GOT words it loads them from are checked below) are modelled: the output is self.out."""
+        def __init__(self):
+            super().__init__()
+            self.fm = {**{a: n for a, n in WS.items()}, self.word(pod.GP - 0x960): 'strlen', self.word(pod.GP - 0xadc): 'memset'}
+            for a in self.fm: self.handlers[a] = 'fm'
+            self.out = ''
+
+        def wtext(self, a, n=None):
+            s = ''
+            while n is None or len(s) < n:
+                c = self.word(a + 4 * len(s))
+                if n is None and not c: break
+                s += chr(c)
+            return s
+
+        def _hook(self, u, address, size, _):
+            name = self.fm.get(address) if self.handlers.get(address) == 'fm' else None
+            if name is None: return super()._hook(u, address, size, _)
+            a0, a1, a2 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2))
+            ret = 0
+            if name == 'strlen': ret = len(self.read_cstr(a0))
+            elif name == 'memset': u.mem_write(a0, bytes([a1 & 255]) * a2); ret = a0
+            elif name == 'wstr_init': u.mem_write(a0, bytes(12))
+            elif name == 'wstr_set_utf8':    # the format as characters, the wstr_t's str at +8
+                text = self.read_cstr(a1).encode('latin-1').decode('utf-8'); p = self.alloc(4 * len(text) + 4)
+                u.mem_write(p, text.encode('utf-32-le') + bytes(4)); u.mem_write(a0, struct.pack('<3I', len(text), len(text) + 1, p))
+            elif name == 'wstr_append_with_len': self.out += self.wtext(a1, a2)
+            elif name == 'wstr_push_int': self.out += self.read_cstr(a1) % (a2 - (1 << 32) if a2 >> 31 else a2)
+            elif name == 'tk_utf8_to_utf16':
+                text = self.read_cstr(a0).encode('latin-1').decode('utf-8')[:a2 - 1]
+                u.mem_write(a1, text.encode('utf-32-le') + bytes(4)); ret = a1
+            elif name == 'wstr_append': self.out += self.wtext(a1)
+            u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA))
+
+        def fmt(self, fmt, t):
+            ws, dt = self.alloc(16), self.alloc(64)
+            self.u.mem_write(ws, bytes(16)); self.out = ''
+            self.u.mem_write(dt, struct.pack('<7i', t.second, t.minute, t.hour, t.day, (t.weekday() + 1) % 7, t.month, t.year))
+            r = self.call(0x64e7b0, a0=ws, a1=self.cstr(fmt), a2=dt, count=400000)
+            return r, self.out
+    got_words = {0x71324c: -0x308c, 0x713490: -0x31b4, 0x7141b0: -0x3108, 0x713770: -0x25e0, 0x713940: -0x25dc, 0x70ec88: -0x2fc0, 0x713834: -0x25d8}
+    probe = Machine()
+    expect(all(probe.word(pod.GP + off) == a for a, off in got_words.items()), 'the formatter\'s helpers are where the test mocks them (the GOT words wstr_format_date_time loads)')
+    days = [datetime.datetime(2026, 11, 8 + i, 9, 41) for i in range(7)] + [datetime.datetime(2026, mo, 28 if mo != 9 else 30, 9, 41) for mo in range(1, 13)]
+    shown = {}
+    for loc in pod_i18n.LOCALES:
+        m = FM(); m.set_language(None if loc == 'en_US' else loc)
+        fmt, wd, mon = pod_i18n.lock_date(loc)
+        got = [m.fmt(fmt, t) for t in days]
+        shown[loc] = got[3][1]
+        expect(all(r == 0 for r, _ in got) and [s for _, s in got] == [PL.fmt_time(fmt, t, wd, mon) for t in days], f'{loc}: the 7 weekdays and 12 months read as the model\'s ({got[3][1]!r}, {got[15][1]!r})')
+    expect((shown['en_US'], shown['zh_CN'], shown['zh_HK'], shown['ja_JP'], shown['ge_DE']) == ('Wed, Nov 11', '11月11日 周三', '11月11日 週三', '11月11日(水)', 'Mi., 11. Nov.'),
+           f'Wednesday 11 November: {shown}')
+    m = FM(); m.set_language('zh_CN')
+    expect(m.fmt(KEY, days[3]) == (0, '周三, 11月 11') and m.fmt('hh:mm', days[3]) == (0, '09:41') and m.fmt('Y-MM-DD w', days[3]) == (0, '2026-11-11 3'),
+           'the asset\'s format in Chinese (the kill switch) has the language\'s names; the clock and the numeric tokens are as before')
+    m = FM(); ws, dt = m.alloc(16), m.alloc(64); m.u.mem_write(ws, bytes(16)); m.u.mem_write(dt, struct.pack('<7i', 0, 41, 9, 11, 7, 11, 2026))
+    expect(m.call(0x64e7b0, a0=ws, a1=m.cstr('W'), a2=dt, count=400000) == 0 and not [c for c in m.calls if c[0] == 'locale_info_tr'], 'a weekday out of range is not looked up (stock\'s bound, kept)')
+
+    # -- 4. the widest date of every language (the built font) stays clear of the Battery Percentage label
+    from awtk_text import Ttf, awtk_width
+    font = Ttf(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/fonts/default.ttf'))
+    page = awtk_ui.parse(open(UI, 'rb').read()); date, lab = page.find(ML.DATE_WIDGET), page.find(ML.PCT_WIDGET)
+    px = int(date.get('style:normal:font_size'))
+    wide = {loc: awtk_width(font, s, px) for loc, s in ML.date_samples(font).items()}
+    expect(all(date.x + (date.w + w) // 2 + 4 <= lab.x for w in wide.values()) and all(font.glyph(c) for s in ML.date_samples(font).values() for c in s),
+           f'every language\'s widest date, centred, ends at least 4 px before the label at {lab.x}, and the font has every character ({wide})')
+
+
+SECTIONS = [hook_tests, layout_tests, life_tests, bar_tests, setting_tests, wallpaper_tests, redirect_tests, date_tests]

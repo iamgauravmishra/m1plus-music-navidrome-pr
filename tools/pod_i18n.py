@@ -1405,6 +1405,39 @@ _MONTHS = {   # locale -> the twelve month texts
     'uk_UK': [f'%d {x}' for x in ('січ.', 'лют.', 'бер.', 'квіт.', 'трав.', 'черв.', 'лип.', 'серп.', 'вер.', 'жовт.', 'лист.', 'груд.')],
 }
 TEXT.update(_t(k, *[_MONTHS[loc][i] for loc in _L]) for i, k in enumerate(_MONTH_KEYS))
+# The lock screen's date (docs/modules/lockscreen.md "The date"): the short date of each language, e.g. "Wed, Nov 11", "11月11日 周三", "Mi., 11. Nov.". Three kinds of key:
+# the digit_clock format (LOCK_DATE_KEY, the asset's own format; the payload sets its translation at the page's init: M / D numbers, MMM and W the names below, the rest copied),
+# and the weekday and month names, which demo's formatter itself looks up (wstr_format_date_time; tools/mod_lockscreen.py patch_date_names). A format's own letters must not be
+# among the formatter's tokens (Y M D h H m s T w W). The CJK formats write the month as a number; their month names only show with the kill switch (the asset's format).
+LOCK_DATE_KEY = 'W, MMM D'
+WEEKDAY_KEYS = ('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat')
+MONTH_NAME_KEYS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+DEMO_KEYS = WEEKDAY_KEYS + MONTH_NAME_KEYS     # looked up by demo, not by an asset or the payload (the orphan test, test/pod/i18n.py)
+_LOCK_DATE = {   # locale -> (format, the seven weekdays from Sunday, the twelve months)
+    'zh_CN': ('M月D日 W', ['周' + c for c in '日一二三四五六'], [f'{m}月' for m in range(1, 13)]),
+    'zh_HK': ('M月D日 W', ['週' + c for c in '日一二三四五六'], [f'{m}月' for m in range(1, 13)]),
+    'ja_JP': ('M月D日(W)', list('日月火水木金土'), [f'{m}月' for m in range(1, 13)]),
+    'ko_KR': ('M월 D일 (W)', list('일월화수목금토'), [f'{m}월' for m in range(1, 13)]),
+    'fr_FR': ('W D MMM', 'dim. lun. mar. mer. jeu. ven. sam.'.split(), 'janv. févr. mars avr. mai juin juil. août sept. oct. nov. déc.'.split()),
+    'ge_DE': ('W, D. MMM', 'So. Mo. Di. Mi. Do. Fr. Sa.'.split(), 'Jan. Feb. März Apr. Mai Juni Juli Aug. Sept. Okt. Nov. Dez.'.split()),
+    'sp_ES': ('W, D MMM', 'dom lun mar mié jue vie sáb'.split(), 'ene feb mar abr may jun jul ago sept oct nov dic'.split()),
+    'it_IT': ('W D MMM', 'dom lun mar mer gio ven sab'.split(), 'gen feb mar apr mag giu lug ago set ott nov dic'.split()),
+    'th_TH': ('W D MMM', 'อา. จ. อ. พ. พฤ. ศ. ส.'.split(), 'ม.ค. ก.พ. มี.ค. เม.ย. พ.ค. มิ.ย. ก.ค. ส.ค. ก.ย. ต.ค. พ.ย. ธ.ค.'.split()),
+    'po_PL': ('W, D MMM', 'niedz. pon. wt. śr. czw. pt. sob.'.split(), 'sty lut mar kwi maj cze lip sie wrz paź lis gru'.split()),
+    'ru_RU': ('W, D MMM', 'вс пн вт ср чт пт сб'.split(), 'янв. февр. мар. апр. мая июн. июл. авг. сент. окт. нояб. дек.'.split()),
+    'uk_UK': ('W, D MMM', 'нд пн вт ср чт пт сб'.split(), 'січ. лют. бер. квіт. трав. черв. лип. серп. вер. жовт. лист. груд.'.split()),
+}
+assert all(len(w) == 7 and len(m) == 12 for _, w, m in _LOCK_DATE.values())
+TEXT.update([_t(LOCK_DATE_KEY, *[_LOCK_DATE[loc][0] for loc in _L])])
+TEXT.update(_t(k, *[_LOCK_DATE[loc][1][i] for loc in _L]) for i, k in enumerate(WEEKDAY_KEYS))
+TEXT.update(_t(k, *[_LOCK_DATE[loc][2][i] for loc in _L]) for i, k in enumerate(MONTH_NAME_KEYS))
+
+
+def lock_date(loc):
+    """(format, weekdays, months) of the lock screen's date in the language loc."""
+    return TEXT[LOCK_DATE_KEY][loc], [TEXT[k][loc] for k in WEEKDAY_KEYS], [TEXT[k][loc] for k in MONTH_NAME_KEYS]
+
+
 TEXT['Subsonic'] = {loc: 'Subsonic' for loc in LOCALES}   # the product name, the same in every language (the menu row and the pages' title)
 TEXT.update([
     _t(', %d', '，%d年', '，%d年', ', %d年', ', %d년', ', %d', ', %d', ', %d', ', %d', ', %d', ', %d', ', %d', ', %d'),

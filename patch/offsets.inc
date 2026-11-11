@@ -593,6 +593,7 @@
 #define LK_TITLE_PX 17
 #define LK_ARTIST_PX 16
 #define LK_ARTIST_RGB "#D0D0D0"
+#define LK_DATE_NAME "dclock_date" /* the lock screen's date (a digit_clock; patch/lockscreen.c lk_date) */
 #define MB_FIRST_MS 120
 #define MB_TICK_MS 500
 #define MB_SETTLE 3

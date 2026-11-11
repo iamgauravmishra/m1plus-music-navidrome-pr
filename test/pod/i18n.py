@@ -146,6 +146,7 @@ def run(ctx):
     expect(all(k in pod_i18n.TEXT or k in pod_i18n.STOCK for k in keys_in_c), f'every key the payload uses exists ({sorted(k for k in keys_in_c if k not in pod_i18n.TEXT and k not in pod_i18n.STOCK)})')
     orphans = set(pod_i18n.TEXT) | set(pod_i18n.STOCK)
     orphans -= set(pod_i18n.PENDING_KEYS)   # (the 10-Band editor's strings, used from phase 2)
+    orphans -= set(pod_i18n.DEMO_KEYS)      # the lock date's weekday and month names: demo's own formatter looks them up
     orphans -= used | {k for k in orphans if any(f'"{k}"' in src for src in sources.values())}
     expect(not orphans, f'every key is used by an asset or the payload: {sorted(orphans)}')
     expect({'Landscape', 'Cover Flow'} <= used | keys_in_c and 'Cover Flow landscape' not in pod_i18n.TEXT,
