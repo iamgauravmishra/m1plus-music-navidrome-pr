@@ -613,6 +613,9 @@ static void tp_format(
     char *out,
     const char *path) { /* the file extension, upper case, at most 4 characters: what the track's information gives */
     unsigned n = 0, dot = 0, i, k = 0;
+    out[0] = 0;
+    if (path[0] == 'h' && path[1] == 't' && path[2] == 't' && path[3] == 'p')
+        return; /* a stream's address (Subsonic's stream.view) has no file format in it */
     while (path[n]) {
         if (path[n] == '.') dot = n + 1;
         if (path[n] == '/') dot = 0;

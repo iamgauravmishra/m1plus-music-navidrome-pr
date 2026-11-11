@@ -1161,6 +1161,13 @@ def quality_tests(ctx):
         if badge == 2 and info and info['rate'] == 2822400: dump(m, 'quality-dsd')
         if fmt == 'MP3 320' and info and info['rate'] == 44100: dump(m, 'quality-lossy')
         if fmt == 'FLAC 16/44.1': dump(m, 'quality-cd')
+    # a stream's address: its ".view" is not a format, the player's record gives it
+    for url in ('http://h/rest/stream.view?id=1', 'https://h/rest/stream.view?id=a.b'):
+        m = machine(font=font, status=3, theme=3, path=url); m.info = I('FLAC', 96000, 24)
+        assert m.open() == 0
+        m.timers = []; settle(m)
+        n, first = diff(m.landscape(), ref_frame(m, font, theme='metal', playing=False, fmt='FLAC 24/96', badge=1))
+        expect(n == 0, f'{url}: "FLAC 24/96" from the record, not the address\'s extension ({n} {first})')
     # a chosen theme keeps its tape: the format and the sticker still follow the stream
     for t in range(3):
         m = page(I('FLAC', 96000, 24), 'a.flac', t)
