@@ -100,9 +100,9 @@ def run(ctx):
     # The stock texts stock left in English (STOCK_FIX): Look up Album / Look up Artist and the rest of that block read in the table's language in the ten tables
     # besides English and Chinese, which are never touched; it_IT has the two keys it lacked; no table reads as it did.
     sen, ten = dict(stock['en_US']), ('ja_JP', 'ko_KR', 'fr_FR', 'ge_DE', 'sp_ES', 'it_IT', 'th_TH', 'po_PL', 'ru_RU', 'uk_UK')
-    block = [k for k, by in pod_i18n.STOCK_FIX.items() if set(by) == set(ten)]
+    block = [k for k, by in pod_i18n.STOCK_FIX.items() if set(by) >= set(ten) - {'th_TH'}]   # (the eleven digital filters keep their English names in Thai)
     expect(len(block) == 42 and{'player_albuminfo', 'player_songerinfo', 'msg_newplaylists', 'msg_playlistexist'} <= set(block)
-           and all(dict(built[loc])[k] == pod_i18n.STOCK_FIX[k][loc] != sen[k] for loc in ten for k in block),
+           and sum('th_TH' not in pod_i18n.STOCK_FIX[k] for k in block) == 11 and all(dict(built[loc])[k] == t != sen[k] for k in block for loc, t in pod_i18n.STOCK_FIX[k].items()),
            f'the {len(block)} stock keys that were English in ten tables are translated in each')
     expect(all(dict(built[loc])[k] == t != dict(stock[loc]).get(k) for k, by in pod_i18n.STOCK_FIX.items() for loc, t in by.items())
            and all(set(by) <= set(ten) and k in sen for k, by in pod_i18n.STOCK_FIX.items()),

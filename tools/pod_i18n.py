@@ -1614,9 +1614,9 @@ _FL = ('ja_JP', 'ko_KR', 'fr_FR', 'ge_DE', 'sp_ES', 'it_IT', 'th_TH', 'po_PL', '
 
 
 def _f(key, *texts, **by):
-    """key -> {locale: text}: `texts` are the ten _FL tables in order (none for a key fixed in single tables), `by` names single tables."""
+    """key -> {locale: text}: `texts` are the ten _FL tables in order (None: that table keeps the stock text; none at all for a key fixed in single tables), `by` names single tables."""
     assert len(texts) in (0, len(_FL)) and set(by) <= set(_FL), key
-    d = dict(zip(_FL, texts)); d.update(by)
+    d = {loc: t for loc, t in zip(_FL, texts) if t is not None}; d.update(by)
     return key, d
 
 
@@ -1669,7 +1669,7 @@ STOCK_FIX = dict([
     # Bluetooth
     _f('msg_btinit_run', 'Bluetoothを起動中', 'Bluetooth 시작 중', 'Démarrage du Bluetooth', 'Bluetooth wird gestartet', 'Iniciando Bluetooth', 'Avvio del Bluetooth', 'กำลังเริ่ม Bluetooth', 'Uruchamianie Bluetooth',
        'Запуск Bluetooth', 'Запуск Bluetooth'),
-    _f('msg_unpairing', 'ペアリングを解除しますか?', '페어링을 해제할까요?', 'Dissocier ?', 'Kopplung aufheben?', '¿Desemparejar?', "Annullare l'abbinamento?", 'ยกเลิกการจับคู่หรือไม่', 'Rozparować?', 'Разорвать пару?', 'Скасувати пару?'),
+    _f('msg_unpairing', 'ペアリングを解除しますか?', '페어링을 해제할까요?', 'Dissocier ?', 'Kopplung aufheben?', '¿Desemparejar?', "Annullare l'abbinamento?", 'ยกเลิกการจับคู่หรือไม่', 'Anulować sparowanie?', 'Отменить сопряжение?', 'Скасувати спарення?'),
     _f('msg_disonnectbt', 'Bluetoothデバイスを切断してください', 'Bluetooth 기기 연결을 해제하세요', "Veuillez déconnecter l'appareil Bluetooth", 'Bitte Bluetooth-Gerät trennen', 'Desconecta el dispositivo Bluetooth',
        'Disconnetti il dispositivo Bluetooth', 'โปรดยกเลิกการเชื่อมต่ออุปกรณ์ Bluetooth', 'Odłącz urządzenie Bluetooth', 'Отключите устройство Bluetooth', "Від'єднайте пристрій Bluetooth"),
     # system settings
@@ -1680,29 +1680,29 @@ STOCK_FIX = dict([
        'Godzina na ekranie blokady', 'Время на экране блокировки', 'Час на екрані блокування'),
     _f('sset_atmosphereled', 'アンビエントライト設定', '무드등 설정', "Éclairage d'ambiance", 'Ambientelicht', 'Luz ambiental', 'Luce ambiente', 'ไฟบรรยากาศ', 'Podświetlenie nastrojowe', 'Декоративная подсветка', 'Декоративне підсвічування'),
     _f('ledfollowscreen', '画面に連動', '화면과 연동', "Suivre l'écran", 'Dem Bildschirm folgen', 'Seguir la pantalla', 'Segui lo schermo', 'ตามหน้าจอ', 'Jak ekran', 'Как экран', 'Як екран'),
-    # the digital filters
-    _f('filter_linearfast', 'リニアフェーズ高速ロールオフ', '선형 위상 고속 롤오프', 'Phase linéaire, atténuation rapide', 'Linearphasig, steiler Roll-off', 'Fase lineal, caída rápida', 'Fase lineare, roll-off rapido', 'เฟสเชิงเส้น โรลออฟเร็ว',
+    # the digital filters (Thai keeps the English names: no Thai manual or review was found that translates them)
+    _f('filter_linearfast', 'リニアフェーズ高速ロールオフ', '선형 위상 고속 롤오프', 'Phase linéaire, atténuation rapide', 'Linearphasig, steiler Roll-off', 'Fase lineal, caída rápida', 'Fase lineare, roll-off rapido', None,
        'Faza liniowa, szybki spadek', 'Линейная фаза, быстрый спад', 'Лінійна фаза, швидкий спад'),
-    _f('filter_linearslow', 'リニアフェーズ低速ロールオフ', '선형 위상 저속 롤오프', 'Phase linéaire, atténuation lente', 'Linearphasig, flacher Roll-off', 'Fase lineal, caída lenta', 'Fase lineare, roll-off lento', 'เฟสเชิงเส้น โรลออฟช้า',
+    _f('filter_linearslow', 'リニアフェーズ低速ロールオフ', '선형 위상 저속 롤오프', 'Phase linéaire, atténuation lente', 'Linearphasig, flacher Roll-off', 'Fase lineal, caída lenta', 'Fase lineare, roll-off lento', None,
        'Faza liniowa, wolny spadek', 'Линейная фаза, медленный спад', 'Лінійна фаза, повільний спад'),
-    _f('filter_minifast', 'ミニマムフェーズ高速ロールオフ', '최소 위상 고속 롤오프', 'Phase minimale, atténuation rapide', 'Minimalphasig, steiler Roll-off', 'Fase mínima, caída rápida', 'Fase minima, roll-off rapido', 'เฟสต่ำสุด โรลออฟเร็ว',
+    _f('filter_minifast', 'ミニマムフェーズ高速ロールオフ', '최소 위상 고속 롤오프', 'Phase minimale, atténuation rapide', 'Minimalphasig, steiler Roll-off', 'Fase mínima, caída rápida', 'Fase minima, roll-off rapido', None,
        'Faza minimalna, szybki spadek', 'Минимальная фаза, быстрый спад', 'Мінімальна фаза, швидкий спад'),
-    _f('filter_minislow', 'ミニマムフェーズ低速ロールオフ', '최소 위상 저속 롤오프', 'Phase minimale, atténuation lente', 'Minimalphasig, flacher Roll-off', 'Fase mínima, caída lenta', 'Fase minima, roll-off lento', 'เฟสต่ำสุด โรลออฟช้า',
+    _f('filter_minislow', 'ミニマムフェーズ低速ロールオフ', '최소 위상 저속 롤오프', 'Phase minimale, atténuation lente', 'Minimalphasig, flacher Roll-off', 'Fase mínima, caída lenta', 'Fase minima, roll-off lento', None,
        'Faza minimalna, wolny spadek', 'Минимальная фаза, медленный спад', 'Мінімальна фаза, повільний спад'),
-    _f('filter_minimum', 'ミニマムフェーズ', '최소 위상', 'Phase minimale', 'Minimalphasig', 'Fase mínima', 'Fase minima', 'เฟสต่ำสุด', 'Faza minimalna', 'Минимальная фаза', 'Мінімальна фаза'),
-    _f('filter_apodizing', 'アポダイジング高速ロールオフ', '아포다이징 고속 롤오프', 'Apodisant, atténuation rapide', 'Apodisierend, steiler Roll-off', 'Apodizante, caída rápida', 'Apodizzante, roll-off rapido', 'อะโพไดซิง โรลออฟเร็ว',
+    _f('filter_minimum', 'ミニマムフェーズ', '최소 위상', 'Phase minimale', 'Minimalphasig', 'Fase mínima', 'Fase minima', None, 'Faza minimalna', 'Минимальная фаза', 'Мінімальна фаза'),
+    _f('filter_apodizing', 'アポダイジング高速ロールオフ', '아포다이징 고속 롤오프', 'Apodisant, atténuation rapide', 'Apodisierend, steiler Roll-off', 'Apodizante, caída rápida', 'Apodizzante, roll-off rapido', None,
        'Apodyzujący, szybki spadek', 'Аподизирующий, быстрый спад', 'Аподизуючий, швидкий спад'),
-    _f('filter_brickwall', 'ブリックウォール', '브릭월 필터', 'Filtre brickwall', 'Brickwall-Filter', 'Filtro brickwall', 'Filtro brickwall', 'ฟิลเตอร์ Brick wall', 'Filtr brickwall', 'Фильтр brickwall', 'Фільтр brickwall'),
+    _f('filter_brickwall', 'ブリックウォール', '브릭월 필터', 'Filtre brickwall', 'Brickwall-Filter', 'Filtro brickwall', 'Filtro brickwall', None, 'Filtr brickwall', 'Фильтр brickwall', 'Фільтр brickwall'),
     _f('filter_corrminifast', 'ミニマムフェーズ高速ロールオフ (補正)', '보정 최소 위상 고속 롤오프', 'Phase minimale corrigée, atténuation rapide', 'Minimalphasig korrigiert, steiler Roll-off', 'Fase mínima corregida, caída rápida',
-       'Fase minima corretta, roll-off rapido', 'เฟสต่ำสุดแบบปรับแก้ โรลออฟเร็ว', 'Faza minimalna skorygowana, szybki spadek', 'Скорректированная минимальная фаза, быстрый спад', 'Скоригована мінімальна фаза, швидкий спад'),
+       'Fase minima corretta, roll-off rapido', None, 'Faza minimalna skorygowana, szybki spadek', 'Скорректированная минимальная фаза, быстрый спад', 'Скоригована мінімальна фаза, швидкий спад'),
     _f('filter_linearsfastapodizing', 'リニアフェーズ高速ロールオフ (アポダイジング)', '선형 위상 고속 롤오프 아포다이징', 'Phase linéaire, atténuation rapide, apodisant', 'Linearphasig, steiler Roll-off, apodisierend',
-       'Fase lineal, caída rápida, apodizante', 'Fase lineare, roll-off rapido, apodizzante', 'เฟสเชิงเส้น โรลออฟเร็ว อะโพไดซิง', 'Faza liniowa, szybki spadek, apodyzujący', 'Линейная фаза, быстрый спад, аподизирующий',
+       'Fase lineal, caída rápida, apodizante', 'Fase lineare, roll-off rapido, apodizzante', None, 'Faza liniowa, szybki spadek, apodyzujący', 'Линейная фаза, быстрый спад, аподизирующий',
        'Лінійна фаза, швидкий спад, аподизуючий'),
     _f('filter_linearsfastripple', 'リニアフェーズ高速ロールオフ (低リップル)', '선형 위상 고속 롤오프 저리플', 'Phase linéaire, atténuation rapide, faible ondulation', 'Linearphasig, steiler Roll-off, geringe Welligkeit',
-       'Fase lineal, caída rápida, bajo rizado', 'Fase lineare, roll-off rapido, basso ripple', 'เฟสเชิงเส้น โรลออฟเร็ว ริปเปิลต่ำ', 'Faza liniowa, szybki spadek, niskie tętnienia', 'Линейная фаза, быстрый спад, низкие пульсации',
+       'Fase lineal, caída rápida, bajo rizado', 'Fase lineare, roll-off rapido, basso ripple', None, 'Faza liniowa, szybki spadek, niskie tętnienia', 'Линейная фаза, быстрый спад, низкие пульсации',
        'Лінійна фаза, швидкий спад, низькі пульсації'),
     _f('filter_minimumdispersion', 'ミニマムフェーズ低速ロールオフ (低分散)', '최소 위상 저속 롤오프 저분산', 'Phase minimale, atténuation lente, faible dispersion', 'Minimalphasig, flacher Roll-off, geringe Dispersion',
-       'Fase mínima, caída lenta, baja dispersión', 'Fase minima, roll-off lento, bassa dispersione', 'เฟสต่ำสุด โรลออฟช้า การกระจายต่ำ', 'Faza minimalna, wolny spadek, niska dyspersja', 'Минимальная фаза, медленный спад, низкая дисперсия',
+       'Fase mínima, caída lenta, baja dispersión', 'Fase minima, roll-off lento, bassa dispersione', None, 'Faza minimalna, wolny spadek, niska dyspersja', 'Минимальная фаза, медленный спад, низкая дисперсия',
        'Мінімальна фаза, повільний спад, низька дисперсія'),
     # single tables: English left in place
     _f('gain_high', ja_JP='高ゲイン', ko_KR='높음', it_IT='Alto'),
