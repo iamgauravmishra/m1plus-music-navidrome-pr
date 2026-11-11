@@ -423,8 +423,8 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
 PS_STYLES = (('label_ps_name', 22, INK_RGB, 'center'), ('label_ps_sec', 16, '#B8B8B8', 'left'), ('label_ps_meta', 15, SUB_RGB, 'left'), ('label_ps_head', 22, INK_RGB, 'left'),
              ('label_ps_date', 15, SUB_RGB, 'left'), ('label_ps_ctitle', 20, INK_RGB, 'left'), ('label_ps_cdim', 20, SUB_RGB, 'left'), ('label_ps_cdesc', 16, SUB_RGB, 'left'),
              ('label_ps_pill', 16, INK_RGB, 'left'), ('label_ps_latest', 18, '#000000', 'left'), ('label_ps_latestw', 18, INK_RGB, 'left'),
-             # the Shows page (round 2): the section headers (Continue Listening, Shows), the refresh line's white "Refresh", a Continue Listening item's title and its grey "35m left", the grid's title and grey line under each cover (the Albums grid's 18 / 15 px)
-             ('label_ps_sech', SECTION_PX, INK_RGB, 'left'), ('label_ps_line', 15, INK_RGB, 'left'), ('label_ps_stitle', 14, INK_RGB, 'left'), ('label_ps_sleft', 13, SUB_RGB, 'left'),
+             # the Shows page (round 2): the section headers (Continue Listening, Shows), a Continue Listening item's title and its grey "35m left", the grid's title and grey line under each cover (the Albums grid's 18 / 15 px)
+             ('label_ps_sech', SECTION_PX, INK_RGB, 'left'), ('label_ps_stitle', 14, INK_RGB, 'left'), ('label_ps_sleft', 13, SUB_RGB, 'left'),
              ('label_ps_gtitle', 18, INK_RGB, 'left'), ('label_ps_gsub', 15, SUB_RGB, 'left'))
 PS_TINT_NAME = 'img_ah_tint'   # the album page's tint gradient (ah_tint), a window sized insensitive image under everything; shown on the Show level once the cover's tone is set
 

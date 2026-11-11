@@ -1,4 +1,4 @@
-"""Show All Episodes (docs/modules/podcasts.md "All episodes"): the archive job (patch/pcnet.c, pn_arch_*: the feed fetched again with every item written to .archive through the parser's sink),
+"""See All (docs/modules/podcasts.md "All episodes"): the archive job (patch/pcnet.c, pn_arch_*: the feed fetched again with every item written to .archive through the parser's sink),
 the merged model (pc_load_show with an archive: the union of .episodes and .archive, an episode once, the newest PC_ALL_MAX, either order), a download of an archive-only episode and the Show page's
 row (patch/podcasts.c). The compiled payload runs under Unicorn against a scripted libcurl."""
 import email.utils
@@ -126,10 +126,10 @@ def job_tests(ctx):
            f'long items (about 900 bytes a line): the file stops at {ARCH_BYTES} bytes, whole lines ({len(data)} bytes, {len(rows)} lines)')
 
 
-def episodes(m, addr, mx=300):
-    """pc_load_show into a block of the emulated heap (the harness's scratch area is too small for 2000 records)."""
+def episodes(m, addr, mx=300, all=True):
+    """pc_load_show_all (all=False: pc_load_show, the recent list) into a block of the emulated heap (the harness's scratch area is too small for 2000 records)."""
     out = m.malloc(mx * O['PC_EP_SIZE'])
-    n = m.call(PSYMS['pc_load_show'], a0=addr, a1=out, a2=mx, count=1 << 40)
+    n = m.call(PSYMS['pc_load_show_all' if all else 'pc_load_show'], a0=addr, a1=out, a2=mx, count=1 << 40)
     return [m.ep(out + i * O['PC_EP_SIZE']) for i in range(n)]
 
 
@@ -139,11 +139,11 @@ def model_tests(ctx):
     m.put(f'{RD}/A/a.mp3', b'x')
     m.put(f'{RD}/A/.episodes', eps_text(dict(g='g1', p=1000, f='a.mp3', t='One', u='u1'), dict(g='g2', p=2000, f='b.mp3', t='Two', u='u2')))
     addr = show_addr(m, 'A')
-    expect(m.call(PSYMS['pc_has_archive'], a0=addr, count=2000000) == 0 and m.call(PSYMS['pc_eps_cap'], a0=addr, count=2000000) == 300 and [e['title'] for e in episodes(m, addr)] == ['Two', 'One'],
-           'no archive: room for 300, the list as before')
+    expect(m.call(PSYMS['pc_has_archive'], a0=addr, count=2000000) == 0 and m.call(PSYMS['pc_all_cap'], a0=addr, count=2000000) == 700 and [e['title'] for e in episodes(m, addr)] == ['Two', 'One'],
+           'no archive: room for 300 entries and 400 files, the list as before')
     m.put(f'{RD}/A/.archive', eps_text(dict(g='g4', p=3000, f='d.mp3', t='Four', u='u4'), dict(g='g1', p=1000, f='other.mp3', t='One again', u='u1'), dict(g='g2', p=2000, f='b.mp3', t='Two again', u='u2'),
                                        dict(g='g3', p=500, f='c.mp3', t='Three', u='u3'), dict(p=100, f='a.mp3', t='No guid, a file .episodes has', u='u9'), dict(p=50, f='e.mp3', t='No guid, new', u='u5')))
-    expect(m.call(PSYMS['pc_has_archive'], a0=addr, count=2000000) == 1 and m.call(PSYMS['pc_eps_cap'], a0=addr, count=2000000) == ARCH_MAX, 'with an archive: room for 2000')
+    expect(m.call(PSYMS['pc_has_archive'], a0=addr, count=2000000) == 1 and m.call(PSYMS['pc_all_cap'], a0=addr, count=2000000) == 2700, 'with an archive: room for 2700 (the 300 entries of .episodes and the 2400 files scanned)')
     got = episodes(m, addr, ARCH_MAX)
     expect([e['title'] for e in got] == ['Four', 'Two', 'One', 'Three', 'No guid, new'], f'the union, an episode once (guid, or the file name when there is no guid), the .episodes entry winning, newest first ({[e["title"] for e in got]})')
     expect([e['file'] for e in got][2] == 'a.mp3' and got[2]['title'] == 'One', 'the .episodes entry wins (its file, its title), not the archive\'s copy')
@@ -156,7 +156,8 @@ def model_tests(ctx):
     m.call(PSYMS['pc_order_set'], a0=PCN.pc_hash('A'), a1=0, count=2000000)
     m.put(f'{RD}/A/.archive', eps_text(*[dict(g=f'x{i}', p=10000 + i, f=f'x{i}.mp3', t=f'X {i}', u=f'u{i}') for i in range(2099, -1, -1)]))   # (as the job writes it: the feed's order, newest first)
     got = episodes(m, addr, ARCH_MAX)
-    expect(len(got) == ARCH_MAX and got[0]['title'] == 'X 2099' and got[-1]['title'] == 'X 100', f'an archive of 2100: the newest {ARCH_MAX} ({len(got)}, {got[0]["title"]} to {got[-1]["title"]})')
+    expect(len(got) == ARCH_MAX and got[0]['title'] == 'X 2099' and got[-2]['title'] == 'X 101' and got[-1]['title'] == 'One' and got[-1]['state'] == O['PC_LOCAL'],
+           f'an archive of 2100 in a room of {ARCH_MAX}: the newest, and the downloaded file (older than them all) before the oldest that is only in the feed ({len(got)}, {got[0]["title"]} to {got[-2]["title"]}, {got[-1]["title"]})')
     got = episodes(m, addr, 300)
     expect(len(got) == 300 and got[0]['title'] == 'X 2099', 'a caller with room for 300 gets the newest 300')
     # a show with no .episodes at all but an archive (the .episodes is the refresh's: a missing one cannot happen after a refresh, but the list must not break)
@@ -172,6 +173,116 @@ def model_tests(ctx):
     expect(len(got) == 550 and len(local) == 550 and all(e['hash'] for e in got), f'520 downloaded episodes of an archive and 30 copied files: all on the card ({len(got)} episodes, {len(local)} local)')
 
 
+def recent_tests(ctx):
+    """pc_load_show is the recent list: .episodes and the files on the card, never the archive's other entries; a file (or .part) no .episodes entry names is looked up in .archive for its title, date and description, and
+    .archive is read only then. pc_load_show_all is the union; pc_count_all counts it."""
+    expect = ctx.expect
+    m = PCN.machine(); m.reuse_heap = True; PCN.sub(m, 'A', 'https://feeds.example/a')
+    m.put(f'{RD}/A/a.mp3', b'x')
+    m.put(f'{RD}/A/.episodes', eps_text(dict(g='g1', p=1000, f='a.mp3', t='One', u='u1'), dict(g='g2', p=2000, f='b.mp3', t='Two', u='u2')))
+    addr = show_addr(m, 'A')
+    m.put(f'{RD}/A/.archive', eps_text(dict(g='g4', p=3000, l=5, f='d.mp3', t='Four', u='u4', x='four desc'), dict(g='g1', p=1000, f='a.mp3', t='One', u='u1'), dict(g='g2', p=2000, f='b.mp3', t='Two', u='u2'),
+                                       dict(g='g3', p=500, f='c.mp3', t='Three', u='u3'), dict(g='g5', p=100, f='e.mp3', t='Five', u='u5')))
+    m.calls = []
+    got = episodes(m, addr, all=False)
+    expect([e['title'] for e in got] == ['Two', 'One'] and not reads_of(m, '.archive'), f'the recent list is .episodes and the files: the archive\'s other entries are not in it and .archive is not opened ({[e["title"] for e in got]})')
+    expect([e['title'] for e in episodes(m, addr)] == ['Four', 'Two', 'One', 'Three', 'Five'] and m.call(PSYMS['pc_count_all'], a0=addr, count=1 << 40) == 5, 'the complete list has all five, and pc_count_all says so')
+    m.put(f'{RD}/A/d.mp3', b'x')            # downloaded from the complete list: no .episodes entry names it
+    m.put(f'{RD}/A/c.mp3.part', b'half')    # a download under way, the same
+    m.calls = []
+    got = episodes(m, addr, all=False)
+    by = {e['title']: e for e in got}
+    expect([e['title'] for e in got] == ['Four', 'Two', 'One', 'Three'] and reads_of(m, '.archive'), f'a file only the archive lists is in the recent list under its title, its .part too; the archive was read for them ({[e["title"] for e in got]})')
+    expect(by['Four']['state'] == O['PC_LOCAL'] and by['Four']['pub'] == 3000 and by['Four']['file'] == 'd.mp3' and by['Four']['desc'] == 'four desc' and by['Four']['hash'] and by['Three']['state'] == O['PC_PART'],
+           'its date, file and description come from the archive, it is PC_LOCAL (the .part PC_PART)')
+    expect(len(episodes(m, addr, all=True)) == 5, 'the complete list is as it was (the file matches its archive entry once)')
+    m.call(PSYMS['pc_order_set'], a0=PCN.pc_hash('A'), a1=1, count=2000000)
+    expect([e['title'] for e in episodes(m, addr, all=False)] == ['Three', 'One', 'Two', 'Four'], 'Oldest First: the exact reverse')
+    m.call(PSYMS['pc_order_set'], a0=PCN.pc_hash('A'), a1=0, count=2000000)
+    # an entry .episodes has wins over a copy in the archive: no second row for its file
+    m.put(f'{RD}/A/b.mp3', b'x')
+    got = episodes(m, addr, all=False)
+    expect([e['title'] for e in got].count('Two') == 1 and len(got) == 4, 'a file .episodes names is never looked up in the archive')
+    # a show with no .episodes at all and an archive: the files are looked up in it
+    m.fs.pop(f'{RD}/A/.episodes')
+    got = episodes(m, addr, all=False)
+    expect([e['title'] for e in got] == ['Four', 'Two', 'One', 'Three'], f'no .episodes: the recent list is the files (looked up in the archive where it has them) ({[e["title"] for e in got]})')
+    # 520 downloaded episodes of the archive: every one is a local file of the recent list (the file scan is PM_ARCH_FILES long) up to the room the caller gave
+    m = PCN.machine(); m.reuse_heap = True; PCN.sub(m, 'A', 'https://feeds.example/a'); addr = show_addr(m, 'A')
+    m.put(f'{RD}/A/.episodes', eps_text(dict(g='g1', p=1000, f='a.mp3', t='One', u='u1')))
+    m.put(f'{RD}/A/.archive', eps_text(*[dict(g=f'w{i}', p=20000 + i, f=f'w{i}.mp3', t=f'W {i}', u=f'u{i}') for i in range(519, -1, -1)]))
+    for i in range(520): m.put(f'{RD}/A/w{i}.mp3', b'x')
+    got = episodes(m, addr, ARCH_MAX, all=False)
+    expect(len(got) == 521 and all(e['state'] == O['PC_LOCAL'] and e['title'].startswith('W') or e['title'] == 'One' for e in got), f'520 downloaded archive episodes: all of them are in the recent list with their titles ({len(got)})')
+
+
+def fit(m, addr, all):
+    """pc_load_fit: the list the pages and readers get (a block of its own size); all: the complete one."""
+    cnt = m.malloc(4)
+    out = m.call(PSYMS['pc_load_fit'], a0=addr, a1=cnt, a2=all, count=1 << 40)
+    return [m.ep(out + i * O['PC_EP_SIZE']) for i in range(m.word(cnt))] if out else None
+
+
+def recent(m, addr): return fit(m, addr, 0)
+
+
+def keep_tests(ctx):
+    """No file on the card is left out of a list for a newer episode that is not downloaded: the lists have room for every file (pc_all_cap), and a list that must be cut keeps the episodes with a file first.
+    The case of the review: 20 episodes of the feed, none downloaded, and 281 older files gave 300 rows, the oldest file gone from Downloaded, Saved, Continue Listening and the iPod level."""
+    expect = ctx.expect
+    remote = [dict(g=f'r{i}', p=900000 + i, f=f'r{i}.mp3', t=f'R {i}', u=f'u{i}') for i in range(19, -1, -1)]
+    def card(n_files, arch=False):
+        m = PCN.machine(); m.reuse_heap = True; PCN.sub(m, 'A', 'https://feeds.example/a')
+        m.put(f'{RD}/A/.episodes', eps_text(*remote))
+        for i in range(n_files): m.put(f'{RD}/A/old{i:04d}.mp3', b'x', mtime=1000 + i)
+        if arch: m.put(f'{RD}/A/.archive', eps_text(*remote))
+        return m, show_addr(m, 'A')
+    local = lambda got: sorted(e['file'] for e in got if e['state'] == O['PC_LOCAL'])
+    files = lambda n: sorted(f'old{i:04d}.mp3' for i in range(n))
+    m, addr = card(281)
+    got = recent(m, addr)
+    expect(m.call(PSYMS['pc_all_cap'], a0=addr, count=2000000) == 700, 'no archive: room for the 300 entries of .episodes and the 400 files a folder is scanned for')
+    expect(got is not None and len(got) == 301 and local(got) == files(281) and [e['title'] for e in got[:20]] == [f'R {i}' for i in range(19, -1, -1)],
+           f'20 episodes of the feed and 281 older files: all 301 are listed, every file among them, the oldest too ({len(got or [])} rows, {len(local(got or []))} files)')
+    # a smaller room than pc_all_cap (no caller gives one): the episodes that are only in the feed keep their places (up to PC_MAX_EPS, half the room at most), then the files, the newest of each
+    cut = episodes(m, addr, 300, all=False)
+    expect(len(cut) == 300 and [e['title'] for e in cut[:20]] == [f'R {i}' for i in range(19, -1, -1)] and local(cut) == files(281)[1:],
+           f'room for 300: the 20 of the feed and the 280 newest files ({len(local(cut))} files, the oldest {local(cut)[:1]})')
+    m.call(PSYMS['pc_order_set'], a0=PCN.pc_hash('A'), a1=1, count=2000000)
+    old = episodes(m, addr, 300, all=False)
+    expect([e['file'] for e in old] == [e['file'] for e in cut][::-1], 'Oldest First: the same 300 episodes, the exact reverse')
+    m.call(PSYMS['pc_order_set'], a0=PCN.pc_hash('A'), a1=0, count=2000000)
+    few = episodes(m, addr, 30, all=False)
+    expect(len(few) == 30 and [e['title'] for e in few[:15]] == [f'R {i}' for i in range(19, 4, -1)] and local(few) == files(281)[-15:],
+           f'room for 30: half for the newest of the feed, half for the newest files ({[e["title"] for e in few[:1]]}, {len(local(few))} files)')
+    m, addr = card(400)
+    got = recent(m, addr)
+    expect(len(got) == 420 and local(got) == files(400), f'the 400 files a folder is scanned for and the 20 of the feed: none is cut ({len(got)})')
+    # a show with an archive: the files beyond 300 are in the recent list too (the archive names none of them: they are copied files)
+    m, addr = card(350, arch=True)
+    got = recent(m, addr)
+    expect(len(got) == 370 and local(got) == files(350), f'with an archive: 350 files and the 20 of the feed are all in the recent list ({len(got)})')
+    # the second review's case: every one of an archive's 2000 episodes is downloaded, then a refresh finds new ones. The files must not take every place: the new episodes are listed (the first is Latest Episode)
+    m = PCN.machine(); m.reuse_heap = True; PCN.sub(m, 'A', 'https://feeds.example/a'); addr = show_addr(m, 'A')
+    new = [dict(g=f'n{i}', p=900000 + i, f=f'n{i}.mp3', t=f'New {i}', u=f'v{i}') for i in range(4, -1, -1)]
+    arch = [dict(g=f'w{i}', p=20000 + i, f=f'w{i:04d}.mp3', t=f'W {i}', u=f'u{i}') for i in range(ARCH_MAX - 1, -1, -1)]
+    m.put(f'{RD}/A/.episodes', eps_text(*new))
+    m.put(f'{RD}/A/.archive', eps_text(*(new + arch)[:ARCH_MAX]))   # (the refresh merged the new ones in: the five oldest lines left the archive, their files are still on the card)
+    for i in range(ARCH_MAX): m.put(f'{RD}/A/w{i:04d}.mp3', b'x', mtime=20000 + i)
+    every = sorted(f'w{i:04d}.mp3' for i in range(ARCH_MAX))
+    expect(m.call(PSYMS['pc_all_cap'], a0=addr, count=2000000) == 2700, 'with an archive: room for the 300 entries of .episodes and the 2400 files a folder is scanned for')
+    for name, got in (('recent', recent(m, addr)), ('complete', fit(m, addr, 1))):
+        expect(got is not None and len(got) == ARCH_MAX + 5 and [e['title'] for e in got[:5]] == [f'New {i}' for i in range(4, -1, -1)] and got[0]['state'] == O['PC_REMOTE'] and local(got) == every,
+               f'2000 downloaded episodes and five new ones, the {name} list: the new ones first, every file after them ({len(got or [])} rows, {[e["title"] for e in (got or [])[:1]]}, {len(local(got or []))} files)')
+    expect(m.call(PSYMS['pc_count_all'], a0=addr, count=1 << 40) == ARCH_MAX + 5, 'See All counts them all')
+    cut = episodes(m, addr, ARCH_MAX)
+    expect(len(cut) == ARCH_MAX and [e['title'] for e in cut[:5]] == [f'New {i}' for i in range(4, -1, -1)] and local(cut) == every[5:],
+           f'a room of 2000 (smaller than any caller gives): the five new episodes are kept and the five oldest files go ({[e["title"] for e in cut[:1]]}, {len(local(cut))} files)')
+
+
+def reads_of(m, name): return [c for c in m.calls if c[0] in ('open', 'fopen') and isinstance(c[1], str) and c[1].endswith(name)]
+
+
 def markall_tests(ctx):
     """Mark All as Played on a list longer than the old ring (512 places): every mark is kept, the places of other shows too, and the ring is written once."""
     expect = ctx.expect
@@ -182,6 +293,7 @@ def markall_tests(ctx):
         PSH.deep_card(mm)
         mm.put(f'{RP}/{DEEP}/.archive', eps_text(*[dict(g=f'z{i}', p=1000 + i, f=f'z{i}.mp3', t=f'Z {i}', u=f'https://cdn.example/z{i}.mp3') for i in range(N - 1, -1, -1)]))
     m = PSH.machine(card=card); PSH.open_show(m)
+    PCP.tap(m, 150, PCP.hdr(m) + 8 * PCP.CELL + O['PS_MORE_H'] // 2, off=max(0, m.props[(m.sv, 'virtual_h')] - 400))   # (See All (528): the page with every episode)
     other = PCP.pc_hash(f'{RP}/Alpha Show/ep1.mp3')
     m.call(PSYMS['pc_mark'], a0=other, a1=1, count=2000000)   # (another show's mark, the ring's oldest slot after the marks below)
     h_z = lambda i: PCP.pc_hash(f'{RP}/{DEEP}/z{i}.mp3')
@@ -192,25 +304,78 @@ def markall_tests(ctx):
     PCP.click(m, 'pg_sh_markall')
     writes = [c for c in m.calls if c[0] == 'rename' and c[2] == RING]
     st = [m.state(h_z(i))[0] for i in range(N)]
-    expect(all(s == 2 for s in st), f'{N} episodes of an archive: every one is played after Mark All as Played ({st.count(2)} of {N})')
+    expect(all(s == 2 for s in st), f'{N} episodes of an archive: every one is played after Mark All as Played on the All Episodes page ({st.count(2)} of {N})')
     expect(m.state(other)[0] == 2, 'the mark another show had is kept')
     expect(m.fs.get(RING) != before and len(writes) == 1, f'the ring is written once, not once a mark ({len(writes)} renames)')
     expect(O['PC_RING_SLOTS'] >= 2 * ARCH_MAX, 'the ring holds two lists of the longest show')
 
 
 def refresh_tests(ctx):
+    """A refresh writes the newest 20 into .episodes as before and merges the items its archive lacks into .archive (no full fetch): newest first, no duplicates, at most 2000 lines and 1.5 MiB, a failure of the
+    archive never fails the refresh, a show with no archive gets none."""
     expect = ctx.expect
     F = 'https://feeds.example/a'
-    # a refresh writes the newest 20 into .episodes as before and leaves .archive alone; Unsubscribe removes it with the rest
+    A, E = f'{RD}/A/.archive', f'{RD}/A/.episodes'
     m = PCN.machine(); PCN.sub(m, 'A', F, checked=1)
     arch = eps_text(*[dict(g=f'g{i}', p=BASE + i, f=f'e{i}.mp3', t=f'Ep {i}', u=f'u{i}') for i in range(50, 0, -1)])
-    m.put(f'{RD}/A/.archive', arch)
-    m.curl_site = lambda url, o: {'body': feed([item(i) for i in range(60, 0, -1)])}
+    m.put(A, arch)
+    sites = []
+    m.curl_site = lambda url, o: (sites.append(url), {'body': feed([item(i) for i in range(60, 0, -1)])})[1]
     r, th = PCN.start(m, ['A'])
     PCN.work(m, th)
-    _, rows = lines_of(m.fs[f'{RD}/A/.episodes'])
-    expect(len(rows) == 20 and m.fs[f'{RD}/A/.archive'] == arch, f'a refresh: .episodes holds the newest 20 ({len(rows)}), .archive is as it was')
-    expect(m.call(PSYMS['pn_unsubscribe_show'], a0=m.cstr(RD), a1=show_addr(m, 'A'), count=1 << 40) == 2 and f'{RD}/A/.archive' not in m.fs and f'{RD}/A/.episodes' not in m.fs,
+    _, rows = lines_of(m.fs[E])
+    _, arows = lines_of(m.fs[A])
+    gs = [r['g'] for r in arows]
+    expect(len(rows) == 20 and rows[0]['g'] == 'g60' and sites == [F], f'a refresh: .episodes holds the newest 20 ({len(rows)}) from one request of the feed')
+    expect(len(arows) == 60 and gs == [f'g{i}' for i in range(60, 0, -1)] and len(set(gs)) == 60,
+           f'.archive gained the ten items it lacked (g51 to g60), newest first, each once ({len(arows)} lines)')
+    expect(arows[0]['u'] == 'https://cdn.example/e60.mp3' and arows[0]['f'] == rows[0]['f'] and arows[-1] == lines_of(arch)[1][-1], 'the new lines are .episodes\' own (the file name a refresh gave), the old lines are as they were')
+    expect(f'{A}.tmp' not in m.fs, 'no temp file is left')
+    # nothing new: the archive is not written again
+    before = m.fs[A]; m.calls = []
+    r, th = PCN.start(m, ['A']); PCN.work(m, th)
+    expect(m.fs[A] == before and not [c for c in m.calls if c[0] in ('open', 'write') and c[1] == f'{A}.tmp'], 'a refresh that finds nothing new leaves .archive alone (not rewritten)')
+    # a new episode arrives: one line, in front
+    m.curl_site = lambda url, o: {'body': feed([item(61)] + [item(i) for i in range(60, 0, -1)])}
+    r, th = PCN.start(m, ['A']); PCN.work(m, th)
+    _, arows = lines_of(m.fs[A])
+    expect(len(arows) == 61 and arows[0]['g'] == 'g61' and arows[1]['g'] == 'g60', 'a later refresh adds only the new episode, in front')
+    # the cap: 2000 lines, the oldest dropped
+    m = PCN.machine(); PCN.sub(m, 'A', F, checked=1)
+    m.put(A, eps_text(*[dict(g=f'x{i}', p=BASE + 1000 + i, f=f'x{i}.mp3', t=f'X {i}', u=f'u{i}') for i in range(1999, -1, -1)]))
+    m.curl_site = lambda url, o: {'body': feed([item(i, day=5000 + i) for i in range(3, 0, -1)])}
+    r, th = PCN.start(m, ['A']); PCN.work(m, th)
+    _, arows = lines_of(m.fs[A])
+    expect(len(arows) == ARCH_MAX and [r['g'] for r in arows[:3]] == ['g3', 'g2', 'g1'] and arows[-1]['g'] == 'x3', f'a full archive of 2000 lines: three new ones in front, the three oldest dropped ({len(arows)} lines, last {arows[-1]["g"]})')
+    # the byte cap: lines of about 900 bytes
+    m = PCN.machine(); PCN.sub(m, 'A', F, checked=1)
+    long_url = 'https://cdn.example/' + 'x' * 600 + '/{}.mp3'
+    m.put(A, eps_text(*[dict(g=f'w{i}', p=BASE + 1000 + i, f=f'w{i}.mp3', t='T' * 90, u=long_url.format(i), x='d' * 190) for i in range(1700, 0, -1)]))
+    size0 = len(m.fs[A])
+    m.curl_site = lambda url, o: {'body': feed([item(i, day=5000 + i) for i in range(3, 0, -1)])}
+    r, th = PCN.start(m, ['A']); PCN.work(m, th)
+    data = m.fs[A]
+    _, arows = lines_of(data)
+    expect(len(data) <= ARCH_BYTES and arows[0]['g'] == 'g3' and size0 > ARCH_BYTES - 3000, f'the byte cap holds ({len(data)} of {ARCH_BYTES}), the new lines are in front')
+    # a failure of the archive is not the refresh's: .episodes is written, the archive is as it was, the state is a success
+    for what, setup in (('its temp file cannot be written', lambda mm: mm.fail.add(('write', f'{A}.tmp'))), ('no memory for the merge', lambda mm: setattr(mm, 'calloc_fail_size', 16400))):
+        m = PCN.machine(); PCN.sub(m, 'A', F, checked=1)
+        m.put(A, arch)
+        m.curl_site = lambda url, o: {'body': feed([item(i) for i in range(60, 0, -1)])}
+        r, th = PCN.start(m, ['A'])
+        setup(m)
+        PCN.work(m, th)
+        _, rows = lines_of(m.fs[E])
+        expect(len(rows) == 20 and rows[0]['g'] == 'g60' and m.fs[A] == arch and f'{A}.tmp' not in m.fs and b'checked=' in m.fs[f'{RD}/A/.show'], f'{what}: .episodes and .show are written, .archive is as it was, no temp file')
+    # a show with no archive gets none
+    m = PCN.machine(); PCN.sub(m, 'A', F, checked=1)
+    m.curl_site = lambda url, o: {'body': feed([item(i) for i in range(60, 0, -1)])}
+    r, th = PCN.start(m, ['A']); PCN.work(m, th)
+    expect(A not in m.fs and f'{A}.tmp' not in m.fs, 'a show with no archive gets none from a refresh')
+    # Unsubscribe with no file left removes .archive with the rest
+    m = PCN.machine(); PCN.sub(m, 'A', F, checked=1)
+    m.put(A, arch)
+    expect(m.call(PSYMS['pn_unsubscribe_show'], a0=m.cstr(RD), a1=show_addr(m, 'A'), count=1 << 40) == 2 and A not in m.fs and E not in m.fs,
            'Unsubscribe with no file left removes .archive with .episodes and .show')
 
 
@@ -260,8 +425,8 @@ def row_tests(ctx):
     bottom = lambda m: max(0, m.props[(m.sv, 'virtual_h')] - 400)
     m = PSH.machine(); PSH.open_show(m)
     h = m.props[(m.sv, 'virtual_h')]
-    rows = [t for t, _ in tx(m, bottom(m)) if t == 'Show All Episodes']
-    expect(rows == ['Show All Episodes'] and h == PSH.pod_show.content_height(PCP.hdr(m), 8, more=True), f'a subscribed show with no archive: the row under the last cell ({rows}, content {h})')
+    rows = [t for t, _ in tx(m, bottom(m)) if t == 'See All']
+    expect(rows == ['See All'] and h == PSH.pod_show.content_height(PCP.hdr(m), 8, more=True), f'a subscribed show with no archive: the row under the last cell ({rows}, content {h})')
     # the tap starts the job; the row reads Loading... while it runs
     feed_xml = feed([item(i) for i in range(40, 0, -1)])
     m.curl_site = lambda url, o: {'body': feed_xml}
@@ -269,17 +434,17 @@ def row_tests(ctx):
     y = PCP.hdr(m) + 8 * PCP.CELL + 20
     PCP.tap(m, 150, y, off=bottom(m))
     expect(m.thread and m.thread[0] == PSYMS['pn_armain'] and state(m)[0] == AR['RUNNING'], 'a tap on the row starts the job')
-    expect([t for t, _ in tx(m, bottom(m), 'label_ps_cdim') if t == 'Loading…'] and not [t for t, _ in tx(m, bottom(m)) if t == 'Show All Episodes'], 'the row reads Loading… while it runs')
+    expect([t for t, _ in tx(m, bottom(m), 'label_ps_cdim') if t == 'Loading…'] and not [t for t, _ in tx(m, bottom(m)) if t == 'See All'], 'the row reads Loading… while it runs')
     m.call(m.thread[0], a0=m.thread[1], count=1 << 40)
     m.call(PSYMS['pg_tick'], a0=0, count=40000000)
     expect(state(m)[0] == AR['IDLE'] and f'{PSH.RP}/{PSH.DEEP}/.archive' in m.fs, 'the tick forgets the finished job; .archive is there')
-    expect(m.props[(m.sv, 'virtual_h')] > h + 20 * PCP.CELL and not [t for t, _ in tx(m, bottom(m)) if t in ('Show All Episodes', 'Loading…')], 'the list now holds the archive (a longer list) and the row is gone')
+    expect(m.props[(m.sv, 'virtual_h')] > h + 20 * PCP.CELL and not [t for t, _ in tx(m, bottom(m)) if t in ('See All', 'Loading…')], 'the list now holds the archive (a longer list) and the row is gone')
     # not for a show with no feed, a show that has an archive, a preview
     m = PSH.machine(feed=False); PSH.open_show(m)
-    expect(not [t for t, _ in tx(m, bottom(m)) if t == 'Show All Episodes'] and m.props[(m.sv, 'virtual_h')] == PSH.pod_show.content_height(PCP.hdr(m), 8), 'a show of copied files (no feed): no row')
+    expect(not [t for t, _ in tx(m, bottom(m)) if t == 'See All'] and m.props[(m.sv, 'virtual_h')] == PSH.pod_show.content_height(PCP.hdr(m), 8), 'a show of copied files (no feed): no row')
     m = PSH.machine(card=lambda mm: (PSH.deep_card(mm), mm.put(f'{PSH.RP}/{PSH.DEEP}/.archive', eps_text(dict(g='a', p=1, f='a.mp3', t='A', u='u')))))
     PSH.open_show(m)
-    expect(not [t for t, _ in tx(m, bottom(m)) if t == 'Show All Episodes'], 'a show that has an archive: no row')
+    expect(not [t for t, _ in tx(m, bottom(m)) if t == 'See All'], 'a show that has an archive: no row')
 
 
 SE = sibling('pcsearch')
@@ -403,7 +568,7 @@ def page_tests(ctx):
     expect(m.thread is None and state(m)[0] == AR['RUNNING'], 'a tap on the row while it loads does nothing')
     PCN.work(m, th)
     tick(m)
-    expect(state(m)[0] == AR['IDLE'] and tx(m) not in (['Show All Episodes'], ['Loading…']), 'the job ended: the row is gone with the long list')
+    expect(state(m)[0] == AR['IDLE'] and tx(m) not in (['See All'], ['Loading…']), 'the job ended: the row is gone with the long list')
 
     # 2. A failure: toast on that show, the reason and the hint stay on the row, leaving and returning keeps them, a tap retries
     m = shown(dead)
@@ -445,7 +610,7 @@ def page_tests(ctx):
     m.calls = []; m.thread = None
     tick(m)
     expect(state(m)[0] == AR['IDLE'] and not toasted(m, 'connect') and f'{PSH.RP}/{PSH.DEEP}/.archive' not in m.fs and f'{PSH.RP}/{PSH.DEEP}/.archive.tmp' not in m.fs
-           and m.thread and m.thread[0] == PSYMS['pn_dmain'] and tx(m) == ['Show All Episodes'],
+           and m.thread and m.thread[0] == PSYMS['pn_dmain'] and tx(m) == ['See All'],
            'cancelled by another job: no archive, no temp file, no toast, the row as before and the paused download goes on')
 
     # 5. The device is kept awake while the job runs; the end is seen by that timer when the page's own is stopped (another page in front)
@@ -478,4 +643,76 @@ def page_tests(ctx):
            'the job ended cancelled: the timer starts the downloads and ends, no archive')
 
 
-SECTIONS = [job_tests, retry_tests, model_tests, refresh_tests, download_tests, row_tests, page_tests, select_tests, markall_tests]
+def spin_tests(ctx):
+    """The See All row's spinner (patch/podcasts.c pg_spin_*): the Wi-Fi page's 14 px frame left of the dim text while the job runs, turned by its own 250 ms timer, gone (and the timer with it) when the row is idle,
+    failed, ended, left, or the page is closed."""
+    expect = ctx.expect
+    bottom = lambda m: max(0, m.props[(m.sv, 'virtual_h')] - 400)
+    row_y = lambda m: PCP.hdr(m) + 8 * PCP.CELL + 20
+    tick = lambda m, fn='pg_tick': m.call(PSYMS[fn], a0=0, count=40000000)
+    dead = lambda u, o: {'rc': 6}
+    feed_xml = feed([item(i) for i in range(40, 0, -1)])
+    spin = lambda m: [b for b in PCP.paint(m, bottom(m))[0] if m.bitmaps[b[0]][1:] == (14, 14)]
+    adds = lambda m: [t for t in m.timers if t[0] == PSYMS['pg_spin_tick']]   # (every timer_add of the machine, in order)
+    dim = lambda m: [r for (t, r), st in zip(*PCP.paint(m, bottom(m))[1:3]) if st == 'label_ps_cdim']
+    RR = O['RET_REPEAT']
+
+    def shown(site, tap=True):
+        m = PSH.machine()
+        for i in range(8): m.images[f'wf_spin{i}'] = (14, 14, bytes((0x55, 0x55, 0x55, 255)) * 196)   # (the Wi-Fi page's frames as cc_decode flattens them over black)
+        PSH.open_show(m)
+        m.curl_site = site
+        m.thread = None
+        if tap: PCP.tap(m, 150, row_y(m), off=bottom(m))
+        return m
+
+    # 1. Idle: no spinner, no timer; the job starts: one spinner at the text's left edge, the text after it, one 250 ms timer
+    m = shown(lambda u, o: {'body': feed_xml}, tap=False)
+    expect(spin(m) == [] and not adds(m) and dim(m) == [], 'the idle row ("See All"): no spinner, no timer')
+    PCP.tap(m, 150, row_y(m), off=bottom(m))
+    th = m.thread
+    sp = spin(m)
+    expect(len(sp) == 1 and sp[0][2][0] == O['PS_CELL_X'] and sp[0][2][2:] == (14, 14) and dim(m)[0][0] == O['PS_CELL_X'] + 14 + O['PS_SPIN_GAP'],
+           f'the job runs: one 14 px spinner at x {O["PS_CELL_X"]}, the dim text after it ({[b[2] for b in sp]}, {dim(m)})')
+    expect(len(adds(m)) == 1 and (PSYMS['pg_spin_tick'], O['PS_SPIN_MS']) in m.timers and O['PS_SPIN_MS'] == 250, 'one timer of 250 ms')
+    # 2. The frame advances with the timer (eight frames, then round)
+    seen = [sp[0][0]]
+    for _ in range(8):
+        expect(tick(m, 'pg_spin_tick') == RR, 'the timer goes on while the row is busy')
+        seen.append(spin(m)[0][0])
+    expect(len(set(seen[:8])) == 8 and seen[8] == seen[0] and seen[1] != seen[0], f'each tick shows the next frame, eight of them ({len(set(seen[:8]))} different)')
+    expect(len(adds(m)) == 1, 'the page tick does not add a second timer while one runs')
+    tick(m)
+    expect(len(adds(m)) == 1, 'the page tick does not add a second timer')
+    # 3. The job ends: no spinner, the timer ends itself (RET_OK) and its handle is forgotten, so the next job arms another
+    PCN.work(m, th)
+    tick(m)
+    expect(state(m)[0] == AR['IDLE'] and tick(m, 'pg_spin_tick') != RR and spin(m) == [], 'the job ended: the timer ends and no spinner is drawn')
+    # 4. A failure: no spinner, the reason on the row at the text's own place
+    m = shown(dead)
+    expect(len(spin(m)) == 1, 'a second show: the spinner while it loads')
+    PCN.work(m, m.thread)
+    tick(m)
+    expect(spin(m) == [] and dim(m) == [] and tick(m, 'pg_spin_tick') != RR, 'a failure: no spinner, the timer ended')
+    expect(any(r[0] == O['PS_CELL_X'] for (t, r), st in zip(*PCP.paint(m, bottom(m))[1:3]) if st == 'label_ps_ctitle' and t.endswith('Tap to Retry')), 'the failure text starts at the cell edge, not after a spinner')
+    # 5. Leaving the show ends the timer; coming back while the job runs arms it again
+    m = shown(lambda u, o: {'body': feed_xml})
+    PCP.click(m, 'btn_return')
+    expect(tick(m, 'pg_spin_tick') != RR, 'the Shows level: the timer ends')
+    PSH.open_show(m)
+    tick(m)
+    expect(len(adds(m)) == 2 and len(spin(m)) == 1, 'back on the show with the job still running: the spinner and a new timer')
+    # 6. The page closes: the spinner timer is removed (one timer_remove more than for a page whose spinner timer has ended)
+    def removes(m):
+        m.calls = []
+        fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
+        m.call(fn, a0=c, a1=0, count=40000000)
+        return len([c for c in m.calls if c[0] == 'timer_remove'])
+    live = removes(shown(lambda u, o: {'body': feed_xml}))
+    m = shown(lambda u, o: {'body': feed_xml})
+    PCP.click(m, 'btn_return')
+    tick(m, 'pg_spin_tick')
+    expect(live == removes(m) + 1, 'closing the page removes the spinner timer')
+
+
+SECTIONS = [job_tests, retry_tests, model_tests, recent_tests, keep_tests, refresh_tests, download_tests, row_tests, page_tests, spin_tests, select_tests, markall_tests]

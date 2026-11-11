@@ -28,6 +28,7 @@
 #define PN_PATH 400
 #define PN_SHOW_MAX 4096 /* bytes of a show file read */
 #define PN_URLS_MAX 16384 /* bytes of subscriptions.txt read */
+#define PN_ARCH_BUF 16384 /* the refresh's archive merge writes this much at a time */
 #define PN_EPS_MAX 65536 /* bytes of .episodes read and written (the model reads at most this much) */
 #define PN_CARD "/mnt/mmc" /* the card: its root is searched for *.opml */
 #define PN_DNAME 11 /* struct dirent (32-bit, MIPS o32): d_name at 11 (pcmodel.c PM_DNAME) */
@@ -451,6 +452,53 @@ static void pn_notes(const char *dir, const pf_parser_t *p) {
         pno_save(file, tmp, (const struct pf_parser *)p);
 }
 
+/* The refresh's part of a show's .archive (docs/modules/podcasts.md "All episodes"): the items of the refreshed .episodes text (eps, n bytes) that the archive lacks are merged into it, newest first, at most PC_ARCH_MAX
+ * lines and PC_ARCH_BYTES bytes (the oldest are dropped), through .archive.tmp and m1_commit. A show with no archive gets none; a failure of any kind leaves the archive as it was and is nobody's status. */
+struct pn_am {
+    int fd, fail;
+    unsigned used;
+    const char *tmp;
+    char buf[PN_ARCH_BUF];
+};
+
+static int pn_am_flush(struct pn_am *w) {
+    if (w->used && !m1_write_all(w->fd, w->buf, w->used)) w->fail = 1;
+    w->used = 0;
+    return !w->fail;
+}
+
+/* The merge's writer: the temp file is made at the first line (a refresh with nothing to add touches no file). */
+static int pn_am_put(void *ctx, const char *data, unsigned n) {
+    struct pn_am *w = ctx;
+    if (w->fail) return 0;
+    if (w->fd < 0 && (w->fd = open(w->tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644)) < 0) return w->fail = 1, 0;
+    if (w->used + n > sizeof w->buf && !pn_am_flush(w)) return 0;
+    memcpy(w->buf + w->used, data, n);
+    w->used += n;
+    return 1;
+}
+
+static void pn_arch_merge(const char *dir, const char *eps, unsigned n) {
+    char file[PN_PATH], tmp[PN_PATH], *old;
+    struct pn_am *w;
+    unsigned oldn = 0;
+    int r;
+    if (!m1_card_mounted() || !pn_join(file, sizeof file, dir, ".archive", (const char *)0) || access(file, F_OK) ||
+        !pn_join(tmp, sizeof tmp, dir, ".archive.tmp", (const char *)0))
+        return;
+    old = m1_read_file(file, PC_ARCH_BYTES, &oldn);
+    w = old ? calloc(1, sizeof *w) : (struct pn_am *)0;
+    if (!w) {
+        free(old);
+        return;
+    }
+    w->fd = -1, w->tmp = tmp;
+    r = pc_archive_merge(eps, n, old, oldn, pn_am_put, w, PC_ARCH_MAX, PC_ARCH_BYTES);
+    if (w->fd >= 0) m1_commit(w->fd, r > 0 && pn_am_flush(w) && m1_card_mounted(), tmp, file);
+    free(w);
+    free(old);
+}
+
 /* ---------------------------------------------------------------------------
  * One show
  */
@@ -538,7 +586,11 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
             pn_join(tmp, sizeof tmp, path, ".episodes.tmp", (const char *)0);
             if (!m1_save(file, tmp, 0644, eps, n))
                 code = PN_STORAGE;
-            else { /* the show file: the feed's title the first time (the import wrote the host), its picture url; the time of this refresh */
+            else {
+                pn_arch_merge(
+                    path, eps,
+                    n); /* (the archive, when the show has one, gets the items it lacks; the refresh does not depend on it) */
+                /* the show file: the feed's title the first time (the import wrote the host), its picture url; the time of this refresh */
                 pn_join(file, sizeof file, path, ".show", (const char *)0);
                 pn_join(tmp, sizeof tmp, path, ".show.tmp", (const char *)0);
                 memcpy(shown, first && pf_title(p)[0] ? pf_title(p) : s.title, PC_TITLE);
@@ -2372,11 +2424,11 @@ int pn_unsubscribe_show(const char *root, const pc_show_t *s) {
     static const char *const own[] = {".show", ".episodes", ".archive", "cover.jpg"};
     char path[PN_PATH];
     pc_ep_t *all;
-    int m, i, left = 0, cap = pc_eps_cap(s);
+    int m, i, left = 0, cap = pc_all_cap(s); /* (the complete list: a .part of an archive-only episode goes too) */
     if (!pn_unsubscribe(root, s)) return 0;
     all = calloc((unsigned)cap, sizeof *all);
     if (!all) return 1; /* (what is left is not known: everything stays) */
-    m = pc_load_show(s, all, cap);
+    m = pc_load_show_all(s, all, cap);
     for (i = 0; i < m; ++i) {
         unsigned key;
         if (!all[i].file[0]) continue;

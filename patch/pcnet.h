@@ -322,7 +322,7 @@ void pn_up_reset(void);
 
 enum { PN_E_IDLE = 0, PN_E_RUNNING = 1, PN_E_DONE = 2, PN_E_FAILED = 3 };
 
-/* Show All Episodes (docs/modules/podcasts.md "All episodes"): the show's feed fetched again with every item kept, into its .archive. pn_arch_start: the guards, then the worker (0 when it runs; PN_BUSY while another job or a
+/* See All (docs/modules/podcasts.md "All episodes"): the show's feed fetched again with every item kept, into its .archive. pn_arch_start: the guards, then the worker (0 when it runs; PN_BUSY while another job or a
  * download runs, the page pauses the downloads and asks again; PN_NOFEED for a show with no feed address). State: PN_AR_*, of the show pn_arch_hash() (pc_show_t.hash); after a failure pn_arch_code() is the PN_* why. pn_arch_reset forgets a
  * finished job (nothing while one runs). A finished job bumps pn_gen. */
 enum { PN_AR_IDLE = 0, PN_AR_RUNNING = 1, PN_AR_DONE = 2, PN_AR_FAILED = 3 };

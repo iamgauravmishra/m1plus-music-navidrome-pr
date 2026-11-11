@@ -622,7 +622,6 @@ TEXT = dict([
     # The Shows page (patch/podcasts.c, docs/modules/podcasts.md "The Shows page"): the two section headers, the refresh line's word and its progress, the menu's row, the Show page's empty hint
     _t('Continue Listening', '继续收听', '繼續收聽', '続きを聴く', '이어 듣기', 'Reprendre la lecture', 'Weiterhören', 'Seguir escuchando', 'Continua ad ascoltare', 'ฟังต่อ', 'Kontynuuj słuchanie', 'Продолжить слушать', 'Продовжити слухати'),
     _t('Shows', '节目', '節目', '番組', '프로그램', 'Émissions', 'Sendungen', 'Programas', 'Programmi', 'รายการ', 'Programy', 'Шоу', 'Шоу'),
-    _t('Refresh', '刷新', '更新', '更新', '새로고침', 'Actualiser', 'Aktualisieren', 'Actualizar', 'Aggiorna', 'รีเฟรช', 'Odśwież', 'Обновить', 'Оновити'),
     _t('Refreshing %d/%d…', '正在刷新 %d/%d…', '正在更新 %d/%d…', '更新中 %d/%d…', '새로고침 중 %d/%d…', 'Actualisation %d/%d…', 'Aktualisiere %d/%d …', 'Actualizando %d/%d…', 'Aggiornamento %d/%d…', 'กำลังรีเฟรช %d/%d…',
        'Odświeżanie %d/%d…', 'Обновление %d/%d…', 'Оновлення %d/%d…'),
     _t('Import from Card', '从存储卡导入', '從記憶卡匯入', 'カードから読み込む', '카드에서 가져오기', 'Importer depuis la carte', 'Von Karte importieren', 'Importar desde la tarjeta', 'Importa dalla scheda', 'นำเข้าจากการ์ด',
@@ -738,7 +737,6 @@ TEXT = dict([
        '¿Quitar las descargas seleccionadas?', 'Rimuovere i download selezionati?', 'ลบการดาวน์โหลดที่เลือกหรือไม่?', 'Usunąć wybrane pobrania?', 'Удалить выбранные загрузки?', 'Видалити вибрані завантаження?'),
     _t('The playing episode was kept', '正在播放的节目已保留', '正在播放的節目已保留', '再生中の項目は残しました', '재생 중인 에피소드는 유지되었습니다', 'L’épisode en lecture a été conservé', 'Die laufende Folge wurde behalten',
        'Se conservó el episodio en reproducción', 'Episodio in corso mantenuto', 'เก็บตอนที่กำลังเล่นไว้', 'Odtwarzany odcinek został zachowany', 'Воспроизводимый выпуск сохранён', 'Епізод, що відтворюється, збережено'),
-    _t('Downloads', '下载', '下載', 'ダウンロード', '다운로드', 'Téléchargements', 'Downloads', 'Descargas', 'Download', 'ดาวน์โหลด', 'Pobrane', 'Загрузки', 'Завантаження'),
     # Saved (patch/podcasts.c, docs/modules/podcasts.md "Saved"): the Shows page's row and page, and the episode sheet's row
     _t('Saved', '已保存', '已儲存', '保存済み', '저장됨', 'Enregistrés', 'Gesichert', 'Guardados', 'Salvati', 'บันทึกแล้ว', 'Zapisane', 'Сохранённые', 'Збережені'),
     _t('Save Episode', '保存单集', '儲存單集', 'エピソードを保存', '에피소드 저장', 'Enregistrer l’épisode', 'Episode sichern', 'Guardar episodio', 'Salva episodio', 'บันทึกตอน', 'Zapisz odcinek', 'Сохранить выпуск', 'Зберегти епізод'),
@@ -752,7 +750,7 @@ TEXT = dict([
        '%d episodio', '%d episodio', '%d ตอน', 'Odcinki: %d', 'Выпусков: %d', 'Випусків: %d'),
     _t('%d episodes', '%d 个节目', '%d 個節目', '%d エピソード', '에피소드 %d개', '%d épisodes', '%d Folgen',
        '%d episodios', '%d episodi', '%d ตอน', 'Odcinki: %d', 'Выпусков: %d', 'Випусків: %d'),
-    # The Library rows of the Shows page and the Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Shows page", "The Downloads page"): the rows' grey lines, the storage line, the two sections, the sheet and its toast
+    # The Library rows of the Shows page and the Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Shows page", "The Downloaded page"): the rows' grey lines, the storage line, the two sections, the sheet and its toast
     _t('%d waiting', '%d 个等待中', '%d 個等待中', '%d 件待機中', '%d개 대기 중', '%d en attente', '%d wartend', '%d en espera', '%d in attesa', 'รอคิว %d', 'Oczekuje: %d', 'Ожидают: %d', 'Очікують: %d'),
     _t('%d paused', '%d 个已暂停', '%d 個已暫停', '%d 件一時停止中', '%d개 일시 중지됨', '%d en pause', '%d pausiert', '%d en pausa', '%d in pausa', 'หยุดชั่วคราว %d', 'Wstrzymano: %d', 'Приостановлено: %d', 'Призупинено: %d'),
     _t('%d show', '%d 个播客', '%d 個 Podcast', '%d 番組', '프로그램 %d개', '%d émission', '%d Sendung', '%d programa', '%d programma', '%d รายการ', 'Programy: %d', 'Шоу: %d', 'Шоу: %d'),
@@ -782,9 +780,11 @@ TEXT = dict([
     _t('Unplayed', '未播放', '未播放', '未再生', '재생 안 함', 'Non lus', 'Ungehört', 'No reproducidos', 'Non riprodotti', 'ยังไม่ได้เล่น', 'Nieodtworzone', 'Не прослушано', 'Не прослухано'),   # (the Filter's value; machine translations, unreviewed)
     _t('No unplayed episodes', '没有未播放的单集', '沒有未播放的單集', '未再生のエピソードはありません', '재생하지 않은 에피소드가 없습니다', 'Aucun épisode non lu', 'Keine ungehörten Folgen', 'Sin episodios sin reproducir', 'Nessun episodio non riprodotto', 'ไม่มีตอนที่ยังไม่ได้เล่น', 'Brak nieodtworzonych odcinków', 'Нет непрослушанных выпусков', 'Немає непрослуханих випусків'),   # (the Show page under the Filter Unplayed; machine translations, unreviewed)
     _t('Search All Episodes', '搜索所有节目', '搜尋所有節目', 'すべてのエピソードを検索', '모든 에피소드 검색', 'Chercher dans tous les épisodes', 'Alle Folgen durchsuchen', 'Buscar en todos los episodios', 'Cerca in tutti gli episodi', 'ค้นหาทุกตอน', 'Szukaj we wszystkich odcinkach', 'Поиск по всем выпускам', 'Пошук серед усіх випусків'),   # (the last row of the search inside a show with no archive yet, patch/pcfind.c; machine translations, unreviewed)
-    _t('Show All Episodes', '显示所有节目', '顯示所有節目', 'すべてのエピソードを表示', '모든 에피소드 보기', 'Afficher tous les épisodes', 'Alle Folgen anzeigen', 'Mostrar todos los episodios', 'Mostra tutti gli episodi', 'แสดงทุกตอน', 'Pokaż wszystkie odcinki', 'Показать все выпуски', 'Показати всі випуски'),   # (the Show page's last row, under the episodes of a subscribed show that has no archive yet)
-    _t('Tap to Retry', '点按重试', '點一下重試', 'タップして再試行', '탭하여 다시 시도', 'Toucher pour réessayer', 'Tippen zum Wiederholen', 'Toca para reintentar', 'Tocca per riprovare', 'แตะเพื่อลองใหม่', 'Dotknij, aby ponowić', 'Нажмите, чтобы повторить', 'Натисніть, щоб повторити'),   # (the Show All Episodes row after a failed job: "Can't connect \u00b7 Tap to Retry"; machine translations, unreviewed)
+    _t('See All', '查看全部', '查看全部', 'すべてを表示', '모두 보기', 'Tout afficher', 'Alle ansehen', 'Ver todo', 'Mostra tutto', 'ดูทั้งหมด', 'Pokaż wszystko', 'Показать все', 'Показати все'),   # (the Show page's last row: opens the page with every episode, or for a subscription with no archive fetches the feed; Apple Podcasts' wording, machine translated, unreviewed)
+    _t('See All (%d)', '查看全部 (%d)', '查看全部 (%d)', 'すべてを表示 (%d)', '모두 보기 (%d)', 'Tout afficher (%d)', 'Alle ansehen (%d)', 'Ver todo (%d)', 'Mostra tutto (%d)', 'ดูทั้งหมด (%d)', 'Pokaż wszystko (%d)', 'Показать все (%d)', 'Показати все (%d)'),   # (the same row once the show has an archive: the number of episodes; unreviewed)
+    _t('Tap to Retry', '点按重试', '點一下重試', 'タップして再試行', '탭하여 다시 시도', 'Toucher pour réessayer', 'Tippen zum Wiederholen', 'Toca para reintentar', 'Tocca per riprovare', 'แตะเพื่อลองใหม่', 'Dotknij, aby ponowić', 'Нажмите, чтобы повторить', 'Натисніть, щоб повторити'),   # (the See All row after a failed job: "Can't connect \u00b7 Tap to Retry"; machine translations, unreviewed)
     _t('Refresh Feed', '刷新订阅源', '更新訂閱源', 'フィードを更新', '피드 새로고침', 'Actualiser', 'Aktualisieren', 'Actualizar', 'Aggiorna', 'รีเฟรชฟีด', 'Odśwież', 'Обновить', 'Оновити'),
+    _t('Refresh All', '全部刷新', '全部更新', 'すべて更新', '모두 새로고침', 'Tout actualiser', 'Alle aktualisieren', 'Actualizar todo', 'Aggiorna tutto', 'รีเฟรชทั้งหมด', 'Odśwież wszystko', 'Обновить все', 'Оновити все'),
     _t('Select Episodes', '选择节目', '選擇節目', 'エピソードを選択', '에피소드 선택', 'Sélectionner des épisodes', 'Folgen auswählen', 'Seleccionar episodios', 'Seleziona episodi', 'เลือกตอน', 'Wybierz odcinki', 'Выбрать выпуски', 'Вибрати випуски'),
     _t('Mark All as Played', '全部标为已播放', '全部標為已播放', 'すべて再生済みにする', '모두 재생함으로 표시', 'Tout marquer comme lu', 'Alle als gehört markieren', 'Marcar todo como reproducido', 'Segna tutto come riprodotto',
        'ทำเครื่องหมายว่าเล่นแล้วทั้งหมด', 'Wszystkie jako odtworzone', 'Все как прослушанные', 'Усі як прослухані'),

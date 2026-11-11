@@ -78,7 +78,7 @@ def all_marks(m):
 def select_tests(ctx):
     expect = ctx.expect
     m = page()
-    expect(flags(m, 'btn_more') == (0, 0), 'the Shows level: no "..." (nothing to import)')
+    expect(flags(m, 'btn_more') == (1, 1), 'the Shows level: the "..." (Refresh All: a show has a feed)')
     PCP.tap_show(m, 'Alpha Show')   # (two files)
     expect(title(m) == 'Alpha Show' and flags(m, 'btn_more') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
            'a show\'s page: the "..." (the capsule\'s left cap) and Now Playing as its right cap; the Select button is not there (Select Episodes is in the sheet)')
@@ -103,7 +103,7 @@ def select_tests(ctx):
            'Select All and the bar show; the "..." and Now Playing go (hidden and insensitive)')
     expect(m.props.get((t, 'visible')) == 1, 'the title shows (in select mode it is "N Selected", not the collapsing show title)')
     expect(m.props.get((back, 'style:normal:icon')) == 'ah_nav_close' and m.props.get((back, 'style:pressed:icon')) == 'ah_nav_close_down', 'Back becomes the glass x')
-    expect(m.props.get((m.sv, 'virtual_h')) == h0 + SG_BAR_H - O['PS_MORE_H'], 'the content is the bar\'s height longer (the Show All Episodes row goes while rows are marked)')
+    expect(m.props.get((m.sv, 'virtual_h')) == h0 + SG_BAR_H - O['PS_MORE_H'], 'the content is the bar\'s height longer (the See All row goes while rows are marked)')
     mk = all_marks(m)
     expect(sorted(mk) == [0, 1, 3] and len({b for _, b in mk.values()}) == 1, f'a mark on each cell that can be marked (the two files and the .part), all unselected ({sorted(mk)})')
     expect(all(x == O['PS_CELL_X'] + (O['SG_SEL_COL'] - 6 - SG_MARK) // 2 for x, _ in mk.values()), 'in the mark column that opens left of the texts')
@@ -201,7 +201,7 @@ def width_tests(ctx):
         t = pod_i18n.table_for(loc)
         tr = lambda key, t=t: pod_i18n.TEXT[key][t]
         worst.append((loc, round(title.layout(tr('%d Selected').replace('%d', '300'))[1]), round(st.layout(tr('No downloads'))[1]), round(st.layout(tr('The playing episode was kept'))[1]),
-                      round(title.layout(tr('Downloads'))[1])))
+                      round(title.layout(tr('Downloaded'))[1])))
     print('  widths in px per language (300 Selected in the', room, 'px title room, No downloads, the toast, the Downloads title):', worst)
     expect(all(w <= room for _, w, _, _, _ in worst), f'"300 Selected" fits the title room in every language ({[x for x in worst if x[1] > room]})')
     expect(all(w <= 280 for _, _, w, _, _ in worst), 'No downloads fits one line of the empty-state label')

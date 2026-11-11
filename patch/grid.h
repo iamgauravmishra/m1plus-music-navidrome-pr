@@ -85,6 +85,8 @@ void grid_free_art(grid_tile_t *t);
  * page's 250 ms timer redraws and repeats while it is not 0). Without grid_spin_open nothing is drawn. */
 void grid_spin_open(grid_t *g, const char *prefix, int px);
 int grid_spin_turn(grid_t *g);
+/* The current frame at x, y (cut at the view's edges as grid_blit_from does); 0 when the frames are not open. A page that paints its own busy row turns grid_t.spin_n itself. */
+int grid_spin_draw(void *canvas, grid_t *g, int x, int y, int view_h);
 
 grid_tile_t *grid_find(grid_t *g, int album);
 /* The scroll_view sv is moving: a finger is dragging it (pressed and past the drag threshold) or its scroll animator (the fling) is running.

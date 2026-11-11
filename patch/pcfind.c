@@ -5,7 +5,7 @@
  * The Show page's search button opens ui/m1plus_pcfind.bin over the Show page: the Search page's field with our keyboard embedded (keyboard_attach) and one content view that paints the rows
  * (the library search's pattern: a title, a grey line, a hairline). The text is matched against the titles of the show's episodes, the list the Show page holds (pg.eps, read through
  * pg_find_*), by the library search's folding, terms and pinyin initials (search_titles_*, patch/search.c); results stay in the show's order. A tap opens the episode page on the Show page
- * (pg_find_pick) and closes this one; Back there opens it again (pcfind_reopen) with its text and scroll, the keyboard down. No hook, no timer, no thread.
+ * (pg_find_pick) and closes this one; Back there opens it again (pcfind_reopen) with its text and scroll, the keyboard down. No hook, no thread; a 1 s timer and, while the Search All Episodes row loads, a 250 ms spinner timer.
  */
 #include "offsets.inc"
 #include "stock.h"
@@ -26,6 +26,7 @@ static struct {
     int more; /* the Search All Episodes row at the end of the results: 0 none, 1 a tap starts the job, 2 the job is on (pg_find_more) */
     char mline[96]; /* its text */
     unsigned timer; /* 1 s: the row's count, the job's end (pf_tick) */
+    unsigned spin; /* the row's spinner (pf_spin_arm): 250 ms, only while the row is Loading…; 0 when none */
     m1_tap_t tap;
     grid_t g; /* the rows' texts (no pictures) */
 } pf __attribute__((section(".scratch")));
@@ -41,6 +42,26 @@ static void pf_redraw(void) { grid_sv_redraw(pf.sv); }
 /* The rows the page paints: the results and the Search All Episodes row. */
 static int pf_total(void) { return pf.nrows + (pf.more != 0); }
 
+/* The Search All Episodes row's spinner while its job is on (pf.more == 2): the Wi-Fi page's frames (pf.g's, opened with the first) before the text, turned by a 250 ms timer that ends itself when the row is not busy
+ * and is removed with the page (pf_on_destroy). The tick repaints only when the row is in view. */
+static int pf_spin_tick(const void *timer) {
+    int y;
+    (void)timer;
+    if (!pf.win || pf.more != 2) {
+        pf.spin = 0;
+        return RET_OK;
+    }
+    ++pf.g.spin_n;
+    y = pf.nrows * PF_ROW_H - grid_sv_off(pf.sv);
+    if (y < PF_LIST_H && y + PF_ROW_H > 0) pf_redraw();
+    return RET_REPEAT;
+}
+static void pf_spin_arm(void) {
+    if (pf.spin || !pf.win || pf.more != 2) return;
+    grid_spin_open(&pf.g, "wf_spin", PS_SPIN_PX);
+    pf.spin = timer_add(pf_spin_tick, (void *)0, PS_SPIN_MS);
+}
+
 /* The row's state is read again (the Show page's row: only while the field is not empty); 1 when its text or state changed. */
 static int pf_more_get(void) {
     char l[sizeof pf.mline];
@@ -49,6 +70,7 @@ static int pf_more_get(void) {
     ch = m != pf.more || strcmp(l, pf.mline);
     pf.more = m;
     memcpy(pf.mline, l, sizeof l);
+    pf_spin_arm();
     return ch;
 }
 
@@ -72,7 +94,7 @@ static void pf_apply(void) {
     pf.nterms = search_titles_query(pf.typed);
     pf_more_get();
     if (pf.nterms)
-        for (i = 0; i < n && pf.nrows < PC_ALL_MAX; ++i) {
+        for (i = 0; i < n && pf.nrows < PC_LIST_MAX; ++i) {
             const pc_ep_t *e = pg_find_ep(i);
             if (e && search_titles_match(e->title)) pf.rows[pf.nrows++] = (unsigned short)i;
         }
@@ -126,6 +148,8 @@ static int pf_on_paint(void *ctx, void *e) {
     for (r = r0; r <= r1; ++r) {
         int y = r * PF_ROW_H - off;
         if (pf.press == r + 1) az_fill(canvas, 0, y, y + PF_ROW_H - 1, 320, LIST_PRESS);
+        if (r == pf.nrows && pf.more == 2)
+            grid_spin_draw(canvas, &pf.g, PF_TEXT_X, y + (PF_ROW_H - PS_SPIN_PX) / 2, PF_LIST_H);
         if (r < pf.nrows) az_fill(canvas, PF_TEXT_X, y + PF_ROW_H - 1, y + PF_ROW_H, PF_SEP_END - PF_TEXT_X, LIST_HAIR);
     }
     for (pass = 0; pass < 3;
@@ -137,11 +161,13 @@ static int pf_on_paint(void *ctx, void *e) {
                 pass < 2 && (more ? pf.more == 2 : pg_find_played(pf.rows[r])); /* (the row dims while its job runs) */
             if (pass < 2 && played != pass) continue;
             if (more && pass == 2) continue;
-            grid_text(canvas, pf_tile(r), pass == 2, PF_TEXT_X,
+            int sx = more && pf.more == 2 && pf.g.spin[0] ? PS_SPIN_PX + PS_SPIN_GAP
+                                                          : 0; /* (the busy row's text after its spinner) */
+            grid_text(canvas, pf_tile(r), pass == 2, PF_TEXT_X + sx,
                       y + (more        ? (PF_ROW_H - LIST_TITLE_H) / 2
                            : pass == 2 ? PF_SUB_Y
                                        : PF_TITLE_Y),
-                      PF_TEXT_END - PF_TEXT_X, pass == 2 ? LIST_SUB_H : LIST_TITLE_H, 0);
+                      PF_TEXT_END - PF_TEXT_X - sx, pass == 2 ? LIST_SUB_H : LIST_TITLE_H, 0);
         }
     }
     I(canvas, CANVAS_OY) -= off;
@@ -244,7 +270,7 @@ static void pf_hold(void) {
     if (hz) search_titles_hold();
 }
 
-/* 1 s, alive while the page is: the Show page's tick is stopped under this page, so the end of its Show All Episodes job (the downloads' timer runs it) is picked up here. The list is read again by the Show page's
+/* 1 s, alive while the page is: the Show page's tick is stopped under this page, so the end of its See All job (the downloads' timer runs it) is picked up here. The list is read again by the Show page's
  * own function (a reload that brought the archive: the engine's hold rule is checked again, the query runs anew, the list starts at the top and the row is gone; any other: the same query, the scroll kept), or the
  * row's count and words are painted when they changed. */
 static int pf_tick(const void *timer) {
@@ -272,6 +298,7 @@ static int pf_on_destroy(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     m1_timer_stop(&pf.timer);
+    m1_timer_stop(&pf.spin);
     keyboard_detach();
     search_titles_close();
     grid_free(&pf.g);
@@ -300,7 +327,7 @@ static int pf_open(void) {
     pf.st_title = widget_lookup(pf.win, "label_row_title", 1);
     pf.st_dim = widget_lookup(pf.win, "label_row_dim", 1);
     pf.st_sub = widget_lookup(pf.win, "label_row_sub", 1);
-    pf.rows = calloc(PC_ALL_MAX, sizeof *pf.rows);
+    pf.rows = calloc(PC_LIST_MAX, sizeof *pf.rows);
     if (!pf.rows || !pf.list || !pf.sv || !pf.view || !pf.status || !pf.field || !pf.st_title || !pf.st_dim ||
         !pf.st_sub || !grid_init(&pf.g, pf.win, PF_TILES, 8, 0) ||
         keyboard_attach(pf.win, TR("Search Episodes"), SE_TEXT_X, SE_TEXT_W, SE_CARET_Y, 0, pf_on_text, pf_on_go) !=

@@ -671,7 +671,7 @@ def page_tests(ctx):
     PCP.click(m, 'btn_return')
     _, texts, styles, _ = PCP.paint_bottom(m)
     got = sorted(((t, s) for (t, (x, y, w, h)), s in zip(texts, styles)))
-    expect(('Downloads', 'label_row_title') in got and ('2 waiting', 'label_row_sub') in got, f'the Shows level: the Downloads row, in the plain title style, says "2 waiting" ({got[:6]})')
+    expect(('Downloaded', 'label_row_title') in got and ('2 waiting', 'label_row_sub') in got, f'the Shows level: the Downloads row, in the plain title style, says "2 waiting" ({got[:6]})')
     expect(m.props.get((m.sv, 'virtual_h')) == pod_show.shows_layout(4, True, 0)['h'], 'the row is always there: the content is the same height as with nothing queued')
     poke_slot(m, 0, 'Sub One', 'a.mp3', 2); m.setword(pn_at(DKEY), key_a); m.setword(pn_at(DGOT), len(DATA) // 4); m.setword(pn_at(DTOTAL), len(DATA)); m.setword(pn_at(DGEN), 77)
     tick(m)
@@ -691,7 +691,7 @@ def refresh_page_tests(ctx):
     th = m.thread
     PCP.click(m, 'btn_return')
     m.calls = []; m.thread = None
-    PCP.tap_line(m)   # Refresh All
+    PCP.refresh_all(m)   # Refresh All
     expect(m.word(pn_at(DPAUSE)) == 1 and m.thread is None and 'pthread_create' not in [c[0] for c in m.calls] and fn(m, 'pn_busy') == 0 and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0,
            'Refresh All while a download runs: the downloads are asked to pause, no refresh thread yet, no dialog yet')
     _, texts, styles, _ = PCP.paint(m)
@@ -716,7 +716,7 @@ def refresh_page_tests(ctx):
     # the page is not in front or dark when the downloads have paused: the refresh is dropped, the downloads go on
     m = page(); open_sub_one(m); PCP.act(m, 0); th = m.thread
     PCP.click(m, 'btn_return')
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     work(m, th)
     m.screen(False); m.thread = None
     m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
@@ -800,7 +800,7 @@ def width_tests(ctx):
         w = {k: round(st.layout(v)[1]) for k, v in cands.items()}
         top = max(w, key=w.get)
         worst.append((loc, w[top], top))
-        title_w = round(st.layout(f'{tr("Downloads")} (32)')[1])
+        title_w = round(st.layout(f'{tr("Downloaded")} (32)')[1])
         expect(title_w <= 274 - 0, f'{loc}: the Downloads row title fits ({title_w})')
     print('  widest state line a language needs (px, room 274):', [(a, b) for a, b, _ in worst])
     over = [(loc, w, k) for loc, w, k in worst if w > 274]

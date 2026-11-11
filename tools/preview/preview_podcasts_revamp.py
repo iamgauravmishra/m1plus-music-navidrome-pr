@@ -486,7 +486,7 @@ def build_shows(s, shows, shelf_n, dl, refreshing):
         cy = o['PP_LINE_Y'] + o['PP_LINE_H'] / 2
         if refreshing: s.text(im, o['PP_LINE_X'], cy, 'Refreshing 2/5…', 15, GREY)
         else:
-            t1 = 'Updated 1h ago · '; s.text(im, o['PP_LINE_X'], cy, t1, 15, GREY); s.text(im, o['PP_LINE_X'] + FONT.width(t1, 15), cy, 'Refresh', 15, WHITE)
+            s.text(im, o['PP_LINE_X'], cy, 'Updated 1h ago', 15, GREY)
     if shelf:
         s.text(im, o['PP_HEAD_X'], L['y_shelf'] + o['PP_HEAD_H'] / 2, 'Continue Listening', 20, WHITE)
         for i, (sh, t, left) in enumerate(shelf):
@@ -497,7 +497,7 @@ def build_shows(s, shows, shelf_n, dl, refreshing):
             s.text(im, x, ly + o['PP_SHELF_LEFT_H'] / 2, left, 13, GREY)
     n_subs = sum(1 for sh in shows if sh.key != 'local')
     for y, name, sub, tile in ((L['y_srch'], 'Discover', 'Apple Podcasts', IMGS[M.PC_SRCH_TILE]),
-                               (L['y_dl'], 'Downloads', dl, IMGS[M.PC_DL_TILE]),
+                               (L['y_dl'], 'Downloaded', dl, IMGS[M.PC_DL_TILE]),
                                (L['y_sub'], 'Subscriptions', '%d shows' % n_subs, IMGS[M.PC_LIB_TILE])):
         if not y: continue
         _paste(im, tile, o['PP_DL_TILE_X'], y + o['PP_DL_TILE_Y'])
@@ -760,17 +760,16 @@ def subs_sheet(s, shows, path):
 # ------------------------------------------------------------------ the Downloads page: patch/podcasts.c pg_paint_dls; the layout is tools/pod_show.py downloads_layout
 
 def downloads_page(s, ip, dl, scroll=0, marked=None, line='7 episodes · 217 MB · 18 GB free', empty=False):
-    """The Downloads page as patch/podcasts.c paints it (docs/modules/podcasts.md "The Downloads page"): the storage line (15 px grey), the In Progress header and rows, PP_SEC_GAP, the Downloaded header and rows
+    """The Downloads page as patch/podcasts.c paints it (docs/modules/podcasts.md "The Downloaded page"): the storage line (15 px grey), the In Progress header and rows, PP_SEC_GAP, the Downloaded header and rows
     (a LIST_ART px cover, the episode 21 px, "show · date · size" or "... · 35m left · ..." 18 px grey, the played check before it, a full width hairline); the capsule "..." | Now Playing. ip: (show, title, line);
     dl: (show, title, tail, played); marked: a set of row indexes = select mode (the x, N Selected, Select All, a mark column of SG_SEL_COL, the bar with the Delete pill); empty: the status line."""
     o = O
     L = pod_show.downloads_layout(len(ip), len(dl), marked is not None)
     shift = o['SG_SEL_COL'] if marked is not None else 0
     im = Image.new('RGBA', (W, max(L['h'], WIN - NAV)), (0, 0, 0, 255))
-    s.text(im, o['SG_TITLE_X'], o['PP_TITLE_H'] / 2, 'Downloads', o['PP_TITLE_PX'], WHITE)   # (the large heading scrolls with the content; the navbar takes the small title past SG_COLLAPSE)
+    s.text(im, o['SG_TITLE_X'], o['PP_TITLE_H'] / 2, 'Downloaded', o['PP_TITLE_PX'], WHITE)   # (the large heading scrolls with the content; the navbar takes the small title past SG_COLLAPSE)
     if line: s.text(im, o['PP_LINE_X'], L['y_line'] + o['PP_LINE_H'] / 2, PS.fit(s, line, 15, W - 2 * o['PP_LINE_X']), 15, GREY)
     if L['y_ip'] is not None: s.text(im, o['PP_SHOWS_X'], L['y_ip'] + o['PP_HEAD_H'] / 2, 'In Progress', 20, WHITE)
-    if L['y_dh'] is not None: s.text(im, o['PP_SHOWS_X'], L['y_dh'] + o['PP_HEAD_H'] / 2, 'Downloaded', 20, WHITE)
     for i, y in enumerate(L['rows'] if not empty else []):
         if i < len(ip): sh, title, sub = ip[i]; played = False
         else:
@@ -798,7 +797,7 @@ def downloads_page(s, ip, dl, scroll=0, marked=None, line='7 episodes · 217 MB 
     else:
         PS.glass(s, win, 'ah_nav_back', 7, 44)
         capsule(s, win, 'none' if empty else 'more')
-        if scroll > o['SG_COLLAPSE']: s.text(win, o['NAV_TITLE_X'], 25, PS.fit(s, 'Downloads', PI.title_px(s.tree), o['NAV_VIEW_X'] - o['NAV_TITLE_X']), PI.title_px(s.tree))   # (the large heading has scrolled away: the small title)
+        if scroll > o['SG_COLLAPSE']: s.text(win, o['NAV_TITLE_X'], 25, PS.fit(s, 'Downloaded', PI.title_px(s.tree), o['NAV_VIEW_X'] - o['NAV_TITLE_X']), PI.title_px(s.tree))   # (the large heading has scrolled away: the small title)
     if empty: s.text(win, o['PP_LINE_X'], NAV + o['PDL_LINE_PITCH'] + 8 + o['PS_TITLE_PITCH'] / 2, 'No downloads', 20, DIMT)   # (painted in the content under the storage line: pg_paint_hint)
     return frame(s, win, None)
 

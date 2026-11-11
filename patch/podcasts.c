@@ -80,12 +80,12 @@ enum {
 
 #define PG_DNA_MAX 16 /* Discover rows remembered as having no feed */
 #define PG_IP_MAX PC_MAX_SHOWS /* In Progress rows of the Downloads level (queued, running, failed, paused) */
-#define PG_DLD_MAX 300 /* Downloaded rows: the newest this many (docs/modules/podcasts.md "The Downloads page") */
+#define PG_DLD_MAX 300 /* Downloaded rows: the newest this many (docs/modules/podcasts.md "The Downloaded page") */
 #define PG_DLS_MAX \
     (PG_IP_MAX + PG_DLD_MAX) /* slots of the Downloads level: In Progress in 0..PG_IP_MAX - 1, Downloaded after */
 #define PG_PICK_MAX \
-    (PC_ALL_MAX > PG_DLS_MAX \
-         ? PC_ALL_MAX \
+    (PC_LIST_MAX > PG_DLS_MAX \
+         ? PC_LIST_MAX \
          : PG_DLS_MAX) /* rows the select mode can mark: the Show page's longest list (an archive) or the Downloads slots */
 #define PG_PICK_BYTES ((PG_PICK_MAX + 7) / 8) /* the select mode's bitsets (display rows) */
 
@@ -128,7 +128,6 @@ enum {
     PH_PILL = 1,
     PH_DOTS = 2,
     PH_LATEST = 3,
-    PH_LINE = 4,
     PH_DLROW = 5,
     PH_SHELF = 6,
     PH_CELL = 7,
@@ -139,8 +138,8 @@ enum {
     PH_SAVROW = 13,
     PH_SRCHROW = 14,
     PH_SEG = 15,
-    PH_MORE = 16 /* the Show level's Show All Episodes row */
-}; /* what a touch hit: on the Show level the first four (the episode page's show row: PH_SHOW); on the Shows level the refresh line, the Search, Downloads and Subscriptions rows, a Continue Listening item, a show's cover and captions */
+    PH_MORE = 16 /* the Show level's See All row */
+}; /* what a touch hit: on the Show level the first four (the episode page's show row: PH_SHOW); on the Shows level the Search, Downloads and Subscriptions rows, a Continue Listening item, a show's cover and captions */
 enum {
     SR_SPEED = 0,
     SR_REFRESH,
@@ -178,7 +177,6 @@ enum {
     ST_LATEST,
     ST_LATESTW,
     ST_SECH,
-    ST_LINE,
     ST_STITLE,
     ST_SLEFT,
     ST_GTITLE,
@@ -213,13 +211,18 @@ static struct {
     unsigned gen; /* pn_gen() the Shows and Downloads levels were made at */
     pc_ep_t *eps; /* the episodes of the show open (on the card or not), newest first */
     int neps;
-    int has_arch; /* the show open has an archive (no Show All Episodes row then) */
+    int has_arch; /* the show open has an archive (the See All row has no fetch then) */
+    int all, allv,
+        nall; /* pg.eps is the COMPLETE list (the All Episodes page, or the search inside a show with an archive, which keeps it while it is open); the All Episodes page is the page shown; the show's episode count for See All (N) */
+    int all_off; /* the Show page's scroll offset Back from the All Episodes page returns to */
+    unsigned
+        aopen; /* pc_hash of the show whose See All tap started the archive job: the All Episodes page opens when it ends */
     int filt,
         nvis; /* the Show page's Filter (PG_F_*, page state, not saved) and the rows it leaves; vis (NULL for All): row -> index into eps, the show's order (pg_ix) */
     unsigned short *vis;
     unsigned
-        apend; /* pc_hash of the show whose Show All Episodes row was tapped while a download ran: the job starts when it has paused */
-    unsigned acnt; /* the item count the Show All Episodes row was painted with */
+        apend; /* pc_hash of the show whose See All row was tapped while a download ran: the job starts when it has paused */
+    unsigned acnt; /* the item count the See All row was painted with */
     int level, sel,
         show_off; /* the level, the show open (an index into shows), the Shows level's offset to come back to */
     int press, down, down_part;
@@ -227,6 +230,7 @@ static struct {
         tap; /* the row under the finger + 1; the row a press began on + 1 (0 none), what of it (PH_*), and where */
     int fg;
     unsigned rev; /* pc_rev() the rows were made at */
+    unsigned spin_t; /* the See All row's spinner timer (pg_spin_arm), 0 when none */
     unsigned timer, load_timer, dlg_timer,
         awake; /* awake: the downloads' timer (keeps the device awake, starts the queue again): scoped to the window, in front or not */
     int rpend; /* a refresh waits for the downloads to pause: 1 + only_new */
@@ -249,7 +253,7 @@ static struct {
     struct pg_dl *dls; /* the Downloads level's slots (PG_DLS_MAX) */
     unsigned short *ord,
         *dord; /* ord: display row -> slot (PG_DLS_MAX); dord: the Downloaded slots, newest first (PG_DLD_MAX) */
-    /* The Downloaded scan (docs/modules/podcasts.md "The Downloads page"): one show a tick of the loader; dscan is the next of the dsn shows in dsl; the totals count every file, past the cap too */
+    /* The Downloaded scan (docs/modules/podcasts.md "The Downloaded page"): one show a tick of the loader; dscan is the next of the dsn shows in dsl; the totals count every file, past the cap too */
     int dscan, dsn, dscan_on, dfree_ok, dtick;
     unsigned char dsl[PC_MAX_SHOWS];
     unsigned dtot_n, dtot_kb, dfree_kb;
@@ -334,23 +338,28 @@ int pcsearch_toggle(void) {
 
 static int pg_off(void) { return grid_sv_off(pg.sv); }
 static void pg_redraw(void) { grid_sv_redraw(pg.sv); }
-static void pg_arch_tap(void);
+static int pg_arch_tap(void);
+static void pg_spin_arm(void);
 static void pg_awake_arm(void); /* the downloads' timer, armed when something is queued */
 
 /* The Show page's rows: every episode, or the ones the Filter leaves (pg.vis maps a row to its place in pg.eps). Everything that takes a row (cells, hit testing, marks, select mode, the queue) counts and maps
  * through these two; what takes an episode (the episode page, the Latest Episode pill, the search inside the show, Unsubscribe) uses pg.eps directly. */
 static int pg_nrows(void) { return pg.vis ? pg.nvis : pg.neps; }
 static int pg_ix(int a) { return pg.vis ? pg.vis[a] : a; }
+/* The rows the page paints: the Show page paints the first PS_SHOW_MAX rows of its (recent) list and ends with the See All row; the All Episodes page and a preview paint every row. */
+static int pg_shown(void) {
+    int n = pg_nrows();
+    return pg.allv || pg.preview || n <= PS_SHOW_MAX ? n : PS_SHOW_MAX;
+}
 static int pg_count(void) {
-    return pg.level == L_EPS    ? pg_nrows()
+    return pg.level == L_EPS    ? pg_shown()
            : pg.level == L_DLS  ? pg.nrows
            : pg.level == L_SRCH ? pg.srn
            : pg.level == L_DISC ? pg.dn
                                 : 0;
 }
-/* The Downloads level's geometry (content y; tools/pod_show.py downloads_layout is the same arithmetic): the storage line, then In Progress (a header and its rows), PP_SEC_GAP, then Downloaded (a header and its
- * rows); the headers only when both sections have rows (pg_dheads: one section alone is the page's content under its large title "Downloads", and a lone "Downloaded" would repeat it), and then the rows start
- * where the first header would have. The Subscriptions page is plain rows from 0. pg_dy is the top of display row a. */
+/* The Downloads level's geometry (content y; tools/pod_show.py downloads_layout is the same arithmetic): the storage line, then the In Progress rows, PP_SEC_GAP, then the downloaded rows. Only In Progress has a header, and only when both
+ * sections have rows (pg_dheads): the downloaded rows are the page's content under its large title "Downloaded" and a header would repeat it, and In Progress alone needs none; without the header the rows start where it would have. The Subscriptions page is plain rows from 0. pg_dy is the top of display row a. */
 static int pg_dheads(void) { return pg.nip && pg.nd; }
 static int pg_dy(int a) {
     int y = PDL_LINE_PITCH;
@@ -359,11 +368,7 @@ static int pg_dy(int a) {
     y += PP_HEAD_PITCH;
     if (a < pg.nip) return y + a * PC_ROW_H;
     y += pg.nip * PC_ROW_H + PP_SEC_GAP;
-    return y + PP_HEAD_PITCH + (a - pg.nip) * PC_ROW_H;
-}
-/* The top of the In Progress header (sec 0) or the Downloaded header (sec 1); only meant while pg_dheads. */
-static int pg_dhead(int sec) {
-    return sec ? PDL_LINE_PITCH + PP_HEAD_PITCH + pg.nip * PC_ROW_H + PP_SEC_GAP : PDL_LINE_PITCH;
+    return y + (a - pg.nip) * PC_ROW_H;
 }
 static int pg_dh(void) {
     return pg.subs || pg.saved ? PP_TITLE_H + pg.nrows * PC_ROW_H
@@ -377,7 +382,10 @@ static int pg_dhit(int y) {
     return -1;
 }
 static int pg_top(void) {
-    return pg.level == L_SRCH ? PQ_TOP : pg.level == L_DISC ? DC_TOP : pg.level == L_EPS && pg.hdr ? pg.hdr->h : 0;
+    return pg.level == L_SRCH                        ? PQ_TOP
+           : pg.level == L_DISC                      ? DC_TOP
+           : pg.level == L_EPS && pg.hdr && !pg.allv ? pg.hdr->h
+                                                     : 0;
 } /* where the rows start in the content */
 /* The Show level's cell height: PS_CELL_H, or PS_PCELL_H for the preview (no pill row under the description). */
 static int pg_cell_h(void) { return pg.preview ? PS_PCELL_H : PS_CELL_H; }
@@ -400,13 +408,21 @@ static const char *pg_hint_text(void) {
     const char *k = pg_hint();
     return k && pg.level != L_DISC && pg.level != L_SRCH ? TR(k) : k;
 }
-/* The Show All Episodes row: the show open is a subscription that has no archive yet (not a preview, not while rows are marked, not for an empty list). */
-static int pg_more_on(void) {
-    return pg.level == L_EPS && !pg.preview && !pg.select && !pg.det && pg.neps > 0 && pg.shows[pg.sel].feed[0] &&
-           !pg.has_arch;
+/* The See All row that fetches: the show open is a subscription that has no archive yet (not a preview, not while rows are marked, not for an empty list, not on the All Episodes page). The search inside the show has the same
+ * row as Search All Episodes. */
+static int pg_fetch_on(void) {
+    return pg.level == L_EPS && !pg.preview && !pg.select && !pg.det && !pg.allv && pg.neps > 0 &&
+           pg.shows[pg.sel].feed[0] && !pg.has_arch;
 }
-/* The top of the Show All Episodes row: under the last cell, or under the hint of a Filter that leaves no row. */
-static int pg_more_y(void) { return pg_top() + (pg_nrows() ? pg_nrows() * pg_cell_h() : PG_HINT_H); }
+/* The See All row (the last row of the Show page): the fetching one (pg_fetch_on), or "See All (N)" for a show with an archive that has more episodes than the rows shown (or a Filter on) and for a show of copied files with rows
+ * past the first PS_SHOW_MAX. */
+static int pg_more_on(void) {
+    if (pg.level != L_EPS || pg.preview || pg.select || pg.det || pg.allv || pg.neps <= 0) return 0;
+    if (pg_fetch_on()) return 1;
+    return pg.has_arch ? pg.nall > pg_shown() || pg.filt != PG_F_ALL : pg_nrows() > pg_shown();
+}
+/* The top of the See All row: under the last cell, or under the hint of a Filter that leaves no row. */
+static int pg_more_y(void) { return pg_top() + (pg_shown() ? pg_shown() * pg_cell_h() : PG_HINT_H); }
 static int pg_content(void) {
     if (pg.det && pg.pd) return pg.pd->h; /* (the episode page) */
     if (pg.level == L_SHOWS) return pg.home_h;
@@ -414,7 +430,7 @@ static int pg_content(void) {
         return pg_hint_y() + PG_HINT_H +
                (pg_more_on()
                     ? PS_MORE_H
-                    : 0); /* (an empty page: its header and the hint, no taller, so it only scrolls when they don't fit; a Filter that leaves no row keeps the Show All Episodes row) */
+                    : 0); /* (an empty page: its header and the hint, no taller, so it only scrolls when they don't fit; a Filter that leaves no row keeps the See All row) */
     if (pg.level == L_SRCH) return PQ_TOP + pg.srn * PC_ROW_H + (pg.srn ? PQ_BOTTOM : 0);
     if (pg.level == L_DISC) return DC_TOP + pg.dn * PC_ROW_H + (pg.dn ? DC_BOTTOM : 0);
     if (pg.level == L_DLS) return pg_dh() + (pg.select && pg.nrows ? SG_BAR_H : 0);
@@ -492,13 +508,13 @@ static void pg_cat(char *out, unsigned size, const char *s) {
     out[o] = 0;
 }
 
-/* The Show All Episodes row's text into out; 1 when the job is on (running for this show, or waiting for the downloads to pause: dim, no tap). Running: Loading… and the items written so far once there are some ("Loading… 340").
+/* The See All row's text into out; 1 when the job is on (running for this show, or waiting for the downloads to pause: dim, no tap). Running: Loading… and the items written so far once there are some ("Loading… 340").
  * After a failure for this show (pn_arch_failed, kept for the session): the page's word for the reason and the hint. */
 static int pg_more_line(char *out, unsigned size, const char *idle) {
     unsigned h = pg.shows[pg.sel].hash, n = 0;
     int run = pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == h;
     out[0] = 0;
-    if (run || pg.apend) {
+    if (run || pg.apend) { /* (the spinner turns beside this text: pg_spin_tick, pf_spin_tick) */
         pg_cat(out, size, TR("Loading…"));
         if (run) n = pn_arch_count();
         if (n) pc_fmt(out + strlen(out), size - (unsigned)strlen(out), " %d", (int)n);
@@ -511,6 +527,13 @@ static int pg_more_line(char *out, unsigned size, const char *idle) {
         return 0;
     }
     pg_cat(out, size, idle);
+    return 0;
+}
+
+/* The See All row of the Show page: the fetching row's line (See All, Loading…, the failure), or "See All (N)", N the show's episodes. 1 while the job is on. */
+static int pg_see_line(char *out, unsigned size) {
+    if (pg_fetch_on()) return pg_more_line(out, size, TR("See All"));
+    pc_fmt(out, size, TR("See All (%d)"), (unsigned)pg.nall);
     return 0;
 }
 
@@ -636,9 +659,9 @@ static grid_tile_t *pg_tile(int a) {
     return t;
 }
 
-/* The grey line under show s's cover on the Shows level. In this order: the words of the feed's last result when it failed this session (No Wi-Fi, Feed not found, ...); "N new" when the last refresh
- * found episodes; "Updated today" / "Updated 2d ago" from the last refresh (the show file's checked=); "Never refreshed" for a subscription never refreshed; "12 episodes" for a show that has
- * no feed (its files). */
+/* The grey line under show s's cover on the Shows level and a Subscriptions row. In this order: "N new" when the last refresh found episodes; "Updated today" / "Updated 2d ago" from the last refresh (the
+ * show file's checked=), which a failed refresh does not hide (the failure was toasted when the job ended); the words of the feed's failure this session (No Wi-Fi, Feed not found, ...) for a subscription
+ * never refreshed, in place of "Never refreshed"; "12 episodes" for a show that has no feed (its files). */
 static void pg_caption(const pc_show_t *s, char *out, unsigned size) {
     unsigned now = (unsigned)time((long *)0), fresh = 0;
     int code = 0, known = 0;
@@ -655,9 +678,7 @@ static void pg_caption(const pc_show_t *s, char *out, unsigned size) {
             out[0] = 0;
             pg_cat(out, size, TR("Local"));
         }
-    } else if (known && code != PN_OK)
-        pg_cat(out, size, pg_status_word(code));
-    else if (known && fresh)
+    } else if (known && code == PN_OK && fresh)
         pc_fmt(out, size, TR("%d new"), fresh);
     else if (s->checked) {
         if (now >= s->checked && now - s->checked < 86400)
@@ -674,7 +695,9 @@ static void pg_caption(const pc_show_t *s, char *out, unsigned size) {
                 pg_cat(out, size, when);
             }
         }
-    } else
+    } else if (known && code != PN_OK)
+        pg_cat(out, size, pg_status_word(code));
+    else
         pg_cat(out, size, TR("Never refreshed"));
 }
 
@@ -1246,9 +1269,10 @@ static void pg_paint_fade(void *canvas) {
     for (y = 0; y < PG_FADE_H; ++y)
         if (alpha[y])
             az_fill(canvas, 0, y, y + 1, PG_W,
-                    ((unsigned)alpha[y] << 24) | (pg.tint ? m1_shade(pg.tint, (unsigned)(PG_LIST_Y + y), AH_TINT_A_TOP,
-                                                                     AH_TINT_A_BOT, AH_TINT_ROWS)
-                                                          : 0));
+                    ((unsigned)alpha[y] << 24) |
+                        (pg.tint && !pg.allv
+                             ? m1_shade(pg.tint, (unsigned)(PG_LIST_Y + y), AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS)
+                             : 0));
 }
 
 #define PG_SEEN 6 /* cells the view can touch at once (400 / PS_CELL_H rounded up, plus a margin) */
@@ -1339,15 +1363,18 @@ static void pg_paint_eps(void *canvas) {
                         y + PS_PILL_Y, pill[i].w - PS_PILL_PADL - PA_G_PX - PS_PILL_GAP, PS_PILL_H);
         }
     }
-    if (pg_more_on()) { /* the Show All Episodes row: Loading… and the count while its job runs, the reason and Tap to Retry after a failure */
+    if (pg_more_on()) { /* the See All row: Loading… and the count while its job runs, the reason and Tap to Retry after a failure */
         int y = pg_more_y() - off;
         char line[96];
-        int busy = pg_more_line(line, sizeof line, TR("Show All Episodes"));
+        int busy = pg_see_line(line, sizeof line);
         unsigned t[96];
         int n = pg_wide(t, 96, line);
-        if (pg.press == pg_nrows() + 1 && !busy) az_fill(canvas, 0, y, y + PS_MORE_H, PG_W, 0x30ffffffu);
+        if (pg.press == pg_shown() + 1 && !busy) az_fill(canvas, 0, y, y + PS_MORE_H, PG_W, 0x30ffffffu);
+        int sx = busy && grid_spin_draw(canvas, &pg.hg, PS_CELL_X, y + (PS_MORE_H - PS_SPIN_PX) / 2, GRID_VIEW_H)
+                     ? PS_SPIN_PX + PS_SPIN_GAP
+                     : 0; /* the spinner, the text after it */
         pg_style(canvas, busy ? ST_CDIM : ST_CTITLE);
-        pg_text(canvas, t, n, PS_CELL_X, y + (PS_MORE_H - PS_TITLE_PITCH) / 2, PS_CELL_W, PS_TITLE_PITCH);
+        pg_text(canvas, t, n, PS_CELL_X + sx, y + (PS_MORE_H - PS_TITLE_PITCH) / 2, PS_CELL_W - sx, PS_TITLE_PITCH);
     }
     if (off > 0) pg_paint_fade(canvas);
 }
@@ -1391,9 +1418,9 @@ static void pg_paint_det(void *canvas) {
  * The Shows level (Apple Podcasts style, docs/modules/podcasts.md "The Shows page"): the large title (a label of the asset, a child of the content view), then painted by the content view: the refresh line,
  * Continue Listening (a static row of at most PP_SHELF_MAX covers), the Downloads row, the "Shows" header and the grid of every show. The numbers are PP_* of patch/offsets.inc (tools/pod_show.py shows_layout).
  */
-typedef struct { /* the refresh line: the grey part, then the white "Refresh" (nw 0: none) */
-    unsigned grey[96], white[24];
-    int ng, nw, gw, ww;
+typedef struct { /* the refresh line (a status, not a control): its text and width */
+    unsigned grey[96];
+    int ng, gw;
 } pg_line_t;
 
 static int pg_last_checked(void) {
@@ -1404,10 +1431,20 @@ static int pg_last_checked(void) {
     return (int)last;
 }
 
-/* The refresh line from the worker's state: "Refreshing 2/5…" while it runs, "Waiting" while the downloads pause for it, else "Updated 1h ago · " (or "Never refreshed · ") and the word Refresh. */
+/* "1h ago" for a refresh at `checked`, "Never refreshed" for 0 (the sheets' Refresh rows' value). */
+static void pg_when_text(unsigned checked, char *text, unsigned size) {
+    text[0] = 0;
+    if (checked)
+        pc_when(checked, (unsigned)time((long *)0), text, size);
+    else
+        pg_cat(text, size, TR("Never refreshed"));
+}
+
+/* The refresh line from the worker's state: "Refreshing 2/5…" while it runs, "Waiting" while the downloads pause for it, else "Updated 1h ago" (or "Never refreshed"). A status only: Refresh All is a row of the
+ * sheet. */
 static void pg_line_make(pg_line_t *l) {
     char buf[120];
-    unsigned last = (unsigned)pg_last_checked(), now = (unsigned)time((long *)0);
+    unsigned last = (unsigned)pg_last_checked();
     memset(l, 0, sizeof *l);
     if (pn_busy() && !pg.rpend) {
         int done, total;
@@ -1416,30 +1453,13 @@ static void pg_line_make(pg_line_t *l) {
     } else if (pg.rpend) {
         buf[0] = 0;
         pg_cat(buf, sizeof buf, TR("Waiting"));
+    } else if (!last) {
+        buf[0] = 0;
+        pg_cat(buf, sizeof buf, TR("Never refreshed"));
     } else {
         char when[48];
-        const char *word = TR("Refresh");
-        int k;
-        l->nw = pg_wide(l->white, 24, word);
-        l->ww = m1_text_w(pg.st[ST_LINE], l->white);
-        for (k = 0; k < 2;
-             ++k) { /* "Updated 1h ago · ", else "1h ago · " when a long language leaves no room for the whole */
-            buf[0] = 0;
-            if (!last)
-                pg_cat(buf, sizeof buf, TR("Never refreshed"));
-            else {
-                pc_when(last, now, when, sizeof when);
-                if (!k)
-                    snprintf(buf, sizeof buf, TR("Updated %s"), when);
-                else
-                    pg_cat(buf, sizeof buf, when);
-            }
-            pg_cat(buf, sizeof buf, " \xc2\xb7 "); /* " · " */
-            l->ng = pg_wide(l->grey, 96, buf);
-            l->gw = m1_text_w(pg.st[ST_META], l->grey);
-            if (l->gw + l->ww <= PG_W - 2 * PP_LINE_X || !last) break;
-        }
-        return;
+        pc_when(last, (unsigned)time((long *)0), when, sizeof when);
+        snprintf(buf, sizeof buf, TR("Updated %s"), when);
     }
     l->ng = pg_wide(l->grey, 96, buf);
     l->gw = m1_text_w(pg.st[ST_META], l->grey);
@@ -1598,8 +1618,6 @@ static void pg_paint_home(void *canvas) {
         int ty = PP_LINE_Y - off;
         pg_line_make(&ln);
         pg_paint_text_at(canvas, pg.st[ST_META], ln.grey, ln.ng, PP_LINE_X, ty, ln.gw + 4, PP_LINE_H);
-        if (ln.nw)
-            pg_paint_text_at(canvas, pg.st[ST_LINE], ln.white, ln.nw, PP_LINE_X + ln.gw, ty, ln.ww + 4, PP_LINE_H);
     }
     /* Continue Listening: the header, then each item's title and what is left */
     if (pg.ncont) {
@@ -1636,7 +1654,7 @@ static void pg_paint_home(void *canvas) {
             pg_lib_subs_sub(sub, sizeof sub);
         else
             pg_lib_dl_sub(sub, sizeof sub);
-        n = pg_wide(w, PG_TITLE_MAX, TR(i == 3 ? "Discover" : i == 2 ? "Saved" : i ? "Subscriptions" : "Downloads"));
+        n = pg_wide(w, PG_TITLE_MAX, TR(i == 3 ? "Discover" : i == 2 ? "Saved" : i ? "Subscriptions" : "Downloaded"));
         pg_paint_text_at(canvas, pg.st_title, w, n, PP_DL_TEXT_X, y + LIST_TITLE_Y, PP_DL_TEXT_W, LIST_TITLE_H);
         n = pg_wide(w, PG_TITLE_MAX, sub);
         pg_paint_text_at(canvas, pg.st_sub, w, n, PP_DL_TEXT_X, y + LIST_SUB_Y, PP_DL_TEXT_W, LIST_SUB_H);
@@ -1652,7 +1670,7 @@ static void pg_paint_home(void *canvas) {
     }
 }
 
-/* The Downloads page's storage line (docs/modules/podcasts.md "The Downloads page"): "12 episodes - 1.4 GB - 18 GB free", the shorter forms (the size and the free space; the free space) where that is wider than the page's
+/* The Downloads page's storage line (docs/modules/podcasts.md "The Downloaded page"): "12 episodes - 1.4 GB - 18 GB free", the shorter forms (the size and the free space; the free space) where that is wider than the page's
  * margins. The counts are there once the scan has finished (they are the whole card's, the rows' cap aside). */
 static void pg_dls_line(char *out, unsigned size) {
     int k;
@@ -1699,8 +1717,7 @@ static void pg_paint_dls(void *canvas) {
             pg_paint_text_at(canvas, pg.st[ST_META], w, n, PP_LINE_X, PDL_LINE_Y - off, PG_W - 2 * PP_LINE_X,
                              PP_LINE_H);
         if (pg_dheads()) {
-            pg_paint_head(canvas, pg_dhead(0) - off, "In Progress", PP_SHOWS_X);
-            pg_paint_head(canvas, pg_dhead(1) - off, "Downloaded", PP_SHOWS_X);
+            pg_paint_head(canvas, PDL_LINE_PITCH - off, "In Progress", PP_SHOWS_X);
         }
     }
     pg_span(&r0, &r1);
@@ -1859,7 +1876,7 @@ static void pg_win_color(unsigned color) {
 }
 
 static void pg_bar_apply(void) {
-    if (pg.tint_on && pg.fg && pg.level == L_EPS && !pg.det &&
+    if (pg.tint_on && pg.fg && pg.level == L_EPS && !pg.det && !pg.allv &&
         m1_bar_tint(pg.win, m1_shade(pg.tint, 0, AH_TINT_A_TOP, AH_TINT_A_BOT, AH_TINT_ROWS)))
         pg.bar_ours = 1; /* a failed call keeps what the bar has (and owes) */
 }
@@ -1875,7 +1892,7 @@ static unsigned pg_tone_raw __attribute__((section(
 
 /* The tint on the window: shown on the Show page, plain black (window, gradient, status bar) on an episode's page; called when the tint changes and when the page opens and closes. */
 static void pg_tint_view(void) {
-    int on = pg.tint_on && !pg.det;
+    int on = pg.tint_on && !pg.det && !pg.allv; /* (the All Episodes page is black, as the episode page) */
     pg_win_color(on ? pg.tint | 0xff000000u : 0xff000000u);
     if (pg.tint_img) widget_set_visible(pg.tint_img, on, 0); /* (decorative: it stays insensitive) */
     widget_invalidate_force(pg.win, (void *)0);
@@ -1894,7 +1911,7 @@ static void pg_tint_set(unsigned tone) {
 }
 
 /* The Show page shows a cover's tone now (not the shows list, not an episode: pg_tint_view). */
-int pg_has_tone(void) { return pg.win && pg.tint_on && !pg.det; }
+int pg_has_tone(void) { return pg.win && pg.tint_on && !pg.det && !pg.allv; }
 
 void pg_relight(void) {
     if (pg.win && pg.tint_on) pg_tint_set(pg_tone_raw); /* (patch/palette.c pal_apply) */
@@ -1938,7 +1955,7 @@ static void pg_title_show(void) {
 
 static void pg_collapse(void) {
     int c = pg.level == L_EPS
-                ? !pg.det && pg.hdr && m1_title_gone(pg_off(), pg.hdr->collapse)
+                ? !pg.det && pg.hdr && (pg.allv || m1_title_gone(pg_off(), pg.hdr->collapse))
                 : (pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC) && m1_title_gone(pg_off(), 0);
     if (c != pg.collapsed) {
         pg.collapsed = c;
@@ -2182,14 +2199,15 @@ static void pg_leave_show(void) {
     pg.collapsed = 0;
 }
 
-/* The navbar's right end. Shows level: the "..." (the sheet's button) only while the card has something to import (Import from Card). Show level: the "..." (its sheet). Downloads page and Subscriptions page: the "..."
+/* The navbar's right end. Shows level: the "..." (the sheet's button) while a show has a feed (Refresh All) or the card has something to import (Import from Card). Show level: the "..." (its sheet). Downloads page and Subscriptions page: the "..."
  * (Select and Delete Played Episodes / Select Shows and Export OPML) while there are rows. Elsewhere all are hidden (and out of the hit test) and Now Playing is the glass disc; with a cap beside it Now Playing is the capsule's right cap.
  * The large title is the Shows level's (a child of the content view); the navbar's small one: see pg_title_show. */
 static void pg_head(void);
 static void pg_nav(void) {
-    int more = !pg.select && pg.btn_more &&
-               ((pg.level == L_EPS && !pg.preview && !pg.det) || (pg.level == L_SHOWS && pg.has_import) ||
-                (pg.level == L_DLS && pg.nrows && !pg.saved)),
+    int more =
+            !pg.select && pg.btn_more &&
+            ((pg.level == L_EPS && !pg.preview && !pg.det) || (pg.level == L_SHOWS && (pg.has_import || pg.has_line)) ||
+             (pg.level == L_DLS && pg.nrows && !pg.saved)),
         find =
             pg.find && (pg.level == L_DISC ||
                         (pg.level == L_EPS && !pg.preview && !pg.det && !pg.select &&
@@ -2232,6 +2250,8 @@ static void pg_eps_free(void) {
     free(pg.vis);
     pg.vis = (unsigned short *)0;
     pg.nvis = pg.filt = PG_F_ALL; /* (leaving the show: the Filter goes with it) */
+    pg.all = pg.allv = pg.nall = 0;
+    pg.aopen = 0;
 }
 
 static void pg_scan(void) { pg.nshows = pc_scan_shows(pg.shows, PC_MAX_SHOWS); }
@@ -2423,7 +2443,7 @@ static void pg_dl_row(int n, int si, const char *dir, const char *file, const ch
 }
 
 /* ---------------------------------------------------------------------------
- * The Downloads level (docs/modules/podcasts.md "The Downloads page"): two sections, In Progress (what the worker holds, in the order it was asked, then the failed ones, then the paused .part files the card has) and
+ * The Downloads level (docs/modules/podcasts.md "The Downloaded page"): two sections, In Progress (what the worker holds, in the order it was asked, then the failed ones, then the paused .part files the card has) and
  * Downloaded (every episode file of every show, the newest download first, at most PG_DLD_MAX). A row lives in a slot (In Progress 0..PG_IP_MAX - 1, Downloaded after) and its tile is keyed by the slot; pg.ord maps the
  * display rows to slots. The Downloaded rows come from a scan the page's loader runs, ONE show a tick (pg_dscan_step, as the local search does: pc_load_show reads, parses and merges one show), so a touch is answered
  * between slices; nothing runs while the screen is off. After the scan the lists are kept up to date from the worker's state (pg_dls_sync) without reading the shows again.
@@ -2705,7 +2725,7 @@ static void pg_load_downloads(int keep) {
     }
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg.rev = pc_rev();
-    pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloads", (const char *)0);
+    pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloaded", (const char *)0);
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_placeholder(&pg.g);
     pg_dls_apply();
@@ -2729,14 +2749,12 @@ static void pg_load_subs(int keep) {
     pg_load_downloads(keep);
 }
 
-/* The episodes of show si (an index into shows): every one the show knows, on the card or not, newest first. The Show page lists them all: a cell's pill says which can be played and which downloaded. */
-static pc_ep_t *pg_eps_of(int si, int *count) {
-    int cap = pc_eps_cap(&pg.shows[si]);
-    pc_ep_t *all = calloc((unsigned)cap, sizeof *all);
-    if (!all) return all;
-    *count = pc_load_show(&pg.shows[si], all, cap);
-    return all;
-}
+/* The RECENT episodes of show si (an index into shows): .episodes and the files on the card, newest first (pc_load_show). The Show page, the Downloaded scan, Continue Listening and the rest read this list; a cell's pill says
+ * which can be played and which downloaded. */
+static pc_ep_t *pg_eps_of(int si, int *count) { return pc_load_recent(&pg.shows[si], count); }
+
+/* The COMPLETE list (pc_load_show_all: with an archive every item of the feed): the All Episodes page and the search inside a show, only while one of them is open. */
+static pc_ep_t *pg_eps_all_of(int si, int *count) { return pc_load_fit(&pg.shows[si], count, 1); }
 
 static const char *pg_no_eps_key(void) {
     return pg.shows[pg.sel].feed[0] ? "No episodes yet. Choose Refresh Feed in the menu at the top right."
@@ -2757,8 +2775,12 @@ static void pg_open_show_with(int si, int off, pc_ep_t *all, int m) {
         pg.filt = PG_F_ALL; /* (the Filter is the open show's: another show or a preview starts at All) */
     free(pg.eps);
     pg.eps = all, pg.neps = m, pg.sel = si, pg.level = L_EPS;
+    pg.all = pg.allv = 0;
+    pg.aopen = 0;
     pg_vis_make();
-    pg.has_arch = pc_has_archive(&pg.shows[si]);
+    pg.has_arch = !pg.preview && pc_has_archive(&pg.shows[si]);
+    pg.nall = pg.has_arch ? pc_count_all(&pg.shows[si])
+                          : m; /* (once, now: the count of See All (N); a Show page paint never reads the archive) */
     pg.apend = 0;
     pg.feed_hash = pg.shows[si].feed[0] ? pc_hash(pg.shows[si].feed) : 0;
     pg.rev = pc_rev();
@@ -2800,13 +2822,21 @@ static void pg_eps_shown(void);
 
 static void pg_reload_eps(void) {
     int m = 0;
-    pc_ep_t *all = pg_eps_of(pg.sel, &m);
+    int had = pg.has_arch;
+    pc_ep_t *all = pg.all ? pg_eps_all_of(pg.sel, &m) : pg_eps_of(pg.sel, &m);
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     if (!all) return;
     free(pg.eps);
     pg.eps = all, pg.neps = m;
     pg_vis_make();
     pg.has_arch = pc_has_archive(&pg.shows[pg.sel]);
+    if (pg.all)
+        pg.nall = m;
+    else if (pg.has_arch && !had)
+        pg.nall = pc_count_all(
+            &pg.shows[pg.sel]); /* (the archive job ended: counted once; a download's reload does not count again) */
+    else if (!pg.has_arch)
+        pg.nall = m;
     pg_eps_shown();
 }
 
@@ -2826,6 +2856,60 @@ static void pg_eps_shown(void) {
     pg_nav();
     pg_redraw();
 }
+/* pg.eps becomes the complete list (all 1) or the recent one (0) again, the Filter's rows and the cells made anew; 0 when there is no memory (nothing changed). The scroll and the page are not touched. */
+static int pg_list_swap(int all) {
+    int m = 0;
+    pc_ep_t *l = all ? pg_eps_all_of(pg.sel, &m) : pg_eps_of(pg.sel, &m);
+    if (!l) return 0;
+    free(pg.eps);
+    pg.eps = l, pg.neps = m, pg.all = all;
+    pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
+    pg.has_arch = pc_has_archive(&pg.shows[pg.sel]);
+    if (all) pg.nall = m;
+    pg_vis_make();
+    pg_cells_drop();
+    return 1;
+}
+
+/* The All Episodes page (docs/modules/podcasts.md "The All Episodes page"): the Show level with the complete list in pg.eps and no header, the show's name in the navbar, black like the episode page. Back (pg_all_close) reads the
+ * recent list again and returns to the Show page's scroll offset. The Filter and Episode Order are the show's. */
+static void pg_all_open(void) {
+    if (pg.level != L_EPS || pg.preview || pg.det || pg.select || pg.sheet || pg.dlg || pg.allv) return;
+    pg.all_off = pg_off();
+    if (!pg.all && !pg_list_swap(1)) {
+        pod_toast(TR("Not enough memory"));
+        return;
+    }
+    pg.allv = 1;
+    pg.press = pg.down = 0;
+    pg_tint_view();
+    pg_size();
+    widget_set_prop_int(pg.sv, "yoffset", 0);
+    pg_collapse();
+    pg_nav();
+    pg_fade();
+    pg_redraw();
+}
+
+static void pg_all_close(void) {
+    int off = pg.all_off, max;
+    pg.allv = 0;
+    if (pg.all && !pg_list_swap(0))
+        pg.all = 1; /* (no memory: the complete list stays under the Show page's cap of rows) */
+    pg_tint_view();
+    pg_eps_shown();
+    max = pg_content() - GRID_VIEW_H;
+    widget_set_prop_int(pg.sv, "yoffset", off > max ? (max > 0 ? max : 0) : off);
+    pg_collapse();
+    pg_fade();
+    pg_redraw();
+}
+
+/* The search inside a show was closed (or the episode page it opened is left another way): the Show page is in front with the complete list the search held, and reads the recent one again. */
+static void pg_all_leave_search(void) {
+    if (pg.level == L_EPS && pg.all && !pg.allv && !pg.det && pg_list_swap(0)) pg_eps_shown();
+}
+
 /* ---------------------------------------------------------------------------
  * The search level (docs/modules/podcasts.md "Search"): behind Discover's magnifier while Podcast Discover is on in Settings. The field at the top opens our keyboard (the Playlists page's New
  * playlist does the same: keyboard_open, its Search key calls back when the page is in front again); the answer, the thumbnails and the preview are the worker's (patch/pcnet.c): this reads its record from
@@ -3409,7 +3493,17 @@ static int pg_on_find(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (pg.win && pg.level == L_EPS && !pg.preview && !pg.det && !pg.select && !pg.dlg && !pg.sheet) {
-        pcfind_open(); /* the Show page's search: the episodes of this show */
+        int swapped = 0;
+        if (pg.has_arch &&
+            !pg.all) { /* (a show with an archive: the search covers the complete list while it is open) */
+            if (!pg_list_swap(1)) {
+                pod_toast(TR("Not enough memory"));
+                return RET_OK;
+            }
+            swapped = 1;
+        }
+        if (pcfind_open() != 0 && swapped)
+            pg_all_leave_search(); /* the Show page's search: the episodes of this show */
         return RET_OK;
     }
     if (!pg.win || pg.level != L_DISC || pg.dlg || pg.sheet || !pg.searchon || pg.loading) return RET_OK;
@@ -3505,21 +3599,23 @@ int pg_find_pick(int i) {
     return pg.det != 0;
 }
 
-/* The Show All Episodes row for the search inside the show (patch/pcfind.c): 0 when the Show page would have none; 1 with the row's text in out (Search All Episodes, or the failure and Tap to Retry) when a tap starts the job;
+/* The See All row for the search inside the show (patch/pcfind.c): 0 when the Show page would have none; 1 with the row's text in out (Search All Episodes, or the failure and Tap to Retry) when a tap starts the job;
  * 2 while the job is on for this show (Loading…, the count; a tap does nothing). */
 int pg_find_more(char *out, unsigned size) {
     out[0] = 0;
-    if (!pg.win || !pg_more_on()) return 0;
+    if (!pg.win || !pg_fetch_on()) return 0;
     return pg_more_line(out, size, TR("Search All Episodes")) ? 2 : 1;
 }
 /* A tap on that row: the Show page's own start (the downloads pause first, a guard's words are a toast, the device stays awake). */
-void pg_find_more_tap(void) { pg_arch_tap(); }
+void pg_find_more_tap(void) { (void)pg_arch_tap(); }
 /* The job's end for a search page that has the Show page in the background: the list is read again when the worker moved on (the Show page's tick is stopped). 0: nothing; 1: read again, the show still has no archive
  * (or the same one); 2: the archive is there now (the list is the long one). The Filter and its index array are made again by the reload, as the Show page's own tick does. */
 int pg_find_sync(void) {
     int had;
     if (!pg.win || pg.level != L_EPS || pg.preview || pg.dlg || pg.select || pn_gen() == pg.gen) return 0;
     had = pg.has_arch;
+    if (!pg.all && !had && pc_has_archive(&pg.shows[pg.sel]))
+        pg.all = 1; /* (the archive is there now: the search holds the complete list, read by this reload) */
     pg_reload_eps();
     return pg.has_arch && !had ? 2 : 1;
 }
@@ -3568,7 +3664,7 @@ static void pg_head(void) { /* the navbar's title: "N Selected" in select mode, 
         else if (pg.level == L_SHOWS)
             pg_title("Podcasts", (const char *)0);
         else if (pg.level == L_DLS)
-            pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloads", (const char *)0);
+            pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloaded", (const char *)0);
         return;
     }
     pc_fmt(buf, sizeof buf, TR("%d Selected"), pg.npick);
@@ -3652,6 +3748,8 @@ static int pg_on_back(void *ctx, void *e) {
         if (again) pcfind_reopen(); /* ... and over it the search inside the show it was opened from, as it was left */
     } else if (pg.select)
         pg_select(0); /* the x leaves select mode first */
+    else if (pg.level == L_EPS && pg.allv)
+        pg_all_close(); /* the All Episodes page goes back to the Show page, at its offset */
     else if (pg.level == L_EPS && pg.from_dls)
         pg_dls_back();
     else if (pg.level == L_EPS && pg.from_search)
@@ -3983,7 +4081,7 @@ static void pg_cont_play(int i) {
 /* ---------------------------------------------------------------------------
  * Touch
  */
-/* What a touch hit: the row (Downloads), the cell (Show) or the part of the Shows level under it, -1 for none; on the Shows level the part is PH_LINE (the refresh line, a PP_LINE_HIT high touch across the page), PH_DLROW,
+/* What a touch hit: the row (Downloads), the cell (Show) or the part of the Shows level under it, -1 for none; on the Shows level the part is PH_DLROW,
  * PH_SHELF (the item) or PH_CELL (the show); on the Show level which part of the cell (PH_*): the "..." (a PS_DOTS_HIT square), the state pill (its width and 7 px more above and below, for a 44 px target), the body. The
  * Latest Episode pill is cell 0's part PH_LATEST (above the cells). Select mode has the bodies only. */
 static int pg_hit(void *e, int *part) {
@@ -4014,9 +4112,7 @@ static int pg_hit(void *e, int *part) {
         return r && !pg_dim(r) ? y : -1;
     }
     if (pg.level == L_SHOWS) {
-        int i, a, mid = PP_LINE_Y + PP_LINE_H / 2, cy = pg.y_shelf + PP_HEAD_PITCH;
-        if (pg.has_line && pt[1] >= mid - PP_LINE_HIT / 2 && pt[1] < mid - PP_LINE_HIT / 2 + PP_LINE_HIT)
-            return *part = PH_LINE, 0;
+        int i, a, cy = pg.y_shelf + PP_HEAD_PITCH;
         for (i = 0; i < pg.ncont; ++i) {
             int x = PP_SHELF_X + i * PP_SHELF_PITCH;
             if (pt[0] >= x && pt[0] < x + PP_SHELF_W && pt[1] >= cy && pt[1] < cy + PP_SHELF_LEFT_Y + PP_SHELF_LEFT_H)
@@ -4048,7 +4144,7 @@ static int pg_hit(void *e, int *part) {
         const pg_hdr_t *h = pg.hdr;
         int row, cy, mid = PS_PILL_Y + PS_PILL_H / 2;
         if (!h) return -1;
-        if (pt[1] < h->h) {
+        if (pt[1] < pg_top()) {
             if (!pg.select && h->has_latest && pt[1] >= h->y_latest - 2 && pt[1] < h->y_latest + PS_LATEST_H + 2) {
                 pg_pill_t lp;
                 pg_latest(&lp);
@@ -4059,13 +4155,13 @@ static int pg_hit(void *e, int *part) {
             }
             return -1;
         }
-        row = (pt[1] - h->h) / pg_cell_h();
-        if (row >= pg_nrows()) {
+        row = (pt[1] - pg_top()) / pg_cell_h();
+        if (row >= pg_shown()) {
             if (pg_more_on() && pt[1] >= pg_more_y() && pt[1] < pg_more_y() + PS_MORE_H)
-                return *part = PH_MORE, pg_nrows();
+                return *part = PH_MORE, pg_shown();
             return -1;
         }
-        cy = (pt[1] - h->h) % pg_cell_h();
+        cy = (pt[1] - pg_top()) % pg_cell_h();
         if (!pg.select && !pg.preview) {
             if (pt[0] >= PS_DOTS_CX - PS_DOTS_HIT / 2 && pt[0] < PS_DOTS_CX + PS_DOTS_HIT / 2 &&
                 cy >= mid - PS_DOTS_HIT / 2 && cy < mid + PS_DOTS_HIT / 2)
@@ -4158,7 +4254,7 @@ static void pg_dls_back(void) {
     pg.subs = 0;
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_placeholder(&pg.g);
-    pg_title(pg.saved ? "Saved" : "Downloads", (const char *)0);
+    pg_title(pg.saved ? "Saved" : "Downloaded", (const char *)0);
     m1_show(pg.view, 1);
     m1_show(pg.status, 0);
     if (pg.saved) { /* the episode may have been unsaved (or saved) since: the page is made again, at the offset it was left */
@@ -4404,7 +4500,15 @@ static void pg_sheet_open(int kind, int ep) {
         return;
     pg.sheet = kind, pg.sh_ep = ep;
     if (kind == SH_HOME) {
-        /* Import from Card while the card has a subscriptions.txt or an OPML file (the only row: the Subscriptions page is a Library row of the Shows page). Add Show is not a row: the search is behind Discover's magnifier. */
+        /* Refresh All while a show has a feed (the value: the newest refresh of any show), then Import from Card while the card has a subscriptions.txt or an OPML file (the Subscriptions page is a Library row of the Shows page).
+         * Add Show is not a row: the search is behind Discover's magnifier. */
+        if (pg.has_line) {
+            widget_set_text_utf8(pg.sh_tx[SR_REFRESH],
+                                 TR("Refresh All")); /* (the row is shared with the Show sheet's Refresh Feed) */
+            rows[n++] = SR_REFRESH;
+            pg_when_text((unsigned)pg_last_checked(), text, sizeof text);
+            pg_sheet_value(SR_REFRESH, 1, text);
+        }
         if (pg.has_import) rows[n++] = SR_IMPORT;
         if (!n) {
             pg.sheet = SH_NONE;
@@ -4444,18 +4548,16 @@ static void pg_sheet_open(int kind, int ep) {
             rows[n++] = SR_FILTER;
             pg_sheet_value(SR_FILTER, 3, pg_filter_name(pg.filt));
         }
-        if (s->feed[0]) {
+        if (s->feed[0] &&
+            !pg.allv) { /* (the All Episodes page has neither Refresh Feed nor Unsubscribe: they are the Show page's) */
+            widget_set_text_utf8(pg.sh_tx[SR_REFRESH], TR("Refresh Feed"));
             rows[n++] = SR_REFRESH;
-            text[0] = 0;
-            if (s->checked) /* "1h ago" */
-                pc_when(s->checked, (unsigned)time((long *)0), text, sizeof text);
-            else
-                pg_cat(text, sizeof text, TR("Never refreshed"));
+            pg_when_text(s->checked, text, sizeof text); /* "1h ago" */
             pg_sheet_value(SR_REFRESH, 1, text);
         }
         if (pg_sel_scan(0) > 0) rows[n++] = SR_SELECT;
         if (pg_any_unplayed()) rows[n++] = SR_MARKALL;
-        if (s->feed[0]) rows[n++] = SR_UNSUB;
+        if (s->feed[0] && !pg.allv) rows[n++] = SR_UNSUB;
     } else {
         const pc_ep_t *e = &pg.eps[ep];
         if (e->state == PC_REMOTE) {
@@ -4480,8 +4582,8 @@ static void pg_sheet_open(int kind, int ep) {
     pg_sheet_rows(rows, n);
 }
 
-/* A tap on Episode Order: the other value, saved at once; the rows are turned round in place (the sheet stays). Oldest First is the exact reverse of Newest First over the same newest
- * PC_MAX_EPS, PC_ALL_MAX with an archive (pc_load_show), so this is the list a reload would give, and nothing can fail after the save: the saved order, the rows, the queue and Latest Episode (pg_latest_ix) always agree. A file
+/* A tap on Episode Order: the other value, saved at once; the rows are turned round in place (the sheet stays). Oldest First is the exact reverse of Newest First over the same
+ * episodes (pcmodel.c pm_load: the order never changes which are listed), so this is the list a reload would give, and nothing can fail after the save: the saved order, the rows, the queue and Latest Episode (pg_latest_ix) always agree. A file
  * that changed since the rows were read is picked up by the tick's reload as before (pg.gen is left alone). */
 static void pg_order_flip(void) {
     const pc_show_t *s = &pg.shows[pg.sel];
@@ -4553,7 +4655,7 @@ static void pg_remove(int ep) {
 }
 
 /* Mark All as Played: every episode the show knows that has a file name (one not on the card too: the mark belongs to the path, which a later download takes). The ring is written once, after the last mark
- * (pc_mark_hold). The rows are marked from the last to the first, so the first rows' marks are the ring's most recent: PC_RING_SLOTS holds two lists of PC_ALL_MAX, and what a full ring lets go is
+ * (pc_mark_hold). The rows are marked from the last to the first, so the first rows' marks are the ring's most recent: PC_RING_SLOTS holds two lists of an archive's PC_ALL_MAX (a list of more than half the ring, which takes over 2048 episodes, lets its own last rows' marks go), and what a full ring lets go is
  * its oldest slots. */
 static void pg_mark_all(void) {
     unsigned pos, len, hash;
@@ -4573,7 +4675,8 @@ static void pg_mark_all(void) {
 static void pg_unsub(void) {
     const pc_show_t *s = &pg.shows[pg.sel];
     char dir[PC_FILE], path[PC_FILE * 3 + 24];
-    int i, left = 0, off = pg_off();
+    int i, m = 0, left = 0, off = pg_off(), own_all = 1;
+    pc_ep_t *all;
     static const char *const own[] = {".show", ".episodes", ".archive", ".notes", "cover.jpg"};
     if (!s->feed[0] || pn_busy() || pn_arch_state() == PN_AR_RUNNING || !pod_confirm(TR("Unsubscribe from this show?")))
         return;
@@ -4582,8 +4685,10 @@ static void pg_unsub(void) {
         pod_toast(TR("Storage unavailable"));
         return;
     }
-    for (i = 0; i < pg.neps; ++i) {
-        const pc_ep_t *e = &pg.eps[i];
+    all = pg_eps_all_of(pg.sel, &m); /* (the complete list: a .part of an archive-only episode goes too) */
+    if (!all) all = pg.eps, m = pg.neps, own_all = 0;
+    for (i = 0; i < m; ++i) {
+        const pc_ep_t *e = &all[i];
         unsigned key;
         if (!e->file[0]) continue;
         key = pn_dl_key(dir, e->file);
@@ -4595,6 +4700,7 @@ static void pg_unsub(void) {
         pn_dl_clear(key);
         left += e->state == PC_LOCAL;
     }
+    if (own_all) free(all);
     if (!left) {
         for (i = 0; i < (int)(sizeof own / sizeof *own); ++i)
             if (pg_join(path, sizeof path, dir, own[i])) unlink(path);
@@ -4670,7 +4776,11 @@ static int pg_on_sheet_row(void *ctx, void *e) {
     pg_sheet_close();
     switch (id) {
     case SR_REFRESH:
-        if (pg.shows[pg.sel].feed[0]) pg_refresh_job(0, 1);
+        if (pg.level ==
+            L_SHOWS) { /* Refresh All: the guards' words as toasts, the progress dialog; nothing while a refresh runs or waits */
+            if (!pn_busy() && !pg.rpend) pg_refresh(0);
+        } else if (pg.shows[pg.sel].feed[0])
+            pg_refresh_job(0, 1);
         break;
     case SR_IMPORT:
         if (pg.level == L_SHOWS && !pn_busy()) pg_import();
@@ -4722,24 +4832,63 @@ static int pg_on_more(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The Show All Episodes job for the show open (docs/modules/podcasts.md "All episodes"): started at once, or, while a download runs, after the downloads have paused (the tick). The words of a guard that fails are a toast. */
+/* The See All job for the show open (docs/modules/podcasts.md "All episodes"): started at once, or, while a download runs, after the downloads have paused (the tick). The words of a guard that fails are a toast. */
 static void pg_arch_go(void) {
     int r = pn_arch_start(pg.root, &pg.shows[pg.sel]);
     if (r != PN_OK && r != PN_BUSY) pod_toast(pg_status_word(r));
     if (r == PN_OK) pg.acnt = 0, pg_awake_arm(); /* (the device stays awake while the job runs, as for downloads) */
+    pg_spin_arm();
     pg_redraw();
 }
 
-static void pg_arch_tap(void) {
-    if (!pg_more_on() || pn_arch_state() == PN_AR_RUNNING || pg.apend || pn_busy() || pn_job_busy()) return;
+/* The See All row's spinner: a 250 ms timer that exists only while the row is busy (the job runs for this show, or waits for the downloads) and the page is in front on the Show level. It turns the
+ * frame and repaints when the row is in view; it ends itself (return RET_OK) when the row is no longer busy, the level changes or the page goes to the background (pg_on_bg stops it, pg_arm_spin starts it again). */
+static int pg_spin_busy(void) {
+    return pg.win && pg.fg && pg_fetch_on() &&
+           ((pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == pg.shows[pg.sel].hash) || pg.apend);
+}
+static int pg_spin_tick(const void *timer) {
+    int y;
+    (void)timer;
+    if (!pg_spin_busy()) {
+        pg.spin_t = 0;
+        if (pg.win && pg.fg) pg_redraw(); /* (the row's text without the spinner) */
+        return RET_OK;
+    }
+    if (!m1_screen_lit()) return RET_REPEAT;
+    ++pg.hg.spin_n;
+    y = pg_more_y() - pg_off();
+    if (y < GRID_VIEW_H && y + PS_MORE_H > 0) pg_redraw();
+    return RET_REPEAT;
+}
+static void pg_spin_arm(void) {
+    if (pg.spin_t || !pg_spin_busy()) return;
+    grid_spin_open(&pg.hg, "wf_spin", PS_SPIN_PX);
+    pg.spin_t = timer_add(pg_spin_tick, (void *)0, PS_SPIN_MS);
+}
+
+/* 1 when the job started or waits for the downloads to pause. */
+static int pg_arch_tap(void) {
+    if (!pg_fetch_on() || pn_arch_state() == PN_AR_RUNNING || pg.apend || pn_busy() || pn_job_busy()) return 0;
     if (pn_dl_running()) {
         pn_dl_pause();
         pg.apend = pg.shows[pg.sel].hash;
         pg_awake_arm();
+        pg_spin_arm();
         pg_redraw();
-        return;
+        return 1;
     }
     pg_arch_go();
+    return pn_arch_state() == PN_AR_RUNNING;
+}
+
+/* A tap on the Show page's See All row: with an archive (or a show of copied files) the All Episodes page opens; a subscription with none starts the fetch (the downloads pause first), and the page opens when the job has
+ * ended well while this Show page is still on screen (pg_arch_poll). */
+static void pg_see_all_tap(void) {
+    if (pg_fetch_on()) {
+        if (pg_arch_tap()) pg.aopen = pg.shows[pg.sel].hash;
+    } else
+        pg_all_open();
 }
 
 /* A tap on a part of cell a of the Show level (select mode taps are the marks'): the Latest Episode pill, the "...", the state pill (play it, or what its state says: download, pause, resume, retry), the
@@ -4747,7 +4896,7 @@ static void pg_arch_tap(void) {
 static void pg_cell_tap(int a, int part) {
     const pc_ep_t *e;
     if (part == PH_MORE) {
-        pg_arch_tap();
+        pg_see_all_tap();
         return;
     }
     if (pg.preview) { /* the preview: the Subscribe pill, and the episode page's show row (back to the preview it came from) */
@@ -4780,12 +4929,9 @@ static void pg_cell_tap(int a, int part) {
         pg_dl_tap(a);
 }
 
-/* A tap on a part of the Shows level: the refresh line runs Refresh All (the guards' words as toasts, the progress dialog; nothing while a refresh runs or waits), the Downloads row and the Subscriptions row open
- * their pages, a Continue Listening item resumes its episode, a show opens its page. */
+/* A tap on a part of the Shows level: the Downloaded row and the Subscriptions row open their pages, a Continue Listening item resumes its episode, a show opens its page. */
 static void pg_home_tap(int part, int a) {
-    if (part == PH_LINE) {
-        if (!pn_busy() && !pg.rpend) pg_refresh(0);
-    } else if (part == PH_DLROW)
+    if (part == PH_DLROW)
         pg_load_downloads(0);
     else if (part == PH_SUBROW)
         pg_load_subs(0);
@@ -4831,14 +4977,14 @@ static int pg_on_abort(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The Show All Episodes job as the page sees it, from the page's tick and the downloads' timer (that one runs while the page is in the background too, so the end does not wait for the page to come back): the count on the row
+/* The See All job as the page sees it, from the page's tick and the downloads' timer (that one runs while the page is in the background too, so the end does not wait for the page to come back): the count on the row
  * about once a second while the screen is lit; at the end the failure (remembered by the job itself, pn_arch_failed) is toasted when that show is on screen; the finished job is forgotten and the
  * downloads it paused go on (its show reads the file in the reload the end's pn_gen asks for). */
 static void pg_arch_poll(void) {
     int st = pn_arch_state(), code, here;
     unsigned h;
     if (st == PN_AR_RUNNING) {
-        if (pn_arch_count() != pg.acnt && m1_screen_lit() && pg.fg && pg.level == L_EPS && pg_more_on() &&
+        if (pn_arch_count() != pg.acnt && m1_screen_lit() && pg.fg && pg.level == L_EPS && pg_fetch_on() &&
             pn_arch_hash() == pg.shows[pg.sel].hash) {
             pg.acnt = pn_arch_count();
             pg_redraw();
@@ -4853,10 +4999,17 @@ static void pg_arch_poll(void) {
     pn_arch_reset();
     pn_dl_start(); /* (the downloads that paused go on) */
     pg_awake_arm();
+    if (pg.aopen == h) {
+        pg.aopen = 0;
+        if (st == PN_AR_DONE && here && !pg.det && !pg.select && !pg.sheet && !pg.dlg && !pg.allv && pg.sel >= 0 &&
+            pc_has_archive(&pg.shows[pg.sel]))
+            pg_all_open(); /* (this Show page started it and is still in front: the page with every episode opens) */
+    } else if (pg.aopen && (st == PN_AR_DONE || st == PN_AR_FAILED))
+        pg.aopen = 0;
     if (pg.fg) pg_redraw();
 }
 
-/* A Show All Episodes tap that waited for the downloads to pause: the job starts once they have (from the page's tick and from the downloads' timer, which also runs while the search inside the show is in front). */
+/* A See All tap that waited for the downloads to pause: the job starts once they have (from the page's tick and from the downloads' timer, which also runs while the search inside the show is in front). */
 static void pg_arch_pend(void) {
     if (pg.apend && (pg.level != L_EPS || pg.shows[pg.sel].hash != pg.apend))
         pg.apend = 0; /* (left the show: nothing starts) */
@@ -4906,6 +5059,7 @@ static int pg_tick(const void *timer) {
     if (pg.sdone || pg.sback) pg_srch_pending();
     if (m1_screen_lit() && pg.level == L_SRCH) pg_srch_sync();
     if (m1_screen_lit() && pg.level == L_DISC) pg_disc_sync();
+    pg_all_leave_search(); /* (the search inside a show is closed: its complete list is let go) */
     if (m1_screen_lit() && pg.level == L_EPS && !pg.preview &&
         !pg.dlg) { /* (not under the refresh dialog: it reads the show again when it closes; the preview is no folder) */
         if (pn_gen() != pg.gen && !pg.select)
@@ -4939,6 +5093,7 @@ static int pg_tick(const void *timer) {
     }
     pg_arch_pend();
     pg_arch_poll();
+    pg_spin_arm();
     if (pg.rpend && (pg.level == L_SHOWS || (pg.level == L_EPS && pg.rone)) && m1_screen_lit() && !pn_dl_running() &&
         !pn_busy()) {
         int only_new = pg.rpend - 1,
@@ -4995,6 +5150,7 @@ static int pg_on_fg(void *ctx, void *e) {
     (void)e;
     pg.fg = 1;
     pg_arm();
+    pg_spin_arm();
     pg.searchon = pg.sfok ? pcsearch_setting() : 0; /* Podcast Discover may have been switched in Settings */
     if (!pg.searchon &&
         (pg.level == L_SRCH || pg.level == L_DISC)) { /* the levels go with the setting: back to the Shows level */
@@ -5023,6 +5179,7 @@ static int pg_on_fg(void *ctx, void *e) {
         else
             pg_dls_sync();
     }
+    pg_all_leave_search();
     if (pg.level ==
         L_EPS) { /* the layouts (the dates) are made again: "4h ago" is a time later; the status bar is the page's again */
         pg.rev = pc_rev();
@@ -5041,6 +5198,7 @@ static int pg_on_bg(void *ctx, void *e) {
     m1_timer_stop(&pg.timer);
     m1_timer_stop(&pg.load_timer);
     m1_timer_stop(&pg.dlg_timer);
+    m1_timer_stop(&pg.spin_t);
     pg.down = 0;
     pg.press = 0;
     pg_bar_black(); /* the status bar is black again while another page is in front (it tints it itself) */
@@ -5054,6 +5212,7 @@ static int pg_on_destroy(void *ctx, void *e) {
     m1_timer_stop(&pg.timer);
     m1_timer_stop(&pg.load_timer);
     m1_timer_stop(&pg.dlg_timer);
+    m1_timer_stop(&pg.spin_t);
     if (pg.awake)
         timer_remove(
             pg.awake); /* the downloads go on while the device is awake; nothing keeps it awake without this window */
@@ -5118,9 +5277,10 @@ static void pg_sheet_bind(void) {
 /* The Extras item Podcasts. 0 once the page is up, -1 if it could not open. */
 int podcasts_open(void) {
     static const char *const st_name[ST_N] = {
-        "label_ps_name", "label_ps_sec",    "label_ps_meta",  "label_ps_head",   "label_ps_date",    "label_ps_ctitle",
-        "label_ps_cdim", "label_ps_cdesc",  "label_ps_pill",  "label_ps_latest", "label_ps_latestw", "label_ps_sech",
-        "label_ps_line", "label_ps_stitle", "label_ps_sleft", "label_ps_gtitle", "label_ps_gsub"};
+        "label_ps_name",   "label_ps_sec",    "label_ps_meta",    "label_ps_head",
+        "label_ps_date",   "label_ps_ctitle", "label_ps_cdim",    "label_ps_cdesc",
+        "label_ps_pill",   "label_ps_latest", "label_ps_latestw", "label_ps_sech",
+        "label_ps_stitle", "label_ps_sleft",  "label_ps_gtitle",  "label_ps_gsub"};
     int i, ok = 1;
     if (pg.win) return -1;
     memset(&pg, 0, sizeof pg);

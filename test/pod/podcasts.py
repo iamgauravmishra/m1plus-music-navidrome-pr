@@ -143,9 +143,10 @@ class PM(ListMachine):
         if mx not in bufs: bufs[mx] = self.alloc(mx * O['PC_EP_SIZE'])
         return bufs[mx]
 
-    def episodes(self, show_addr, mx=300):
+    def episodes(self, show_addr, mx=300, all=False):
+        """The recent list (pc_load_show), or with all=True the complete one (pc_load_show_all: with an archive the union of .episodes and .archive)."""
         out = self.ep_buffer(mx); self.u.mem_write(out, bytes(mx * O['PC_EP_SIZE']))
-        n = self.call(PSYMS['pc_load_show'], a0=show_addr, a1=out, a2=mx, count=400000000)
+        n = self.call(PSYMS['pc_load_show_all' if all else 'pc_load_show'], a0=show_addr, a1=out, a2=mx, count=400000000)
         return [self.ep(out + i * O['PC_EP_SIZE']) for i in range(n)]
 
     def state(self, h):
@@ -282,7 +283,8 @@ def scan_tests(ctx):
            f'titles, dates, durations and lengths come from the metadata; a missing title is the file name, a missing date the file\'s ({[x["title"] for x in e]})')
     expect([x['hash'] != 0 for x in e] == [False, True, False, True, True, True] and e[1]['hash'] == pc_hash(f'{ROOT}/bravo/b2.mp3') and e[1]['guid'] == guid_hash('g2'),
            'only a local file has a ring key; the guid is kept as its hash')
-    expect([x['file'] for x in m.episodes(bravo, 3)] == ['b4.mp3', 'b2.mp3', 'b3.mp3'], 'at most max episodes: the newest')
+    expect([x['file'] for x in m.episodes(bravo, 3)] == ['b4.mp3', 'b2.mp3', 'b3.mp3'] and [x['file'] for x in m.episodes(bravo, 5)] == ['b4.mp3', 'b2.mp3', 'b3.mp3', 'extra.mp3', 'b1.mp3'],
+           'at most max episodes: the newest that is only in the feed keeps its place, then the newest with a file on the card (a .part too)')
     # a metadata-only show
     only = arr + O['PC_SHOW_SIZE'] * [s['dir'] for s in shows].index('MetaOnly')
     e = m.episodes(only)
@@ -780,7 +782,7 @@ def lib_row_at(m, name):
 
 def tap_downloads(m, **kw):
     """A tap on the Shows level's Downloads row (found by its title, scrolled into view)."""
-    y, off = lib_row_at(m, 'Downloads')
+    y, off = lib_row_at(m, 'Downloaded')
     return tap(m, 150, y, off=off, **kw)
 
 
@@ -790,12 +792,10 @@ def tap_discover(m, **kw):
     return tap(m, 150, y, off=off, **kw)
 
 
-def tap_line(m, **kw):
-    """A tap on the refresh line (its grey text's middle)."""
-    for (t, r), s in zip(*paint(m, 0)[1:3]):
-        if s == 'label_ps_meta' and (t.startswith('Updated') or t.startswith('Never') or t.startswith('Refreshing') or t == 'Waiting' or t.endswith('ago · ')):
-            return tap(m, r[0] + 20, r[1] + r[3] // 2, **kw)
-    raise AssertionError('no refresh line on the Shows level')
+def refresh_all(m):
+    """Refresh All: the Shows level's "..." and the sheet's first row."""
+    click(m, 'btn_more')
+    return click(m, 'pg_sh_refresh')
 
 
 def tap_show(m, title, **kw):
@@ -819,7 +819,7 @@ def title_text(m):
 def hdr(m):
     """Where the Show level's cells start (content y): the Episodes header's top and its height, read from a frame scrolled 100 px (a text is drawn only wholly in view: at the top a tall header hides it)."""
     _, texts, styles, _ = paint(m, 100)
-    return next(r[1] for (t, r), s in zip(texts, styles) if s == 'label_ps_head') + 100 + O['PS_HEAD_H']
+    return next((r[1] for (t, r), s in zip(texts, styles) if s == 'label_ps_head'), -100 - O['PS_HEAD_H']) + 100 + O['PS_HEAD_H']   # (the All Episodes page has no header: its cells start at 0)
 
 
 def cell_y(m, i): return hdr(m) + i * CELL

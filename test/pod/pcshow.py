@@ -248,7 +248,7 @@ def layout_tests(ctx):
     expect([t for t, _ in meta] == ['Technology · All-In Podcast'] and meta[0][1] == (16, h['y_meta'], 288, 22), f'the meta line: Category · Author, no cadence ({meta})')
     head = texts_of(m, 'label_ps_head', 100)
     expect(head == [('Episodes', (16, h['y_head'] - 100, 288, 28))] and h['h'] == h['y_head'] + 34, f'the Episodes header ({head}); the cells start at {h["h"]}')
-    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.content_height(h['h'], 8, more=True), f'the content: header, eight cells of {CELL} px, the Show All Episodes row, 20 px of air ({m.props.get((m.sv, "virtual_h"))})')
+    expect(m.props.get((m.sv, 'virtual_h')) == pod_show.content_height(h['h'], 8, more=True), f'the content: header, eight cells of {CELL} px, the See All row, 20 px of air ({m.props.get((m.sv, "virtual_h"))})')
     # the latest pill's place: centred under the name, 40 px high
     lat = texts_of(m, 'label_ps_latest')
     expect(len(lat) == 1 and lat[0][0] == 'Latest Episode' and lat[0][1][1] == h['y_latest'] and lat[0][1][3] == 40 and h['y_latest'] == h['y_name'] + 2 * 26 + 12, f'the Latest Episode label ({lat})')
@@ -513,17 +513,17 @@ def nav_tests(ctx):
     expect(m.props.get((t, 'visible')) == 1 and flags(m, 'btn_more') == (0, 0), 'select mode shows its title and hides the "..."')
     PCP.click(m, 'btn_return')
     expect(m.props.get((t, 'visible')) == 0 and flags(m, 'btn_more') == (1, 1), 'leaving select mode: the "..." is back, the title hidden at the top')
-    # the Shows level: the large title is the page's, the navbar's is hidden at rest and there is no "..." without Import
+    # the Shows level: the large title is the page's, the navbar's is hidden at rest and the "..." is there for Refresh All
     PCP.click(m, 'btn_return')
-    expect(m.props.get((t, 'visible')) == int(m.props.get((m.sv, 'yoffset'), 0) > O['SG_COLLAPSE']) and flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
-           'the Shows level: the large title (the navbar\'s shows only once it has scrolled away, where the page comes back to), no "..." (nothing to import): [Globe | Now Playing]')
+    expect(m.props.get((t, 'visible')) == int(m.props.get((m.sv, 'yoffset'), 0) > O['SG_COLLAPSE']) and flags(m, 'btn_more') == (1, 1) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
+           'the Shows level: the large title (the navbar\'s shows only once it has scrolled away, where the page comes back to), the "..." with Refresh All (a show has a feed): [Globe | ... | Now Playing]')
     # the Downloads page has the "..." (its sheet) once it has a row
     m = shown()
     PCP.click(m, 'btn_return')
     DL.poke_slot(m, 0, DEEP, 'e3.mp3', 1, seq=2)
     m.setword(DL.pn_at(12), 5); DL.tick(m)
     PCP.tap_downloads(m)
-    expect(PCP.title_text(m) == 'Downloads' and flags(m, 'btn_more') == (1, 1) and 'btn_select' not in m.widgets, 'the Downloads page has the "..." (its sheet: Select, Delete Played Episodes) and no Select button')
+    expect(PCP.title_text(m) == 'Downloaded' and flags(m, 'btn_more') == (1, 1) and 'btn_select' not in m.widgets, 'the Downloads page has the "..." (its sheet: Select, Delete Played Episodes) and no Select button')
 
 
 def m1_shade(tone, y):

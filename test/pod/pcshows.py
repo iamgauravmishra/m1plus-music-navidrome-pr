@@ -145,12 +145,11 @@ def layout_tests(ctx):
            'with no feed there is no refresh line and no Subscriptions row: the Shows header PP_NOLINE_PITCH under the title, the Discover and Downloads rows and Saved at the end')
     Le = lay(m, n=0)
     expect(Le['y_srch'] == Le['y_grid'] and Le['y_dl'] == Le['y_srch'] + o['PC_ROW_H'] and Le['y_sub'] == Le['y_dl'] + o['PC_ROW_H'], 'no show: no gap, the rows follow the top block')
-    # the refresh line: "Updated 1h ago · " in the grey 15 px style, the white word right after it
+    # the refresh line: "Updated 1h ago" in the grey 15 px style, a status with no word after it
     grey = texts_of(m, 'label_ps_meta')
-    white = texts_of(m, 'label_ps_line')
-    gw = sw().font().width('Updated 1h ago · ', 15)
-    expect(len(grey) == 1 and grey[0][0] == 'Updated 1h ago · ' and grey[0][1][:2] == (o['PP_LINE_X'], o['PP_LINE_Y']) and grey[0][1][3] == o['PP_LINE_H']
-           and white[0][0] == 'Refresh' and white[0][1][0] == o['PP_LINE_X'] + gw and white[0][1][1] == o['PP_LINE_Y'], f'the refresh line: grey "Updated 1h ago · " at (12, 52), the white "Refresh" after it ({grey}, {white})')
+    atline = [t for t, r in PCP.drawn(m, 0) if r[1] == o['PP_LINE_Y']]
+    expect(len(grey) == 1 and grey[0][0] == 'Updated 1h ago' and grey[0][1][:2] == (o['PP_LINE_X'], o['PP_LINE_Y']) and grey[0][1][3] == o['PP_LINE_H']
+           and atline == ['Updated 1h ago'], f'the refresh line: grey "Updated 1h ago" at (12, 52) and nothing else on it ({grey}, {atline})')
     # the Library rows: the atlas' tiles, the chevrons, the titles and grey lines, the hairlines
     LO = max(0, L['h'] - 400)   # (the Library rows close the page: the frame scrolled to the bottom)
     bl, texts, styles, fills = PCP.paint(m, LO)
@@ -161,7 +160,7 @@ def layout_tests(ctx):
            f'four Library rows: the discover, download, podcast and bookmark tiles (images of their own) at x 16, a chevron each ({tiles}, {chev})')
     rows = [(t, s, r) for (t, r), s in zip(texts, styles) if s in ('label_row_title', 'label_row_sub')]
     want = [('Discover', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_srch'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('Apple Podcasts', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_srch'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
-            ('Downloads', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('5 episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
+            ('Downloaded', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('5 episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_dl'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
             ('Subscriptions', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('3 shows', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sub'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])),
             ('Saved', 'label_row_title', (o['PP_DL_TEXT_X'], L['y_sav'] - LO + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H'])), ('No saved episodes', 'label_row_sub', (o['PP_DL_TEXT_X'], L['y_sav'] - LO + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H']))]
     expect(sorted(rows) == sorted(want), f'their titles (21 px) and grey lines (18 px) from x 72 ({rows})')
@@ -207,7 +206,7 @@ def layout_tests(ctx):
            and [r for _, r in sl] == [(pod_show.shelf_item(i, L3['y_shelf'])[0], pod_show.shelf_item(i, L3['y_shelf'])[3], o['PP_SHELF_W'], o['PP_SHELF_LEFT_H']) for i in range(3)], 'each item\'s title (14 px) and what is left (13 px grey) under its cover')
     LO3 = L3['h'] - 400
     dt = {s: (t, r) for (t, r), s in zip(*PCP.paint(m, LO3)[1:3]) if s in ('label_row_title', 'label_row_sub') and L3['y_dl'] - LO3 <= r[1] < L3['y_sub'] - LO3}
-    expect(dt['label_row_title'] == ('Downloads', (o['PP_DL_TEXT_X'], L3['y_dl'] - LO3 + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H']))
+    expect(dt['label_row_title'] == ('Downloaded', (o['PP_DL_TEXT_X'], L3['y_dl'] - LO3 + o['LIST_TITLE_Y'], o['PP_DL_TEXT_W'], o['LIST_TITLE_H']))
            and dt['label_row_sub'] == ('Downloading 42%', (o['PP_DL_TEXT_X'], L3['y_dl'] - LO3 + o['LIST_SUB_Y'], o['PP_DL_TEXT_W'], o['LIST_SUB_H'])), f'the Downloads row: its title and the running download\'s line ({dt})')
     # the three tiles are images of their own, the atlas holds the chevron where the offsets say
     from PIL import Image
@@ -230,8 +229,8 @@ def title_tests(ctx):
     m = opened()
     t, big, fade = m.widgets['label_title'], m.widgets['pg_big'], m.widgets['img_nb_fade']
     resized = lambda mm: [c[2] for c in mm.calls if c[0] == 'widget_resize' and c[1] == mm.widgets['label_title']]
-    expect(m.props.get((t, 'visible')) == 0 and m.props.get((big, 'visible'), 1) == 1 and m.props.get((fade, 'visible'), 0) == 0 and PCP.title_text(m) == 'Podcasts' and m.wtext.get(t) == 'Podcasts' and resized(m)[-1:] == [O['NAV_VIEW_X'] - O['NAV_TITLE_X']],
-           f'at rest: the large Podcasts heading is there, the navbar\'s title (the same words) is hidden and ends at the globe (the leftmost piece; no "..." here), no fade ({PCP.title_text(m)} {resized(m)} {m.props.get((t, "visible"))})')
+    expect(m.props.get((t, 'visible')) == 0 and m.props.get((big, 'visible'), 1) == 1 and m.props.get((fade, 'visible'), 0) == 0 and PCP.title_text(m) == 'Podcasts' and m.wtext.get(t) == 'Podcasts' and resized(m)[-1:] == [O['NAV_VIEW_X'] - O['NAV_VIEW_W'] - O['NAV_TITLE_X']],
+           f'at rest: the large Podcasts heading is there, the navbar\'s title (the same words) is hidden and ends at the globe (the leftmost piece, with the "..." beside it), no fade ({PCP.title_text(m)} {resized(m)} {m.props.get((t, "visible"))})')
     fn_, ctx_ = m.bound[(m.sv, O['EVT_SCROLL'])]
     def scroll(off):
         m.props[(m.sv, 'yoffset')] = off; m.setword(m.sv + PCP.SC_YOFF, off)
@@ -253,7 +252,7 @@ def title_tests(ctx):
     DL = sibling('pcdl')
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 1, seq=1); m.setword(DL.pn_at(12), 5); tick(m)
     PCP.tap_downloads(m)
-    expect(PCP.title_text(m) == 'Downloads' and m.props.get((m.widgets['label_title'], 'visible')) == 0 and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1 and m.wtext.get(m.widgets['label_title']) == 'Downloads' and resized(m)[-1:] == [O['NAV_VIEW_X'] - O['NAV_TITLE_X']],
+    expect(PCP.title_text(m) == 'Downloaded' and m.props.get((m.widgets['label_title'], 'visible')) == 0 and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1 and m.wtext.get(m.widgets['label_title']) == 'Downloaded' and resized(m)[-1:] == [O['NAV_VIEW_X'] - O['NAV_TITLE_X']],
            'the Downloads level: the large Downloads heading at rest, the small title (the same words, ending at the "...") hidden')
     scroll(O['SG_COLLAPSE'] + 1)
     expect(m.props.get((m.widgets['label_title'], 'visible')) == 1 and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1, 'past SG_COLLAPSE the Downloads page\'s small title shows')
@@ -267,7 +266,7 @@ def title_tests(ctx):
                f'{name}: heading {heading!r} in the large label, the navbar title hidden at rest ({PCP.title_text(m)})')
     level('Shows', 'Podcasts')
     expect(flags(m, 'btn_more') == (1, 1), 'the Shows level has the "..." capsule piece')
-    PCP.tap_downloads(m); level('Downloads', 'Downloads')
+    PCP.tap_downloads(m); level('Downloaded', 'Downloaded')
     PCP.click(m, 'btn_return')
     tap_row(m, "Subscriptions"); level('Subscriptions', 'Subscriptions')
     PCP.click(m, 'btn_return')
@@ -287,33 +286,34 @@ def line_tests(ctx):
     def line(m, off=0):
         g = texts_of(m, 'label_ps_meta', off)
         u = fixed   # (the harness hands the payload's UTF-8 bytes over as latin-1 characters)
-        return u(g[0][0] if g else None), u(([t for t, _ in texts_of(m, 'label_ps_line', off)] or [None])[0])
+        return u(g[0][0] if g else None)
+    def on_line(m): return [fixed(t) for t, r in PCP.drawn(m, 0) if r[1] == O['PP_LINE_Y']]   # (everything painted on the line's row)
     m = opened()
-    expect(line(m) == ('Updated 1h ago · ', 'Refresh'), f'refreshed an hour ago: "Updated 1h ago · Refresh" ({line(m)})')
-    for checked, want in ((0, 'Never refreshed · '), (NOW - 30, 'Updated Just now · '), (NOW - 3 * DAY, 'Updated 3d ago · ')):
+    expect(line(m) == 'Updated 1h ago' and on_line(m) == ['Updated 1h ago'], f'refreshed an hour ago: "Updated 1h ago", no Refresh word ({line(m)}, {on_line(m)})')
+    for checked, want in ((0, 'Never refreshed'), (NOW - 30, 'Updated Just now'), (NOW - 3 * DAY, 'Updated 3d ago')):
         mm = opened(lambda x, c=checked: [x.put(f'{RP}/{d}/.show', f'M1PLUS-SHOW 1\ntitle={d}\nfeed={F[k]}\nimage=\nchecked={c}\n'.encode()) for d, k in (('Alpha Show', 'alpha'), ('Sub One', 'one'), ('Sub Two', 'two'))])
-        expect(line(mm) == (want, 'Refresh'), f'the newest refresh of any show says it: {want!r} ({line(mm)})')
+        expect(line(mm) == want and on_line(mm) == [want], f'the newest refresh of any show says it: {want!r} ({line(mm)})')
     expect(texts_of(m, 'label_ps_meta')[0][1][3] == O['PP_LINE_H'], 'the line is PP_LINE_H high')
     # running: "Refreshing 2/5…", with no Refresh word
     pn_set(m, busy=1, done=2, total=5, cur=hash_of(F['one']), gen=3)
     tick(m)
-    expect(line(m) == ('Refreshing 2/5…', None), f'a refresh under way: "Refreshing 2/5…" and no word to tap ({line(m)})')
+    expect(line(m) == 'Refreshing 2/5…' and on_line(m) == ['Refreshing 2/5…'], f'a refresh under way: "Refreshing 2/5…" ({line(m)})')
     pn_set(m, busy=0, gen=4)
     tick(m)
-    expect(line(m)[1] == 'Refresh', 'it ended: the line is back')
+    expect(line(m) == 'Updated 1h ago', 'it ended: the line is back')
     # hidden: no feed
     m2 = opened(cardf=lambda x: PCP.page_card(x))
-    expect(line(m2) == (None, None) and lay(m2, 2, False)['y_line'] == 0, 'no show has a feed: no refresh line')
+    expect(line(m2) is None and lay(m2, 2, False)['y_line'] == 0, 'no show has a feed: no refresh line')
     # the tap: the guards
     m = opened(lambda mm: mm.fs.pop(f'{RP}/Sub One/.episodes'))
     m.wifi = -1
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     expect(toasts(m) == ['No Wi-Fi'] and 'pthread_create' not in m.names(), 'a tap with no Wi-Fi: the toast says so, nothing starts')
     m.wifi = 4; m.wall = 1700000000
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     expect(toasts(m) == ['Set the date first'], 'a clock that was never set: "Set the date first"')
     m.wall = NOW; m.present.discard(CA)
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     expect(toasts(m) == ['Certificates missing'], 'no CA bundle: "Certificates missing"')
     # the tap that works: the worker and the dialog
     m.present.add(CA); m.thread = None
@@ -322,10 +322,10 @@ def line_tests(ctx):
         seen.append(url)
         return {'body': {F['alpha']: WSJ, F['one']: HEAD}.get(url, b'<html></html>')}
     m.curl_site = site
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     expect(m.thread is not None and toasts(m) == [] and flags(m, 'pod_pd_scrim') == (1, 1) and flags(m, 'pod_pd_card') == (1, 1) and flags(m, 'pod_pd_cancel') == (1, 1),
            'a tap on the line: the worker starts (three feeds) and the progress dialog with its Cancel opens, modal')
-    expect(line(m)[0] == 'Refreshing 0/3…', f'the line says "Refreshing 0/3…" ({line(m)})')
+    expect(line(m) == 'Refreshing 0/3…', f'the line says "Refreshing 0/3…" ({line(m)})')
     m.call(m.thread[0], a0=m.thread[1], count=1 << 40)
     expect([u for u in seen if u in F.values()] == [F['alpha'], F['one'], F['two']], 'the feeds are fetched in the grid\'s order (the most recently updated first: here Alpha Show, then the two with no episode, by title)')
     m.calls = []
@@ -333,23 +333,38 @@ def line_tests(ctx):
     m.call(PSYMS['pg_dlg_tick'], a0=0, count=40000000)
     expect(flags(m, 'pod_pd_card') == (0, 0) and toasts(m) == ['2 updated, 1 failed'], f'the worker is done: the dialog closes with its line ({toasts(m)})')
     got = grid(m)
-    expect([t for t, _ in got] == ['Alpha Show', 'The Headlines', 'bravo', 'Sub Two'] and got[0][1] == '3 new' and got[1][1] == '3 new' and got[3][1] == 'Not a podcast feed',
-           f'the page read the files the worker wrote: Sub One is named by its feed (The Headlines), the order is by the newest episode, the captions say what the refresh found ({got})')
+    expect([t for t, _ in got] == ['Alpha Show', 'The Headlines', 'bravo', 'Sub Two'] and got[0][1] == '3 new' and got[1][1] == '3 new' and got[3][1] == 'Updated 2d ago',
+           f'the page read the files the worker wrote: Sub One is named by its feed (The Headlines), the order is by the newest episode, the captions say what the refresh found (a failure keeps the time of an earlier refresh: the feed of Sub Two is not a podcast feed, its caption stays Updated 2d ago) ({got})')
     expect(f'{RP}/The Headlines/.episodes' in m.fs and not [p for p in m.fs if p.startswith(f'{RP}/Sub One/')], 'the folder of a first refresh was renamed after the show')
     m.calls = []; m.thread = None
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     expect(m.thread is not None and m.names().count('pthread_create') == 1, 'a second tap, once the first refresh is done, starts again')
     pn_set(m, busy=1)
     m.calls = []
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     expect('pthread_create' not in m.names() and toasts(m) == [], 'while a refresh runs the line does nothing (no second thread, no toast)')
-    # the line is a touch 44 px high across the page, and nothing else near it takes it
+    # the line is a status: a touch on it (anywhere across it) starts nothing
     mid = O['PP_LINE_Y'] + O['PP_LINE_H'] // 2
-    for y, x, want in ((mid - O['PP_LINE_HIT'] // 2, 300, True), (mid + O['PP_LINE_HIT'] // 2 - 1, 5, True), (mid - O['PP_LINE_HIT'] // 2 - 1, 100, False), (mid + O['PP_LINE_HIT'] // 2, 100, False)):
+    for y, x in ((mid, 40), (mid, 300), (mid - 22, 100), (mid + 21, 5)):
         m = opened(); m.thread = None; m.calls = []
         PCP.tap(m, x, y)
-        started = 'pthread_create' in m.names()
-        expect(started == want, f'a touch at ({x}, {y}): {"starts" if want else "does not start"} a refresh (the touch is {O["PP_LINE_HIT"]} px high around the text)')
+        expect('pthread_create' not in m.names() and toasts(m) == [] and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0, f'a touch at ({x}, {y}) on the refresh line starts no refresh')
+    # Refresh All is the first row of the "..." sheet: with a feed show, with the newest refresh's age as its value; without a feed there is no row (and with nothing to import no "...")
+    m = opened()
+    PCP.click(m, 'btn_more')
+    rows_ = sibling('pcshow').sheet_state(m)[0]
+    expect(flags(m, 'btn_more') == (1, 1) and rows_ == ['refresh'] and fixed(m.wtext.get(m.widgets['pg_sh_refresh_tx'], '')) == 'Refresh All' and fixed(m.wtext.get(m.widgets['pg_sh_refresh_vl'], '')) == '1h ago'
+           and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet1', f'the "..." sheet has Refresh All with the value 1h ago ({rows_})')
+    PCP.click(m, 'pg_sh_scrim')
+    mm = opened(lambda x: [x.put(f'{RP}/{d}/.show', f'M1PLUS-SHOW 1\ntitle={d}\nfeed={F[k]}\nimage=\nchecked=0\n'.encode()) for d, k in (('Alpha Show', 'alpha'), ('Sub One', 'one'), ('Sub Two', 'two'))])
+    PCP.click(mm, 'btn_more')
+    expect(fixed(mm.wtext.get(mm.widgets['pg_sh_refresh_vl'], '')) == 'Never refreshed', 'never refreshed: the value says so')
+    m2 = opened(cardf=lambda x: PCP.page_card(x))
+    expect(flags(m2, 'btn_more') == (0, 0), 'no show has a feed and nothing to import: no "..."')
+    m = opened(lambda mm_: mm_.put('/mnt/mmc/podcasts.opml', b'<opml><body><outline xmlUrl="https://n.example/rss" text="N"/></body></opml>'))
+    PCP.click(m, 'btn_more')
+    rows_ = sibling('pcshow').sheet_state(m)[0]
+    expect(rows_ == ['refresh', 'import'] and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet2', f'with something to import: Refresh All first, then Import from Card ({rows_})')
     # downloads pause for the refresh, it starts when their thread has stopped
     DL = sibling('pcdl')
     m = opened(lambda mm: mm.put(f'{RP}/Sub One/a.mp3.part', b'x' * 1000))
@@ -358,8 +373,8 @@ def line_tests(ctx):
     th = m.thread
     PCP.click(m, 'btn_return')
     m.calls = []; m.thread = None
-    PCP.tap_line(m)
-    expect(m.word(DL.pn_at(DL.DPAUSE)) == 1 and m.thread is None and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0 and line(m) == ('Waiting', None),
+    PCP.refresh_all(m)
+    expect(m.word(DL.pn_at(DL.DPAUSE)) == 1 and m.thread is None and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0 and line(m) == 'Waiting',
            'a tap while a download runs: the downloads are asked to pause, no refresh thread and no dialog yet, the line says Waiting')
     DL.work(m, th)
     m.calls = []
@@ -490,21 +505,21 @@ def library_tests(ctx):
     A1, A2 = EP('Alpha Show', 'ep1.mp3'), EP('Alpha Show', 'ep2.mp3')
     m = opened()
     L = lay(m)
-    expect([a for a, _ in lib(m)] == ['Downloads', 'Subscriptions', 'Saved'] and not [c for c in m.calls if c[0] == 'widget_set_text_utf8' and 'Downloads (' in str(c)], 'a card with subscriptions: both rows are there (nothing queued does not hide Downloads)')
+    expect([a for a, _ in lib(m)] == ['Downloaded', 'Subscriptions', 'Saved'] and not [c for c in m.calls if c[0] == 'widget_set_text_utf8' and 'Downloaded (' in str(c)], 'a card with subscriptions: both rows are there (nothing queued does not hide Downloads)')
     m2 = opened(cardf=lambda x: PCP.page_card(x))
-    expect([a for a, _ in lib(m2)] == ['Downloads', 'Saved'] and lay(m2, 2, False)['y_sub'] == 0, 'no show has a feed: the Downloads row and Saved (the Subscriptions row needs a subscription)')
+    expect([a for a, _ in lib(m2)] == ['Downloaded', 'Saved'] and lay(m2, 2, False)['y_sub'] == 0, 'no show has a feed: the Downloads row and Saved (the Subscriptions row needs a subscription)')
     # idle: the count at once, the size when the totals scan has finished
-    expect(lib(m) == [('Downloads', '5 episodes'), ('Subscriptions', '3 shows'), ('Saved', 'No saved episodes')], f'idle: "5 episodes" at once, "3 shows", nothing saved ({lib(m)})')
+    expect(lib(m) == [('Downloaded', '5 episodes'), ('Subscriptions', '3 shows'), ('Saved', 'No saved episodes')], f'idle: "5 episodes" at once, "3 shows", nothing saved ({lib(m)})')
     m = opened(lambda mm: mm.sizes.update({A1: 100 << 20, A2: 50 << 20}))
     settle(m)
-    expect(lib(m)[0] == ('Downloads', '5 episodes · 150 MB'), f'the totals scan has run: "5 episodes · 150 MB" ({lib(m)})')
+    expect(lib(m)[0] == ('Downloaded', '5 episodes · 150 MB'), f'the totals scan has run: "5 episodes · 150 MB" ({lib(m)})')
     m = opened(lambda mm: mm.sizes.update({A1: 1503238554, A2: 50 << 20}))
     settle(m)
-    expect(lib(m)[0] == ('Downloads', '5 episodes · 1.4 GB'), f'from a gigabyte on one decimal: "5 episodes · 1.4 GB" ({lib(m)})')
+    expect(lib(m)[0] == ('Downloaded', '5 episodes · 1.4 GB'), f'from a gigabyte on one decimal: "5 episodes · 1.4 GB" ({lib(m)})')
     one = opened(lambda mm: mm.put(f'{RP}/Only/o.mp3', b'x', 5), lambda x: None)
-    expect(lib(one) == [('Downloads', '1 episode'), ('Saved', 'No saved episodes')], f'one file: "1 episode" ({lib(one)})')
+    expect(lib(one) == [('Downloaded', '1 episode'), ('Saved', 'No saved episodes')], f'one file: "1 episode" ({lib(one)})')
     nothing = opened(lambda mm: mm.put(f'{RP}/Fresh/.show', f'M1PLUS-SHOW 1\ntitle=Fresh\nfeed={F["three"]}\nimage=\nchecked=0\n'.encode()), lambda x: None)
-    expect(lib(nothing) == [('Downloads', 'No downloads'), ('Subscriptions', '1 show'), ('Saved', 'No saved episodes')], f'a subscription with nothing downloaded: "No downloads", "1 show" ({lib(nothing)})')
+    expect(lib(nothing) == [('Downloaded', 'No downloads'), ('Subscriptions', '1 show'), ('Saved', 'No saved episodes')], f'a subscription with nothing downloaded: "No downloads", "1 show" ({lib(nothing)})')
     # the totals scan: one show a tick, nothing once it is done, never in the dark, the old figure stays until the new one is complete
     m = opened(lambda mm: mm.sizes.update({A1: 100 << 20}))
     walks = []
@@ -529,28 +544,28 @@ def library_tests(ctx):
     m = opened()
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 1, seq=1); DL.poke_slot(m, 1, 'Sub One', 'b.mp3', 1, seq=2); m.setword(DL.pn_at(12), 5)
     tick(m)
-    expect(lib(m)[0] == ('Downloads', '2 waiting') and m.props.get((m.sv, 'virtual_h')) == L['h'], 'two queued, none running: "2 waiting" (the page is not made again for it)')
+    expect(lib(m)[0] == ('Downloaded', '2 waiting') and m.props.get((m.sv, 'virtual_h')) == L['h'], 'two queued, none running: "2 waiting" (the page is not made again for it)')
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 2, seq=1); m.setword(DL.pn_at(DL.DKEY), DL.key_of('Sub One', 'a.mp3')); m.setword(DL.pn_at(DL.DGOT), 100000); m.setword(DL.pn_at(DL.DTOTAL), 1000000)
     m.setword(DL.pn_at(DL.KIND), 2); m.setword(DL.pn_at(0), 1); m.setword(DL.pn_at(DL.DGEN), 9)
     tick(m)
-    expect(lib(m)[0] == ('Downloads', 'Downloading 9%'), f'one running: "Downloading 9%" ({lib(m)})')
+    expect(lib(m)[0] == ('Downloaded', 'Downloading 9%'), f'one running: "Downloading 9%" ({lib(m)})')
     m.setword(DL.pn_at(DL.DGOT), 420000); m.setword(DL.pn_at(DL.DGEN), 10)
     m.calls = []
     tick(m)
-    expect(lib(m)[0] == ('Downloads', 'Downloading 42%') and not [c for c in m.calls if c[0] in ('opendir', '__xstat')], 'a step of progress moves the line (the card is not read)')
+    expect(lib(m)[0] == ('Downloaded', 'Downloading 42%') and not [c for c in m.calls if c[0] in ('opendir', '__xstat')], 'a step of progress moves the line (the card is not read)')
     m = opened(lambda mm: mm.put(f'{RP}/Sub One/a.mp3.part', b'half'))
     settle(m)
-    expect(lib(m)[0] == ('Downloads', '1 paused'), f'a .part nothing holds: "1 paused" ({lib(m)})')
+    expect(lib(m)[0] == ('Downloaded', '1 paused'), f'a .part nothing holds: "1 paused" ({lib(m)})')
     DL.poke_fail(m, 0, 'Sub One', 'b.mp3', PN['NET']); m.setword(DL.pn_at(12), 5)
     tick(m)
-    expect(lib(m)[0] == ('Downloads', '2 paused'), f'a failed download counts as paused (a tap on its row goes on): "2 paused" ({lib(m)})')
+    expect(lib(m)[0] == ('Downloaded', '2 paused'), f'a failed download counts as paused (a tap on its row goes on): "2 paused" ({lib(m)})')
     DL.poke_slot(m, 0, 'Sub One', 'c.mp3', 1, seq=3)
-    expect(lib(m)[0] == ('Downloads', '1 waiting'), f'one waiting beats the paused ones ({lib(m)})')
+    expect(lib(m)[0] == ('Downloaded', '1 waiting'), f'one waiting beats the paused ones ({lib(m)})')
     # a tap on each row opens its page; Back returns where the Shows level was
     m = opened()
     LO = L['h'] - 400   # (the rows close the page: scrolled to the bottom)
     PCP.tap(m, 150, L['y_dl'] + 20, off=LO)
-    expect(PCP.title_text(m) == 'Downloads' and flags(m, 'btn_more')[0] in (0, 1) and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1, 'a tap on the Downloads row opens the Downloads page')
+    expect(PCP.title_text(m) == 'Downloaded' and flags(m, 'btn_more')[0] in (0, 1) and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1, 'a tap on the Downloads row opens the Downloads page')
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Podcasts' and m.props.get((m.sv, 'yoffset')) == LO and m.props.get((m.sv, 'virtual_h')) == L['h'] and 'navigator_back' not in m.names(), 'Back returns to the Shows level, scrolled as it was left')
     PCP.tap(m, 150, L['y_sub'] + 20, off=LO)
@@ -560,7 +575,7 @@ def library_tests(ctx):
     PCP.tap(m, 150, L['y_srch'] - 2, off=LO); PCP.tap(m, 150, L['y_sav'] + o['PC_ROW_H'] + 2, off=LO)
     expect(PCP.title_text(m) == 'Podcasts', 'a touch just above the rows or just under them opens nothing')
     m = opened()
-    for key, label in (('y_dl', 'Downloads'), ('y_sub', 'Subscriptions')):
+    for key, label in (('y_dl', 'Downloaded'), ('y_sub', 'Subscriptions')):
         m.setword(m.sv + PCP.SC_YOFF, LO); m.setword(m.view + 4, -LO & 0xffffffff)
         m.touch('down', 100, PCP.SCREEN_Y0 + L[key] + 20 - LO, 1000, fn='pg_on_down')
         _, _, _, fills = PCP.paint(m, LO)
@@ -577,7 +592,7 @@ def library_tests(ctx):
     m = opened()
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 1, seq=1); m.setword(DL.pn_at(12), 5); tick(m)
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 0); m.setword(DL.pn_at(12), 6); tick(m)
-    expect(m.props.get((m.sv, 'virtual_h')) == L['h'] and [a for a, _ in lib(m)] == ['Downloads', 'Subscriptions', 'Saved'], 'a download that comes and goes: the Library rows stay, the content is the same height')
+    expect(m.props.get((m.sv, 'virtual_h')) == L['h'] and [a for a, _ in lib(m)] == ['Downloaded', 'Subscriptions', 'Saved'], 'a download that comes and goes: the Library rows stay, the content is the same height')
 
 
 def grid_tests(ctx):
@@ -648,26 +663,26 @@ def grid_tests(ctx):
 
 
 def sheet_tests(ctx):
-    """The "..." sheet of the Shows level: Import from Card is its only row, so the "..." shows only while the card has something to import (the Subscriptions page is a Library row now); no Add Show row."""
+    """The "..." sheet of the Shows level: Refresh All (while a show has a feed) and Import from Card (while the card has something to import), so the "..." shows only when it has a row; no Add Show row."""
     expect = ctx.expect
     WSJ = open(os.path.join(FEEDS, 'wsj-3items.xml'), 'rb').read()
     m = opened(None, PCP.page_card)
     expect(flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play' and m.props[(m.widgets['btn_backtoplayer'], 'style:pressed:icon')] == 'ah_nav_play_down',
-           'without an import source the sheet would be empty: the "..." is hidden and out of the hit test, [Globe | Now Playing]')
+           'without a feed and an import source the sheet would be empty: the "..." is hidden and out of the hit test, [Globe | Now Playing]')
     m = opened()
     PCP.click(m, 'btn_more')
-    expect(flags(m, 'btn_more') == (0, 0) and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
-           'with subscriptions and nothing to import the "..." is hidden too (Subscriptions is a Library row): [Globe | Now Playing], and a stray click opens no sheet')
+    expect(flags(m, 'btn_more') == (1, 1) and sibling('pcshow').sheet_state(m)[0] == ['refresh'] and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet1',
+           'with subscriptions and nothing to import the "..." shows, with Refresh All alone on the one-row glass')
     sub_txt = f'{RP}/subscriptions.txt'
     m = opened(lambda mm: mm.put(sub_txt, f'{F["three"]}\n'.encode()))
     expect(flags(m, 'btn_more') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play' and m.props[(m.widgets['btn_backtoplayer'], 'style:pressed:icon')] == 'ah_nav_play_down',
            'with subscriptions.txt: [Globe | ... | Now Playing], one capsule')
     PCP.click(m, 'btn_more')
     shown = [r for r in PCP.SHEET_ROWS if flags(m, f'pg_sh_{r}') == (1, 1)]
-    expect(shown == ['import'] and flags(m, 'pg_sh_card') == (1, 1) and flags(m, 'pg_sh_scrim') == (1, 1) and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet1'
-           , f'the sheet has one row, Import from Card (the one-row glass) ({shown})')
+    expect(sorted(shown) == ['import', 'refresh'] and flags(m, 'pg_sh_card') == (1, 1) and flags(m, 'pg_sh_scrim') == (1, 1) and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet2'
+           , f'the sheet has two rows, Refresh All and Import from Card (the two-row glass) ({shown})')
     ys = {r: [c for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'pg_sh_{r}']][-1][3] for r in shown}
-    expect(ys == {'import': 0}, f'Import from Card is the row at the card\'s top ({ys})')
+    expect(ys == {'refresh': 0, 'import': 50}, f'Refresh All is the row at the card\'s top, Import from Card under it ({ys})')
     expect('pg_sh_add' not in m.widgets and 'Add Show' not in pod_i18n.TEXT and not [r for r in PCP.SHEET_ROWS if 'add' in r], 'there is no Add Show row until search exists')
     # Back and the scrim close it
     PCP.click(m, 'btn_return')
@@ -691,7 +706,7 @@ def sheet_tests(ctx):
     del m.fs[sub_txt]
     refg(m)
     PCP.click(m, 'btn_more')
-    expect(flags(m, 'btn_more') == (0, 0) and m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0, 'subscriptions.txt removed: the "..." goes with it after the page is read, and a click opens no sheet')
+    expect(flags(m, 'btn_more') == (1, 1) and sibling('pcshow').sheet_state(m)[0] == ['refresh'], 'subscriptions.txt removed: the sheet is Refresh All alone after the page is read')
     # no sheet under the dialog or in select mode of another level
     m = opened(lambda mm: mm.put(sub_txt, f'{F["three"]}\n'.encode()))
     PCP.tap_show(m, 'bravo')
@@ -707,7 +722,7 @@ def gone_tests(ctx):
     expect('btn_feeds' not in m.widgets and 'label_row_act' not in m.widgets, 'the page opens without a Feeds button or an action-row style (it looks for neither)')
     tree = awtk_ui.parse(open(os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui/m1plus_podcasts.bin'), 'rb').read())
     expect(tree.find('btn_feeds') is None and tree.find('label_row_act') is None, 'the asset has no Feeds button and no action-row style')
-    gone = ('Feeds', 'Refresh All', 'Import shows', 'Up to date', 'Refreshing', 'Nothing downloaded yet. Open Feeds, at the top right.', 'No episodes yet. Refresh the feed in Feeds.',
+    gone = ('Feeds', 'Import shows', 'Up to date', 'Refreshing', 'Nothing downloaded yet. Open Feeds, at the top right.', 'No episodes yet. Refresh the feed in Feeds.',
             'No subscriptions. List one feed address per line in subscriptions.txt in Podcasts on the card, then open Feeds again.')
     expect(not [k for k in gone if k in pod_i18n.TEXT], f'the Feeds level\'s strings are gone from the tables ({[k for k in gone if k in pod_i18n.TEXT]})')
     src = sources()
@@ -755,20 +770,21 @@ def width_tests(ctx):
         t = pod_i18n.table_for(loc)
         tr = lambda key, n=None, t=t: (pod_i18n.TEXT[key][t].replace('%d', str(n)) if n is not None else pod_i18n.TEXT[key][t])
         when = [tr('Just now'), tr('%dm ago', 59), tr('%dh ago', 23), tr('%dd ago', 6), tr('Oct %d', 23) + tr(', %d', 2025)]
-        line_a = [fnt.width(tr('Updated %s').replace('%s', w) + ' · ', 15) + fnt.width(tr('Refresh'), 15) for w in when]
-        line_b = [fnt.width(w + ' · ', 15) + fnt.width(tr('Refresh'), 15) for w in when]
-        line_n = fnt.width(tr('Never refreshed') + ' · ', 15) + fnt.width(tr('Refresh'), 15)
+        line_a = [fnt.width(tr('Updated %s').replace('%s', w), 15) for w in when]
+        line_n = fnt.width(tr('Never refreshed'), 15)
+        refall = fnt.width(tr('Refresh All'), 18)
         prog = fnt.width(pod_i18n.TEXT['Refreshing %d/%d…'][t].replace('%d', '40', 1).replace('%d', '40', 1), 15)
         heads = max(fnt.width(tr('Continue Listening'), 20), fnt.width(tr('Shows'), 20))
         left = max(fnt.width(tr('%dm left', 99), 13), fnt.width(tr('Play'), 13))
         left599 = fnt.width(tr('%dm left', 599), 13)
-        dlt = fnt.width(tr('Downloads') + ' (40)', 21)
-        head = max(fnt.width(tr(k), o['PP_TITLE_PX']) for k in ('Podcasts', 'Downloads', 'Subscriptions'))
+        dlt = fnt.width(tr('Downloaded') + ' (40)', 21)
+        head = max(fnt.width(tr(k), o['PP_TITLE_PX']) for k in ('Podcasts', 'Downloaded', 'Subscriptions'))
         dls = max(fnt.width(tr('Downloading') + ' 100%', 18), fnt.width(tr('Downloading') + ' ' + tr('%d MB', 999), 18), fnt.width(tr('Waiting'), 18))
         caps = {k: fnt.width(k_, 15) for k, k_ in (('new', tr('%d new', 99)), ('today', tr('Updated today')), ('neverc', tr('Never refreshed')), ('eps', tr('%d episodes', 999)), ('ago', (lambda a, b: a if fnt.width(a, 15) <= GC else b)(tr('Updated %s').replace('%s', tr('%dd ago', 6)), tr('%dd ago', 6))))}
-        worst[loc] = dict(line=max(a if a <= 320 - 2 * o['PP_LINE_X'] else b for a, b in zip(line_a, line_b)), never=line_n, prog=prog, heads=heads, left=left, left599=left599, dlt=dlt, dls=dls, head=head, **caps)
+        worst[loc] = dict(line=max(line_a), never=line_n, refall=refall, prog=prog, heads=heads, left=left, left599=left599, dlt=dlt, dls=dls, head=head, **caps)
     room = 320 - 2 * o['PP_LINE_X']
-    expect(all(w['line'] <= room and w['never'] <= room for w in worst.values()), f'the refresh line fits {room} px in every language, the age alone when "Updated <age>" would not ({[l for l, w in worst.items() if w["line"] > room or w["never"] > room]})')
+    expect(all(w['line'] <= room and w['never'] <= room for w in worst.values()), f'the refresh line fits {room} px in every language, "Updated <age>" whole ({[l for l, w in worst.items() if w["line"] > room or w["never"] > room]})')
+    expect(all(w['refall'] <= 150 for w in worst.values()), f'the sheet row "Refresh All" (18 px) leaves room for its value ({[(l, w["refall"]) for l, w in worst.items() if w["refall"] > 150]})')
     expect(all(w['prog'] <= room for w in worst.values()), f'"Refreshing 40/40…" fits the line ({[l for l, w in worst.items() if w["prog"] > room]})')
     expect(all(w['heads'] <= 320 - 2 * o['PP_HEAD_X'] for w in worst.values()), 'the headers fit one line')
     expect(all(w['head'] <= o['SG_TITLE_W'] for w in worst.values()), f'the large headings (Podcasts, Downloads, Subscriptions at {o["PP_TITLE_PX"]} px) fit the page in every language ({[(l, w["head"]) for l, w in worst.items() if w["head"] > o["SG_TITLE_W"]]})')
@@ -780,7 +796,7 @@ def width_tests(ctx):
             (('No Wi-Fi', 'No Wi-Fi'), ('date', 'Set the date first'), ('certs', 'Certificates missing'), ('cert', 'Certificate problem'), ('net', "Can't connect"), ('gone', 'Feed not found'), ('http', 'Server error'),
              ('notfeed', 'Not a podcast feed'), ('storage', 'Storage unavailable'), ('mem', 'Not enough memory'))}
     print('  error words wider than the 144 px caption (they end in an ellipsis there; the toast has them whole):', {k: [x for x in v] for k, v in errs.items() if v})
-    print('  widest per string (px):', {k: max((w[k], l) for l, w in worst.items()) for k in ('line', 'never', 'prog', 'heads', 'left', 'dlt', 'dls', 'new', 'today', 'neverc', 'eps', 'ago')})
+    print('  widest per string (px):', {k: max((w[k], l) for l, w in worst.items()) for k in ('line', 'never', 'refall', 'prog', 'heads', 'left', 'dlt', 'dls', 'new', 'today', 'neverc', 'eps', 'ago')})
 
 
 def off_tests(ctx):
@@ -798,7 +814,7 @@ def off_tests(ctx):
     m.call(PSYMS['pg_on_load'], a0=0, count=40000000)
     expect(not m.loads, 'dark: the cover loader decodes nothing')
     tick(m)
-    expect(lib(m)[0] == ('Downloads', '1 waiting') and m.props.get((m.sv, 'virtual_h')) == L['h'], 'the next lit tick: the Downloads row says 1 waiting (it is read from the queue at every paint)')
+    expect(lib(m)[0] == ('Downloaded', '1 waiting') and m.props.get((m.sv, 'virtual_h')) == L['h'], 'the next lit tick: the Downloads row says 1 waiting (it is read from the queue at every paint)')
     # a page that comes back to the front while dark is read at the first lit tick
     m = opened()
     progress(m, EP('Alpha Show', 'ep1.mp3'), 300)

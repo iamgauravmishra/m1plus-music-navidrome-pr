@@ -647,14 +647,32 @@ int pc_walk(const char *root, const char *dir, void (*cb)(void *ctx, const char 
     return n;
 }
 
-/* Whether the show has an archive (.archive: every item of the feed, written by the Show All Episodes job). */
+/* Whether the show has an archive (.archive: every item of the feed, written by the See All job). */
 int pc_has_archive(const pc_show_t *show) {
     char root[PC_FILE + 20], path[PM_PATH];
     return pc_root(root) && pm_join(path, sizeof path, root, show->dir, ".archive") && !access(path, F_OK);
 }
 
-/* The room pc_load_show's out needs for the show: PC_ALL_MAX with an archive, else PC_MAX_EPS. */
-int pc_eps_cap(const pc_show_t *show) { return pc_has_archive(show) ? PC_ALL_MAX : PC_MAX_EPS; }
+/* The room a list of the show needs (pc_load_show and pc_load_show_all): the PC_MAX_EPS entries of .episodes and every file the scan looks at that none of them names (PM_MAX_FILES; with an archive
+ * PM_ARCH_FILES, which makes PC_LIST_MAX). A recent list always fits it, so it has every file and every entry of .episodes; a complete list is cut (pm_load) only when the archive, .episodes and
+ * the files no entry names are more than PC_LIST_MAX episodes together. */
+typedef char pm_list_max_is_the_recent_room[PC_LIST_MAX == PC_MAX_EPS + PM_ARCH_FILES ? 1 : -1];
+int pc_all_cap(const pc_show_t *show) { return pc_has_archive(show) ? PC_LIST_MAX : PC_MAX_EPS + PM_MAX_FILES; }
+
+/* A list of the show (all: the complete one) in a block of its own size (the caller frees it), *count entries; NULL without memory. */
+pc_ep_t *pc_load_fit(const pc_show_t *show, int *count, int all) {
+    int cap = pc_all_cap(show), n;
+    pc_ep_t *list = calloc((unsigned)cap, sizeof *list), *fit;
+    *count = 0;
+    if (!list) return list;
+    n = all ? pc_load_show_all(show, list, cap) : pc_load_show(show, list, cap);
+    *count = n;
+    if (n >= cap || !(fit = calloc((unsigned)(n ? n : 1), sizeof *fit))) return list;
+    memcpy(fit, list, (unsigned)n * sizeof *fit);
+    free(list);
+    return fit;
+}
+pc_ep_t *pc_load_recent(const pc_show_t *show, int *count) { return pc_load_fit(show, count, 0); }
 
 /* The archive's entries (at most room) parsed into eps after the nm entries of .episodes already there; one whose guid (or, with no guid, file name) a .episodes entry has is dropped, so the union holds an
  * episode once and the .episodes entry wins (it is the fresher, and keeps a started download's file name). Returns the entries now in eps (nm when the archive cannot be read). */
@@ -678,13 +696,59 @@ static int pm_add_archive(pc_ep_t *eps, int nm, int room, const char *path) {
     return n;
 }
 
-int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
+/* The recent list of a show with an archive: a file (or .part) on the card that no .episodes entry names is an episode the refresh's window has passed (or one downloaded from the complete list), and its title, date,
+ * description and url are in .archive. Those entries, and only those, are added after the nm entries of .episodes (room of them at most), so the recent list shows a downloaded old episode as it shows any other. The
+ * archive is read only when such a file exists. Returns the entries now in eps. */
+static int pm_add_archived_files(pc_ep_t *eps, int nm, int room, const pm_file_t *files, int nf, const char *path) {
+    unsigned char *seen = calloc((unsigned)(nf ? nf : 1), 1);
+    int i, j, need = 0, n = nm;
+    unsigned got;
+    char *buf;
+    pc_ep_t *tmp;
+    int na;
+    if (!seen) return nm;
+    for (i = 0; i < nm; ++i) {
+        char part[PC_FILE + 8];
+        if (!eps[i].file[0]) continue;
+        if ((j = pm_find(files, nf, eps[i].file)) >= 0) seen[j] = 1;
+        pm_cpy(part, sizeof part, eps[i].file);
+        if (pm_cat(part, sizeof part, ".part") && (j = pm_find(files, nf, part)) >= 0) seen[j] = 1;
+    }
+    for (i = 0; i < nf; ++i) need |= !seen[i];
+    if (!need || !(buf = m1_read_file(path, PC_ARCH_BYTES, &got))) {
+        free(seen);
+        return nm;
+    }
+    tmp = calloc(PC_ARCH_MAX, sizeof *tmp);
+    na = tmp ? pc_parse_eps(buf, got, tmp, PC_ARCH_MAX) : 0;
+    free(buf);
+    for (i = 0; i < na && n < nm + room; ++i) {
+        char part[PC_FILE + 8];
+        int j1, j2 = -1, dup = 0;
+        if (!tmp[i].file[0]) continue;
+        j1 = pm_find(files, nf, tmp[i].file);
+        pm_cpy(part, sizeof part, tmp[i].file);
+        if (pm_cat(part, sizeof part, ".part")) j2 = pm_find(files, nf, part);
+        if (!((j1 >= 0 && !seen[j1]) || (j2 >= 0 && !seen[j2]))) continue;
+        for (j = 0; j < n && !dup; ++j)
+            dup = tmp[i].guid ? eps[j].guid == tmp[i].guid : !strcmp(eps[j].file, tmp[i].file);
+        if (!dup) memcpy(&eps[n++], &tmp[i], sizeof *eps);
+    }
+    free(tmp);
+    free(seen);
+    return n;
+}
+
+/* The list of a show: the .episodes entries (the newest PC_MAX_EPS) and the files on the card, merged and sorted in the show's order, the newest max kept. all: the complete list, the archive's entries too (the union
+ * of .episodes and .archive, at most PC_LIST_MAX); otherwise the recent list, where a show with an archive adds from it only the entries of files on the card (pm_add_archived_files). out NULL: nothing is sorted or
+ * copied and the count is returned (the number of episodes the complete list has). */
+static int pm_load(const pc_show_t *show, pc_ep_t *out, int max, int all) {
     char root[PC_FILE + 20], path[PM_PATH];
     pm_file_t *files;
     pc_ep_t *work;
     unsigned *order, got;
     char *buf;
-    int nf, nm = 0, n, i, skip, arch = 0, wk, mf;
+    int nf, nm = 0, n, i, arch = 0, wk, mf;
     if (!pc_root(root) || max <= 0) return 0;
     arch = pm_join(path, sizeof path, root, show->dir, ".archive") && !access(path, F_OK);
     mf =
@@ -693,8 +757,8 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
             : PM_MAX_FILES; /* (every episode of an archive can be a file on the card: a scan that stopped at PM_MAX_FILES left the rest as not downloaded) */
     files = calloc((unsigned)mf, sizeof *files);
     nf = files ? pm_files(root, show->dir, files, mf) : 0;
-    wk = (arch ? PC_ALL_MAX + PC_MAX_EPS : PC_MAX_EPS) +
-         nf; /* the entries .episodes holds, the archive's, the files found */
+    wk = (all && arch ? PC_ALL_MAX + PC_MAX_EPS : PC_MAX_EPS) + nf +
+         (!all && arch ? nf : 0); /* the entries .episodes holds, the archive's, the files found */
     work = calloc(
         1, (unsigned)wk *
                (sizeof *work +
@@ -710,22 +774,137 @@ int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) {
         free(buf);
     }
     if (arch && pm_join(path, sizeof path, root, show->dir, ".archive"))
-        nm = pm_add_archive(work, nm, PC_ARCH_MAX, path);
+        nm = all ? pm_add_archive(work, nm, PC_ARCH_MAX, path)
+                 : pm_add_archived_files(work, nm, wk - nm - nf, files, nf, path);
     n = pm_merge(work, nm, wk, files, nf, root, show->dir);
+    if (!out) {
+        free(files);
+        free(work);
+        return n > max ? max : n;
+    }
     order = (unsigned *)(work + wk);
     for (i = 0; i < n; ++i) order[i] = (unsigned)i;
     pm_sort_eps = work;
     pm_sort_name = nm == 0; /* no metadata entry: copied files only */
     pm_sort_old = show->hash ? pc_order_get(show->hash) : 0;
     cc_heapsort(order, (unsigned)n, pm_ep_cmp);
-    skip = 0;
-    if (n > max)
-        skip = pm_sort_old ? n - max : 0,
-        n = max; /* the newest max either way: the order changes the rows' order, never which episodes are listed */
-    for (i = 0; i < n; ++i) memcpy(&out[i], &work[order[skip + i]], sizeof *out);
+    /* More than max (pc_all_cap of room never cuts a recent list; a complete list only past PC_LIST_MAX episodes). Two things are kept before the rest. The newest episodes that are only in the
+     * feed, up to PC_MAX_EPS of them (a refresh's window; half the room when max is smaller): a show with more files than the room would otherwise list no new episode at all, and Latest Episode
+     * would be an old download. Then the episodes with a file on the card (downloaded, copied, a .part), so the newer ones that are not downloaded do not push a file out. The newest of each kind
+     * first; the order changes the rows' order, never which are listed. */
+    if (n > max) {
+        int nloc = 0, nrem = 0, keep = PC_MAX_EPS < max / 2 ? PC_MAX_EPS : max / 2, m = 0;
+        for (i = 0; i < n; ++i) nloc += work[i].state != PC_REMOTE;
+        nrem = n - nloc;
+        if (keep > nrem) keep = nrem;
+        if (nloc > max - keep) nloc = max - keep;
+        nrem = max - nloc;
+        for (i = 0; i < n; ++i) { /* from the newest */
+            unsigned *o = &order[pm_sort_old ? n - 1 - i : i];
+            int *left = work[*o].state != PC_REMOTE ? &nloc : &nrem;
+            if (*left)
+                --*left;
+            else
+                *o = ~0u;
+        }
+        for (i = 0; i < n; ++i)
+            if (order[i] != ~0u) order[m++] = order[i];
+        n = m;
+    }
+    for (i = 0; i < n; ++i) memcpy(&out[i], &work[order[i]], sizeof *out);
     free(files);
     free(work);
     return n;
+}
+
+int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max) { return pm_load(show, out, max, 0); }
+int pc_load_show_all(const pc_show_t *show, pc_ep_t *out, int max) { return pm_load(show, out, max, 1); }
+int pc_count_all(const pc_show_t *show) { return pm_load(show, (pc_ep_t *)0, PC_LIST_MAX, 1); }
+
+/* One line of an .episodes text read for the archive merge: whether it is an entry (as pc_parse_eps reads it), its guid hash (0: none), its file name's hash (0: none) and its date. */
+static int pm_line_keys(const char *p, unsigned len, unsigned *guid, unsigned *file, unsigned *pub) {
+    unsigned at = 0;
+    int any = 0;
+    *guid = *file = *pub = 0;
+    if (!len || p[0] == '#' || len > PM_LINE_MAX) return 0;
+    while (at < len) {
+        const char *f = p + at;
+        unsigned flen = 0;
+        while (at + flen < len && f[flen] != '\t') ++flen;
+        if (flen >= 2 && f[1] == '=') {
+            unsigned vlen = flen - 2;
+            if (f[0] == 'g')
+                *guid = vlen ? pm_fnv_n(f + 2, vlen) : 0, any |= vlen != 0;
+            else if (f[0] == 'p')
+                *pub = pm_num(f + 2, vlen);
+            else if (f[0] == 'f') {
+                if (vlen && vlen < PC_FILE) *file = pm_fnv_n(f + 2, vlen), any = 1;
+            } else if (f[0] == 't' || f[0] == 'u')
+                any |= vlen != 0;
+        }
+        at += flen + 1;
+    }
+    return any;
+}
+
+#define PM_NEW_MAX 256 /* lines a refresh can add to the archive at once */
+
+int pc_archive_merge(const char *eps, unsigned epsn, const char *old, unsigned oldn,
+                     int (*put)(void *ctx, const char *data, unsigned n), void *ctx, int maxn, unsigned maxbytes) {
+    const char *p, *stop, *next, *ep;
+    const char *nl[PM_NEW_MAX];
+    unsigned nlen[PM_NEW_MAX], npub[PM_NEW_MAX], *og, *of, bytes, nn = 0, no = 0, k, j;
+    int lines = 0, emitted_new = 0;
+    static const char head[] = "M1PLUS-EPISODES 1\n";
+    if (!pm_header(old, oldn, "M1PLUS-EPISODES 1", &p) || !pm_header(eps, epsn, "M1PLUS-EPISODES 1", &ep)) return 0;
+    og = calloc(2 * PC_ARCH_MAX, sizeof *og);
+    if (!og) return -1;
+    of = og + PC_ARCH_MAX;
+    stop = old + oldn;
+    for (; p < stop && no < PC_ARCH_MAX; p = next) { /* the archive's guids and file names */
+        unsigned len = m1_line(p, stop, &next), g, f, d;
+        if (pm_line_keys(p, len, &g, &f, &d)) og[no] = g, of[no] = f, ++no;
+    }
+    stop = eps + epsn;
+    for (; ep < stop && nn < PM_NEW_MAX;
+         ep = next) { /* the lines of the refreshed .episodes that the archive does not have */
+        unsigned len = m1_line(ep, stop, &next), g, f, d;
+        int dup = 0;
+        if (!pm_line_keys(ep, len, &g, &f, &d)) continue;
+        for (j = 0; j < no && !dup; ++j) dup = g ? og[j] == g : f && of[j] == f;
+        for (j = 0; j < nn && !dup; ++j) { /* (a line twice in the refreshed text) */
+            unsigned g2, f2, d2;
+            pm_line_keys(nl[j], nlen[j], &g2, &f2, &d2);
+            dup = g ? g2 == g : f && f2 == f;
+        }
+        if (dup) continue;
+        for (k = nn; k > 0 && npub[k - 1] < d; --k) /* (newest first: an insertion sort, stable) */
+            nl[k] = nl[k - 1], nlen[k] = nlen[k - 1], npub[k] = npub[k - 1];
+        nl[k] = ep, nlen[k] = len, npub[k] = d, ++nn;
+    }
+    free(og);
+    if (!nn) return 0;
+    if (!put(ctx, head, sizeof head - 1)) return -1;
+    bytes = sizeof head - 1;
+    k = 0;
+    stop = old + oldn;
+    pm_header(old, oldn, "M1PLUS-EPISODES 1", &p);
+    for (;; p = next) { /* the archive's lines, the new ones in front of the first older one */
+        unsigned len = 0, g, f, d = 0;
+        int entry = 0;
+        if (p < stop) len = m1_line(p, stop, &next), entry = pm_line_keys(p, len, &g, &f, &d);
+        while (k < nn && (p >= stop || (entry && npub[k] >= d)) && lines < maxn && bytes + nlen[k] + 1 <= maxbytes) {
+            if (!put(ctx, nl[k], nlen[k]) || !put(ctx, "\n", 1)) return -1;
+            bytes += nlen[k] + 1, ++lines, ++k, ++emitted_new;
+        }
+        if (p >= stop) break;
+        if (entry) {
+            if (lines >= maxn || bytes + len + 1 > maxbytes) break; /* (full: the oldest are dropped) */
+            if (!put(ctx, p, len) || !put(ctx, "\n", 1)) return -1;
+            bytes += len + 1, ++lines;
+        }
+    }
+    return emitted_new;
 }
 
 /* ---------------------------------------------------------------------------
@@ -984,8 +1163,7 @@ int pc_continue(const pc_show_t *shows, int nshows, pc_cont_t *out, int max) {
     pc_cont_t cand[PM_CONT_SCAN];
     char got[PM_CONT_SCAN];
     unsigned i, nc = 0, left;
-    int s, k, n = 0, cap;
-    pc_ep_t *all;
+    int s, k, n = 0;
     pm_ring_load();
     for (i = 0; pm.s && i < pm.n && nc < PM_CONT_SCAN; ++i) {
         const slot_t *t = &pm.s[i];
@@ -995,15 +1173,12 @@ int pc_continue(const pc_show_t *shows, int nshows, pc_cont_t *out, int max) {
         got[nc++] = 0;
     }
     if (!nc || max <= 0) return 0;
-    for (s = 0, cap = PC_MAX_EPS; s < nshows; ++s)
-        if (shows[s].count && pc_has_archive(&shows[s]))
-            cap = PC_ALL_MAX; /* (a downloaded old episode is in the archive's entries) */
-    if (!(all = calloc((unsigned)cap, sizeof *all))) return 0;
     left = nc;
     for (s = 0; s < nshows && left; ++s) {
         int cnt;
-        if (!shows[s].count) continue;
-        cnt = pc_load_show(&shows[s], all, cap);
+        pc_ep_t *
+            all; /* (the recent list: every file of the show is in it, a downloaded old episode of an archive show too) */
+        if (!shows[s].count || !(all = pc_load_recent(&shows[s], &cnt))) continue;
         for (k = 0; k < cnt && left; ++k) {
             if (all[k].state != PC_LOCAL || !all[k].hash) continue;
             for (i = 0; i < nc; ++i)
@@ -1014,8 +1189,8 @@ int pc_continue(const pc_show_t *shows, int nshows, pc_cont_t *out, int max) {
                     pm_cpy(cand[i].title, PC_TITLE, all[k].title);
                 }
         }
+        free(all);
     }
-    free(all);
     for (i = 0; i < nc && n < max; ++i)
         if (got[i]) memcpy(&out[n++], &cand[i], sizeof *out);
     return n;

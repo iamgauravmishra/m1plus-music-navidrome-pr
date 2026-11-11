@@ -168,7 +168,7 @@ def entry_tests(ctx):
               (False, True, '... | Now Playing', [('btn_more', X)]),
               (True, True, 'globe | ... | Now Playing', [('btn_globe', X - W), ('btn_more', X)]))
     for on, imp, name, slots in shapes:
-        m = opened(imp=imp, subs=True, setting=None if on else b'0\n')   # (a subscription changes nothing here: the "..." is Import's alone)
+        m = opened(imp=imp, subs=False, setting=None if on else b'0\n')   # (no show with a feed: the "..." is Import's alone; with one it holds Refresh All too)
         shown = {n for n in ('btn_globe', 'btn_more') if flags(m, n) == (1, 1)}
         np_icon = ('ah_nav_play', 'ah_nav_play_down') if slots else ('ah_nav_np', 'ah_nav_np_down')
         expect(shown == {n for n, _ in slots} and flags(m, 'btn_search') == (0, 0) and (NP(m), NP(m, 'pressed')) == np_icon, f'{name}: exactly those pieces show (no magnifier on the Shows level), Now Playing is the right cap of a capsule or the plain disc')
@@ -239,7 +239,7 @@ def entry_tests(ctx):
     o = O
     lay = pod_show.shows_layout(4, True, 0)
     expect(m.props.get((m.sv, 'virtual_h')) == lay['h'] and lay['y_srch'] + o['PC_ROW_H'] == lay['y_dl'] and lay['y_dl'] + o['PC_ROW_H'] == lay['y_sub'], 'the Discover row is the first Library row, directly above Downloads; the layout has it always')
-    ys, yd = PCP.lib_row_at(m, 'Discover'), PCP.lib_row_at(m, 'Downloads')
+    ys, yd = PCP.lib_row_at(m, 'Discover'), PCP.lib_row_at(m, 'Downloaded')
     expect(ys[0] + o['PC_ROW_H'] == yd[0] and ys[0] - o['LIST_TITLE_Y'] - o['LIST_TITLE_H'] // 2 == lay['y_srch'], f'Discover is drawn PC_ROW_H above Downloads, at the layout\'s top ({ys[0]}, {yd[0]})')
     off = max(0, m.props.get((m.sv, 'virtual_h'), 0) - 400)
     blits, texts, styles, fills = PCP.paint(m, off)
@@ -510,7 +510,7 @@ def preview_tests(ctx):
     hh = PCP.hdr(m)
     _, t3, s3, f3 = PCP.paint(m, hh - 60)
     pills = [t for t, s in zip((t for t, r in t3), s3) if s == 'label_ps_pill']
-    expect(pills and all(p.endswith('MB') or p == 'Download' for p in pills) and m.props.get((m.sv, 'virtual_h')) == hh + 3 * O['PS_CELL_H'] + O['PS_MORE_H'] + 20, f'the real cells: the download pills ({pills}) and the full cell height (and the Show All Episodes row under them: the show has a feed)')
+    expect(pills and all(p.endswith('MB') or p == 'Download' for p in pills) and m.props.get((m.sv, 'virtual_h')) == hh + 3 * O['PS_CELL_H'] + O['PS_MORE_H'] + 20, f'the real cells: the download pills ({pills}) and the full cell height (and the See All row under them: the show has a feed)')
     PCP.click(m, 'btn_return')
     expect(at_search(m) and len(level_rows(m)) >= 5, 'its Back returns to the search results')
     PCP.click(m, 'btn_return')

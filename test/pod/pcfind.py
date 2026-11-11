@@ -299,7 +299,7 @@ def more_tests(ctx):
     r = rows(m, 60, more=True)
     expect(len(r) == 45 and not any(is_more(t) for t, _, _ in r) and r[0][0] == 'Alpha 0' and r[-1][0].startswith('Alpha Old'), f'the archive is in: the same query finds more, in the show\'s order, no row ({len(r)})')
     expect(m.props[(m.fsv, 'yoffset')] == 0 and m.props[(m.fsv, 'virtual_h')] == 45 * ROW + KB_H, 'the list starts at the top')
-    expect(m.props[(m.psv, 'virtual_h')] > 40 * PCP.CELL and f'{PSH.RP}/{PSH.DEEP}/.archive' in m.fs, 'the Show page under it was read again with the archive')
+    expect(m.props[(m.psv, 'virtual_h')] < 40 * PCP.CELL and f'{PSH.RP}/{PSH.DEEP}/.archive' in m.fs, 'the Show page under it was read again with the archive: still its 20 rows and the See All row (the search holds the complete list)')
     typed(m, 'old 7')
     expect([t for t, _, _ in rows(m, 60, more=True)] == ['Alpha Old 7'], 'the matcher is over the new list')
 
@@ -401,4 +401,79 @@ def more_tests(ctx):
     expect(FL.ids(m) == [0, 1], f'the Show page keeps its Filter (Downloaded: the two on the card) over the long list ({FL.ids(m)[:5]})')
 
 
-SECTIONS = [nav_tests, match_tests, flow_tests, queue_tests, asset_tests, more_tests]
+def spin_tests(ctx):
+    """The Search All Episodes row's spinner (patch/pcfind.c pf_spin_*): the 14 px frame before the dim text while the job loads, turned by a 250 ms timer of the page; none when the row is idle, failed or the job ended; the timer
+    ends with the row and is removed with the page."""
+    expect = ctx.expect
+    tick = lambda m, fn='pf_tick': m.call(PSYMS[fn], a0=0, count=400000000)
+    atick = lambda m: m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
+    feed_xml = ARC.feed([ARC.item(100 + i, title=f'Alpha Old {i}') for i in range(40, 0, -1)])
+    RR = O['RET_REPEAT']
+    adds = lambda m: [t for t in m.timers if t[0] == PSYMS['pf_spin_tick']]
+
+    def spin(m):
+        fpaint(m, 0)
+        return [b for b in m.blits if m.bitmaps[b[0]][1:] == (14, 14)]
+
+    def opened():
+        m = find_widgets(show(TITLES5))
+        for i in range(8): m.images[f'wf_spin{i}'] = (14, 14, bytes((0x55, 0x55, 0x55, 255)) * 196)   # (the Wi-Fi page's frames as cc_decode flattens them over black)
+        click_find(m)
+        typed(m, 'alpha')
+        return m
+
+    def go(m, site):
+        m.curl_site = site
+        m.thread = None
+        tap_row(m, 5)
+        return m.thread
+
+    m = opened()
+    expect(spin(m) == [] and not adds(m), 'the idle row: no spinner, no timer')
+    th = go(m, lambda u, o: {'body': feed_xml})
+    sp = spin(m)
+    txt = [r for (t, r), st in fpaint(m, 0) if t == 'Loading…']
+    expect(len(sp) == 1 and sp[0][2][0] == 16 and sp[0][2][2:] == (14, 14) and sp[0][2][1] == 5 * ROW + (ROW - 14) // 2 and txt and txt[0][0] == 16 + 14 + O['PS_SPIN_GAP'],
+           f'Loading…: the spinner centred in the row, the text after it ({[b[2] for b in sp]}, {txt})')
+    expect(len(adds(m)) == 1 and (PSYMS['pf_spin_tick'], O['PS_SPIN_MS']) in m.timers, 'one 250 ms timer')
+    seen = [sp[0][0]]
+    for _ in range(8):
+        expect(tick(m, 'pf_spin_tick') == RR, 'the timer goes on while it loads')
+        seen.append(spin(m)[0][0])
+    expect(len(set(seen[:8])) == 8 and seen[8] == seen[0], 'each tick shows the next frame')
+    m.setword(ARC.count_addr(m), 340)
+    tick(m)
+    expect(len(adds(m)) == 1 and len(spin(m)) == 1, 'the 1 s tick (the count moved) adds no second timer')
+    ARC.PCN.work(m, th)
+    atick(m)
+    tick(m)
+    expect(spin(m) == [] and tick(m, 'pf_spin_tick') != RR, 'the job ended: no spinner (the row is gone), the timer ends')
+
+    m = opened()
+    th = go(m, lambda u, o: {'rc': 6})
+    expect(len(spin(m)) == 1, 'a job that is going to fail: the spinner meanwhile')
+    ARC.PCN.work(m, th)
+    atick(m)
+    tick(m)
+    expect(spin(m) == [] and tick(m, 'pf_spin_tick') != RR, 'a failure: Tap to Retry, no spinner, the timer ended')
+    expect(any(t.endswith('Tap to Retry') and r[0] == 16 for (t, r), st in fpaint(m, 0)), 'the failure text starts at the row\'s text edge')
+
+    def removes(m):
+        m.calls = []
+        fn, c = m.bound[(m.window, O['EVT_DESTROY'])]
+        m.call(fn, a0=c, a1=0, count=40000000)
+        return len([c for c in m.calls if c[0] == 'timer_remove'])
+    m = opened(); go(m, lambda u, o: {'body': feed_xml})
+    live = removes(m)
+    m = opened(); go(m, lambda u, o: {'body': feed_xml})
+    tick(m, 'pf_spin_tick')
+    m.setword(ARC.count_addr(m), 0)
+    m.call(PSYMS['pg_srch_leave'], count=2000000)
+    ARC.PCN.work(m, m.thread)
+    atick(m)
+    tick(m)
+    tick(m, 'pf_spin_tick')
+    expect(live == removes(m) + 1, 'closing the page removes the spinner timer while the row loads')
+
+
+SECTIONS = [nav_tests, match_tests, flow_tests, queue_tests, asset_tests, more_tests, spin_tests]

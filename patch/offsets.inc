@@ -1173,7 +1173,12 @@
 #define PS_HEAD_H 34
 #define PS_COLLAPSE_BACK 12
 #define PS_CELL_H 173
-#define PS_MORE_H 56              /* the Show All Episodes row under the last cell of a subscribed show that has no archive yet (docs/modules/podcasts.md "All episodes") */
+#define PS_MORE_H 56              /* the See All row under the last cell of the Show page (docs/modules/podcasts.md "All episodes") */
+#define PS_SHOW_MAX 20            /* rows of the recent list the Show page paints; See All opens the page with every episode */
+/* The busy row's spinner (the See All row while its job runs, and the search's Search All Episodes row): the Wi-Fi page's wf_spin frames, PS_SPIN_PX square, PS_SPIN_GAP before the text, turned every PS_SPIN_MS by the page's own timer. */
+#define PS_SPIN_PX 14
+#define PS_SPIN_GAP 8
+#define PS_SPIN_MS 250
 #define PS_PCELL_H 137            /* the preview's cell (docs/modules/podcasts.md "Search"): the date line, the title and the description of a normal cell without the pill row: PS_CDESC_Y + 2 * PS_CDESC_PITCH + 14 under it */
 #define PS_CELL_X 16
 #define PS_CELL_W 288
@@ -1243,7 +1248,7 @@
 #define PA_PLAYB_PX 28
 /* The Podcasts Shows page (Apple Podcasts style; patch/podcasts.c, docs/modules/podcasts.md "The Shows page"; tools/pod_show.py shows_layout is the model the tests and tools/preview/preview_podcasts_revamp.py use). Content y from the list's top
  * (window row PG_LIST_Y), x the window's. In order: the large title (a label, PP_TITLE_H high at x SG_TITLE_X, SG_TITLE_W wide, PP_TITLE_PX px, shared by the Downloads, Subscriptions and Saved pages; it scrolls away with the content and the navbar shows the small title past SG_COLLAPSE), the refresh line (PP_LINE_H high at PP_LINE_Y, 15 px: "Updated
- * 1h ago · Refresh", only when a show has a feed; PP_LINE_PITCH to the next block, PP_NOLINE_PITCH when there is no line; its touch is PP_LINE_HIT high around the text's middle), Continue Listening (PP_HEAD_H header at x PP_HEAD_X, 20 px, then PP_HEAD_PITCH to the
+ * 1h ago", a status with no control (Refresh All is a row of the "..." sheet), only when a show has a feed; PP_LINE_PITCH to the next block, PP_NOLINE_PITCH when there is no line), Continue Listening (PP_HEAD_H header at x PP_HEAD_X, 20 px, then PP_HEAD_PITCH to the
  * covers: at most PP_SHELF_MAX PP_SHELF_ART px covers at x PP_SHELF_X + i * PP_SHELF_PITCH, the title (14 px, one line, PP_SHELF_W wide) PP_SHELF_TITLE_Y under the cover's top and the "35m left" (13 px) at PP_SHELF_LEFT_Y; PP_SHELF_PITCH_Y the block's height; each cover has the atlas' PA_PLAYB_PX play disc PP_SHELF_PLAY_INSET from its right and bottom edges),
  * the Library rows, last, PP_LIB_GAP under the grid (Search while Podcast Search is on, Downloads, Subscriptions, Saved; the Downloads row: PC_ROW_H high: the PA_TILE_PX tile (an image of its own) at x PP_DL_TILE_X, PP_DL_TILE_Y down, the texts from PP_DL_TEXT_X, PP_DL_TEXT_W wide at LIST_TITLE_Y / LIST_SUB_Y, the shared chevron at PP_DL_CHEV_X, hairline from the text),
  * after the shelf PP_SEC_GAP of air and the "Shows" header (at x PP_SHOWS_X), then the Albums grid (GRID_*: GRID_COVER covers, the title and the grey line under each) from the grid's top; PP_BOTTOM under the last row. */
@@ -1253,7 +1258,6 @@
 #define PP_LINE_H 20
 #define PP_LINE_PITCH 34
 #define PP_NOLINE_PITCH 8
-#define PP_LINE_HIT 44
 #define PP_LINE_X 12 /* = SG_TITLE_X: the grey line under a large title starts under the title */
 #define PP_HEAD_H 28
 #define PP_HEAD_PITCH 34
@@ -1279,7 +1283,7 @@
 #define PP_SEC_GAP 12
 #define PP_LIB_GAP 24 /* the air between the grid's last row and the Library rows (Search, Downloads, Subscriptions, Saved) that close the Shows page */
 #define PP_BOTTOM 10
-/* The Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Downloads page"; tools/pod_show.py downloads_layout is the model): content y from the list's top. The storage line (15 px grey, PP_LINE_H high) at PDL_LINE_Y, x PP_LINE_X;
+/* The Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Downloaded page"; tools/pod_show.py downloads_layout is the model): content y from the list's top. The storage line (15 px grey, PP_LINE_H high) at PDL_LINE_Y, x PP_LINE_X;
  * the first section's header PDL_LINE_PITCH down; a section is its header (PP_HEAD_PITCH) and its PC_ROW_H rows; PP_SEC_GAP between sections; PP_BOTTOM under the last row. The Library rows of the Shows page are the Downloads row's geometry
  * twice (PP_DL_*): Downloads, then Subscriptions (its tile is the image pod_ic_subtile, PA_TILE_PX square). */
 #define PDL_LINE_Y 52

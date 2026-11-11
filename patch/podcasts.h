@@ -14,10 +14,13 @@
 
 /* (the PC_* sizes are patch/offsets.inc's: include it first) */
 
-/* The archive (.archive, docs/modules/podcasts.md "All episodes"): at most PC_ARCH_MAX items and PC_ARCH_BYTES bytes are written and read; the list of a show with an archive holds at most PC_ALL_MAX episodes (the newest). */
+/* The archive (.archive, docs/modules/podcasts.md "All episodes"): at most PC_ARCH_MAX items and PC_ARCH_BYTES bytes are written and read; PC_ALL_MAX is the archive's count where a list is meant.
+ * PC_LIST_MAX: the most episodes a list of a show holds (pc_all_cap; what the pages' rows, select bitsets and search results are sized for): the PC_MAX_EPS entries of .episodes and the files a folder with an archive
+ * is scanned for (2400, pcmodel.c PM_ARCH_FILES, which checks the sum), so a recent list is never cut. */
 #define PC_ARCH_MAX 2000
 #define PC_ARCH_BYTES 1572864u
 #define PC_ALL_MAX PC_ARCH_MAX
+#define PC_LIST_MAX 2700
 
 typedef struct {
     char file[PC_FILE]; /* the file name in the show folder; "" = no file (yet) */
@@ -56,12 +59,24 @@ int pc_root(char *out);
 int pc_scan_shows(pc_show_t *out, int max);
 /* Whether any show folder holds an episode file (the Pod's No Podcasts): stops at the first one, no metadata read. */
 int pc_any_episode(void);
-/* The episodes of a show in the show's order (pc_order_get): newest first (publication date, then file name, digit runs by value, descending; a show of copied files only, no metadata entry, by file name alone), or the exact reverse, PC_LOCAL / PC_PART / PC_REMOTE together; at most max. Returns the count. */
+/* The RECENT list of a show, in the show's order (pc_order_get): newest first (publication date, then file name, digit runs by value, descending; a show of copied files only, no metadata entry, by file name alone), or the exact reverse, PC_LOCAL / PC_PART /
+ * PC_REMOTE together; at most max (pc_all_cap of room holds every file of the show and every entry of .episodes: nothing is cut; pcmodel.c pm_load has the rule for a smaller room). It is .episodes (the newest PC_MAX_EPS entries) and the files on the card; a show with an archive reads .archive only to give a file (or .part) that no .episodes entry names its
+ * title, date and description, and only when such a file exists. Every page and reader but the All Episodes page and the search inside a show uses this. Returns the count. */
 int pc_load_show(const pc_show_t *show, pc_ep_t *out, int max);
-/* With an archive (.archive: every item of the feed) the list is the union of .episodes and .archive, an episode once (the .episodes entry wins), and holds the newest PC_ALL_MAX; without one it is as before, the newest PC_MAX_EPS of
- * .episodes and the files. pc_eps_cap: how many entries out needs for the show (PC_ALL_MAX with an archive, else PC_MAX_EPS); callers allocate that and pass it as max. */
+/* A list in a block of its own size (pc_all_cap of room while it is read; the caller frees it), *count entries; NULL without memory. What the pages and readers call: pc_load_recent the recent list, pc_load_fit with all the complete one. */
+pc_ep_t *pc_load_recent(const pc_show_t *show, int *count);
+pc_ep_t *pc_load_fit(const pc_show_t *show, int *count, int all);
+/* The COMPLETE list: with an archive (.archive: every item of the feed) the union of .episodes and .archive, an episode once (the .episodes entry wins), at most PC_LIST_MAX (past that the newest PC_MAX_EPS that are only in the feed are kept, then the episodes with a file, then the rest by date); without one it is the recent list. pc_all_cap: how many entries out
+ * needs for either list (PC_LIST_MAX with an archive, else PC_MAX_EPS and the files a show folder is scanned for). pc_count_all: the number of episodes pc_load_show_all would return (nothing sorted or copied), for the Show page's See All (N). */
+int pc_load_show_all(const pc_show_t *show, pc_ep_t *out, int max);
+int pc_count_all(const pc_show_t *show);
 int pc_has_archive(const pc_show_t *show);
-int pc_eps_cap(const pc_show_t *show);
+int pc_all_cap(const pc_show_t *show);
+/* A refresh's part of the archive: the lines of the refreshed .episodes text (eps, epsn) that .archive's text (old, oldn) does not have (by guid, else by file name) are put, newest first by date among the archive's lines, into
+ * put(ctx, data, n) (return 0 to fail), after a header line, the archive's lines following, at most maxn lines and maxbytes bytes (the oldest are dropped). Nothing is put when the archive has every line. Returns the new lines
+ * put (0: none, nothing put), -1 on a failure (no memory, or put failed). */
+int pc_archive_merge(const char *eps, unsigned epsn, const char *old, unsigned oldn,
+                     int (*put)(void *ctx, const char *data, unsigned n), void *ctx, int maxn, unsigned maxbytes);
 /* One file of a show folder: its modification time and its size in KB; 1 when it exists. */
 int pc_stat(const char *root, const char *dir, const char *file, unsigned *mtime, unsigned *kb);
 /* The audio files and .part files of a show folder, one callback each (name, size in KB, 1 for a .part); the count. No .episodes is read (the Shows page's totals). */

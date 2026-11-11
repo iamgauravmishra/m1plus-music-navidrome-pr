@@ -70,13 +70,13 @@ def entry_tests(ctx):
     expect = ctx.expect
     m = page()
     PCP.click(m, 'btn_more')
-    expect(flags(m, 'btn_more') == (0, 0) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play',
-           'with subscriptions and nothing to import there is no "..." ([Globe | Now Playing]) and a stray click opens no sheet')
-    expect(m.props.get((m.widgets['pg_sh_card'], 'visible'), 0) == 0 and 'subs' not in PCP.SHEET_ROWS, 'the sheet has no Subscriptions row any more')
+    expect(flags(m, 'btn_more') == (1, 1) and flags(m, 'btn_globe') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play' and sheet_rows(m) == ['refresh']
+           and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet1', 'with subscriptions and nothing to import the "..." opens a sheet of Refresh All alone ([Globe | ... | Now Playing])')
+    expect('subs' not in PCP.SHEET_ROWS, 'the sheet has no Subscriptions row any more')
     # a card with an OPML file in its root: Import from Card in the "..."
     m = page(lambda mm: mm.put('/mnt/mmc/podcasts.opml', b'<opml><body><outline xmlUrl="https://n.example/rss" text="N"/></body></opml>'))
     PCP.click(m, 'btn_more')
-    expect(flags(m, 'btn_more') == (1, 1) and sheet_rows(m) == ['import'] and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet1', f'an *.opml in the card\'s root makes the "..." appear, with Import from Card alone ({sheet_rows(m)})')
+    expect(flags(m, 'btn_more') == (1, 1) and sorted(sheet_rows(m)) == ['import', 'refresh'] and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet2', f'an *.opml in the card\'s root adds Import from Card under Refresh All ({sheet_rows(m)})')
     PCP.click(m, 'pg_sh_scrim')
     # the level
     m = page()
@@ -95,20 +95,21 @@ def entry_tests(ctx):
     h = {k: PCS.hash_of(v) for k, v in F.items()}
     PCS.pn_set(m, gen=7, statuses=[(h['alpha'], PN['OK'], 3), (h['one'], PN['NOWIFI'], 0), (h['two'], PN['NOTFEED'], 0)])
     PCS.tick(m)
-    expect(dict(lines(m)) == {'Alpha Show': '3 new', 'Sub One': 'No Wi-Fi', 'Sub Two': 'Not a podcast feed'}, f'the status words: new episodes, no Wi-Fi, not a feed ({lines(m)})')
+    expect(dict(lines(m)) == {'Alpha Show': '3 new', 'Sub One': 'No Wi-Fi', 'Sub Two': 'Updated 2d ago'},
+           f'the status words: new episodes; a failure replaces "Never refreshed" (Sub One: No Wi-Fi) but not the time of an earlier refresh (Sub Two failed with Not a podcast feed: still Updated 2d ago) ({lines(m)})')
     PCS.pn_set(m, gen=8, statuses=[(h['alpha'], PN['OK'], 0), (h['one'], PN['GONE'], 0), (h['two'], PN['OK'], 0)])
     PCS.tick(m)
     expect(dict(lines(m)) == {'Alpha Show': 'Updated today', 'Sub One': 'Feed not found', 'Sub Two': 'Updated 2d ago'}, f'Feed not found; a refresh that found nothing falls back to the date ({lines(m)})')
     # Back: the Shows level
     PCP.click(m, 'btn_return')
-    expect(title(m) == 'Podcasts' and flags(m, 'btn_more') == (0, 0), 'Back returns to the Shows level')
+    expect(title(m) == 'Podcasts' and flags(m, 'btn_more') == (1, 1), 'Back returns to the Shows level')
     # the Downloads page is another page: its own rows and its own sheet (Select, Delete Played Episodes), not this one's
     m = page()
     DL.poke_slot(m, 0, 'Sub One', 'x.mp3', 1, seq=1)
     PCS.tick(m)
     PCP.tap_downloads(m)
     PCP.click(m, 'btn_more')
-    expect(title(m) == 'Downloads' and 'export' not in sheet_rows(m) and sheet_rows(m) == ['select'], f'the Downloads page has its own sheet ({sheet_rows(m)})')
+    expect(title(m) == 'Downloaded' and 'export' not in sheet_rows(m) and sheet_rows(m) == ['select'], f'the Downloads page has its own sheet ({sheet_rows(m)})')
 
 
 def tap_tests(ctx):
@@ -302,7 +303,7 @@ def import_tests(ctx):
         mm.put('/mnt/mmc/more.opml', b'<opml><body><outline type="rss" text="Four" xmlUrl="https://f.example/four"/><outline xmlUrl="https://f.example/one"/></body></opml>')
     m = page(extra)
     PCP.click(m, 'btn_more')
-    expect(sheet_rows(m) == ['import'], 'subscriptions.txt and an OPML file: Import from Card')
+    expect(sorted(sheet_rows(m)) == ['import', 'refresh'], 'subscriptions.txt and an OPML file: Import from Card')
     m.curl_site = lambda url, o: {'body': WSJ}
     m.thread = None; m.calls = []
     PCP.click(m, 'pg_sh_import')
@@ -311,7 +312,7 @@ def import_tests(ctx):
     m.call(m.thread[0], a0=m.thread[1], count=1 << 40)
     m.call(PSYMS['pg_dlg_tick'], a0=0, count=40000000)
     PCP.click(m, 'btn_more')
-    expect(sheet_rows(m) == ['import'], 'subscriptions.txt is still there: Import from Card stays (it has nothing new)')
+    expect(sorted(sheet_rows(m)) == ['import', 'refresh'], 'subscriptions.txt is still there: Import from Card stays (it has nothing new)')
     m.thread = None; m.calls = []
     PCP.click(m, 'pg_sh_import')
     expect(toasts_fixed(m) == ['Nothing new to import'] and m.thread is None, 'importing again: nothing new')

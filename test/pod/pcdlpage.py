@@ -1,4 +1,4 @@
-"""The Podcasts Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Downloads page"): the storage line, the two sections (In Progress: what the worker holds, the failed and the paused; Downloaded: every episode
+"""The Podcasts Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Downloaded page"): the storage line, the two sections (In Progress: what the worker holds, the failed and the paused; Downloaded: every episode
 file of every show, the newest download first, sliced scan, capped), the rows' grey lines and played check, the taps (an In Progress row pauses, resumes or retries; a Downloaded row opens the episode's page and Back
 returns to the same place), the "..." sheet (Select, Delete Played Episodes), select mode and its Delete across both sections, Delete Played with the playing episode protected and its toast, the empty state, the
 screen-off rule and the strings in 13 languages measured in the real font. The compiled payload runs under Unicorn; the card is a dict of paths."""
@@ -54,7 +54,7 @@ def settle(m, n=80): PCS.settle(m, n)
 
 def to_page(m, done=True):
     """The Shows page's Downloads row; the loader's ticks (the covers, then one show a tick) when done."""
-    PCS.tap_row(m, 'Downloads')
+    PCS.tap_row(m, 'Downloaded')
     if done: settle(m)
 
 
@@ -96,8 +96,8 @@ def page_tests(ctx):
     """The page from the Downloads row: the title, the storage line, the Downloaded section's rows (the newest download first, each with its show, date and size), the section header and every row's place."""
     expect = ctx.expect
     m = page()
-    PCS.tap_row(m, 'Downloads')
-    expect(title(m) == 'Downloads' and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1 and flags(m, 'btn_more') == (0, 0), f'a tap on the Downloads row: the page opens ({title(m)}), the scan has not run yet: nothing listed, no "..."')
+    PCS.tap_row(m, 'Downloaded')
+    expect(title(m) == 'Downloaded' and m.props.get((m.widgets['pg_big'], 'visible'), 1) == 1 and flags(m, 'btn_more') == (0, 0), f'a tap on the Downloads row: the page opens ({title(m)}), the scan has not run yet: nothing listed, no "..."')
     expect(texts_at(m, 'label_ps_meta')[0][0] == '18 GB free', f'the storage line says the free space until the scan has counted ({texts_at(m, "label_ps_meta")})')
     settle(m)
     got = rows(m)
@@ -107,7 +107,7 @@ def page_tests(ctx):
     L = lay(1, 7)
     expect(m.props.get((m.sv, 'virtual_h')) == L['h'] and sorted(rows_y(m)) == L['rows'], f'the content and every row\'s top are the model\'s ({m.props.get((m.sv, "virtual_h"))} against {L["h"]})')
     heads = [(t, r) for t, r in texts_at(m, 'label_ps_sech')]
-    expect(heads == [('In Progress', (O['PP_SHOWS_X'], L['y_ip'], 320 - 2 * O['PP_SHOWS_X'], O['PP_HEAD_H'])), ('Downloaded', (O['PP_SHOWS_X'], L['y_dh'], 320 - 2 * O['PP_SHOWS_X'], O['PP_HEAD_H']))], f'the In Progress and Downloaded headers at the model\'s places ({heads})')
+    expect(heads == [('In Progress', (O['PP_SHOWS_X'], L['y_ip'], 320 - 2 * O['PP_SHOWS_X'], O['PP_HEAD_H']))] and L['rows'][1] == L['rows'][0] + ROW + O['PP_SEC_GAP'], f'the In Progress header at the model\'s place and no Downloaded header: the downloaded rows follow PP_SEC_GAP under the In Progress row ({heads}, {L["rows"][:2]})')
     line = texts_at(m, 'label_ps_meta')
     expect(line == [('7 episodes · 217 MB · 18 GB free', (O['PP_LINE_X'], O['PDL_LINE_Y'], 320 - 2 * O['PP_LINE_X'], O['PP_LINE_H']))], f'the storage line: the count, their size and the free space ({line})')
     expect(flags(m, 'btn_more') == (1, 1) and m.props[(m.widgets['btn_backtoplayer'], 'style:normal:icon')] == 'ah_nav_play', 'the "..." is there once there are rows (the capsule: "..." | Now Playing)')
@@ -144,7 +144,7 @@ def scan_tests(ctx):
     """The Downloaded scan: one show a tick of the loader, the order across shows, the cap, what a slice costs with 40 shows of 300 episodes, nothing in the dark."""
     expect = ctx.expect
     m = page()
-    PCS.tap_row(m, 'Downloads')
+    PCS.tap_row(m, 'Downloaded')
     per, shown = [], []
     for _ in range(14):
         m.call(PSYMS['pg_on_load'], a0=0, count=400000000)
@@ -158,7 +158,7 @@ def scan_tests(ctx):
     if PERF:   # the cap and the order across shows, the cost of a slice: 40 shows of 300 episodes (stress scale)
         m = page(lambda mm: setattr(mm, 'reuse_heap', True), cardf=big_card)
         m.count()
-        PCS.tap_row(m, 'Downloads')
+        PCS.tap_row(m, 'Downloaded')
         cost, reads = [], []
         for _ in range(80):
             m.call(PSYMS['pg_on_load'], a0=0, count=400000000)
@@ -177,7 +177,7 @@ def scan_tests(ctx):
         expect(max(cost) < 8_000_000, f'a slice stays under 8 million instructions ({max(cost)}): about 10 ms at the X2000\'s speed plus the card reads')
     # the screen off: the loader reads nothing; the first lit tick starts it again
     m = page()
-    PCS.tap_row(m, 'Downloads')
+    PCS.tap_row(m, 'Downloaded')
     m.screen(False); m.calls = []
     m.call(PSYMS['pg_on_load'], a0=0, count=400000000)
     expect(not [c for c in m.calls if c[0] in ('opendir', 'open', '__xstat')], 'dark: the loader reads no show')
@@ -291,20 +291,20 @@ def open_tests(ctx):
     heads = [PCS.fixed(t) for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_head']
     expect(heads != ['ep1'] and flags(m, 'btn_more') == (1, 1) and m.props.get((m.sv, 'virtual_h')) != L['h'], f'a tap on the show row: the Alpha Show page, its list with its "..." (not the episode page) ({heads})')
     PCP.click(m, 'btn_return')
-    expect(title(m) == 'Downloads' and [t for t, _ in rows(m)[1:]] == TITLES and m.props.get((m.sv, 'virtual_h')) == L['h'], 'Back from the show\'s page: the Downloads page with the same rows')
+    expect(title(m) == 'Downloaded' and [t for t, _ in rows(m)[1:]] == TITLES and m.props.get((m.sv, 'virtual_h')) == L['h'], 'Back from the show\'s page: the Downloads page with the same rows')
     tap_row(m, 3, 1, 7)
     PCP.click(m, 'btn_return')
-    expect(title(m) == 'Downloads' and [t for t, _ in rows(m)[1:]] == TITLES and m.props.get((m.sv, 'virtual_h')) == L['h'], 'Back: the Downloads page with the same rows')
+    expect(title(m) == 'Downloaded' and [t for t, _ in rows(m)[1:]] == TITLES and m.props.get((m.sv, 'virtual_h')) == L['h'], 'Back: the Downloads page with the same rows')
     expect(m.props.get((m.sv, 'yoffset')) == max(0, L['rows'][3] - 150), f'at the offset the tap left ({m.props.get((m.sv, "yoffset"))} against {max(0, L["rows"][3] - 150)})')
     expect(not [c for c in m.calls if c[0] == 'opendir'] and not [c for c in m.calls if c[0] == 'open' and c[1].endswith('/.episodes')], 'no show was read again')
     # a deeper row, scrolled: the same place comes back
     m = page(lambda mm: setattr(mm, 'reuse_heap', True), cardf=big_card)
-    PCS.tap_row(m, 'Downloads')
+    PCS.tap_row(m, 'Downloaded')
     settle(m, 120)
     tap_row(m, 200, 0, 300)
     PCP.click(m, 'btn_return')
     y = lay(0, 300)['rows'][200]
-    expect(title(m) == 'Downloads' and m.props.get((m.sv, 'yoffset')) == y - 150, f'a row 200 rows down: Back returns to the same scroll position ({m.props.get((m.sv, "yoffset"))} against {y - 150})')
+    expect(title(m) == 'Downloaded' and m.props.get((m.sv, 'yoffset')) == y - 150, f'a row 200 rows down: Back returns to the same scroll position ({m.props.get((m.sv, "yoffset"))} against {y - 150})')
     # Back from the page goes on to the Shows level where it was
     PCP.click(m, 'btn_return')
     expect(title(m) == 'Podcasts' and m.props.get((m.sv, 'yoffset')) > 0, 'Back again: the Shows level, scrolled to the Library rows where it was left')
@@ -314,7 +314,7 @@ def open_tests(ctx):
     del m.fs[B3]
     tap_row(m, 2, 1, 7)
     heads = [t for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_head']
-    expect(title(m) == 'Downloads' and not heads and len(rows(m)) == 7, f'an episode whose file has gone: the row leaves, nothing opens ({len(rows(m))} rows)')
+    expect(title(m) == 'Downloaded' and not heads and len(rows(m)) == 7, f'an episode whose file has gone: the row leaves, nothing opens ({len(rows(m))} rows)')
     # an episode removed on its own page: Back returns without it
     m = page()
     to_page(m)
@@ -323,7 +323,7 @@ def open_tests(ctx):
     PCP.tap(m, O['PS_DOTS_CX'], dots[0][2][1] + 10)
     PCP.click(m, 'pg_sh_rm')
     PCP.click(m, 'btn_return')
-    expect(title(m) == 'Downloads' and [t for t, _ in rows(m)[1:]] == [t for t in TITLES if t != 'Bravo 3'] and B3 not in m.fs, f'Remove Download on the episode\'s page: Back, and its row is gone ({[t for t, _ in rows(m)[1:]]})')
+    expect(title(m) == 'Downloaded' and [t for t, _ in rows(m)[1:]] == [t for t in TITLES if t != 'Bravo 3'] and B3 not in m.fs, f'Remove Download on the episode\'s page: Back, and its row is gone ({[t for t, _ in rows(m)[1:]]})')
 
 
 def marks_of(m, n_ip, n_dl):
@@ -385,7 +385,7 @@ def select_tests(ctx):
     m.confirm_yes = True; m.calls = []
     PCP.click(m, 'pg_del')
     expect(sorted(unlinks(m)) == sorted(['Sub One/c.mp3.part', 'Sub One/d.mp3.part']) and DL.state(m, 'c.mp3', 'Sub One')[0] == 0 and f'{RP}/Sub One/a.mp3' in m.fs, f'a waiting one leaves the queue and a paused one loses its .part; no file of an episode goes ({unlinks(m)})')
-    expect(flags(m, 'pg_bar') == (0, 0) and title(m) == 'Downloads' and [t for t, _ in rows(m)[:2]] == [('Ep E'), ('Ep F')] and m.props.get((m.sv, 'virtual_h')) == lay(2, 7)['h'], 'the mode ended; the rows left the lists (no show read again)')
+    expect(flags(m, 'pg_bar') == (0, 0) and title(m) == 'Downloaded' and [t for t, _ in rows(m)[:2]] == [('Ep E'), ('Ep F')] and m.props.get((m.sv, 'virtual_h')) == lay(2, 7)['h'], 'the mode ended; the rows left the lists (no show read again)')
     # a Downloaded row and an In Progress one together: the files go, the played mark is forgotten, the line stays
     m = page(ip_state)
     to_page(m)
@@ -425,7 +425,7 @@ def select_tests(ctx):
     PCS.tick(m)
     expect(title(m) == '1 Selected' and len(marks_of(m, 4, 7)) == 10, 'the worker moves while rows are marked: the rows and the marks stay as they are')
     PCP.click(m, 'btn_return')
-    expect(title(m) == 'Downloads' and flags(m, 'pg_bar') == (0, 0) and flags(m, 'btn_more') == (1, 1), 'the x leaves select mode')
+    expect(title(m) == 'Downloaded' and flags(m, 'pg_bar') == (0, 0) and flags(m, 'btn_more') == (1, 1), 'the x leaves select mode')
 
 
 def played_tests(ctx):
@@ -433,7 +433,7 @@ def played_tests(ctx):
     expect = ctx.expect
     m = page()
     for p in (A1, B1, B2): m.call(PSYMS['pc_mark'], a0=PCP.pc_hash(p), a1=1, count=2000000)
-    PCS.tap_row(m, 'Downloads')
+    PCS.tap_row(m, 'Downloaded')
     settle(m, 3)   # (the first show or two: rows, but the scan is not done)
     PCP.click(m, 'btn_more')
     shown = [r for r in PCP.SHEET_ROWS if m.props.get((m.widgets[f'pg_sh_{r}'], 'visible'), 0) == 1]
@@ -492,16 +492,17 @@ def heads_tests(ctx):
     m = page(ip_state)
     to_page(m)
     L = lay(4, 7)
-    expect(heads(m) == ['In Progress', 'Downloaded'] and L['y_ip'] == O['PDL_LINE_PITCH'] and L['y_dh'] is not None, f'both sections: both headers ({heads(m)})')
+    expect(heads(m) == ['In Progress'] and L['y_ip'] == O['PDL_LINE_PITCH'] and 'y_dh' not in L and L['rows'][4] == L['rows'][3] + ROW + O['PP_SEC_GAP'] and sorted(rows_y(m)) == L['rows'],
+           f'both sections: the In Progress header alone (the title Downloaded is the downloaded rows\' header), the downloaded rows PP_SEC_GAP under the last In Progress row ({heads(m)}, {sorted(rows_y(m))[3:5]})')
     # only Downloaded
     m = page(cardf=no_part)
     to_page(m)
     L = lay(0, 7)
     got = rows(m)
-    expect([t for t, _ in got] == TITLES and heads(m) == [] and L['y_ip'] is None and L['y_dh'] is None, f'only downloaded rows: no section header, the seven rows ({heads(m)}, {[t for t, _ in got]})')
+    expect([t for t, _ in got] == TITLES and heads(m) == [] and L['y_ip'] is None, f'only downloaded rows: no section header, the seven rows ({heads(m)}, {[t for t, _ in got]})')
     expect(sorted(rows_y(m)) == L['rows'] and L['rows'][0] == O['PDL_LINE_PITCH'] and m.props.get((m.sv, 'virtual_h')) == L['h'] == O['PDL_LINE_PITCH'] + 7 * ROW + O['PP_BOTTOM'],
            f'the rows start where the first header started, y {O["PDL_LINE_PITCH"]}; the height is the rows and PP_BOTTOM ({L["rows"][0]}, {m.props.get((m.sv, "virtual_h"))})')
-    expect(texts_at(m, 'label_ps_meta')[0][1][1] == O['PDL_LINE_Y'] and title(m) == 'Downloads', 'the storage line and the large title are where they are with headers')
+    expect(texts_at(m, 'label_ps_meta')[0][1][1] == O['PDL_LINE_Y'] and title(m) == 'Downloaded', 'the storage line and the large title are where they are with headers')
     m.calls = []
     tap_row(m, 2, 0, 7)
     opened = [PCS.fixed(t) for (t, r), s in zip(*PCP.paint(m, 0)[1:3]) if s == 'label_ps_head']
@@ -534,7 +535,7 @@ def heads_tests(ctx):
     m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.KIND), 0)
     m.setword(DL.pn_at(12), 500)
     PCS.tick(m)
-    expect(heads(m) == ['In Progress', 'Downloaded'] and sorted(rows_y(m)) == lay(3, 1)['rows'], f'a finished download gives the page both sections: the headers come ({heads(m)})')
+    expect(heads(m) == ['In Progress'] and sorted(rows_y(m)) == lay(3, 1)['rows'], f'a finished download gives the page both sections: the In Progress header comes ({heads(m)})')
     # the empty page has no header either
     m = page(cardf=lambda mm: (card(mm), [mm.fs.pop(p) for p in [p for p in mm.fs if p.endswith(('.part', '.mp3'))]]))
     to_page(m)

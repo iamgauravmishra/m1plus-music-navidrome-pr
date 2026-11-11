@@ -101,7 +101,7 @@ def rows_tests(ctx):
 
 
 def state_tests(ctx):
-    """Page state: kept over the episode page, reset by leaving the show and by another show; the Show All Episodes row's place."""
+    """Page state: kept over the episode page, reset by leaving the show and by another show; the See All row's place."""
     expect = ctx.expect
     m = PSH.shown()
     to_filter(m, 2)
@@ -233,7 +233,7 @@ def select_tests(ctx):
 
 
 def empty_tests(ctx):
-    """A Filter that leaves nothing: the hint under the header, the header, the navbar and the sheet stay; Show All Episodes stays."""
+    """A Filter that leaves nothing: the hint under the header, the header, the navbar and the sheet stay; See All stays."""
     expect = ctx.expect
     m = PSH.shown(files=())
     to_filter(m, 2)
@@ -244,16 +244,16 @@ def empty_tests(ctx):
     PCP.click(m, 'pg_sh_filter'); PCP.click(m, 'pg_sh_scrim')
     expect(ids(m) == list(range(8)) and 'No downloaded episodes' not in hint(m), 'back to All: the rows are back and the hint gone')
     # Unplayed with everything played
-    m = PSH.machine(entries=[PSH.entry(i) for i in range(3)], files=(0, 1)); PSH.open_show(m)   # (no download running: the tap on Show All Episodes starts its job)
+    m = PSH.machine(entries=[PSH.entry(i) for i in range(3)], files=(0, 1)); PSH.open_show(m)   # (no download running: the tap on See All starts its job)
     for i in range(3): m.call(PSYMS['pc_mark'], a0=h_of(i), a1=1, count=2000000)
     to_filter(m, 1)
     expect(hint(m) == 'No unplayed episodes' and ids(m) == [], f'Unplayed with every episode played: the hint ({hint(m)!r})')
-    # the Show All Episodes row stays (a feed show with no archive), under the hint
+    # the See All row stays (a feed show with no archive), under the hint
     h, bottom = PCP.hdr(m), max(0, m.props[(m.sv, 'virtual_h')] - 400)
     y = h + O['PG_HINT_H'] if 'PG_HINT_H' in O else h + 8 + 4 * O['PS_TITLE_PITCH']
     _, texts, styles, _ = PCP.paint(m, bottom)
-    row = [(t, r) for (t, r), s in zip(texts, styles) if t == 'Show All Episodes']
-    expect(row and row[0][1][1] + bottom >= y and m.props[(m.sv, 'virtual_h')] == y + O['PS_MORE_H'], f'Show All Episodes is still the last row, under the hint ({row}, content {m.props[(m.sv, "virtual_h")]}, row at {y})')
+    row = [(t, r) for (t, r), s in zip(texts, styles) if t == 'See All']
+    expect(row and row[0][1][1] + bottom >= y and m.props[(m.sv, 'virtual_h')] == y + O['PS_MORE_H'], f'See All is still the last row, under the hint ({row}, content {m.props[(m.sv, "virtual_h")]}, row at {y})')
     PCP.tap(m, 150, y + O['PS_MORE_H'] // 2, off=bottom)
     expect(m.thread and m.thread[0] == PSYMS['pn_armain'], 'a tap on it starts the job')
     # reload while the list is empty keeps the hint

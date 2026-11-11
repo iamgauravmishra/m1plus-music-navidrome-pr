@@ -45,7 +45,7 @@ def started(m, sites=None):
     m.curl_site = sites or (lambda url, o: {'body': WSJ if url == F['alpha'] else HEAD if url == F['one'] else b'<html></html>'})
     m.thread = None
     m.calls = []
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     return m
 
 
@@ -126,9 +126,9 @@ def run(ctx):
     m = PF.opened()
     started(m)
     m.calls = []
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     PF.pn_set(m, busy=1)
-    PCP.tap_line(m)
+    PCP.refresh_all(m)
     expect('pthread_create' not in m.names() and toasts(m) == [], 'a tap on the refresh line while the worker runs starts nothing (the scrim keeps the real touch away as well)')
 
     # 5. Cancel

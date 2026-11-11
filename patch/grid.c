@@ -305,6 +305,12 @@ int grid_spin_turn(grid_t *g) {
     return n;
 }
 
+int grid_spin_draw(void *canvas, grid_t *g, int x, int y, int view_h) {
+    if (!g->spin[0]) return 0;
+    grid_blit_from(canvas, g->spin[g->spin_n & 7], 0, 0, g->spin_px, g->spin_px, x, y, view_h);
+    return 1;
+}
+
 void grid_blit_from(void *canvas, void *bmp, int sx, int sy, int w, int h, int x, int y, int view_h) {
     int top = y < 0 ? -y : 0, bottom = view_h > 0 && y + h > view_h ? view_h - y : h;
     int src[4], dst[4];

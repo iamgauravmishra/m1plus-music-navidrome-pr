@@ -85,7 +85,7 @@ def cell(font, title, desc, sx=0):
 
 
 def content_height(h_hdr, n, select=False, more=False):
-    """The content's height: the header, n cells, the Show All Episodes row (more: a subscribed show with no archive) and the air under the last (PG_BOTTOM 20), and the select bar's room."""
+    """The content's height: the header, n cells, the See All row (more: a subscribed show with no archive) and the air under the last (PG_BOTTOM 20), and the select bar's room."""
     return h_hdr + n * O['PS_CELL_H'] + 20 + (O['PS_MORE_H'] if more and n and not select else 0) + (O['SG_BAR_H'] if select and n else 0)
 
 
@@ -125,20 +125,19 @@ def shows_layout(n_shows, has_line, n_cont, discover=True):
 
 
 def downloads_layout(n_ip, n_dl, select=False):
-    """The Downloads page's layout (patch/podcasts.c pg_dy, pg_dhead, pg_dh): the storage line, the In Progress header and rows, PP_SEC_GAP, the Downloaded header and rows, content y from the list's top; the headers' tops
-    (None for a section with no row, and for both when only one section has rows: a section header is drawn only when both do, so the page never reads "Downloads" and then "Downloaded"; the rows then start where the
-    first header would have), each row's top (In Progress then Downloaded) and the content's height (the select bar's room too)."""
+    """The Downloaded page's layout (patch/podcasts.c pg_dy, pg_dh): the storage line, the In Progress header and rows, PP_SEC_GAP, the downloaded rows, content y from the list's top; the In Progress header's top
+    (None unless both sections have rows: the downloaded rows have no header, the page's title "Downloaded" is theirs, and In Progress alone needs none; the rows then start where the header would have), each row's top (In Progress
+    then downloaded) and the content's height (the select bar's room too)."""
     o = O
-    y, rows, y_ip, y_dh = o['PDL_LINE_PITCH'], [], None, None
+    y, rows, y_ip = o['PDL_LINE_PITCH'], [], None
     heads = bool(n_ip and n_dl)
     if n_ip:
         if heads: y_ip = y; y += o['PP_HEAD_PITCH']
         rows += [y + i * o['PC_ROW_H'] for i in range(n_ip)]
         y += n_ip * o['PC_ROW_H'] + o['PP_SEC_GAP']
     if n_dl:
-        if heads: y_dh = y; y += o['PP_HEAD_PITCH']
         rows += [y + i * o['PC_ROW_H'] for i in range(n_dl)]
-    return dict(y_line=o['PDL_LINE_Y'], y_ip=y_ip, y_dh=y_dh, rows=rows, h=(rows[-1] + o['PC_ROW_H'] + o['PP_BOTTOM'] if rows else o['PDL_LINE_PITCH']) + (o['SG_BAR_H'] if select and rows else 0))
+    return dict(y_line=o['PDL_LINE_Y'], y_ip=y_ip, rows=rows, h=(rows[-1] + o['PC_ROW_H'] + o['PP_BOTTOM'] if rows else o['PDL_LINE_PITCH']) + (o['SG_BAR_H'] if select and rows else 0))
 
 
 def grid_pitch():
