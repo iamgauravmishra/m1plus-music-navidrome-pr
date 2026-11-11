@@ -77,13 +77,9 @@ void sbn_sink_free(sbn_sink_t *sink);
  * "download", "getCoverArt", ...): <base>/rest/<view>.view?u=..&t=<md5(password+salt)>&s=<salt>
  * &v=1.16.1&c=m1plus-music&f=json, the token and salt being the login secret's (srv.auth), so no password is needed or kept.
  * id (may be NULL) is added as &id=<escaped>; "stream" gets &format=raw so the server does not
- * transcode; extra (may be NULL) is appended verbatim, build it with sbn_urlenc (e.g. "&size=240").
+ * transcode; extra (may be NULL) is appended verbatim, build it with m1_urlenc (e.g. "&size=240").
  * 0 on success, -1 on bad input or when out is too small. */
 int sbn_url(char *out, unsigned cap, sbn_server_t srv, const char *view, const char *id, const char *extra);
-
-/* Percent-escape s into out at offset used (RFC 3986 unreserved characters pass); returns the new
- * length, or 0 when s is NULL or the result does not fit. */
-unsigned sbn_urlenc(char *out, unsigned cap, unsigned used, const char *s);
 
 /* GET a URL (timeout in seconds, 0 = none; range like "1048576-" or NULL) into sink. 0 on success
  * (HTTP 2xx), -1 when the transfer failed, SBN_E_INIT when it could not start. */
@@ -101,9 +97,6 @@ int sbn_get(sbn_server_t srv, const char *view, const char *id, const char *extr
  * -1 otherwise. */
 int sbn_download(const char *url, const char *part, const char *final, const char *dir_path, const char *identity,
                  sbn_sink_t *sink, int *resumable_out);
-
-/* write() all of data; 1 on success. */
-int sbn_write_all(int fd, const void *data, unsigned size);
 
 /* MD5 of n bytes (n <= 247, what its 256-byte block buffer holds; sbn_auth_make passes up to 207), as used by the token. */
 void sbn_md5(const unsigned char *msg, unsigned n, unsigned char out[16]);

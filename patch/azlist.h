@@ -55,6 +55,15 @@ int azhead_toggle(void);
 /* The rank of a character in the sections: 0 "#" (a digit, '*', anything else), 1..26 'A'..'Z' (either case). */
 int az_rank_of(int c);
 unsigned char az_rank_letter(int rank); /* the letter a rank shows */
+/* The Z-A mirror: Z is rank 0 .. A rank 25 and "#" last (26), so the ranks still rise down the list. */
+static inline int az_flip_rank(int k) { return k ? 26 - k : 26; }
+void az_flip_letters(
+    az_t *
+        az); /* the headers and the rail of mirrored ranks: each section's letter (the rank az_sections labelled it with) shows as its mirror */
+/* The six widgets of the A-Z furniture of win (label_hdr, label_rail, label_rail_on, sg_rail, sg_bubble, sg_bubble_letter, looked up in that order); 1 when all six exist. */
+int az_bind(az_t *az, void *win);
+/* The rail's touch (DOWN, MOVE, UP, ABORT -> on) and its paint (AFTER_PAINT -> paint). */
+void az_bind_rail(az_t *az, int (*on)(void *, void *), int (*paint)(void *, void *));
 /* The sections of az->count rows whose ranks are the bytes rank[0], rank[stride], ...; no memory = a plain list (nsec 0). */
 void az_sections(az_t *az, const unsigned char *rank, unsigned stride);
 

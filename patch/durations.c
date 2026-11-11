@@ -14,8 +14,8 @@
 #include "covercache.h"
 #include "i18n.h"
 #include "durations.h"
+#include "fnv.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 #define DUR_MAGIC 0x4e4c314du /* "M1LN" */
@@ -36,7 +36,7 @@ unsigned dur_key(const char *path) {
 static unsigned dur_sum(const dur_ent_t *e, unsigned n) {
     const unsigned char *p = (const unsigned char *)e;
     unsigned h = FNV_SEED, i;
-    for (i = 0; i < n * sizeof *e; ++i) h = (h ^ p[i]) * 16777619u;
+    for (i = 0; i < n * sizeof *e; ++i) h = (h ^ p[i]) * FNV_PRIME;
     return h;
 }
 

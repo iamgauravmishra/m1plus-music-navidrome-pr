@@ -30,8 +30,8 @@
 #include "i18n.h"
 #include "wifictl.h"
 #include "keyboard.h"
+#include "fnv.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define WP_CUR \
     1 /* the asset's row pools (tools/pod_ui.py WF_CUR, WF_MY, WF_OTH): the connected network, My Networks, Networks */
 #define WP_MY 16
@@ -191,15 +191,15 @@ static int wp_ksec(int id) {
 
 /* The page's signature: what a row shows, so the rows are laid out again only when it changed. */
 static unsigned wp_sig(void) {
-    unsigned h = 2166136261u, i, k;
-    h = (h ^ (unsigned)wp.on) * 16777619u;
-    h = (h ^ (unsigned)wp.st.state ^ (unsigned)wp.st.ip << 4) * 16777619u;
+    unsigned h = FNV_SEED, i, k;
+    h = (h ^ (unsigned)wp.on) * FNV_PRIME;
+    h = (h ^ (unsigned)wp.st.state ^ (unsigned)wp.st.ip << 4) * FNV_PRIME;
     for (i = 0; wp.on && i < (unsigned)wp.n; i++) {
         const wf_net *w = &wp.nets[i];
         h = (h ^ w->len ^ (unsigned)w->sec << 8 ^ (unsigned)w->level << 12 ^ (unsigned)w->known << 16 ^
              (unsigned)w->current << 17) *
-            16777619u;
-        for (k = 0; k < w->len; k++) h = (h ^ w->ssid[k]) * 16777619u;
+            FNV_PRIME;
+        for (k = 0; k < w->len; k++) h = (h ^ w->ssid[k]) * FNV_PRIME;
     }
     return h;
 }
@@ -736,7 +736,7 @@ static void wi_layout(void) {
 
 /* The network's state from the list's (the name is the key): a saved network, its Auto-Join and whether it is connected. A network that left the scan stays as it was, a forgotten one becomes an unsaved one. */
 static void wi_refresh(void) {
-    unsigned h = 2166136261u, i;
+    unsigned h = FNV_SEED, i;
     int j;
     if (!wi.win || !wp.on || !wp.alive) return;
     for (j = 0; j < wp.n && !wi_same(&wp.nets[j], &wi.net); j++) {
@@ -752,9 +752,9 @@ static void wi_refresh(void) {
         wi_route(wi.gw);
     } else
         wi.gw[0] = 0;
-    h = (h ^ wi.net.known ^ (unsigned)wi.net.off << 1 ^ (unsigned)wi.net.sec << 2 ^ (unsigned)wi.conn << 6) * 16777619u;
-    for (i = 0; wi.conn && wi.ip[i]; i++) h = (h ^ (unsigned char)wi.ip[i]) * 16777619u;
-    for (i = 0; wi.conn && wi.gw[i]; i++) h = (h ^ (unsigned char)wi.gw[i] ^ 0x100) * 16777619u;
+    h = (h ^ wi.net.known ^ (unsigned)wi.net.off << 1 ^ (unsigned)wi.net.sec << 2 ^ (unsigned)wi.conn << 6) * FNV_PRIME;
+    for (i = 0; wi.conn && wi.ip[i]; i++) h = (h ^ (unsigned char)wi.ip[i]) * FNV_PRIME;
+    for (i = 0; wi.conn && wi.gw[i]; i++) h = (h ^ (unsigned char)wi.gw[i] ^ 0x100) * FNV_PRIME;
     if (h != wi.sig) wi.sig = h, wi_layout();
 }
 
@@ -793,12 +793,13 @@ static int wi_on_join(void *ctx, void *e) {
     return RET_OK;
 }
 
-static int wi_on_scroll(void *ctx, void *e) {
-    (void)ctx;
+/* The top fade of a page's scroll view; ctx is the page's struct (wi, ws or wp), which starts with win, sv, fade. */
+static int wf_on_scroll(void *ctx, void *e) {
+    void **pg = ctx;
     (void)e;
-    if (!wi.fade) return RET_OK;
-    widget_set_visible(wi.fade, I(wi.sv, SC_YOFF) > 0, 0);
-    widget_set_sensitive(wi.fade, 0);
+    if (!pg[2]) return RET_OK;
+    widget_set_visible(pg[2], I(pg[1], SC_YOFF) > 0, 0);
+    widget_set_sensitive(pg[2], 0);
     return RET_OK;
 }
 
@@ -853,8 +854,8 @@ static void wi_open(const wf_net *w) {
     }
     wf_utf8(wi.net.ssid, wi.net.len, u, sizeof u);
     az_fit(wi.title, u);
-    widget_on(wi.sv, EVT_SCROLL, wi_on_scroll, (void *)0);
-    widget_on(wi.sv, EVT_SCROLL_END, wi_on_scroll, (void *)0);
+    widget_on(wi.sv, EVT_SCROLL, wf_on_scroll, &wi);
+    widget_on(wi.sv, EVT_SCROLL_END, wf_on_scroll, &wi);
     wi.sig = 0;
     wi_refresh();
     if (!wi.sig) wi.sig = 1, wi_layout(); /* the list had nothing to say (no supplicant): the page as it was opened */
@@ -1184,15 +1185,6 @@ static int ws_on_row(void *ctx, void *e) {
     return RET_OK;
 }
 
-static int ws_on_scroll(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    if (!ws.fade) return RET_OK;
-    widget_set_visible(ws.fade, I(ws.sv, SC_YOFF) > 0, 0);
-    widget_set_sensitive(ws.fade, 0);
-    return RET_OK;
-}
-
 static int ws_on_destroy(void *ctx, void *e) {
     (void)e;
     if (ctx != ws.win) return RET_OK;
@@ -1226,8 +1218,8 @@ static void ws_open(void) {
         navigator_back();
         return;
     }
-    widget_on(ws.sv, EVT_SCROLL, ws_on_scroll, (void *)0);
-    widget_on(ws.sv, EVT_SCROLL_END, ws_on_scroll, (void *)0);
+    widget_on(ws.sv, EVT_SCROLL, wf_on_scroll, &ws);
+    widget_on(ws.sv, EVT_SCROLL_END, wf_on_scroll, &ws);
 }
 
 /* The switch row: stock's sequence. Turning Wi-Fi on while Bluetooth is on shows the coex warning (msg_wifi_open, docs/modules/overlays.md) and leaves Bluetooth on. */
@@ -1304,15 +1296,6 @@ static int wp_tick(const void *timer) {
             wp_fetch(); /* connecting, so no scan of ours: the supplicant's own scans fill its table, read for the row's signal */
     }
     return RET_REPEAT;
-}
-
-static int wp_on_scroll(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    if (!wp.fade) return RET_OK;
-    widget_set_visible(wp.fade, I(wp.sv, SC_YOFF) > 0, 0);
-    widget_set_sensitive(wp.fade, 0);
-    return RET_OK;
 }
 
 static int wp_on_fg(void *ctx, void *e) {
@@ -1403,8 +1386,8 @@ int wifipage_open(void) {
         return -1;
     }
     wp_spin_place();
-    widget_on(wp.sv, EVT_SCROLL, wp_on_scroll, (void *)0);
-    widget_on(wp.sv, EVT_SCROLL_END, wp_on_scroll, (void *)0);
+    widget_on(wp.sv, EVT_SCROLL, wf_on_scroll, &wp);
+    widget_on(wp.sv, EVT_SCROLL_END, wf_on_scroll, &wp);
     wp.fg = 1, wp.want_id = -1, wp.cur = -1, wp.crow = -1, wp.scan_t = -1, wp.idle_t = 0;
     wp.on = wp_wifi_on();
     memset(&wp.st, 0, sizeof wp.st);

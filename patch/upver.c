@@ -241,11 +241,7 @@ static int up_hex4(const char *s, unsigned n, unsigned i) {
     int v = 0, k;
     if (i + 4 > n) return -1;
     for (k = 0; k < 4; ++k) {
-        char c = s[i + (unsigned)k];
-        int d = c >= '0' && c <= '9'   ? c - '0'
-                : c >= 'a' && c <= 'f' ? c - 'a' + 10
-                : c >= 'A' && c <= 'F' ? c - 'A' + 10
-                                       : -1;
+        int d = m1_hexval((unsigned char)s[i + (unsigned)k]);
         if (d < 0) return -1;
         v = v * 16 + d;
     }

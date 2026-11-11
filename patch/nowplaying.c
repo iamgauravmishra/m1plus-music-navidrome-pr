@@ -110,11 +110,6 @@ __attribute__((noinline)) void np_format_remaining(char *out, unsigned size, int
     np_format_clock(out, size, len - pos, 1);
 }
 
-/* color (0x..BBGGRR) as the window shows it on row y: under the black gradient (np_tint.png: black, NP_ALPHA_TOP at the first row to NP_ALPHA_BOTTOM at the last). */
-__attribute__((noinline)) unsigned np_shade(unsigned color, unsigned y) {
-    return m1_shade(color, y, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H);
-}
-
 /* The coverage of the area outside a quarter circle of radius NP_ART_R in the corner square of NP_ART_R pixels
  * (the circle's centre at the square's inner corner), 0..255: each pixel is sampled 8 x 8 times. The same numbers
  * as the PNG mask of the earlier builds (test/pod/nowplaying.py). */
@@ -145,22 +140,24 @@ static int np_on_art_paint(void *ctx, void *e) {
  * empty. */
 __attribute__((noinline)) unsigned np_file_key(const char *path) {
     unsigned char buf[512];
-    unsigned h = 2166136261u, total = 0, n, i;
+    unsigned h = FNV_SEED, total = 0, n, i;
     void *f = fopen(path, "rb");
     if (!f) return 0;
     while (total < NP_HASH_MAX && (n = fread(buf, 1, sizeof buf, f)) > 0) {
-        for (i = 0; i < n; ++i) h = (h ^ buf[i]) * 16777619u;
+        for (i = 0; i < n; ++i) h = (h ^ buf[i]) * FNV_PRIME;
         total += n;
     }
     fclose(f);
-    h = (h ^ total) * 16777619u;
+    h = (h ^ total) * FNV_PRIME;
     return total ? h | !h : 0;
 }
 
 /* EXPERIMENTAL: the status bar takes the colour the page has on its first row, so the bar and the page read as one surface
- * (m1_bar_tint / m1_bar_black, patch/common.c, shared with the album page). np_bar_color is np_shade(color, 0), darkened
+ * (m1_bar_tint / m1_bar_black, patch/common.c, shared with the album page). np_bar_color is the colour (0x..BBGGRR) under the black gradient on the first row (np_tint.png: black, NP_ALPHA_TOP at the first row to NP_ALPHA_BOTTOM at the last), darkened
  * until the bar's white glyphs keep 4.5:1 (m1_bar_color). */
-__attribute__((noinline)) unsigned np_bar_color(unsigned color) { return m1_bar_color(np_shade(color, 0)); }
+__attribute__((noinline)) unsigned np_bar_color(unsigned color) {
+    return m1_bar_color(m1_shade(color, 0, NP_ALPHA_TOP, NP_ALPHA_BOTTOM, NP_WIN_H));
+}
 
 /* The bar in the page's colour, while the page is in front and its events are registered. */
 static void np_bar_apply(void) {
@@ -233,8 +230,8 @@ __attribute__((noinline)) unsigned np_cover_sig(const char *path, int src) {
     if (size <= 0) return 0;
     track = cc_playing();
     h = np_hash(track ? cc_str(track, REC_PATH) : "");
-    h = (h ^ (unsigned)size) * 16777619u;
-    h = (h ^ (unsigned)src) * 16777619u;
+    h = (h ^ (unsigned)size) * FNV_PRIME;
+    h = (h ^ (unsigned)src) * FNV_PRIME;
     return h | !h;
 }
 
@@ -409,7 +406,7 @@ static int np_starts(const char *s, const char *w) {
 static int np_digit(char c) { return c >= '0' && c <= '9'; }
 
 __attribute__((noinline)) unsigned np_hash(const char *s) {
-    unsigned h = m1_fnv(2166136261u, s);
+    unsigned h = m1_fnv(FNV_SEED, s);
     return h | !h;
 }
 

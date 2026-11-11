@@ -25,7 +25,6 @@
 #include "common.h"
 #include "i18n.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 #define HC_START_MS \

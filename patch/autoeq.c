@@ -33,8 +33,6 @@
 
 extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message box */
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-
 #define AE_MAX 20 /* results kept (the Podcasts' search shows 25; sonix 20) */
 #define AE_NAME 64
 #define AE_SRC 24
@@ -375,7 +373,7 @@ static void ae_cand(const ae_ent *e, int k, char *out) {
     snprintf(out, PEQ_NAME, "%s%s.txt", base, suf);
 }
 
-static void ae_stamp(const ae_ent *e, char *out, unsigned size) { snprintf(out, size, "# AutoEq: %s", e->path); }
+static void ae_stamp(const ae_ent *e, char *out, unsigned size) { snprintf(out, size, PEQ_STAMP "%s", e->path); }
 
 static int ae_stamped(const char *file, const ae_ent *e) { /* the file's first line is the result's stamp */
     char path[PEQ_NAME + 16], want[AE_PATH + 16], buf[AE_PATH + 32];

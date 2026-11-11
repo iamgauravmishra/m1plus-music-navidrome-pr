@@ -53,15 +53,7 @@ unsigned m1_url_decode(char *out, unsigned size, const char *in, unsigned n) {
     for (i = 0; i < n && o + 1 < size; ++i) {
         unsigned char c = (unsigned char)in[i];
         if (c == '%' && i + 2 < n) {
-            int h = 0, l = 0, k;
-            for (k = 1; k <= 2; ++k) {
-                unsigned char d = (unsigned char)in[i + k];
-                int v = d - '0' < 10u ? d - '0' : (d | 32) - 'a' < 6u ? (d | 32) - 'a' + 10 : -1;
-                if (k == 1)
-                    h = v;
-                else
-                    l = v;
-            }
+            int h = m1_hexval((unsigned char)in[i + 1]), l = m1_hexval((unsigned char)in[i + 2]);
             if (h >= 0 && l >= 0) c = (unsigned char)(h << 4 | l), i += 2;
         }
         out[o++] = (char)c;
@@ -82,7 +74,7 @@ int m1_card_mounted(void) {
              a[9] == b[9]); /* f_type, f_fsid (MIPS o32 statfs words 0, 8, 9): the same, nothing mounted */
 }
 
-static int m1_write_all(int fd, const void *data, unsigned n) {
+int m1_write_all(int fd, const void *data, unsigned n) {
     unsigned at = 0;
     while (at < n) {
         int w = write(fd, (const char *)data + at, n - at);
@@ -120,6 +112,35 @@ int m1_card_write(const char *dir, const char *path, const char *tmp, const void
     if (d < 0) return -1;
     ok = fsync(d) == 0;
     return (close(d) == 0 && ok) ? 0 : -1;
+}
+
+unsigned m1_urlenc(char *out, unsigned cap, unsigned used, const char *s) {
+    static const char hex[] = "0123456789ABCDEF";
+    unsigned i;
+    if (!s) return 0;
+    for (i = 0; s[i]; ++i) {
+        unsigned c = (unsigned char)s[i];
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+            c == '.' || c == '~') {
+            if (used + 1 >= cap) return 0;
+            out[used++] = (char)c;
+        } else {
+            if (used + 3 >= cap) return 0;
+            out[used++] = '%', out[used++] = hex[c >> 4], out[used++] = hex[c & 15];
+        }
+    }
+    return used;
+}
+
+/* KB free for a non-root user on the file system of path (MIPS o32 statfs: f_bsize is word 1, f_bavail word 7); 0 when statfs fails. */
+int m1_free_kb(const char *path, unsigned *kb) {
+    unsigned fs[32];
+    unsigned long long b;
+    memset(fs, 0, sizeof fs);
+    if (statfs(path, fs)) return 0;
+    b = (unsigned long long)fs[7] * fs[1] >> 10;
+    *kb = b > 0xffffffffull ? 0xffffffffu : (unsigned)b;
+    return 1;
 }
 
 int m1_on_back(void *ctx, void *e) {
@@ -603,18 +624,6 @@ static void pod_fill_row(void *canvas, int view_h, int x, int y, int w, unsigned
     canvas_fill_rect(canvas, x, y, w, 1);
 }
 
-/* The integer square root of v (the largest s with s * s <= v). */
-static unsigned pod_isqrt(unsigned v) {
-    unsigned s = 0, bit = 1u << 30;
-    while (bit > v) bit >>= 2;
-    for (; bit; bit >>= 2)
-        if (v >= s + bit)
-            v -= s + bit, s = (s >> 1) + bit;
-        else
-            s >>= 1;
-    return s;
-}
-
 void m1_capsule(void *canvas, int view_h, int x, int y, int w, int h, int r, unsigned c) {
     int i, top, bottom;
     unsigned a;
@@ -624,7 +633,7 @@ void m1_capsule(void *canvas, int view_h, int x, int y, int w, int h, int r, uns
     /* the corner rows, from the outside in: the circle's chord on the row's middle, its ends smoothed by a pixel of partial cover */
     for (i = 0; i < r; ++i) {
         int dy = 2 * (r - i) - 1, inset, x0, f;
-        inset = r * 256 - (int)(pod_isqrt((unsigned)(4 * r * r - dy * dy) << 16) / 2); /* in 1/256 px */
+        inset = r * 256 - (int)(m1_isqrt((unsigned)(4 * r * r - dy * dy) << 16) / 2); /* in 1/256 px */
         x0 = inset >> 8, f = inset & 255;
         a = (unsigned)(255 - f);
         top = y + i, bottom = y + h - 1 - i;
@@ -672,4 +681,50 @@ void m1_segmented(void *canvas, int view_h, int x, int y, int w, int h, int n, i
         if (len[k] > 0 && rect[1] >= 0 && rect[1] + SEG_LABEL_H <= view_h)
             canvas_draw_text_in_rect(canvas, label[k], (unsigned)len[k], rect);
     }
+}
+
+unsigned m1_isqrt(unsigned v) {
+    unsigned r = 0, bit = 1u << 30;
+    while (bit > v) bit >>= 2;
+    while (bit) {
+        if (v >= r + bit)
+            v -= r + bit, r = (r >> 1) + bit;
+        else
+            r >>= 1;
+        bit >>= 2;
+    }
+    return r;
+}
+
+void *m1_asset_rgba(void *win, const char *name, unsigned w, unsigned h, int pm) {
+    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
+    unsigned bitmap[32], format, x, y, ok = 0, *out, stride;
+    const unsigned char *data;
+    void *bmp = (void *)0;
+    memset(bitmap, 0, sizeof bitmap);
+    if (widget_load_image(win, name, bitmap)) return bmp;
+    format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
+    data =
+        format < 4 && bitmap[0] == w && bitmap[1] == h ? bitmap_lock_buffer_for_read(bitmap) : (const unsigned char *)0;
+    if (data) {
+        stride = bitmap_get_line_length(bitmap);
+        bmp = bitmap_create_ex(w, h, w * 4, BITMAP_RGBA8888);
+        out = bmp ? (unsigned *)bitmap_lock_buffer_for_write(bmp) : (unsigned *)0;
+        if (out) {
+            for (y = 0; y < h; ++y) {
+                const unsigned char *s = data + y * stride;
+                for (x = 0; x < w; ++x, s += 4) {
+                    unsigned r = s[at[format][0]], g = s[at[format][1]], b = s[at[format][2]], a = s[at[format][3]];
+                    if (pm) r = (r * a + 127) / 255, g = (g * a + 127) / 255, b = (b * a + 127) / 255;
+                    out[y * w + x] = r | g << 8 | b << 16 | a << 24;
+                }
+            }
+            ok = 1;
+            bitmap_unlock_buffer(bmp);
+        }
+        bitmap_unlock_buffer(bitmap);
+    }
+    widget_unload_image(win, bitmap);
+    if (!ok && bmp) bitmap_destroy(bmp), bmp = (void *)0;
+    return bmp;
 }

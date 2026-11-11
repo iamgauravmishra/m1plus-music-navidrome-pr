@@ -126,59 +126,6 @@ static struct {
  */
 static unsigned *tp_pix(unsigned *d, int pitch, int x, int y) { return d + x * pitch + (TP_H - 1 - y); }
 
-static unsigned tp_mix(unsigned v, unsigned c, unsigned a) { /* c over v by a (of 255), opaque result */
-    unsigned w = a + (a >> 7);
-    return 0xff000000u | (((v & 0xff00ffu) * (256 - w) + (c & 0xff00ffu) * w) >> 8 & 0xff00ffu) |
-           (((v & 0xff00u) * (256 - w) + (c & 0xff00u) * w) >> 8 & 0xff00u);
-}
-
-__attribute__((noinline)) unsigned tp_isqrt(unsigned v) {
-    unsigned r = 0, bit = 1u << 30;
-    while (bit > v) bit >>= 2;
-    while (bit) {
-        if (v >= r + bit)
-            v -= r + bit, r = (r >> 1) + bit;
-        else
-            r >>= 1;
-        bit >>= 2;
-    }
-    return r;
-}
-
-/* A bitmap of ours from the asset `name`, w x h as the image is stored (turned), as RGBA8888 whatever order the decoder gave. NULL when it cannot be loaded or has another size. */
-static void *tp_load(const char *name, unsigned w, unsigned h) {
-    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
-    unsigned bitmap[32], format, x, y, ok = 0, *out;
-    const unsigned char *data;
-    unsigned stride;
-    void *bmp;
-    memset(bitmap, 0, sizeof bitmap);
-    if (widget_load_image(tp.win, name, bitmap)) return (void *)0;
-    format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
-    bmp = (void *)0;
-    data =
-        format < 4 && bitmap[0] == w && bitmap[1] == h ? bitmap_lock_buffer_for_read(bitmap) : (const unsigned char *)0;
-    if (data) {
-        stride = bitmap_get_line_length(bitmap);
-        bmp = bitmap_create_ex(w, h, w * 4, BITMAP_RGBA8888);
-        out = bmp ? (unsigned *)bitmap_lock_buffer_for_write(bmp) : (unsigned *)0;
-        if (out) {
-            for (y = 0; y < h; ++y) {
-                const unsigned char *s = data + y * stride;
-                for (x = 0; x < w; ++x, s += 4)
-                    out[y * w + x] = (unsigned)s[at[format][0]] | (unsigned)s[at[format][1]] << 8 |
-                                     (unsigned)s[at[format][2]] << 16 | (unsigned)s[at[format][3]] << 24;
-            }
-            ok = 1;
-        }
-        if (out) bitmap_unlock_buffer(bmp);
-        bitmap_unlock_buffer(bitmap);
-    }
-    widget_unload_image(tp.win, bitmap);
-    if (!ok && bmp) bitmap_destroy(bmp), bmp = (void *)0;
-    return bmp;
-}
-
 /* A pixel moved by alpha a (of 256) towards white or black, channel by channel (tools/tape_art.py blend_to). */
 static unsigned tp_blend(unsigned v, unsigned a, unsigned white) {
     unsigned o = v & 0xff000000u, k;
@@ -297,7 +244,7 @@ static unsigned tp_pack(unsigned under, int d, int R, int dx, int dy) {
         unsigned v = ((base[i] * mb >> 8) + (rise[i] * k >> 16)) * e >> 8;
         c |= (v > 255 ? 255 : v) << 8 * i;
     }
-    return cov >= 16 ? c : tp_mix(under, c, (unsigned)cov * 255 / 16);
+    return cov >= 16 ? c : m1_mix(under, c, (unsigned)cov * 255 / 16);
 }
 
 static int tp_in_clear(int x, int y) {
@@ -332,7 +279,7 @@ static unsigned tp_reel_px(const unsigned *base, const unsigned *top, int x, int
     if (x >= TP_TOP_X && x < TP_TOP_X + TP_TOP_W && y >= TP_TOP_Y && y < TP_TOP_Y + TP_TOP_H) {
         t = top + (x - TP_TOP_X) * TP_TOP_H + (TP_TOP_H - 1 - (y - TP_TOP_Y));
         a = *t >> 24;
-        if (a) c = tp_mix(c, *t, a);
+        if (a) c = m1_mix(c, *t, a);
     }
     return c;
 }
@@ -353,7 +300,7 @@ static void tp_reel_rect(unsigned *f, int pitch, const unsigned *base, const uns
         for (x = hx > x0 ? hx : x0; x < hx + TP_HUB_PX && x < x1; ++x)
             for (y = hy > y0 ? hy : y0; y < hy + TP_HUB_PX && y < y1; ++y) {
                 unsigned s = tp_sprite(hubs, TP_HUB_PX, tp.hub[k], x - hx, y - hy), a = s >> 24;
-                if (a) *tp_pix(f, pitch, x, y) = tp_mix(*tp_pix(f, pitch, x, y), s, a);
+                if (a) *tp_pix(f, pitch, x, y) = m1_mix(*tp_pix(f, pitch, x, y), s, a);
             }
     }
 }
@@ -411,7 +358,7 @@ static void tp_marks(unsigned which) { /* which: bit 0 the play / pause mark, 1 
                                      : (i == 2 ? tp_sprite(sc, TP_MARK_PX, 0, u, v)
                                                : tp_sprite(m, TP_MARK_PX, cell, u, v));
                     *p = *tp_pix((unsigned *)base, FRAME_W, mx + u, my + v);
-                    if (s >> 24) *p = tp_mix(*p, s, s >> 24);
+                    if (s >> 24) *p = m1_mix(*p, s, s >> 24);
                 }
             tp_dirty(mx, my, mx + TP_MARK_PX, my + TP_MARK_PX);
         }
@@ -454,7 +401,7 @@ static void tp_field(unsigned *f, const unsigned *base, void *font, int id, cons
         for (x = 0; x < TP_BADGE_W; ++x)
             for (y = 0; y < TP_BADGE_H; ++y) {
                 unsigned c = s[x * TP_BADGE_H + (TP_BADGE_H - 1 - y)], *p = tp_pix(f, FRAME_W, fd->x0 + x, fd->y0 + y);
-                if (c >> 24) *p = tp_mix(*p, c, c >> 24);
+                if (c >> 24) *p = m1_mix(*p, c, c >> 24);
             }
         bitmap_unlock_buffer(tp.sticker);
     }
@@ -485,7 +432,7 @@ static void tp_field(unsigned *f, const unsigned *base, void *font, int id, cons
                     int gx = pen + g.x + c, gy = y + g.y + ascent + r;
                     if (a && gx >= fd->x0 && gx < fd->x1 && gy >= fd->y0 && gy < fd->y1) {
                         unsigned *p = tp_pix(f, FRAME_W, gx, gy);
-                        *p = tp_mix(*p, theme_rgb[tp.theme][fd->rgb], a);
+                        *p = m1_mix(*p, theme_rgb[tp.theme][fd->rgb], a);
                     }
                 }
         }
@@ -686,11 +633,11 @@ static int tp_theme_load(int theme) {
     const unsigned *s = (const unsigned *)0;
     int i;
     snprintf(name, sizeof name, "tape_shell_%s", theme_name[theme]);
-    b[0] = tp_load(name, TP_H, TP_W);
+    b[0] = m1_asset_rgba(tp.win, name, TP_H, TP_W, 0);
     snprintf(name, sizeof name, "tape_hubs_%s", theme_name[theme]);
-    b[1] = tp_load(name, TP_HUB_PX, TP_HUB_PX * TP_SPRITES);
+    b[1] = m1_asset_rgba(tp.win, name, TP_HUB_PX, TP_HUB_PX * TP_SPRITES, 0);
     snprintf(name, sizeof name, "tape_marks_%s", theme_name[theme]);
-    b[2] = tp_load(name, TP_MARK_PX, TP_MARK_PX * 3);
+    b[2] = m1_asset_rgba(tp.win, name, TP_MARK_PX, TP_MARK_PX * 3, 0);
     if (b[0] && b[1] && b[2] && tp.frame) {
         tp_finish(b[0]);
         f = (unsigned *)bitmap_lock_buffer_for_write(tp.frame);
@@ -745,8 +692,8 @@ __attribute__((noinline)) void tp_radii(int pos, int len, int *rs, int *rt) {
     if (p > 65536u) p = 65536u;
     take2 =
         TP_PACK_MIN * TP_PACK_MIN * 256u + (unsigned)((TP_PACK_MAX * TP_PACK_MAX - TP_PACK_MIN * TP_PACK_MIN) * p >> 8);
-    *rt = (int)tp_isqrt(take2);
-    *rs = (int)tp_isqrt((TP_PACK_MAX * TP_PACK_MAX + TP_PACK_MIN * TP_PACK_MIN) * 256u - take2);
+    *rt = (int)m1_isqrt(take2);
+    *rs = (int)m1_isqrt((TP_PACK_MAX * TP_PACK_MAX + TP_PACK_MIN * TP_PACK_MIN) * 256u - take2);
 }
 
 /* One look at everything: updates the state, draws what is not text into the frame, marks the text to redraw and what to invalidate. */
@@ -957,11 +904,7 @@ int tape_theme(void) {
 }
 
 /* Choose the theme (0 Normal, 1 Chrome, 2 Metal, 3 by the track), saved atomically; the theme, or -1 (an unknown theme, or one that could not be saved: the saved one is unchanged). */
-int tape_theme_set(int theme) {
-    static const char *const text[TP_THEME_AUTO + 1] = {"0\n", "1\n", "2\n", "3\n"};
-    if (theme < 0 || theme > TP_THEME_AUTO) return -1;
-    return home_write_atomic(TAPETHEME_FILE, TAPETHEME_TMP, text[theme]) == 0 ? theme : -1;
-}
+int tape_theme_set(int theme) { return home_set_digit(TAPETHEME_FILE, TAPETHEME_TMP, theme, TP_THEME_AUTO); }
 
 /* ---------------------------------------------------------------------------
  * Open: the More dialog's Cassette Mode row. 0 once the page is up (or already open); -1 when it could not open (nothing is left of it).
@@ -988,12 +931,13 @@ int tape_open(void) {
             theme = t ? q.theme : 0;
         }
         tp.frame = bitmap_create_ex(TP_H, TP_W, TP_H * 4, BITMAP_RGBA8888);
-        tp.top = tp_load("tape_top", TP_TOP_H, TP_TOP_W);
-        tp.screw = tp_load("tape_screw", TP_MARK_PX, TP_MARK_PX);
-        tp.sticker = tp_load("tape_badge", TP_BADGE_H, TP_BADGE_W); /* missing: the page opens without the sticker */
+        tp.top = m1_asset_rgba(tp.win, "tape_top", TP_TOP_H, TP_TOP_W, 0);
+        tp.screw = m1_asset_rgba(tp.win, "tape_screw", TP_MARK_PX, TP_MARK_PX, 0);
+        tp.sticker = m1_asset_rgba(tp.win, "tape_badge", TP_BADGE_H, TP_BADGE_W,
+                                   0); /* missing: the page opens without the sticker */
         tp.lut = (unsigned short *)calloc(TP_LUT_N, sizeof(unsigned short));
         if (tp.frame && tp.top && tp.screw && tp.lut && tp_theme_load(theme)) {
-            for (d2 = 0; d2 < TP_LUT_N; ++d2) tp.lut[d2] = (unsigned short)tp_isqrt(d2 << 6);
+            for (d2 = 0; d2 < TP_LUT_N; ++d2) tp.lut[d2] = (unsigned short)m1_isqrt(d2 << 6);
             tp.ang[1] = 400, tp.hub[1] = 400 / 80; /* the reels do not start in step */
             tp.fg = 1;
             tp.rs = tp.rt = -1;

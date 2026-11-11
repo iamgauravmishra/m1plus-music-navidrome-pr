@@ -156,6 +156,8 @@ extern int home_off(void);
 extern void fr_boot(void);
 extern int home_write_atomic(const char *path, const char *tmp,
                              const char *data); /* temp, fsync, rename, directory fsync; 0 = done */
+extern int home_set_digit(const char *file, const char *tmp, int v,
+                          int max); /* "v\n" atomically for 0 <= v <= max <= 9: v, or -1 (out of range, not written) */
 extern int set_read(const char *path, int def); /* a one-character setting file: "x" or "x\n" gives x, else def */
 extern void home_menu_opened(void *win, int settings, int entry);
 extern void

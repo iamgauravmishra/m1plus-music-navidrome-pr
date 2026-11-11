@@ -16,8 +16,6 @@
 #include "sbapi.h"
 #include "palette.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-
 /* A stock list copied; NULL when empty or the copy failed. */
 static void *ls_copy(void *list) {
     void *copy;

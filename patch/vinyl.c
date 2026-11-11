@@ -109,12 +109,6 @@ VN_HOT unsigned vn_lerp(unsigned p, unsigned q, unsigned f) { /* p to q by f / 2
            ((((p >> 8) & 0xff00ffu) * g + ((q >> 8) & 0xff00ffu) * f) & 0xff00ff00u);
 }
 
-VN_HOT unsigned vn_mix(unsigned v, unsigned c, unsigned a) { /* c over v by a (of 255), opaque result */
-    unsigned w = a + (a >> 7);
-    return 0xff000000u | (((v & 0xff00ffu) * (256 - w) + (c & 0xff00ffu) * w) >> 8 & 0xff00ffu) |
-           (((v & 0xff00u) * (256 - w) + (c & 0xff00u) * w) >> 8 & 0xff00u);
-}
-
 VN_HOT unsigned vn_dim(unsigned v, unsigned a) { /* black over v by a */
     unsigned w = 256 - (a + (a >> 7));
     return 0xff000000u | ((v & 0xff00ffu) * w >> 8 & 0xff00ffu) | ((v & 0xff00u) * w >> 8 & 0xff00u);
@@ -165,40 +159,6 @@ VN_HOT unsigned vn_label(const unsigned *src, int px, int py) {
 /* ---------------------------------------------------------------------------
  * Pictures
  */
-/* A bitmap of ours from the asset `name`, w x h, as RGBA8888 whatever order the decoder gave (premultiplied when pm). NULL when it cannot be loaded or has another size. */
-static void *vn_load(const char *name, unsigned w, unsigned h, int pm) {
-    static const unsigned char at[4][4] = BITMAP_RGBA_AT;
-    unsigned bitmap[32], format, x, y, ok = 0, *out, stride;
-    const unsigned char *data;
-    void *bmp = (void *)0;
-    memset(bitmap, 0, sizeof bitmap);
-    if (widget_load_image(vn.win, name, bitmap)) return bmp;
-    format = (unsigned)(*(unsigned short *)((char *)bitmap + BITMAP_FORMAT)) - 1u;
-    data =
-        format < 4 && bitmap[0] == w && bitmap[1] == h ? bitmap_lock_buffer_for_read(bitmap) : (const unsigned char *)0;
-    if (data) {
-        stride = bitmap_get_line_length(bitmap);
-        bmp = bitmap_create_ex(w, h, w * 4, BITMAP_RGBA8888);
-        out = bmp ? (unsigned *)bitmap_lock_buffer_for_write(bmp) : (unsigned *)0;
-        if (out) {
-            for (y = 0; y < h; ++y) {
-                const unsigned char *s = data + y * stride;
-                for (x = 0; x < w; ++x, s += 4) {
-                    unsigned r = s[at[format][0]], g = s[at[format][1]], b = s[at[format][2]], a = s[at[format][3]];
-                    if (pm) r = (r * a + 127) / 255, g = (g * a + 127) / 255, b = (b * a + 127) / 255;
-                    out[y * w + x] = r | g << 8 | b << 16 | a << 24;
-                }
-            }
-            ok = 1;
-            bitmap_unlock_buffer(bmp);
-        }
-        bitmap_unlock_buffer(bitmap);
-    }
-    widget_unload_image(vn.win, bitmap);
-    if (!ok && bmp) bitmap_destroy(bmp), bmp = (void *)0;
-    return bmp;
-}
-
 /* The pictures a plinth theme changes, in the order base, lid, arm, armsh, cap, keys (tools/vinyl_art.py tname: Graphite's keep their names), and the page asset of each theme. */
 static const char *const vn_names[VN_THEMES][6] = {
     {"vinyl_base", "vinyl_lid", "vinyl_arm", "vinyl_armsh", "vinyl_cap", "vinyl_keys"},
@@ -319,7 +279,6 @@ static void vn_unlock(void) {
 /* The rectangle (x0, y0) .. (x1, y1) of the frame above the key band: the base, the label inside VN_LAB_IN, the lid, the arm's shadow and the arm, the cap.
  * The layers are locked (vn_lock). */
 static void vn_row(int y, int x0, int x1);
-static int vn_isqrt(int n);
 static int vn_retint(void);
 void vn_cols(int c, int s, int ox, int oy, int y, int *x0, int *x1);
 
@@ -347,7 +306,7 @@ static void vn_row(int y, int x0, int x1) {
     for (x = x0; x < x1; ++x) f[x] = b[x] | 0xff000000u;
     vy = 2 * (y - VN_REC_Y) + 1, e = 4 * VN_LAB_IN * VN_LAB_IN - vy * vy;
     if (e >= 0) { /* the label: |2 (x - VN_REC_X) + 1| <= h */
-        int h = vn_isqrt(e), vx, lx, ly, dlx = 2 * vn.lc, dly = -2 * vn.ls;
+        int h = (int)m1_isqrt(e), vx, lx, ly, dlx = 2 * vn.lc, dly = -2 * vn.ls;
         a = VN_REC_X - ((h + 1) >> 1), e = VN_REC_X + ((h - 1) >> 1) + 1;
         if (a < x0) a = x0;
         if (e > x1) e = x1;
@@ -358,7 +317,7 @@ static void vn_row(int y, int x0, int x1) {
         const unsigned *lid = vl.lid + (y - VN_LID_Y) * VN_LID_PX - VN_LID_X;
         a = x0 < VN_LID_X ? VN_LID_X : x0, e = x1 > VN_LID_X + VN_LID_PX ? VN_LID_X + VN_LID_PX : x1;
         for (x = a; x < e; ++x)
-            if ((l = lid[x]) >> 24) f[x] = vn_mix(f[x], l, l >> 24);
+            if ((l = lid[x]) >> 24) f[x] = m1_mix(f[x], l, l >> 24);
     }
     if (vn.armed && y >= vn.ab[1] && y < vn.ab[3]) {
         int px, py, sx, sy, dx = 2 * vn.ac, dy = -2 * vn.as, pvx, pvy = 2 * (y - VN_PIV_Y) + 1,
@@ -384,19 +343,8 @@ static void vn_row(int y, int x0, int x1) {
         const unsigned *cap = vl.cap + (y - VN_CAP_Y) * VN_CAP_PX - VN_CAP_X;
         a = x0 < VN_CAP_X ? VN_CAP_X : x0, e = x1 > VN_CAP_X + VN_CAP_PX ? VN_CAP_X + VN_CAP_PX : x1;
         for (x = a; x < e; ++x)
-            if ((l = cap[x]) >> 24) f[x] = vn_mix(f[x], l, l >> 24);
+            if ((l = cap[x]) >> 24) f[x] = m1_mix(f[x], l, l >> 24);
     }
-}
-
-static int vn_isqrt(int n) { /* floor(sqrt(n)), n >= 0 */
-    int r = 0, bit = 1 << 20;
-    while (bit > n) bit >>= 2;
-    for (; bit; bit >>= 2)
-        if (n >= r + bit)
-            n -= r + bit, r = (r >> 1) + bit;
-        else
-            r >>= 1;
-    return r;
 }
 
 /* The label turned: only the rows' spans inside its circle change (the square's corners do not), each a pixel wide each side; the square is invalidated. */
@@ -406,7 +354,7 @@ static void vn_label_draw(void) {
     for (y = VN_REC_Y - VN_LAB_IN; y <= VN_REC_Y + VN_LAB_IN; ++y) {
         int vy = 2 * (y - VN_REC_Y) + 1, r2 = 4 * VN_LAB_IN * VN_LAB_IN - vy * vy, h;
         if (r2 < 0) continue;
-        h = (vn_isqrt(r2) + 1) / 2 + 1; /* |2 (x - VN_REC_X) + 1| <= sqrt(r2) inside this */
+        h = ((int)m1_isqrt(r2) + 1) / 2 + 1; /* |2 (x - VN_REC_X) + 1| <= sqrt(r2) inside this */
         if (y >= 0 && y < VN_BAND_Y0) vn_row(y, VN_REC_X - h < 0 ? 0 : VN_REC_X - h, VN_REC_X + h);
     }
     vn_dirty(VN_REC_X - VN_LAB_IN < 0 ? 0 : VN_REC_X - VN_LAB_IN, VN_REC_Y - VN_LAB_IN, VN_REC_X + VN_LAB_IN + 1,
@@ -884,7 +832,7 @@ static int vn_on_touch(void *ctx, void *e) {
 
 /* ---------------------------------------------------------------------------
  * The record's colour (Settings > Now Playing > Record: 0 Black, 1 Cover; docs/modules/vinyl.md "Record colours"). Black is the installed base as it is. Cover is composed into the page's own
- * copy of the base (vn.base is a copy vn_load made: never the image manager's bitmap) when the page opens and on each track change, so every look reads that base exactly as it reads the black
+ * copy of the base (vn.base is a copy m1_asset_rgba made: never the image manager's bitmap) when the page opens and on each track change, so every look reads that base exactly as it reads the black
  * one and costs the same. vinyl_rec holds the record map t in its red channel (0 where the base stays); the colour is five stops (r, g, b) at t = 0, 118, 190, 235, 255 made into a 256 entry
  * table by vn_ramp. Inside the rim a pixel is the table's colour (opaque); a pixel of the rim (the disc's coverage under 1) is the installed base's (kept at the first recolour: vr.rim) plus the colour's difference from the black record's
  * rim (VN_REC_K) by the coverage: the base already holds the plinth and the record's shadow there (whatever the theme), so the picture carries none of it. tools/vinyl_art.py ramp_table,
@@ -937,7 +885,7 @@ static int vn_recolour(const unsigned char (*st)[3]) {
                 vx = 2 * (x + VN_RB_X0 - VN_REC_X) + 1, d2 = vx * vx + vy * vy, w = vr.w[m];
                 if (d2 > (2 * VN_REC_R - 2) *
                              (2 * VN_REC_R - 2)) { /* the rim: the disc's coverage of this pixel, in 1/8 pixel */
-                    int c = 8 * VN_REC_R + 4 - vn_isqrt(16 * d2), i;
+                    int c = 8 * VN_REC_R + 4 - (int)m1_isqrt(16 * d2), i;
                     unsigned cov = c <= 0 ? 0 : c >= 8 ? 255 : (unsigned)c * 32, b = o[x], out = 0xff000000u;
                     if (ri <
                         VN_RIM_MAX) { /* the first recolour: the base is still the installed one; later ones blend from what it saved */
@@ -968,21 +916,13 @@ static int vn_recolour(const unsigned char (*st)[3]) {
 int vinyl_theme(void) { return set_read(VINYLTHEME_FILE, 0) == '1'; }
 
 /* Choose the theme (0 Graphite, 1 Snow), saved atomically; the theme, or -1 (unknown, or not saved: the saved one is unchanged). */
-int vinyl_theme_set(int theme) {
-    static const char *const text[VN_THEMES] = {"0\n", "1\n"};
-    if (theme < 0 || theme >= VN_THEMES) return -1;
-    return home_write_atomic(VINYLTHEME_FILE, VINYLTHEME_TMP, text[theme]) == 0 ? theme : -1;
-}
+int vinyl_theme_set(int theme) { return home_set_digit(VINYLTHEME_FILE, VINYLTHEME_TMP, theme, VN_THEMES - 1); }
 
 /* The saved colour: '1' Cover (an optional newline), anything else or no file Black; reading never writes. */
 int vinyl_record(void) { return set_read(VINYLREC_FILE, 0) == '1'; }
 
 /* Choose the colour (0 Black, 1 Cover), saved atomically; the colour, or -1 (unknown, or not saved: the saved one is unchanged). */
-int vinyl_record_set(int rec) {
-    static const char *const text[VN_RECS] = {"0\n", "1\n"};
-    if (rec < 0 || rec >= VN_RECS) return -1;
-    return home_write_atomic(VINYLREC_FILE, VINYLREC_TMP, text[rec]) == 0 ? rec : -1;
-}
+int vinyl_record_set(int rec) { return home_set_digit(VINYLREC_FILE, VINYLREC_TMP, rec, VN_RECS - 1); }
 
 /* The Cover colour: the record tinted from the decoded cover (vn.cover, VN_LAB_PX square). The mean colour of each cell of a 16 x 16 grid; the chroma-weighted mean of the cells whose chroma
  * (max - min) is at least the grid's mean; its saturation clamped to 170 .. 235 and its value to 125 .. 190 (the hue kept); then the ramp (tools/vinyl_art.py cover_tint_px and tint_stops are the
@@ -1051,7 +991,7 @@ static int vn_retint(void) {
     }
     if (vn.tinted) { /* back to black: only the pixels vn_recolour wrote, so the plinth keeps its grain: inside the rim the
                         installed base's (no grain there), the rim the pixels it saved (grained where the plinth shows through) */
-        void *b = vn_load(vn_names[vn.theme][0], VN_W, VN_H, 0);
+        void *b = m1_asset_rgba(vn.win, vn_names[vn.theme][0], VN_W, VN_H, 0);
         unsigned *src = b ? (unsigned *)bitmap_lock_buffer_for_read(b) : (unsigned *)0,
                  *dst = src ? (unsigned *)bitmap_lock_buffer_for_write(vn.base) : (unsigned *)0;
         int x, y, ri = 0;
@@ -1064,7 +1004,8 @@ static int vn_retint(void) {
                     int vx = 2 * (x + VN_RB_X0 - VN_REC_X) + 1, d2 = vx * vx + vy * vy;
                     if (d2 <= (2 * VN_REC_R - 2) * (2 * VN_REC_R - 2))
                         o[x] = s[x];
-                    else if (d2 < (2 * VN_REC_R + 2) * (2 * VN_REC_R + 2) && 8 * VN_REC_R + 4 - vn_isqrt(16 * d2) > 0)
+                    else if (d2 < (2 * VN_REC_R + 2) * (2 * VN_REC_R + 2) &&
+                             8 * VN_REC_R + 4 - (int)m1_isqrt(16 * d2) > 0)
                         o[x] = ri < VN_RIM_MAX ? vr.rim[ri] : s[x], ++ri; /* vn_recolour's rim pixels, in its order */
                 }
             }
@@ -1098,14 +1039,14 @@ int vinyl_open(void) {
     vn.status = widget_lookup(vn.win, "vn_status", 1);
     if (vn.view && vn.title && vn.title2 && vn.artist && vn.times && vn.status) {
         unsigned *f;
-        vn.base = vn_load(vn_names[vn.theme][0], VN_W, VN_H, 0);
+        vn.base = m1_asset_rgba(vn.win, vn_names[vn.theme][0], VN_W, VN_H, 0);
         if (vn.base) vn_grain(vn.base, 0, 0, VN_W, VN_H);
-        vn.keys = vn_load(vn_names[vn.theme][5], VN_KEYS_W, VN_BAND_Y1 - VN_BAND_Y0, 0);
-        vn.arm = vn_load(vn_names[vn.theme][2], VN_ARM_W, VN_ARM_H, 1);
-        vn.sh = vn_load(vn_names[vn.theme][3], VN_ARM_W, VN_ARM_H, 0);
-        vn.lid = vn_load(vn_names[vn.theme][1], VN_LID_PX, VN_LID_PX, 0);
-        vn.cap = vn_load(vn_names[vn.theme][4], VN_CAP_PX, VN_CAP_PX, 0);
-        vn.fall = vn_load("vinyl_label", VN_LAB_PX, VN_LAB_PX, 0);
+        vn.keys = m1_asset_rgba(vn.win, vn_names[vn.theme][5], VN_KEYS_W, VN_BAND_Y1 - VN_BAND_Y0, 0);
+        vn.arm = m1_asset_rgba(vn.win, vn_names[vn.theme][2], VN_ARM_W, VN_ARM_H, 1);
+        vn.sh = m1_asset_rgba(vn.win, vn_names[vn.theme][3], VN_ARM_W, VN_ARM_H, 0);
+        vn.lid = m1_asset_rgba(vn.win, vn_names[vn.theme][1], VN_LID_PX, VN_LID_PX, 0);
+        vn.cap = m1_asset_rgba(vn.win, vn_names[vn.theme][4], VN_CAP_PX, VN_CAP_PX, 0);
+        vn.fall = m1_asset_rgba(vn.win, "vinyl_label", VN_LAB_PX, VN_LAB_PX, 0);
         vn.cover = bitmap_create_ex(VN_LAB_PX, VN_LAB_PX, VN_LAB_PX * 4, BITMAP_RGBA8888);
         vn.frame = bitmap_create_ex(VN_W, VN_H, VN_W * 4, BITMAP_RGBA8888);
         vn.rec =

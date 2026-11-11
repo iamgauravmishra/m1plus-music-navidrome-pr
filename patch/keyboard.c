@@ -726,7 +726,7 @@ int kb_zh_setting(void) { return set_read(KBZH_FILE, 0) == '1'; }
 
 int kb_zh_toggle(void) {
     int next = !kb_zh_setting();
-    if (home_write_atomic(KBZH_FILE, KBZH_TMP, next ? "1\n" : "0\n") != 0) return -1;
+    if (home_set_digit(KBZH_FILE, KBZH_TMP, next, 1) < 0) return -1;
     if (!next) kb_memo = L_EN; /* off: the next time it is turned on the keyboard starts on English again */
     return next;
 }

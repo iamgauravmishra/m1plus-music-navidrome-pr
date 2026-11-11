@@ -20,7 +20,7 @@ int ip_theme_dark(void) { return dark; }
 
 int ip_theme_toggle(void) {
     int next = !dark;
-    if (home_write_atomic(IP_THEME_FILE, IP_THEME_TMP, next ? "1\n" : "0\n") != 0) return -1;
+    if (home_set_digit(IP_THEME_FILE, IP_THEME_TMP, next, 1) < 0) return -1;
     dark = next;
     return dark;
 }

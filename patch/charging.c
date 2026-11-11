@@ -48,10 +48,8 @@ int chg_limit(void) {
 
 /* Choose a limit (the picker's rows: CHG_MIN .. CHG_OFF in CHG_STEP steps); saved atomically first, then the next tick checks at once. The limit or -1. */
 int chg_set(int limit) {
-    char t[3];
     if (limit < CHG_MIN || limit > CHG_OFF || (limit - CHG_MIN) % CHG_STEP) return -1;
-    t[0] = (char)('0' + (limit - CHG_MIN) / CHG_STEP), t[1] = '\n', t[2] = 0;
-    if (home_write_atomic(CHG_FILE, CHG_TMP, t) != 0) return -1;
+    if (home_set_digit(CHG_FILE, CHG_TMP, (limit - CHG_MIN) / CHG_STEP, 9) < 0) return -1;
     chg.limit = limit;
     chg.now = 1;
     return limit;

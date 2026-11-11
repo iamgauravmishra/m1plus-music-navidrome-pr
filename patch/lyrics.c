@@ -43,6 +43,7 @@
 #include "lyrics.h"
 #include "common.h"
 #include "textgamma.h"
+#include "fnv.h"
 
 static struct {
     void *win, *src, *view, *box,
@@ -137,13 +138,13 @@ static int ly_text(int i, char *buf) {
 
 /* A signature of the stock rows: their number, the first and last row's handle and time. A new song's lyrics (the rows are destroyed and made again) change it. */
 static unsigned ly_sig(int n) {
-    unsigned h = 2166136261u;
+    unsigned h = FNV_SEED;
     void *a = widget_get_child(ly.src, 0), *b = widget_get_child(ly.src, (unsigned)(n - 1));
-    h = (h ^ (unsigned)n) * 16777619u;
-    h = (h ^ (unsigned)(unsigned long)a) * 16777619u;
-    h = (h ^ (unsigned)(unsigned long)b) * 16777619u;
-    h = (h ^ (unsigned)ly_time(0)) * 16777619u;
-    h = (h ^ (unsigned)ly_time(n - 1)) * 16777619u;
+    h = (h ^ (unsigned)n) * FNV_PRIME;
+    h = (h ^ (unsigned)(unsigned long)a) * FNV_PRIME;
+    h = (h ^ (unsigned)(unsigned long)b) * FNV_PRIME;
+    h = (h ^ (unsigned)ly_time(0)) * FNV_PRIME;
+    h = (h ^ (unsigned)ly_time(n - 1)) * FNV_PRIME;
     return h | !h;
 }
 

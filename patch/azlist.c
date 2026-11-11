@@ -18,7 +18,6 @@
 #define AZ_ACT_PAD \
     16 /* the text button takes a touch this far left of its text (and to the screen's edge on the right) */
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 #define SG_RANKS 27
@@ -32,6 +31,32 @@ int az_rank_of(int c) {
 }
 
 unsigned char az_rank_letter(int r) { return r > 0 ? (unsigned char)('A' + r - 1) : '#'; }
+
+void az_flip_letters(az_t *az) {
+    int i;
+    for (i = 0; i < az->nsec; ++i) {
+        int t = az->sec_letter[i] == '#' ? 0 : az->sec_letter[i] - 'A' + 1;
+        az->sec_letter[i] = (unsigned char)(t == 26 ? '#' : 'Z' - t);
+    }
+}
+
+int az_bind(az_t *az, void *win) {
+    az->st_hdr = widget_lookup(win, "label_hdr", 1);
+    az->st_rail = widget_lookup(win, "label_rail", 1);
+    az->st_rail_on = widget_lookup(win, "label_rail_on", 1);
+    az->rail = widget_lookup(win, "sg_rail", 1);
+    az->bubble = widget_lookup(win, "sg_bubble", 1);
+    az->bubble_letter = widget_lookup(win, "sg_bubble_letter", 1);
+    return az->st_hdr && az->st_rail && az->st_rail_on && az->rail && az->bubble && az->bubble_letter;
+}
+
+void az_bind_rail(az_t *az, int (*on)(void *, void *), int (*paint)(void *, void *)) {
+    widget_on(az->rail, EVT_POINTER_DOWN, on, (void *)0);
+    widget_on(az->rail, EVT_POINTER_MOVE, on, (void *)0);
+    widget_on(az->rail, EVT_POINTER_UP, on, (void *)0);
+    widget_on(az->rail, EVT_POINTER_ABORT, on, (void *)0);
+    widget_on(az->rail, EVT_AFTER_PAINT, paint, (void *)0);
+}
 
 /* The sections of the stock Title order. It sorts by the whole title (toolsQueryDbTable's comparator) and the Initial is the scan's first surviving character, so the
  * two only roughly agree (a symbol that sorts after 'z', an accented letter, a dropped kana, a CJK title placed by its whole pinyin): the songs are not in runs of

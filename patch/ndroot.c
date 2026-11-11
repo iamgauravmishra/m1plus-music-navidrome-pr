@@ -17,6 +17,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "common.h"
+#include "grid.h"
 #include "home.h"
 #include "i18n.h"
 #include "podcasts.h"
@@ -150,10 +151,8 @@ static void nr_nav(void) {
     if (on == nr.nav) return;
     nr.nav = on;
     m1_show(nr.search, on);
-    widget_set_prop_str(nr.more, "style:normal:icon", mid);
-    widget_set_prop_str(nr.more, "style:over:icon", mid);
-    widget_set_prop_str(nr.more, "style:pressed:icon", down);
-    widget_resize(nr.title, (on ? NAV_CF_X : NAV_VIEW_X) - NAV_TITLE_X, 22);
+    grid_icons(nr.more, mid, down);
+    grid_title_end(nr.title, on ? NAV_CF_X : NAV_VIEW_X);
 }
 
 /* The navbar's small title once the large one has scrolled away; the fade shows while the list is scrolled. The empty state has no scrolling list: its own large title stays. */
@@ -161,8 +160,7 @@ static void nr_title_update(void) {
     int off = nr.sv ? *(int *)((char *)nr.sv + SC_YOFF) : 0, list = nr.shown == 0;
     m1_title_set(nr.title, &nr.title_on, nr.noscroll || (list && m1_title_gone(off, 0)));
     if (nr.fade) {
-        widget_set_visible(nr.fade, list && off > 0, 0);
-        widget_set_sensitive(nr.fade, 0);
+        grid_fade(nr.fade, list && off > 0);
     }
 }
 
@@ -403,11 +401,7 @@ int nd_root_open(void) {
             return -1;
         }
     }
-    nr.noscroll = !widget_on(nr.sv, EVT_SCROLL, nr_on_scroll, (void *)0) ||
-                  !widget_on(nr.sv, EVT_SCROLL_END, nr_on_scroll,
-                             (void *)0); /* without the scroll events the navbar keeps its title */
-    if (nr.noscroll) widget_set_visible(nr.title, 1, 0);
-    nr.title_on = nr.noscroll;
+    nr.noscroll = grid_scroll_bind(nr.sv, nr_on_scroll, nr.title, &nr.title_on);
     nr.kind = -1;
     nr.nav = -1;
     label_set_line_wrap(nr.es_text, 1);

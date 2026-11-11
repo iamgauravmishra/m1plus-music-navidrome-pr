@@ -13,8 +13,6 @@
 #include "libsrc.h"
 #include "picker.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-
 static int so_marked(const unsigned char *sel, unsigned i) { return sel[i >> 3] >> (i & 7) & 1; }
 
 int so_selection(unsigned count, const unsigned char *sel) {
@@ -82,6 +80,24 @@ int so_add(int cls, unsigned count, const unsigned char *sel, unsigned nsel, int
     return 1;
 }
 
+void *so_row_deque(void *rec) {
+    void *d = _create_deque("stSongInfo");
+    if (!d) return (void *)0;
+    deque_init(d);
+    _deque_push_back(d, rec);
+    return d;
+}
+
+/* Now Playing on the queue at idx with class cls: navigator_to_with_context("playing_page", {queue, idx, cls, PLAY_MODE}); start_player copies the queue. */
+void pod_start_player(void *queue, int idx, int cls) {
+    struct {
+        void *dq;
+        int idx, cls, mode;
+    } context;
+    context.dq = queue, context.idx = idx, context.cls = cls, context.mode = PLAY_MODE;
+    navigator_to_with_context("playing_page", &context);
+}
+
 /* Open Now Playing on the queue exactly as a track row's tap does (the stock album row handler @0x52569c, its tail
  * @0x5258c8..0x525970): when songerinfoflag is set and a playing_page is in the stack, the windows above it are popped
  * with navigator_back and the old playing_page is closed (the stock loop, which also stops at home_page); then
@@ -90,10 +106,6 @@ int so_add(int cls, unsigned count, const unsigned char *sel, unsigned nsel, int
  * a bound of POP_MAX turns that trust into a limit, after which the page is opened over what is left. */
 void pod_open_player(void *queue, int idx,
                      int cls) { /* (the album page's so_open_fn; also the Daily Mix card's play disc) */
-    struct {
-        void *dq;
-        int idx, cls, mode;
-    } context;
     if (*(unsigned char *)SONGER_FLAG && navigator_window_is_exist("playing_page")) {
         void *wm = window_manager();
         int i;
@@ -109,8 +121,7 @@ void pod_open_player(void *queue, int idx,
             navigator_back();
         }
     }
-    context.dq = queue, context.idx = idx, context.cls = cls, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context); /* playing_page_init -> start_player copies the queue */
+    pod_start_player(queue, idx, cls); /* playing_page_init -> start_player copies the queue */
 }
 
 /* Song `at` (-1: a random one) of the list and the list as the queue, in Now Playing: the stock Songs row's handler (@0x5275a4: loadSongList of the shown list, then

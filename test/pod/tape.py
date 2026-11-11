@@ -556,7 +556,7 @@ def reel_tests(ctx):
     expect(all(abs(a - (66 ** 2 + 16 ** 2)) <= 10 for a in area), f'r_supply^2 + r_takeup^2 stays 66^2 + 16^2 = 4612 (within the 1/16 px rounding, 2 r / 16 = 8): {[round(a) for a in area]}')
     take = [t for _, _, _, t in [(0, 0, *py_radii(p, 1000)) for p in range(0, 1001, 50)]]
     expect(take == sorted(take), 'the take-up pack only grows with the position')
-    expect(all(m.call(PSYMS['tp_isqrt'], a0=v) == math.isqrt(v) for v in (0, 1, 2, 3, 4, 15, 16, 17, 255, 65535, 65536, 1180672, 2 ** 31, 2 ** 32 - 1)), 'tp_isqrt is the integer square root')
+    expect(all(m.call(PSYMS['m1_isqrt'], a0=v) == math.isqrt(v) for v in (0, 1, 2, 3, 4, 15, 16, 17, 255, 65535, 65536, 1180672, 2 ** 31, 2 ** 32 - 1)), 'm1_isqrt is the integer square root')
     # the frame with the tape at three positions equals the model (the packs only through the holes and the clear window)
     for pos in (0, 281, 562):
         m = machine(font=font, status=3, pos=pos, length=562)

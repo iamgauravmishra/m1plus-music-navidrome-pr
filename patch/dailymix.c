@@ -34,9 +34,9 @@
 #include "scroll.h"
 #include "podcasts.h"
 #include "songops.h"
+#include "fnv.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
-#define I(r, off) (*(int *)((char *)(r) + (off)))
 #define DM_GREY 0xff1e1c1cu /* #1C1C1E (red lowest) */
 #define DM_TEXT 48 /* wide chars of a title line */
 #define DM_STEXT 160 /* wide chars of an artists line */
@@ -84,7 +84,7 @@ static unsigned dm_xs(unsigned x) {
 /* FNV-1a with ASCII letters folded to lower case (the identity of an artist or an album; the stock list groups albums by title, NOCASE), never 0. */
 static unsigned dm_fold_to(const char *s, const char *end) {
     unsigned h = FNV_SEED;
-    for (; *s && s != end; ++s) h = (h ^ (unsigned char)((unsigned char)*s - 'A' < 26u ? *s + 32 : *s)) * 16777619u;
+    for (; *s && s != end; ++s) h = (h ^ (unsigned char)((unsigned char)*s - 'A' < 26u ? *s + 32 : *s)) * FNV_PRIME;
     return h | !h;
 }
 
@@ -1073,7 +1073,7 @@ static void *dm_ensure_bitmap(void) {
 
 static unsigned dm_fnv_bytes(const unsigned char *p, unsigned n) {
     unsigned h = FNV_SEED;
-    while (n--) h = (h ^ *p++) * 16777619u;
+    while (n--) h = (h ^ *p++) * FNV_PRIME;
     return h;
 }
 
@@ -1814,7 +1814,7 @@ static struct {
     grid_t g; /* the 52 px cover ring (patch/grid.c), the placeholder */
 } dp __attribute__((section(".scratch")));
 
-static int dp_off(void) { return dp.sv ? I(dp.sv, SC_YOFF) : 0; }
+static int dp_off(void) { return grid_sv_off(dp.sv); }
 static int dp_content(void) { return DP_ROWS_Y + (int)dp.n * LIST_ROW_H + DP_BOTTOM; }
 
 static void dp_color(void *w, const char *prop, unsigned c) {
@@ -2038,11 +2038,7 @@ static grid_tile_t *dp_tile(int a) {
 
 /* A bitmap of w x h at (x, y) in the window, rows beyond the view cut by hand. */
 static void dp_blit(void *canvas, void *bmp, int w, int h, int x, int y) {
-    int top = y < 0 ? -y : 0, bottom = y + h > DP_VIEW_H ? DP_VIEW_H - y : h, src[4], dst[4];
-    if (!bmp || bottom <= top) return;
-    src[0] = 0, src[1] = top, src[2] = w, src[3] = bottom - top;
-    dst[0] = x, dst[1] = y + top, dst[2] = w, dst[3] = bottom - top;
-    canvas_draw_image(canvas, bmp, src, dst);
+    grid_blit_from(canvas, bmp, 0, 0, w, h, x, y, DP_VIEW_H);
 }
 
 static void dp_fill(void *canvas, int x, int y0, int w, int y1, unsigned c) {
@@ -2111,7 +2107,6 @@ static int dp_on_paint(void *ctx, void *e) {
 }
 
 /* ---- the cover loader: one cover per tick, nothing while the scroll_view moves (the Albums list's, patch/albums.c) */
-static void dp_redraw(void) { widget_invalidate_force(dp.sv, (void *)0); }
 
 static int dp_next_load(void) {
     int lo, hi, a, best = -1, bd = 0x7fffffff, s = dp_off();
@@ -2150,7 +2145,7 @@ static int dp_on_load(const void *unused) {
     if (a >= 0) {
         int top = DP_ROWS_Y + a * LIST_ROW_H - dp_off();
         grid_art(&dp.g, dp_tile(a));
-        if (top < DP_VIEW_H && top + LIST_ROW_H > 0) dp_redraw();
+        if (top < DP_VIEW_H && top + LIST_ROW_H > 0) grid_sv_redraw(dp.sv);
     }
     dp_kick();
     return RET_OK;
@@ -2175,15 +2170,8 @@ static int dp_row_at(int y) {
 
 static int dp_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(dp.view, pt);
+    grid_ev_local(dp.view, e, pt);
     return dp_row_at(pt[1]);
-}
-
-static void dp_set_press(int p) {
-    if (dp.press == p) return;
-    dp.press = p;
-    dp_redraw();
 }
 
 /* The page's rows as the mix's paths in order, then the queue (dm_play_at): the song `want` (a path), else the first or a random one. */
@@ -2201,7 +2189,7 @@ static int dp_on_down(void *ctx, void *e) {
     if (!e || !dp.view) return RET_OK;
     a = dp_item_of(e);
     dp.down = a + 1, m1_tap_at(&dp.tap, e);
-    dp_set_press(a + 1);
+    grid_set_press(&dp.press, a + 1, dp.sv);
     return RET_OK;
 }
 
@@ -2209,7 +2197,7 @@ static int dp_on_up(void *ctx, void *e) {
     int a = dp.down - 1;
     (void)ctx;
     dp.down = 0;
-    dp_set_press(0);
+    grid_set_press(&dp.press, 0, dp.sv);
     if (a < 0 || !e || !dp.view) return RET_OK;
     if (m1_tap_near(&dp.tap, e) && dp_item_of(e) == a) dp_play(cc_str(dp.rows[a].raw, REC_PATH), 0);
     return RET_OK;
@@ -2220,7 +2208,7 @@ static int dp_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     dp.down = 0;
-    dp_set_press(0);
+    grid_set_press(&dp.press, 0, dp.sv);
     return RET_OK;
 }
 
@@ -2266,9 +2254,7 @@ static void dp_put_back(const dp_state_t *s) {
 /* The Add disc: a plus, or a check once the mix's playlist exists. */
 static void dp_mark(int on) {
     dp.saved = on;
-    widget_set_prop_str(dp.add, "style:normal:icon", on ? "dp_added" : "dp_add");
-    widget_set_prop_str(dp.add, "style:over:icon", on ? "dp_added" : "dp_add");
-    widget_set_prop_str(dp.add, "style:pressed:icon", on ? "dp_added_down" : "dp_add_down");
+    grid_icons(dp.add, on ? "dp_added" : "dp_add", on ? "dp_added_down" : "dp_add_down");
 }
 
 /* Whether the mix's playlist exists: the stock playlist list (loadLocalClassList(0xf00b) replaces *pdeq_playlist) has a row titled with its name. At the page's opening
@@ -2298,7 +2284,7 @@ static int dp_on_foreground(void *ctx, void *e) {
         dp.away = 0;
         dp_look();
     }
-    dp_redraw();
+    grid_sv_redraw(dp.sv);
     dp_bar_apply();
     return RET_OK;
 }

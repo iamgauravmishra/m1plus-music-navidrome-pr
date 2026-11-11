@@ -27,7 +27,6 @@
 #define BD_GAIN_SLIDE 12.0 /* the slider's range, either way (the engine takes 24) */
 #define BD_Q_MIN 0.1
 #define BD_Q_MAX 10.0
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 
 static struct {
     void *win, *sv, *graph, *gtop, *gbot, *seg, *hsl, *title;

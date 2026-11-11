@@ -14,8 +14,7 @@
 #include "home.h"
 #include "podcasts.h"
 #include "fnv.h"
-
-#define I(r, off) (*(int *)((char *)(r) + (off)))
+#include "utf8.h"
 
 _Static_assert(sizeof(pc_ep_t) == PC_EP_SIZE, "pc_ep_t");
 _Static_assert(sizeof(pc_show_t) == PC_SHOW_SIZE, "pc_show_t");
@@ -54,11 +53,6 @@ static int pm_ieq_n(const char *a, const char *b, unsigned n) {
     for (i = 0; i < n; ++i)
         if (!a[i] || pm_lc((unsigned char)a[i]) != pm_lc((unsigned char)b[i])) return 0;
     return 1;
-}
-
-static int pm_eq(const char *a, const char *b) {
-    while (*a && *a == *b) ++a, ++b;
-    return *a == *b;
 }
 
 /* s (n bytes, or to its NUL when n < 0) into out of size bytes with a NUL, cut before a UTF-8 continuation byte; control bytes become spaces. */
@@ -100,7 +94,7 @@ unsigned pc_hash(const char *s) {
 
 static unsigned pm_fnv_n(const char *s, unsigned n) {
     unsigned h = FNV_SEED, i;
-    for (i = 0; i < n; ++i) h = (h ^ (unsigned char)s[i]) * 16777619u;
+    for (i = 0; i < n; ++i) h = (h ^ (unsigned char)s[i]) * FNV_PRIME;
     return h | !h;
 }
 
@@ -244,20 +238,9 @@ static int pm_join(char *out, unsigned size, const char *root, const char *dir, 
  * The text formats
  */
 
-/* The line [p, stop) of buf up to a newline: sets *end to the newline (or stop) and returns the line's length without a trailing CR. */
-static unsigned pm_line(const char *p, const char *stop, const char **next) {
-    const char *q = p;
-    unsigned n;
-    while (q < stop && *q != '\n') ++q;
-    n = (unsigned)(q - p);
-    *next = q < stop ? q + 1 : q;
-    if (n && p[n - 1] == '\r') --n;
-    return n;
-}
-
 static int pm_header(const char *buf, unsigned n, const char *magic, const char **after) {
     const char *stop = buf + n, *next;
-    unsigned m = strlen(magic), len = pm_line(buf, stop, &next);
+    unsigned m = strlen(magic), len = m1_line(buf, stop, &next);
     if (len != m || !pm_ieq_n(buf, magic, m)) return 0;
     *after = next;
     return 1;
@@ -268,7 +251,7 @@ int pc_parse_eps(const char *buf, unsigned n, pc_ep_t *out, int max) {
     int count = 0;
     if (!pm_header(buf, n, "M1PLUS-EPISODES 1", &p)) return 0;
     for (; p < stop && count < max; p = next) {
-        unsigned len = pm_line(p, stop, &next), at = 0;
+        unsigned len = m1_line(p, stop, &next), at = 0;
         pc_ep_t *e = &out[count];
         int any = 0;
         if (!len || p[0] == '#' || len > PM_LINE_MAX) continue;
@@ -323,7 +306,7 @@ int pc_parse_show(const char *buf, unsigned n, pc_show_t *show) {
     const char *p, *stop = buf + n, *next;
     if (!pm_header(buf, n, "M1PLUS-SHOW 1", &p)) return 0;
     for (; p < stop; p = next) {
-        unsigned len = pm_line(p, stop, &next);
+        unsigned len = m1_line(p, stop, &next);
         if (len >= 6 && pm_ieq_n(p, "title=", 6))
             pm_cpy_n(show->title, PC_TITLE, p + 6, (int)len - 6);
         else if (len >= 5 && pm_ieq_n(p, "feed=", 5))
@@ -377,7 +360,7 @@ static unsigned pm_newest_pub(const char *buf, unsigned n) {
     int entries = 0;
     if (!pm_header(buf, n, "M1PLUS-EPISODES 1", &p)) return 0;
     for (; p < stop && entries < PC_MAX_EPS; p = next) {
-        unsigned len = pm_line(p, stop, &next), at = 0, pub = 0;
+        unsigned len = m1_line(p, stop, &next), at = 0, pub = 0;
         int any = 0;
         if (!len || p[0] == '#' || len > PM_LINE_MAX) continue;
         while (at < len) {
@@ -429,7 +412,7 @@ static int pm_summary(const char *root, pc_show_t *s) {
         int rank;
         if (!*name) continue;
         if (name[0] == '.') { /* the metadata files; any other dot file is not ours */
-            if (pm_eq(name, ".episodes") || pm_eq(name, ".show")) meta = 1;
+            if (!strcmp(name, ".episodes") || !strcmp(name, ".show")) meta = 1;
             continue;
         }
         if (strlen(name) >= PC_FILE) continue;
@@ -549,7 +532,7 @@ static void pm_title_of(char *out, const char *name) {
 static int pm_find(const pm_file_t *files, int nf, const char *name) {
     int i;
     for (i = 0; i < nf; ++i)
-        if (pm_eq(files[i].name, name)) return i;
+        if (!strcmp(files[i].name, name)) return i;
     return -1;
 }
 
@@ -1093,7 +1076,7 @@ static void pm_speed_back(void) {
  * show where the tags were; stock's own code after the site copies them to song_name / song_artist, Now Playing and the mini bar show them.
  * Reachable at boot (Memory Playback starts a track): so a plain path costs the copy and one prefix test, and the kill switch is looked at only for a podcast path.
  */
-static int pm_empty_or_unknown(const char *s) { return !*s || pm_eq(s, "Unknown"); }
+static int pm_empty_or_unknown(const char *s) { return !*s || !strcmp(s, "Unknown"); }
 
 __attribute__((noinline)) char *pc_id3_path(char *info, const char *path) {
     char *title = info + 0x684, *artist = info + 0x504, *album = info + 0x404, show[PC_FILE];
@@ -1109,7 +1092,7 @@ __attribute__((noinline)) char *pc_id3_path(char *info, const char *path) {
     }
     pm_cpy_n(show, sizeof show, p, (int)n);
     rec = cc_playing();
-    if (rec && !pm_eq(cc_str(rec, REC_PATH), path))
+    if (rec && strcmp(cc_str(rec, REC_PATH), path))
         rec = (void *)0; /* (the record get_id3info read is the playing one; anything else is not trusted) */
     s = rec ? cc_str(rec, REC_ARTIST) : "";
     if (rec && *cc_str(rec, REC_TITLE) &&

@@ -7,6 +7,7 @@
 #include "peq.h"
 #ifndef PEQ_PLAYER
 #include "offsets.inc"
+#include "common.h"
 #endif
 
 static int between(double x, double lo, double hi) { return __builtin_isfinite(x) && x >= lo && x <= hi; }
@@ -307,16 +308,8 @@ int peq_state_save_to(const char *path, const peq_state *s) {
     if (n + 5 > sizeof tmp) return -1;
     memcpy(tmp, path, n);
     memcpy(tmp + n, ".tmp", 5);
-    int fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644), ok;
-    if (fd < 0 && mkdir(PEQ_STATE_DIR, 0755) == 0) fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return -1;
-    ok = write(fd, &file, sizeof(file)) == (int)sizeof(file) && fsync(fd) == 0;
-    ok = close(fd) == 0 && ok;
-    if (!ok || rename(tmp, path) != 0) {
-        unlink(tmp);
-        return -1;
-    }
-    return 0;
+    if (m1_save(path, tmp, 0644, &file, sizeof file)) return 0;
+    return mkdir(PEQ_STATE_DIR, 0755) == 0 && m1_save(path, tmp, 0644, &file, sizeof file) ? 0 : -1;
 }
 int peq_state_save(const peq_state *s) { return peq_state_save_to(PEQ_STATE, s); }
 #endif

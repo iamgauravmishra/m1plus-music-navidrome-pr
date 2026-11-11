@@ -38,7 +38,6 @@ extern void pod_toast(const char *text); /* patch/shuffle.c: the stock message b
 #define TB_GREY_VAL "#8A8A8A"
 #define TB_PREAMP_ROWS 14 /* the Preamp page: Auto, then 0 .. -12 dB */
 #define STEP_MAX (PEQ_GAIN_MAX * 2)
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 
 static struct {
     void *win, *sv, *graph, *gtop, *gbot, *view, *curve_row, *curve_val, *pre_row, *pre_val, *reset_row, *save_row;

@@ -24,7 +24,6 @@
 #include "grid.h"
 #include "i18n.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define CV_W 320 /* the content's width: the list_view's */
 #define CV_RING 12 /* tiles: the rows in view are at most GRID_VIEW_H / LIST_ROW_H + 2 */
 #define CV_TEXT_X 16 /* the rows' text starts where the menu rows' do (no cover) */
@@ -42,9 +41,6 @@ static struct {
         g; /* all zero: no bitmaps, no placeholder (grid_blit draws nothing); the painter only wants it for the cover */
     grid_tile_t ring[CV_RING];
 } cv __attribute__((section(".scratch")));
-
-static int cv_off(void) { return cv.sv ? I(cv.sv, SC_YOFF) : 0; }
-static void cv_redraw(void) { widget_invalidate_force(cv.sv, (void *)0); }
 
 /* The tile of row r: its texts made when the ring slot held another row. */
 static grid_tile_t *cv_tile(void *ctx, int r) {
@@ -72,7 +68,7 @@ static grid_tile_t *cv_tile(void *ctx, int r) {
 
 static int cv_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    int off = cv_off(), r0, r1;
+    int off = grid_sv_off(cv.sv), r0, r1;
     (void)ctx;
     if (!canvas || !cv.view || !cv.n) return RET_OK;
     r0 = off / LIST_ROW_H, r1 = (off + GRID_VIEW_H - 1) / LIST_ROW_H;
@@ -91,8 +87,7 @@ static int cv_on_scroll(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!cv.fade) return RET_OK;
-    widget_set_visible(cv.fade, cv_off() > 0, 0);
-    widget_set_sensitive(cv.fade, 0);
+    grid_fade(cv.fade, grid_sv_off(cv.sv) > 0);
     return RET_OK;
 }
 
@@ -104,12 +99,6 @@ static int cv_row_of(void *e) {
     return r < (int)cv.n ? r : -1;
 }
 
-static void cv_set_press(int p) {
-    if (cv.press == p) return;
-    cv.press = p;
-    cv_redraw();
-}
-
 static int cv_on_down(void *ctx, void *e) {
     int r;
     (void)ctx;
@@ -117,14 +106,14 @@ static int cv_on_down(void *ctx, void *e) {
     if (!e || !cv.view) return RET_OK;
     r = cv_row_of(e);
     cv.down = r + 1, m1_tap_at(&cv.tap, e);
-    cv_set_press(r + 1);
+    grid_set_press(&cv.press, r + 1, cv.sv);
     return RET_OK;
 }
 
 /* The scroll_view's virtual_h setter keeps the offset as it was: after the rows shrink, the offset moves back into [0, rows - the view's height]
  * (the same clamp folders.c and albums.c make; 0 when everything fits). */
 static void cv_clamp_off(void) {
-    int max = (int)cv.n * LIST_ROW_H - widget_get_prop_int(cv.sv, "h", 0), off = cv_off(), at;
+    int max = (int)cv.n * LIST_ROW_H - widget_get_prop_int(cv.sv, "h", 0), off = grid_sv_off(cv.sv), at;
     if (max < 0) max = 0;
     at = off < 0 ? 0 : off > max ? max : off;
     if (at != off) widget_set_prop_int(cv.sv, "yoffset", at);
@@ -152,14 +141,14 @@ static void cv_file_ask(int r) {
         widget_set_tr_text(cv.status, "No unsupported files");
     }
     cv_clamp_off();
-    cv_redraw();
+    grid_sv_redraw(cv.sv);
 }
 
 static int cv_on_up(void *ctx, void *e) {
     int r = cv.down - 1;
     (void)ctx;
     cv.down = 0;
-    cv_set_press(0);
+    grid_set_press(&cv.press, 0, cv.sv);
     if (r < 0 || !e || !cv.view) return RET_OK;
     if (m1_tap_near(&cv.tap, e) && cv_row_of(e) == r) {
         unsigned d = cv.idx[r];
@@ -176,7 +165,7 @@ static int cv_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     cv.down = 0;
-    cv_set_press(0);
+    grid_set_press(&cv.press, 0, cv.sv);
     return RET_OK;
 }
 

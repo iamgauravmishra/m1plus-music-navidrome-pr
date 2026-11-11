@@ -423,3 +423,11 @@ int m1plus_home_init(void *win, void *ctx) {
     if (r == RET_OK && win) home_boot(win); /* a stock init that failed leaves everything stock */
     return r;
 }
+
+/* A one-digit setting file: the digit v (0 .. max, max <= 9) and a newline, written atomically. v, or -1 for a v out of range or a failed write. */
+int home_set_digit(const char *file, const char *tmp, int v, int max) {
+    char text[3];
+    if (v < 0 || v > max) return -1;
+    text[0] = (char)('0' + v), text[1] = '\n', text[2] = 0;
+    return home_write_atomic(file, tmp, text) == 0 ? v : -1;
+}

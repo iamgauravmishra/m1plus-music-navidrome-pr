@@ -85,7 +85,6 @@ static const char *const FO_ICON_NAME[FO_ICONS] = {"pod_ic_folders",   "fo_ic_sd
 
 enum { T_LIST = 1, T_SD = 2, T_OTG = 3, T_DIR = 4, T_FILE = 8 }; /* a record's type (+0x34) */
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 static struct {
@@ -134,13 +133,12 @@ static void fo_kick(void);
 static void fo_cap(void);
 static void fo_select(int on);
 
-static int fo_off(void) { return fo.sv ? I(fo.sv, SC_YOFF) : 0; }
-static void fo_redraw(void) { widget_invalidate_force(fo.sv, (void *)0); }
+static int fo_off(void) { return grid_sv_off(fo.sv); }
 
 /* The index is of the stock list as long as that list is still in *pdeq_showlist, as big, and starts with the same record. */
 static int fo_valid(void) {
     void *cur = *(void **)PDEQ_SHOWLIST;
-    return fo.list && cur == fo.list && deque_size(cur) == fo.count && (!fo.count || deque_at(cur, 0) == fo.first);
+    return grid_list_same(cur, fo.list, fo.count, fo.first);
 }
 
 static int fo_type(int rec) { return I(deque_at(fo.list, (unsigned)rec), REC_TYPE); }
@@ -388,12 +386,7 @@ static void fo_retext(void) {
  * adds back (CANVAS_OY) for its duration, as the Songs page does. A bitmap is cut to the view by hand.
  */
 static void fo_blit(void *canvas, void *bmp, int w, int h, int x, int y) {
-    int top = y < 0 ? -y : 0, bottom = y + h > GRID_VIEW_H ? GRID_VIEW_H - y : h;
-    int src[4], dst[4];
-    if (!bmp || bottom <= top) return;
-    src[0] = 0, src[1] = top, src[2] = w, src[3] = bottom - top;
-    dst[0] = x, dst[1] = y + top, dst[2] = w, dst[3] = bottom - top;
-    canvas_draw_image(canvas, bmp, src, dst);
+    grid_blit_from(canvas, bmp, 0, 0, w, h, x, y, GRID_VIEW_H);
 }
 
 /* The record's glyph: the storage's (the CD Library, the Ripper folder of the card, has its disc), the folder's, the playlist file's or the audio file's. */
@@ -504,7 +497,7 @@ static int fo_on_load(const void *unused) {
     r = fo_next_load();
     if (r >= 0) {
         fo_art(fo_tile(r), fo.vis[r]);
-        fo_redraw();
+        grid_sv_redraw(fo.sv);
     }
     fo_kick();
     return RET_OK;
@@ -527,12 +520,7 @@ static void fo_paint_rows(void *canvas) {
         if (fo.press == r + 1 && !fo.select) az_fill(canvas, 0, y, y + rh - 1, FO_W, LIST_PRESS);
         if (fo.select && fo.mark[0] && fo_markable(type)) {
             void *m = fo.mark[fo_is_sel(rec)];
-            int src[4], dst[4], top = y + (rh - SG_MARK) / 2;
-            if (top >= 0 && top + SG_MARK <= GRID_VIEW_H) {
-                src[0] = 0, src[1] = 0, src[2] = SG_MARK, src[3] = SG_MARK;
-                dst[0] = (SG_SEL_COL - SG_MARK) / 2, dst[1] = top, dst[2] = SG_MARK, dst[3] = SG_MARK;
-                canvas_draw_image(canvas, m, src, dst);
-            }
+            grid_mark_draw(canvas, m, (SG_SEL_COL - SG_MARK) / 2, y + (rh - SG_MARK) / 2, GRID_VIEW_H);
         }
         if (t && t->art == 1) /* the cover, its corners cut in the bitmap */
             fo_blit(canvas, t->bmp, FO_COVER, FO_COVER, FO_COVER_X + fo_shift(), y + FO_COVER_Y);
@@ -583,8 +571,7 @@ static void fo_title_update(void) {
     /* The navbar's fade (an insensitive image, built hidden) is for rows passing under the bar: shown while the list is scrolled, hidden at rest, where it would darken
      * the large title. Never a touch target. */
     if (fo.fade) {
-        widget_set_visible(fo.fade, fo_off() > 0, 0);
-        widget_set_sensitive(fo.fade, 0);
+        grid_fade(fo.fade, fo_off() > 0);
     }
 }
 
@@ -670,7 +657,7 @@ static void fo_load(int keep) {
     fo_head();
     fo.title_on = -1;
     fo_title_update();
-    fo_redraw();
+    grid_sv_redraw(fo.sv);
     if (fo.select && fo_root())
         fo_select(0); /* the root has nothing to select: the mode ends (and the capsule is made again) */
     else
@@ -693,14 +680,6 @@ static int fo_on_stale(const void *unused) {
 /* ---------------------------------------------------------------------------
  * Playing: the stock folder row's handler (@0x531e00: loadSongList of the folder's files, then Now Playing at the row)
  */
-static void fo_open_player(void *queue, int idx, int cls) {
-    struct {
-        void *dq;
-        int idx, cls, mode;
-    } context;
-    context.dq = queue, context.idx = idx, context.cls = cls, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context);
-}
 
 /* Record rec (an audio file) of the list and the folder's files as the queue, in Now Playing (patch/songops.c). */
 static void fo_play(int rec, int how) {
@@ -709,7 +688,7 @@ static void fo_play(int rec, int how) {
         fo_load(1);
         return;
     }
-    so_play_with(FO_CLASS, fo.list, rec, how, fo_open_player, 0,
+    so_play_with(FO_CLASS, fo.list, rec, how, pod_start_player, 0,
                  fo_m3u() ? (so_reorder_fn)0 : fo_reorder); /* the queue plays in the order shown */
 }
 
@@ -780,12 +759,10 @@ static void fo_cap(void) {
     m1_show(fo.btn_more, sel && !fo_direct());
     m1_show(fo.btn_select, sel && fo_direct());
     if (!sel && fo.menu) fo_menu(0);
-    widget_resize(fo.title, (fo.select ? SG_SELALL_X : sel ? NAV_VIEW_X : FO_TITLE_END_NP) - NAV_TITLE_X, 22);
+    grid_title_end(fo.title, fo.select ? SG_SELALL_X : sel ? NAV_VIEW_X : FO_TITLE_END_NP);
     m1_show(fo.np, np);
     if (fo.np) {
-        widget_set_prop_str(fo.np, "style:normal:icon", img);
-        widget_set_prop_str(fo.np, "style:over:icon", img);
-        widget_set_prop_str(fo.np, "style:pressed:icon", sel ? "ah_nav_play_down" : "ah_nav_np_down");
+        grid_icons(fo.np, img, sel ? "ah_nav_play_down" : "ah_nav_np_down");
     }
 }
 
@@ -799,21 +776,19 @@ static void fo_select(int on) {
     m1_show(fo.btn_selall, on);
     m1_show(fo.bar, on);
     fo_pills();
-    widget_set_prop_str(fo.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
-    widget_set_prop_str(fo.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
-    widget_set_prop_str(fo.back, "style:pressed:icon", on ? "ah_nav_close_down" : "ah_nav_back_down");
+    grid_icons(fo.back, on ? "ah_nav_close" : "ah_nav_back", on ? "ah_nav_close_down" : "ah_nav_back_down");
     fo.title_on = -1;
     fo_head();
     fo_title_update();
     fo_retext();
     fo_size();
     if (fo_off() > fo_max_scroll()) widget_set_prop_int(fo.sv, "yoffset", fo_max_scroll());
-    fo_redraw();
+    grid_sv_redraw(fo.sv);
 }
 
 static void fo_changed(void) {
     fo_head();
-    fo_redraw();
+    grid_sv_redraw(fo.sv);
 }
 
 static void fo_toggle(int rec) {
@@ -958,15 +933,8 @@ static int fo_on_add(void *ctx, void *e) {
  */
 static int fo_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(fo.view, pt);
+    grid_ev_local(fo.view, e, pt);
     return fo_at(pt[1]);
-}
-
-static void fo_set_press(int p) {
-    if (fo.press == p) return;
-    fo.press = p;
-    fo_redraw();
 }
 
 static int fo_on_down(void *ctx, void *e) {
@@ -976,7 +944,7 @@ static int fo_on_down(void *ctx, void *e) {
     if (!e || !fo.view || !fo.nvis || !fo_valid()) return RET_OK;
     a = fo_item_of(e);
     fo.down = a + 1, m1_tap_at(&fo.tap, e);
-    if (!fo.select) fo_set_press(a + 1);
+    if (!fo.select) grid_set_press(&fo.press, a + 1, fo.sv);
     return RET_OK;
 }
 
@@ -994,8 +962,7 @@ static void fo_tap(int r) {
 static int fo_on_up(void *ctx, void *e) {
     int a = fo.down - 1;
     (void)ctx;
-    fo.down = 0;
-    fo_set_press(0);
+    grid_press_end(&fo.down, &fo.press, fo.sv);
     if (a < 0 || !e || !fo.view) return RET_OK;
     if (m1_tap_near(&fo.tap, e) && fo_item_of(e) == a && (unsigned)a < fo.nvis) fo_tap(a);
     return RET_OK;
@@ -1004,8 +971,7 @@ static int fo_on_up(void *ctx, void *e) {
 static int fo_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    fo.down = 0;
-    fo_set_press(0);
+    grid_press_end(&fo.down, &fo.press, fo.sv);
     return RET_OK;
 }
 
@@ -1149,12 +1115,7 @@ static int fo_open_page(void) {
     m1_make_marks(fo.win, fo.mark); /* all or none */
     fo.chev = m1_make_chevron();
     for (i = 0; i < FO_ICONS; ++i) fo.ic[i] = fo_bitmap(fo.win, FO_ICON_NAME[i]);
-    fo.noscroll = !widget_on(fo.sv, EVT_SCROLL, fo_on_scroll, (void *)0) ||
-                  !widget_on(fo.sv, EVT_SCROLL_END, fo_on_scroll, (void *)0);
-    if (fo.noscroll)
-        widget_set_visible(fo.title, 1,
-                           0); /* the large title's collapse needs the scroll events: the navbar keeps its title */
-    fo.title_on = fo.noscroll;
+    fo.noscroll = grid_scroll_bind(fo.sv, fo_on_scroll, fo.title, &fo.title_on);
     widget_on(fo.win, EVT_WINDOW_TO_FG, fo_on_fg, (void *)0);
     widget_on(fo.win, EVT_WINDOW_TO_BG, fo_on_bg, (void *)0);
     widget_on(fo.view, EVT_POINTER_DOWN, fo_on_down, (void *)0);

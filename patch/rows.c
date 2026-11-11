@@ -36,8 +36,6 @@
 
 typedef int (*layout_fn)(void *, void *);
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 static unsigned row_vtable[LAYOUT_VTABLE_WORDS] __attribute__((section(".scratch")));

@@ -56,12 +56,13 @@
 #include "radio.h"
 #include "sbapi.h"
 #include "libsrc.h"
+#include "fnv.h"
 
 extern unsigned np_file_key(const char *path); /* patch/nowplaying.c: a hash of the picture file, 0 if unreadable */
 extern const char *
 np_cover_file(int *busy); /* the /tmp file of the playing track's cover, NULL for none; busy while demo makes it */
 
-#define MB_HASH_PRIME 16777619u
+#define MB_HASH_PRIME FNV_PRIME
 
 static struct {
     void *win, *bar, *card, *title, *artist, *play, *pause, *next, *sv,
@@ -286,16 +287,10 @@ static int mb_on_paint(void *ctx, void *e) {
 #define MB_HALF \
     0x00200802u /* 2 in each field: the rounding of every >> 2 (without it the smaller red and blue fields fall behind green: a green cast) */
 
-static unsigned mb_isqrt(unsigned n) {
-    unsigned s = 0;
-    while ((s + 1) * (s + 1) <= n) ++s;
-    return s;
-}
-
 /* Columns at the end of full row y outside the pill's arc, rounded up (tools/pod_blur.py inset). */
 static unsigned mb_inset(unsigned y) {
     unsigned yy = y < MB_R ? y : 2 * MB_R - 1 - y, d2 = 2 * (MB_R - yy) - 1;
-    return MB_R - (mb_isqrt(4 * MB_R * MB_R - d2 * d2) >> 1);
+    return MB_R - (m1_isqrt(4 * MB_R * MB_R - d2 * d2) >> 1);
 }
 
 static void mb_blur_init(mb_blur_t *bl) {

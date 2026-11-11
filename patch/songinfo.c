@@ -424,8 +424,7 @@ static int gi_on_paint(void *ctx, void *e) {
     off = GI_I(gi.sv, SC_YOFF);
     if (gi.fade && (off > 0) != gi.fade_on) {
         gi.fade_on = off > 0;
-        widget_set_visible(gi.fade, gi.fade_on, 0);
-        widget_set_sensitive(gi.fade, 0);
+        grid_fade(gi.fade, gi.fade_on);
     }
     GI_I(canvas, CANVAS_OY) += off;
     if (gi.g.tiles) grid_blit(canvas, &gi.g, gi.g.tiles, GI_X, GI_TOP - off, GI_VIEW_H);

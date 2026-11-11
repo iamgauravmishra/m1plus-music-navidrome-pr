@@ -38,8 +38,8 @@
 #include "pcregion.h"
 #include "pcwrap.h"
 #include "palette.h"
+#include "songops.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 #define PG_W 320
@@ -311,8 +311,8 @@ int pcsearch_toggle(void) {
     return next;
 }
 
-static int pg_off(void) { return pg.sv ? I(pg.sv, SC_YOFF) : 0; }
-static void pg_redraw(void) { widget_invalidate_force(pg.sv, (void *)0); }
+static int pg_off(void) { return grid_sv_off(pg.sv); }
+static void pg_redraw(void) { grid_sv_redraw(pg.sv); }
 static void pg_awake_arm(void); /* the downloads' timer, armed when something is queued */
 
 static int pg_count(void) {
@@ -919,11 +919,8 @@ static int pg_can_pick(int i) { return pg.can[i >> 3] >> (i & 7) & 1; }
 
 /* The select mark of a row that can be marked, wholly inside the window (as the Playlists page's). */
 static void pg_mark(void *canvas, int i, int x, int y) {
-    int src[4], dst[4];
-    if (!pg.mark[0] || !pg_can_pick(i) || y < 0 || y + SG_MARK > GRID_VIEW_H) return;
-    src[0] = src[1] = 0, src[2] = src[3] = SG_MARK;
-    dst[0] = x, dst[1] = y, dst[2] = dst[3] = SG_MARK;
-    canvas_draw_image(canvas, pg.mark[pg_is_pick(i)], src, dst);
+    if (!pg.mark[0] || !pg_can_pick(i)) return;
+    grid_mark_draw(canvas, pg.mark[pg_is_pick(i)], x, y, GRID_VIEW_H);
 }
 
 /* The search level (docs/modules/podcasts.md "Search"): the field is widgets of the content view (ps_field); the result rows are the Downloads rows' look, a show's thumbnail, its name and its author in grey, from PQ_TOP.
@@ -1080,11 +1077,7 @@ static void *pg_srchtile(void) {
 
 /* A w x h piece of the atlas from (sx, sy) at (x, y) of the view, cut by hand to the rows inside it (grid_blit's rule). */
 static void pg_blit_from(void *canvas, void *bmp, int sx, int sy, int w, int h, int x, int y) {
-    int src[4], dst[4], top = y < 0 ? -y : 0, bottom = y + h > GRID_VIEW_H ? GRID_VIEW_H - y : h;
-    if (!bmp || bottom <= top) return;
-    src[0] = sx, src[1] = sy + top, src[2] = w, src[3] = bottom - top;
-    dst[0] = x, dst[1] = y + top, dst[2] = w, dst[3] = bottom - top;
-    canvas_draw_image(canvas, bmp, src, dst);
+    grid_blit_from(canvas, bmp, sx, sy, w, h, x, y, GRID_VIEW_H);
 }
 
 static void pg_sprite(void *canvas, int sx, int sy, int w, int h, int x, int y) {
@@ -2023,9 +2016,10 @@ static void pg_empty(const char *key) {
 
 static void pg_fade(void) {
     if (!pg.fade) return;
-    widget_set_visible(pg.fade, pg_off() > 0 && (pg.level != L_EPS || pg.det),
-                       0); /* (the Show level paints its own, in the page's colour; the episode page is black) */
-    widget_set_sensitive(pg.fade, 0);
+    grid_fade(pg.fade,
+              pg_off() > 0 &&
+                  (pg.level != L_EPS ||
+                   pg.det)); /* (the Show level paints its own, in the page's colour; the episode page is black) */
 }
 
 static int pg_on_scroll(void *ctx, void *e) {
@@ -2107,10 +2101,7 @@ static void pg_nav(void) {
     m1_show(pg.btn_globe, globe);
     if (globe) widget_move(pg.btn_globe, gx, 0); /* [Globe | Now Playing], [Globe | ... | NP] or [... | NP] */
     if (pg.btn_more) {
-        widget_set_prop_str(pg.btn_more, "style:normal:icon", mimg);
-        widget_set_prop_str(pg.btn_more, "style:over:icon", mimg);
-        widget_set_prop_str(pg.btn_more, "style:pressed:icon",
-                            globe && more ? "pod_nav_moremid_down" : "pod_nav_more_down");
+        grid_icons(pg.btn_more, mimg, globe && more ? "pod_nav_moremid_down" : "pod_nav_more_down");
     }
     if (pg.sf)
         widget_set_visible(pg.sf, pg.level == L_SRCH,
@@ -2118,18 +2109,23 @@ static void pg_nav(void) {
     m1_show(pg.big, pg.level == L_SHOWS || pg.level == L_DLS || pg.level == L_DISC);
     if (pg.title &&
         !pg.select) { /* the small title ends before the leftmost button, cut with an ellipsis (pg_head sets the text again at the new width) */
-        widget_resize(pg.title, (globe ? gx : more || find ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W) - NAV_TITLE_X, 22);
+        grid_title_end(pg.title, globe ? gx : more || find ? NAV_VIEW_X : NAV_VIEW_X + NAV_VIEW_W);
         pg_head();
     }
     pg_title_show();
     if (pg.np) {
-        widget_set_prop_str(pg.np, "style:normal:icon", img);
-        widget_set_prop_str(pg.np, "style:over:icon", img);
-        widget_set_prop_str(pg.np, "style:pressed:icon", cap ? "ah_nav_play_down" : "ah_nav_np_down");
+        grid_icons(pg.np, img, cap ? "ah_nav_play_down" : "ah_nav_np_down");
     }
 }
 
 /* The model's folders again (a show may have come, gone or been renamed): every one of them is a show of the Shows level. */
+/* The episodes read for the level are let go. */
+static void pg_eps_free(void) {
+    free(pg.eps);
+    pg.eps = (pc_ep_t *)0;
+    pg.neps = 0;
+}
+
 static void pg_scan(void) { pg.nshows = pc_scan_shows(pg.shows, PC_MAX_SHOWS); }
 
 /* Continue Listening: the episodes partly played, the most recently played first (the ring's order), at most PP_SHELF_MAX; each title cut to the item's width. */
@@ -2279,9 +2275,7 @@ static void pg_load_shows(int keep) {
     pg.has_import =
         pn_import_found(pg.root) > 0; /* subscriptions.txt, subscriptions.opml or an *.opml in the card's root */
     pg_cont_load();
-    free(pg.eps);
-    pg.eps = (pc_ep_t *)0;
-    pg.neps = 0;
+    pg_eps_free();
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg.rev = pc_rev();
     pg_title("Podcasts", (const char *)0);
@@ -2592,9 +2586,7 @@ static void pg_load_downloads(int keep) {
     pg.level = L_DLS;
     pg_leave_show();
     pg_scan();
-    free(pg.eps);
-    pg.eps = (pc_ep_t *)0;
-    pg.neps = 0;
+    pg_eps_free();
     pg.nip = pg.nd = pg.nrows = pg.dscan_on = 0;
     pg.want_off = 0;
     if (pg.subs)
@@ -2743,7 +2735,7 @@ static void pg_srch_rows_reset(void) {
     pg.press = pg.down = 0;
 }
 
-/* The status line under the field (the label of the empty states), or none. */
+/* The status line under the field or the control (the label of the empty states), or none. */
 static void pg_srch_hint(const char *text) {
     pg.htext = text;
     m1_show(pg.status, 0);
@@ -2794,9 +2786,7 @@ static void pg_load_search(int fresh) {
     pg_sheet_close();
     pg_leave_show();
     grid_drop(&pg.hg);
-    free(pg.eps);
-    pg.eps = (pc_ep_t *)0;
-    pg.neps = 0;
+    pg_eps_free();
     pg.preview = 0;
     pg.level = L_SRCH;
     pg.from_search = pg.pv_disc = 0;
@@ -3139,12 +3129,6 @@ static void pg_subscribe(void) {
  * this reads its record from the page's 1 s tick and does no widget work in the dark. A job waits for the downloads to pause, as a refresh does; a running one is cancelled by a newer one and by leaving the level. A row opens the show's
  * preview (the lookup of its Apple id gives the feed), the navbar's magnifier the search level.
  */
-/* The status line under the control (the label of the empty states), or none. */
-static void pg_disc_hint(const char *text) {
-    pg.htext = text;
-    m1_show(pg.status, 0);
-}
-
 /* What the level shows for the state of the chart in view: its rows, or the status line (Loading... while it is asked for, the failure's words, No results). */
 static void pg_disc_apply(void) {
     int t = pg.dtab, n = 0, max, cnt, code;
@@ -3164,7 +3148,7 @@ static void pg_disc_apply(void) {
     if (n != pg.dn) pg_srch_rows_reset();
     pg.dn = n;
     pg.cgen = pn_chart_gen();
-    pg_disc_hint(hint);
+    pg_srch_hint(hint);
     pg_size();
     max = pg_content() - GRID_VIEW_H;
     if (max < 0) max = 0;
@@ -3229,9 +3213,7 @@ static void pg_load_disc(int fresh) {
     pg_sheet_close();
     pg_leave_show();
     grid_drop(&pg.hg);
-    free(pg.eps);
-    pg.eps = (pc_ep_t *)0;
-    pg.neps = 0;
+    pg_eps_free();
     pg.preview = pg.pv_disc = 0;
     pg.from_search = 0;
     pg.from_disc = 1;
@@ -3455,12 +3437,9 @@ static void pg_select(int on) {
                             pg.subs)); /* the bar's one pill: Delete, or on the Subscriptions page Unsubscribe */
     m1_show(pg.unsubp, on && pg.level == L_DLS && pg.subs);
     if (pg.title && on)
-        widget_resize(pg.title, SG_SELALL_X - NAV_TITLE_X,
-                      22); /* (leaving select mode, pg_nav sets the width of the level) */
+        grid_title_end(pg.title, SG_SELALL_X); /* (leaving select mode, pg_nav sets the width of the level) */
     if (pg.back) {
-        widget_set_prop_str(pg.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
-        widget_set_prop_str(pg.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
-        widget_set_prop_str(pg.back, "style:pressed:icon", on ? "ah_nav_close_down" : "ah_nav_back_down");
+        grid_icons(pg.back, on ? "ah_nav_close" : "ah_nav_back", on ? "ah_nav_close_down" : "ah_nav_back_down");
     }
     pg_head();
     if (!on) pg_nav();
@@ -3798,15 +3777,10 @@ void *pg_episode_queue(const char *root, const pc_show_t *s, const pc_ep_t *eps,
 static void pg_play(int at) {
     void *queue;
     int idx;
-    struct {
-        void *dq;
-        int idx, cls, mode;
-    } context;
     queue = pg_episode_queue(pg.root, &pg.shows[pg.sel], pg.eps, pg.neps, at, &idx);
     if (!queue) return;
     *(int *)G_CLASS_TYPE = 1;
-    context.dq = queue, context.idx = idx, context.cls = 1, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
+    pod_start_player(queue, idx, 1);
     deque_destroy(queue);
 }
 
@@ -3832,9 +3806,7 @@ static void pg_cont_play(int i) {
     free(pg.eps);
     pg.eps = all, pg.neps = m, pg.sel = it->show;
     pg_play(at);
-    free(pg.eps);
-    pg.eps = (pc_ep_t *)0;
-    pg.neps = 0;
+    pg_eps_free();
 }
 /* ---------------------------------------------------------------------------
  * Touch
@@ -3844,8 +3816,7 @@ static void pg_cont_play(int i) {
  * Latest Episode pill is cell 0's part PH_LATEST (above the cells). Select mode has the bodies only. */
 static int pg_hit(void *e, int *part) {
     int pt[2], y;
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(pg.view, pt);
+    grid_ev_local(pg.view, e, pt);
     *part = PH_BODY;
     if (pg.level == L_SRCH) { /* the field, or a result that has a feed address (the others take no touch) */
         const pj_result_t *r;
@@ -3934,12 +3905,6 @@ static int pg_hit(void *e, int *part) {
     return pg_dhit(pt[1]); /* (the Downloads level and the Subscriptions page) */
 }
 
-static void pg_set_press(int p) {
-    if (pg.press == p) return;
-    pg.press = p;
-    pg_redraw();
-}
-
 static int pg_on_down(void *ctx, void *e) {
     int a, part;
     (void)ctx;
@@ -3953,10 +3918,9 @@ static int pg_on_down(void *ctx, void *e) {
         (pg.level == L_SHOWS ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW || part == PH_SRCHROW
          : pg.level == L_SRCH || pg.level == L_DISC ? part == PH_BODY
                                                     : pg.level != L_EPS || part == PH_BODY))
-        pg_set_press(
-            pg.level == L_DLS
-                ? pg.ord[a] + 1
-                : a + 1); /* (the Shows level presses only its Library rows; the Downloads level's tiles are keyed by slot) */
+        grid_set_press(
+            &pg.press, pg.level == L_DLS ? pg.ord[a] + 1 : a + 1,
+            pg.sv); /* (the Shows level presses only its Library rows; the Downloads level's tiles are keyed by slot) */
     return RET_OK;
 }
 
@@ -4012,9 +3976,7 @@ static void pg_dls_back(void) {
     grid_drop(&pg.hg);
     grid_drop(&pg.g);
     pg_cells_drop();
-    free(pg.eps);
-    pg.eps = (pc_ep_t *)0;
-    pg.neps = 0;
+    pg_eps_free();
     pg.press = pg.down = 0;
     pg.level = L_DLS;
     pg.subs = 0;
@@ -4609,7 +4571,7 @@ static int pg_on_up(void *ctx, void *e) {
     int a = pg.down, part = pg.down_part, same, part2;
     (void)ctx;
     pg.down = 0;
-    pg_set_press(0);
+    grid_set_press(&pg.press, 0, pg.sv);
     if (!a || !e || !pg.view) return RET_OK;
     if (!m1_tap_near(&pg.tap, e)) return RET_OK;
     same = pg_hit(e, &part2);
@@ -4633,7 +4595,7 @@ static int pg_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     pg.down = 0;
-    pg_set_press(0);
+    grid_set_press(&pg.press, 0, pg.sv);
     return RET_OK;
 }
 

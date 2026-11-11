@@ -36,8 +36,6 @@
 #define SBA_SYNC_MAX_AGE 900u /* seconds: Sync is "due" when the last one is older than this (15 minutes) */
 #define SBA_MUSIC_DIR \
     "/mnt/mmc/Subsonic" /* downloaded files: <artist>/<album>/<nn> <title>.<suffix>, a .part file until complete; the stock library scans them in */
-#define SBA_CA \
-    "/etc/m1plus-cacert.pem" /* the CA bundle HTTPS verifies with; HTTP is allowed (a LAN server) and unencrypted */
 #define SBA_RESERVE_KB 32768u /* a download leaves the card this much free (the PR's 32 MiB) */
 #define SBA_CACHE_RESERVE_KB 4096u /* the cache files keep this much free */
 #define SBA_QMAX 8 /* metadata requests waiting; the next is SBA_QFULL */
@@ -49,7 +47,7 @@ enum {
     SBA_NOCONF, /* no server saved */
     SBA_NOWIFI, /* the Wi-Fi is not connected (stock get_wifisignal) */
     SBA_NOCLOCK, /* the clock was never set: a certificate would not verify (HTTPS only) */
-    SBA_NOCERT, /* SBA_CA is missing or unreadable (HTTPS only) */
+    SBA_NOCERT, /* M1_CA is missing or unreadable (HTTPS only; HTTP is allowed: a LAN server) */
     SBA_CERT, /* the server's certificate was refused */
     SBA_NET, /* no connection, no answer, a time-out */
     SBA_AUTH, /* Subsonic error 40 / 41: wrong user or password */

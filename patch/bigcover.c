@@ -61,15 +61,18 @@ static const char *bc_track(unsigned *key) {
     void *rec = cc_playing();
     const char *path = rec ? cc_str(rec, REC_PATH) : "";
     *key = bc_server(rec) ? (unsigned)*(int *)((char *)rec + REC_ID) | 1u
-           : *path == '/' ? cc_fnv(2166136261u, path) | 1u
+           : *path == '/' ? cc_fnv(FNV_SEED, path) | 1u
                           : 0;
     return path;
 }
 
+/* The picture file and its temp are removed. */
+static void bc_unlink(void) { unlink(BC_TMP), unlink(BC_TMP ".tmp"); }
+
 /* The job goes (never waits) and its files; the page's state for the track is cleared. */
 static void bc_drop(void) {
     if (bc.worker) cc_build_stop();
-    if (bc.worker || bc.st == BC_RUN) unlink(BC_TMP), unlink(BC_TMP ".tmp");
+    if (bc.worker || bc.st == BC_RUN) bc_unlink();
     bc.worker = 0;
     if (bc.st == BC_READY && bc.img) widget_invalidate_force(bc.img, (void *)0); /* stock's picture shows again */
     bc.st = BC_IDLE, bc.srv = 0;
@@ -99,7 +102,7 @@ static void bc_finish(void) {
     cc_build_stop(); /* joins the exited worker and frees the set */
     bc.worker = 0;
     if (!bc_same()) { /* the source changed (or is another track's) meanwhile: this result is for another picture, dropped; the tick asks again */
-        unlink(BC_TMP), unlink(BC_TMP ".tmp");
+        bc_unlink();
         bc.st = BC_IDLE;
         return;
     }
@@ -111,7 +114,7 @@ static void bc_finish(void) {
             bitmap_unlock_buffer(bc.bmp);
         }
     }
-    unlink(BC_TMP), unlink(BC_TMP ".tmp");
+    bc_unlink();
     bc.st = ok ? BC_READY : BC_GAVE;
     if (ok && bc.img) widget_invalidate_force(bc.img, (void *)0);
 }
@@ -120,7 +123,7 @@ static void bc_finish(void) {
 static void bc_start_job(const char *path) {
     int busy, src = bc_src(path);
     if (*path != '/' || !src || !np_cover_file(&busy) || busy || cc_build_busy() || !m1_screen_lit()) return;
-    unlink(BC_TMP), unlink(BC_TMP ".tmp");
+    bc_unlink();
     if (!cc_build_open(1, CC_MISSING)) return;
     if (cc_build_add_aspect(path, BC_TMP, BC_SIZE, src) != 1 || !cc_build_start()) {
         cc_build_stop();
@@ -293,19 +296,17 @@ static int idle_cover_mode(int on) {
 /* The picker's rows (0 Off, 1 Album Cover, 2 Cassette, 3 Vinyl), saved: the choice, or -1 with the file, the byte and so the label unchanged. Off only turns stock's byte off (the destination
  * is kept for when it is turned on again); a destination is saved first and turns the byte on when it is off, and the file goes back if that fails. */
 int idle_set(int choice) {
-    static const char *const text[3] = {"0\n", "1\n", "2\n"};
     int dest = choice - 1, was = idle_view(), had, changed;
     if (choice < 0 || choice > 3) return -1;
     if (choice == 0) return !*(volatile unsigned char *)COVER_MODE || idle_cover_mode(0) == 0 ? 0 : -1;
     had = access(IDLE_FILE, F_OK) == 0;
     changed = !had || dest != was;
-    if (changed && home_write_atomic(IDLE_FILE, IDLE_TMP, text[dest]) != 0) return -1;
+    if (changed && home_set_digit(IDLE_FILE, IDLE_TMP, dest, 2) < 0) return -1;
     if (!*(volatile unsigned char *)COVER_MODE && idle_cover_mode(1) != 0) {
         if (changed) {
             if (had)
-                home_write_atomic(
-                    IDLE_FILE, IDLE_TMP,
-                    text[was]); /* (best effort: a file that cannot be put back still reads as a destination) */
+                home_set_digit(IDLE_FILE, IDLE_TMP, was,
+                               2); /* (best effort: a file that cannot be put back still reads as a destination) */
             else
                 unlink(IDLE_FILE);
         }

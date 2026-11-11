@@ -32,7 +32,6 @@
 extern unsigned ip_fit(void *canvas, unsigned *s,
                        int maxw); /* patch/ipod.c: the wide string cut with an ellipsis to maxw px */
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define IPCF_SLOTS (CF_RING + 1)
 #define TEXELS (ART_SIZE * ART_SIZE)
 #define PLACE (ipcf.tex + IPCF_SLOTS * TEXELS)

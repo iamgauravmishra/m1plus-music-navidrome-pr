@@ -116,6 +116,10 @@ int grid_cell_at(int x, int y, int origin_y, int count);
 
 /* A cover of the tile (its bitmap, else the placeholder) at (x, y) in the view; rows beyond view_h (> 0) are cut by hand. */
 void grid_blit(void *canvas, grid_t *g, grid_tile_t *t, int x, int y, int view_h);
+/* A w x h piece of bmp from (sx, sy) at (x, y) of the window, the rows outside 0..view_h cut by hand (view_h 0: no bottom cut); NULL bmp draws nothing. */
+void grid_blit_from(void *canvas, void *bmp, int sx, int sy, int w, int h, int x, int y, int view_h);
+/* The SG_MARK x SG_MARK select mark bmp at (x, top), only when wholly inside 0..view_h. */
+void grid_mark_draw(void *canvas, void *bmp, int x, int top, int view_h);
 /* The tile's album (pass 0) or artist (pass 1) in rect (x, y, w, h), cut once; drawn only when wholly inside view_h (> 0); 0: always, for a paint inside a
  * scroll_view, whose canvas clip cuts it at the view's edges (as a cover). The canvas has the style. */
 void grid_text(void *canvas, grid_tile_t *t, int pass, int x, int y, int w, int h, int view_h);
@@ -136,3 +140,51 @@ int grid_mosaic_keys(void *songs, void *albums, unsigned *key, int *miss);
 /* Cells [first, last): the covers, then the albums, then the artists. tile_of(ctx, a) gives cell a's tile. */
 void grid_paint(void *canvas, grid_t *g, int first, int last, int origin_y, int view_h,
                 grid_tile_t *(*tile_of)(void *, int), void *ctx);
+
+/* Page helpers of the list pages (the stock calls their copies made, in the same order). */
+#define GRID_NAV_TITLE_H 22 /* the navbar's small title's height */
+
+/* The scroll_view sv's yoffset, 0 for none. */
+static inline int grid_sv_off(void *sv) { return sv ? I(sv, SC_YOFF) : 0; }
+static inline void grid_sv_redraw(void *sv) { widget_invalidate_force(sv, (void *)0); }
+/* The stock list `list` (count rows, the first record `first`) is still the one in *pdeq_showlist (cur). */
+static inline int grid_list_same(void *cur, void *list, unsigned count, void *first) {
+    return list && cur == list && deque_size(cur) == count && (!count || deque_at(cur, 0) == first);
+}
+/* *press = p, the view redrawn when it changed. */
+static inline void grid_set_press(int *press, int p, void *sv) {
+    if (*press == p) return;
+    *press = p;
+    grid_sv_redraw(sv);
+}
+/* The press ends: *down (the item the pointer went down on, plus 1) is 0 and the pressed row's fill goes. */
+static inline void grid_press_end(int *down, int *press, void *sv) {
+    *down = 0;
+    grid_set_press(press, 0, sv);
+}
+/* The pointer event e in the coordinates of view (widget_to_local includes the scroll offset): pt[0] x, pt[1] y. */
+static inline void grid_ev_local(void *view, void *e, int *pt) {
+    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
+    widget_to_local(view, pt);
+}
+/* Binds h to sv's EVT_SCROLL and EVT_SCROLL_END (the second only when the first bound); returns 1 when either failed: the large title's collapse needs the events, so
+ * the navbar keeps its small title (title, when not NULL, is shown) and *title_on (when not NULL) is set to that flag. */
+static inline int grid_scroll_bind(void *sv, int (*h)(void *, void *), void *title, int *title_on) {
+    int noscroll = !widget_on(sv, EVT_SCROLL, h, (void *)0) || !widget_on(sv, EVT_SCROLL_END, h, (void *)0);
+    if (noscroll && title) widget_set_visible(title, 1, 0);
+    if (title_on) *title_on = noscroll;
+    return noscroll;
+}
+/* The fade strip under the navbar: shown (on) or hidden, never touched. */
+static inline void grid_fade(void *fade, int on) {
+    widget_set_visible(fade, on, 0);
+    widget_set_sensitive(fade, 0);
+}
+/* The icon of a navbar button: normal and over the same, pressed its own. */
+static inline void grid_icons(void *w, const char *normal, const char *pressed) {
+    widget_set_prop_str(w, "style:normal:icon", normal);
+    widget_set_prop_str(w, "style:over:icon", normal);
+    widget_set_prop_str(w, "style:pressed:icon", pressed);
+}
+/* The navbar's small title ends at x end. */
+static inline void grid_title_end(void *title, int end) { widget_resize(title, end - NAV_TITLE_X, GRID_NAV_TITLE_H); }

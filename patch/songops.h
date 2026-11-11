@@ -17,8 +17,14 @@ enum {
 /* How the queue is shown: Now Playing opens on queue at idx with class cls (the caller's way: the Songs page's navigator_to_with_context, the album page's pod_open_player). */
 typedef void (*so_open_fn)(void *queue, int idx, int cls);
 
+/* Now Playing on queue at idx with class cls: navigator_to_with_context("playing_page", ...) and nothing else (a so_open_fn). */
+void pod_start_player(void *queue, int idx, int cls);
+
 /* Now Playing opens on queue at idx with class cls the way a stock album row's tap opens it (a so_open_fn; also the Daily Mix card's play disc). */
 void pod_open_player(void *queue, int idx, int cls);
+
+/* A deque holding a copy of rec alone (as the stock queries push rows); NULL without memory. The caller destroys it. */
+void *so_row_deque(void *rec);
 
 /* The stock selection vector filled from the bitset: select_recordinit(count), set_selectindex(i) for each marked row. 0 when there is no vector. */
 int so_selection(unsigned count, const unsigned char *sel);

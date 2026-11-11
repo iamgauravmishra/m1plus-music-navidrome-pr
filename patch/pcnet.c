@@ -129,11 +129,6 @@ enum {
 };
 enum { PN_Q_FREE = 0, PN_Q_WAIT = 1, PN_Q_ACTIVE = 2 };
 
-static int pn_eq(const char *a, const char *b) {
-    while (*a && *a == *b) ++a, ++b;
-    return *a == *b;
-}
-
 static int pn_starts(const char *s, const char *prefix) {
     while (*prefix && *s == *prefix) ++s, ++prefix;
     return !*prefix;
@@ -374,15 +369,10 @@ struct cx {
 
 static unsigned pn_cwrite(char *d, unsigned size, unsigned nmemb, void *user) {
     struct cx *c = user;
-    unsigned len = size * nmemb, at = 0;
+    unsigned len = size * nmemb;
     if (len > c->cap || c->total > c->cap - len) return 0; /* a write error: the transfer stops */
     c->total += len;
-    while (at < len) {
-        int w = write(c->fd, d + at, len - at);
-        if (w <= 0) return 0;
-        at += (unsigned)w;
-    }
-    return len;
+    return m1_write_all(c->fd, d, len) ? len : 0;
 }
 
 /* The picture at url into the file path (a plain file, not yet a cover), at most cap bytes. 1 when the whole answer was written; else 0 and no file. */
@@ -556,7 +546,7 @@ static void pn_refresh_one(const struct pn_job *j, const char *dir) {
                         !old) { /* nothing of the folder is anyone's yet: it takes the show's name instead of the import's */
                         char name[PC_FILE], to[PN_PATH];
                         pf_folder_name(name, sizeof name, shown);
-                        if (name[0] && !pn_eq(name, dir) && pn_join(to, sizeof to, j->root, name, (const char *)0) &&
+                        if (name[0] && strcmp(name, dir) && pn_join(to, sizeof to, j->root, name, (const char *)0) &&
                             access(to, F_OK) && !rename(path, to))
                             pn_join(path, sizeof path, to, (const char *)0, (const char *)0);
                     }
@@ -678,17 +668,6 @@ static int pn_next_slot(void) {
     return best;
 }
 
-/* KB free for a non-root user on the file system of path (MIPS o32 statfs: f_bsize is word 1, f_bavail word 7); 0 when statfs fails. */
-int pn_free_kb(const char *path, unsigned *kb) {
-    unsigned fs[32];
-    unsigned long long b;
-    memset(fs, 0, sizeof fs);
-    if (statfs(path, fs)) return 0;
-    b = (unsigned long long)fs[7] * fs[1] >> 10;
-    *kb = b > 0xffffffffull ? 0xffffffffu : (unsigned)b;
-    return 1;
-}
-
 /* A page instead of audio: any Content-Type of text/..., in any case. */
 static int pn_is_text(const char *t) {
     return t && (t[0] | 32) == 't' && (t[1] | 32) == 'e' && (t[2] | 32) == 'x' && (t[3] | 32) == 't' && t[4] == '/';
@@ -706,22 +685,14 @@ static void pn_dl_step(void) {
 
 /* The gathered bytes into the .part file as a chunk of their own (open for append, write, fsync, close), the card keeping its margin. 1 on success, else 0 and d->bad. */
 static int pn_dflush(struct dx *d) {
-    unsigned kb, at = 0;
-    int fd, ok = 1;
+    unsigned kb;
+    int fd, ok;
     if (!d->used) return 1;
     if (!pn_free_kb(d->dir, &kb)) return d->bad = PN_STORAGE, 0;
     if (kb < PN_DL_MARGIN_KB || kb - PN_DL_MARGIN_KB < (d->used >> 10)) return d->bad = PN_CARDFULL, 0;
     fd = open(d->part, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd < 0) return d->bad = PN_STORAGE, 0;
-    while (at < d->used) {
-        int w = write(fd, d->buf + at, d->used - at);
-        if (w <= 0) {
-            ok = 0;
-            break;
-        }
-        at += (unsigned)w;
-    }
-    ok = ok && fsync(fd) == 0;
+    ok = m1_write_all(fd, d->buf, d->used) && fsync(fd) == 0;
     ok = close(fd) == 0 && ok;
     if (!ok) return d->bad = PN_STORAGE, 0;
     d->used = 0;
@@ -964,7 +935,7 @@ int pn_dl_add(const char *root, const char *dir, const char *file) {
     if (g) return g;
     if (free_slot < 0) return PN_QFULL;
     pn_fail_clear(key);
-    if (!pn_eq(pn.droot, root)) pn_join(pn.droot, sizeof pn.droot, root, (const char *)0, (const char *)0);
+    if (strcmp(pn.droot, root)) pn_join(pn.droot, sizeof pn.droot, root, (const char *)0, (const char *)0);
     memcpy(pn.q[free_slot].dir, dir, strlen(dir) + 1);
     memcpy(pn.q[free_slot].file, file, strlen(file) + 1);
     pn.q[free_slot].key = key;
@@ -1112,19 +1083,9 @@ int pn_classify(const char *text, char *id, unsigned size) {
 
 /* The URL-encoded UTF-8 text s appended to out: the unreserved characters (letters, digits, - _ . ~) as they are, every other byte as %XX. 0 when it does not fit. */
 static int pn_urlenc(char *out, unsigned size, const char *s) {
-    static const char hex[] = "0123456789ABCDEF";
-    unsigned o = strlen(out);
-    for (; *s; ++s) {
-        unsigned char c = (unsigned char)*s;
-        int plain = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '-' ||
-                    c == '_' || c == '.' || c == '~';
-        if (o + (plain ? 1 : 3) + 1 > size) return 0;
-        if (plain)
-            out[o++] = (char)c;
-        else
-            out[o++] = '%', out[o++] = hex[c >> 4], out[o++] = hex[c & 15];
-    }
-    out[o] = 0;
+    unsigned n = m1_urlenc(out, size, strlen(out), s); /* (0 is also the whole answer for no text and no out) */
+    if (!n && *s) return 0;
+    out[n] = 0;
     return 1;
 }
 
@@ -1367,7 +1328,7 @@ const pj_chart_t *pn_chart_item(int kind, int i) {
 /* The chart is held: answered with rows, for the storefront in use now. */
 int pn_chart_held(int kind) {
     return kind >= 0 && kind < 2 && pn.cstate[kind] == 2 && pn.ccode[kind] == PN_OK && pn.cn[kind] > 0 &&
-           pn_eq(pn.creq[kind], pcregion_code());
+           !strcmp(pn.creq[kind], pcregion_code());
 }
 
 int pn_chart_thumb(int kind, int i, char *path, unsigned size) {
@@ -1435,7 +1396,7 @@ static void *pn_cmain(void *arg) {
         int code = PN_MEM, n = -1;
         if (buf) {
             n = pn_chart_ask(k, use, buf, &code);
-            if (!pn.cancel && !pn_eq(use, PCREGION_FALLBACK) &&
+            if (!pn.cancel && strcmp(use, PCREGION_FALLBACK) &&
                 (code == PN_GONE ||
                  (code == PN_OK && n == 0))) { /* this storefront has no such chart: the United States' */
                 use = PCREGION_FALLBACK;
@@ -1690,8 +1651,8 @@ static int pn_lyr_add(void *ctx, const pj_lrc_t *r, const char *text) {
     if (slot >= PN_LYR_MAX) return 0;
     for (i = 0; i < slot; ++i) {
         const pn_lyr_t *c = &pn.lcand[i];
-        if (c->secs == r->secs && c->synced == r->synced && pn_eq(c->title, r->title) && pn_eq(c->artist, r->artist) &&
-            pn_eq(c->album, r->album))
+        if (c->secs == r->secs && c->synced == r->synced && !strcmp(c->title, r->title) &&
+            !strcmp(c->artist, r->artist) && !strcmp(c->album, r->album))
             return 1;
     }
     pn_art_dir();
@@ -2026,7 +1987,7 @@ static void pn_pmatch(const pf_parser_t *p) {
     pn_cat(url, sizeof url, pn.pcc);
     if (pn_fetch_json(url, buf, &got) == PN_OK && (n = pj_episodes(buf, got, eps, PJ_EPS)) > 0)
         for (i = 0; i < n; ++i)
-            if (pn_eq(eps[i].id, pn.peid)) {
+            if (!strcmp(eps[i].id, pn.peid)) {
                 pn.pmatch = pf_match(p, eps[i].url, pf_iso(eps[i].date), eps[i].name);
                 break;
             }
@@ -2231,7 +2192,7 @@ static int pn_sub_one(struct pn_imp *im, char *line, const char *name) {
     unsigned hash, n;
     int i, dup = 0;
     for (i = 0; i < im->nshows; ++i)
-        if (pn_eq(im->shows[i].feed, line)) dup = 1;
+        if (!strcmp(im->shows[i].feed, line)) dup = 1;
     hash = pc_hash(line);
     for (i = 0; i < im->nseen; ++i)
         if (im->seen[i] == hash) dup = 1;
@@ -2433,33 +2394,31 @@ struct ux { /* the download's write callback's data */
 
 static unsigned pn_uwrite(char *d, unsigned size, unsigned nmemb, void *user) {
     struct ux *x = user;
-    unsigned len = size * nmemb, at = 0;
+    unsigned len = size * nmemb;
     if (len > PN_UP_CAP - x->total) {
         x->capped = 1;
         return 0;
     }
-    while (at < len) {
-        int w = write(x->fd, d + at, len - at);
-        if (w <= 0) {
-            x->werr = 1;
-            return 0;
-        }
-        at += (unsigned)w;
+    if (!m1_write_all(x->fd, d, len)) {
+        x->werr = 1;
+        return 0;
     }
     x->total += len;
     return len;
 }
 
 /* The job is over: the code, then the state, then the slot is free. */
-static void pn_up_end(int state, int code) {
-    pn.ucode = code;
+static void pn_job_end(volatile int *st, volatile int *cd, int state, int code) {
+    *cd = code;
     __sync_synchronize();
-    pn.ustate = state;
+    *st = state;
     pn.stopped = pn.cancel;
     pn.kind = 0;
     pn.busy = 0;
     pn_bump();
 }
+#define pn_up_end(state, code) pn_job_end(&pn.ustate, &pn.ucode, state, code)
+#define pn_eq_end(state, code) pn_job_end(&pn.estate, &pn.ecode, state, code)
 
 static void pn_up_https(void *h) {
     if (!up_https_only()) return; /* (upver.c says where the jobs ask) */
@@ -2712,26 +2671,12 @@ static unsigned pn_ewrite(char *d, unsigned size, unsigned nmemb, void *user) {
         x->capped = 1;
         return 0;
     }
-    while (at < len) {
-        int w = write(x->fd, d + at, len - at);
-        if (w <= 0) {
-            x->werr = 1;
-            return 0;
-        }
-        at += (unsigned)w;
+    if (!m1_write_all(x->fd, d, len)) {
+        x->werr = 1;
+        return 0;
     }
     x->total += len;
     return len;
-}
-
-static void pn_eq_end(int state, int code) {
-    pn.ecode = code;
-    __sync_synchronize();
-    pn.estate = state;
-    pn.stopped = pn.cancel;
-    pn.kind = 0;
-    pn.busy = 0;
-    pn_bump();
 }
 
 static void pn_eq_run(void) {
@@ -2753,14 +2698,9 @@ static void pn_eq_run(void) {
         return;
     }
     if (pn.emode) { /* the first line of the file, the entry it came from (the page finds the file again by it) */
-        unsigned n = 0, at = 0;
+        unsigned n = 0;
         while (pn.estamp[n]) ++n;
-        while (at < n) {
-            int w = write(x.fd, pn.estamp + at, n - at);
-            if (w <= 0) break;
-            at += (unsigned)w;
-        }
-        if (at < n || write(x.fd, "\n", 1) != 1) x.werr = 1;
+        if (!m1_write_all(x.fd, pn.estamp, n) || write(x.fd, "\n", 1) != 1) x.werr = 1;
         x.total = base = n + 1;
         for (name = pn.epath; *name; ++name) {
         }
@@ -2792,12 +2732,8 @@ static void pn_eq_run(void) {
     if (!code &&
         !pn.emode) { /* the day it came, for the page's age rule (a failed write only makes the next open ask again) */
         char day[16];
-        int fd = open(PN_EQ_STAMP, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        if (fd >= 0) {
-            int n = snprintf(day, sizeof day, "%u\n", (unsigned)time((long *)0));
-            if (write(fd, day, (unsigned)n) < 0) unlink(PN_EQ_STAMP);
-            close(fd);
-        }
+        int n = snprintf(day, sizeof day, "%u\n", (unsigned)time((long *)0));
+        m1_save(PN_EQ_STAMP, PN_EQ_STAMP ".part", 0644, day, (unsigned)n);
     }
     if (code || !pn.emode) unlink(part); /* (a renamed list has no part file left) */
     pn_eq_end(code ? PN_E_FAILED : PN_E_DONE, code);

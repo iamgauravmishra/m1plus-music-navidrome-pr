@@ -109,7 +109,6 @@ coverflow_artist_albums(void *artist_row, unsigned scope, int keep_card, void **
 #error GRID_TILES cannot hold the visible rows, the next two and the history
 #endif
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 typedef grid_tile_t tile_t; /* the grid's tile (patch/grid.h) */
@@ -201,7 +200,7 @@ static int al_max_scroll(void) {
 }
 
 /* The scroll_view's offset: px down the content that the top of the window is. */
-static int al_off(void) { return al.sv ? I(al.sv, SC_YOFF) : 0; }
+static int al_off(void) { return grid_sv_off(al.sv); }
 
 /* The same offset measured from the top of the rows (negative while the title block is in view). */
 static int al_coff(void) { return al_off() - al_top(); }
@@ -213,8 +212,7 @@ static void al_fade(void) {
     m1_title_set(al.small, &al.title_on,
                  al.noscroll || m1_title_gone(al_off(), al.head ? AL_HEAD_COLLAPSE - al_gone() : 0));
     if (!al.fade) return;
-    widget_set_visible(al.fade, al_off() > 0, 0);
-    widget_set_sensitive(al.fade, 0);
+    grid_fade(al.fade, al_off() > 0);
 }
 
 /* The persisted mode: "1" the grid, "0" the list, anything else ALBUMS_DEFAULT_GRID. */
@@ -224,7 +222,7 @@ static int al_use_grid(void) {
 }
 
 /* The window repaints (the scroll_view's rectangle: the content view itself is as high as the library). */
-static void al_redraw(void) { widget_invalidate_force(al.sv, (void *)0); }
+static void al_redraw(void) { grid_sv_redraw(al.sv); }
 
 /* ---------------------------------------------------------------------------
  * Tiles
@@ -668,15 +666,8 @@ static int al_row_at(int y) { return az_at(&al.az, y); /* -1 for a header, the a
 /* The album under the pointer event: its screen position into the content view's coordinates (widget_to_local includes the scroll offset). */
 static int al_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(al.view, pt);
+    grid_ev_local(al.view, e, pt);
     return al.list ? al_row_at(pt[1]) : al_cell_at(pt[0], pt[1]);
-}
-
-static void al_set_press(int p) {
-    if (al.press == p) return;
-    al.press = p;
-    al_redraw();
 }
 
 static int al_on_down(void *ctx, void *e) {
@@ -686,7 +677,7 @@ static int al_on_down(void *ctx, void *e) {
     if (!e || !al.view) return RET_OK;
     a = al_item_of(e);
     al.down = a + 1, m1_tap_at(&al.tap, e);
-    if (al.list) al_set_press(a + 1);
+    if (al.list) grid_set_press(&al.press, a + 1, al.sv);
     return RET_OK;
 }
 
@@ -694,7 +685,7 @@ static int al_on_up(void *ctx, void *e) {
     int a = al.down - 1;
     (void)ctx;
     al.down = 0;
-    if (al.list) al_set_press(0);
+    if (al.list) grid_set_press(&al.press, 0, al.sv);
     if (a < 0 || !e || !al.view) return RET_OK;
     if (m1_tap_near(&al.tap, e) && al_item_of(e) == a) {
         int row = (int)(al.order ? al.order[a] : (unsigned)a); /* the stock row */
@@ -725,7 +716,7 @@ static int al_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     al.down = 0;
-    if (al.list) al_set_press(0);
+    if (al.list) grid_set_press(&al.press, 0, al.sv);
     return RET_OK;
 }
 
@@ -852,15 +843,12 @@ static void al_sections(void) {
     if (!rank) return;
     for (i = 0; i < al.count; ++i) {
         int k = az_rank_of(cc_name_initial(cc_str(cc_row(al.albums, al.order, i), REC_ALBUM)));
-        rank[i] = (unsigned char)(al.rev ? (k ? 26 - k : 26) : k);
+        rank[i] = (unsigned char)(al.rev ? az_flip_rank(k) : k);
     }
     az_sections(&al.az, rank, 1);
     free(rank);
     if (al.rev) /* the letters of the mirrored ranks: rank 0 is Z, 25 is A, 26 is "#" */
-        for (i = 0; i < (unsigned)al.az.nsec; ++i) {
-            int t = al.az.sec_letter[i] == '#' ? 0 : al.az.sec_letter[i] - 'A' + 1;
-            al.az.sec_letter[i] = (unsigned char)(t == 26 ? '#' : 'Z' - t);
-        }
+        az_flip_letters(&al.az);
 }
 
 /* The first album in view: its row's first album in the grid, the top row in the list; inside [0, count - 1] also while
@@ -1079,13 +1067,7 @@ static int al_begin(void) {
     al_rail();
     al.dir = 1;
     al.fg = 1;
-    al.noscroll = !widget_on(al.sv, EVT_SCROLL, al_on_scroll, (void *)0) ||
-                  !widget_on(al.sv, EVT_SCROLL_END, al_on_scroll, (void *)0);
-    if (al.noscroll && al.small)
-        widget_set_visible(
-            al.small, 1,
-            0); /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
-    al.title_on = al.noscroll;
+    al.noscroll = grid_scroll_bind(al.sv, al_on_scroll, al.small, &al.title_on);
     al_kick();
     al_build_later();
     if (widget_on(al.win, EVT_WINDOW_TO_FG, al_on_fg, (void *)0))
@@ -1098,11 +1080,7 @@ static int al_begin(void) {
     widget_on(al.view, EVT_AFTER_PAINT, al_on_paint, (void *)0);
     if (al.az_ok) {
         az_make_disc(&al.az);
-        widget_on(al.az.rail, EVT_POINTER_DOWN, al_on_rail, (void *)0);
-        widget_on(al.az.rail, EVT_POINTER_MOVE, al_on_rail, (void *)0);
-        widget_on(al.az.rail, EVT_POINTER_UP, al_on_rail, (void *)0);
-        widget_on(al.az.rail, EVT_POINTER_ABORT, al_on_rail, (void *)0);
-        widget_on(al.az.rail, EVT_AFTER_PAINT, al_on_rail_paint, (void *)0);
+        az_bind_rail(&al.az, al_on_rail, al_on_rail_paint);
     }
     al.started = 1;
     return 1;
@@ -1239,13 +1217,7 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     vs_view(&al.vs, list);
     al.az.win = al.win, al.az.sv = al.sv, al.az.top = al_top(), al.az.row = LIST_ROW_H;
     az_prefs(&al.az);
-    al.az.st_hdr = widget_lookup(al.win, "label_hdr", 1);
-    al.az.st_rail = widget_lookup(al.win, "label_rail", 1);
-    al.az.st_rail_on = widget_lookup(al.win, "label_rail_on", 1);
-    al.az.rail = widget_lookup(al.win, "sg_rail", 1);
-    al.az.bubble = widget_lookup(al.win, "sg_bubble", 1);
-    al.az.bubble_letter = widget_lookup(al.win, "sg_bubble_letter", 1);
-    al.az_ok = al.az.st_hdr && al.az.st_rail && al.az.st_rail_on && al.az.rail && al.az.bubble && al.az.bubble_letter;
+    al.az_ok = az_bind(&al.az, al.win);
     m1_show(al.status, 0);
     al.small = widget_lookup(al.win, "label_title", 1);
     al.big = widget_lookup(al.win, "al_title", 1);
@@ -1253,11 +1225,9 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
           LS_CAP_COVERFLOW)) { /* no Cover Flow for this source: its button goes and the "..." takes the capsule's left cap (the Artists page's), with the title running to it */
         m1_show(widget_lookup(al.win, "btn_coverflow", 1), 0);
         if (al.btn) {
-            widget_set_prop_str(al.btn, "style:normal:icon", "pod_nav_more");
-            widget_set_prop_str(al.btn, "style:over:icon", "pod_nav_more");
-            widget_set_prop_str(al.btn, "style:pressed:icon", "pod_nav_more_down");
+            grid_icons(al.btn, "pod_nav_more", "pod_nav_more_down");
         }
-        if (al.small) widget_resize(al.small, NAV_VIEW_X - NAV_TITLE_X, 22);
+        if (al.small) grid_title_end(al.small, NAV_VIEW_X);
     }
     if (artist_row) { /* the artist's albums and, with two or more, the All Songs row last, titled with the artist (Cover Flow's scoped list) */
         const char *name = cc_str(deque_at(artist_row, 0), REC_TITLE);
@@ -1319,10 +1289,8 @@ static int al_open_artist(void *row, unsigned scope, const lib_src_t *src) {
     void *d;
     int r;
     if (al.win || !row) return -1;
-    d = _create_deque("stSongInfo");
+    d = so_row_deque(row);
     if (!d) return -1;
-    deque_init(d);
-    _deque_push_back(d, row); /* a copy, as the stock queries push rows */
     r = al_open(!al_use_grid(), d, scope == CLASS_COMPOSERS ? CLASS_COMPOSERS : CLASS_ARTISTS, src);
     if (!al.win) deque_destroy(d); /* else the window's destroy frees it */
     return r;

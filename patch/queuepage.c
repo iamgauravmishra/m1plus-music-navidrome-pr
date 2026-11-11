@@ -40,9 +40,6 @@
 #define QP_AHEAD 2 /* rows kept beyond the view in the scroll direction */
 #define QP_MORE_MS 16
 
-#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-
 static struct {
     void *win, *view, *sv, *status;
     void *back, *btn_shuffle, *btn_repeat, *btn_clear;
@@ -80,13 +77,12 @@ static int qp_on_stale(const void *unused);
 static int qp_on_load(const void *unused);
 static int qp_stream(void);
 
-static int qp_off(void) { return qp.sv ? I(qp.sv, SC_YOFF) : 0; }
-static void qp_redraw(void) { widget_invalidate_force(qp.sv, (void *)0); }
+static int qp_off(void) { return grid_sv_off(qp.sv); }
 
 /* The index is of the stock queue `list` as long as that queue is still the player's, as big, and starts with the same record. */
 static int qp_valid(void) {
     void *cur = *(void **)PLAY_QUEUE;
-    return qp.list && cur == qp.list && deque_size(cur) == qp.count && (!qp.count || deque_at(cur, 0) == qp.first);
+    return grid_list_same(cur, qp.list, qp.count, qp.first);
 }
 
 /* The play position in the queue the page is of, -1 for none. */
@@ -301,7 +297,7 @@ static int qp_on_load(const void *unused) {
             t->load = qp_srv_art(&qp.g, t, rec);
         else
             t->ckey = qp_key(rec), grid_art(&qp.g, t);
-        if (top < QP_WIN_H && top + ROW > 0) qp_redraw();
+        if (top < QP_WIN_H && top + ROW > 0) grid_sv_redraw(qp.sv);
     }
     qp_kick();
     return RET_OK;
@@ -458,7 +454,7 @@ static void qp_load(int keep) {
     grid_placeholder(&qp.g);
     qp_header();
     qp_pills();
-    qp_redraw();
+    grid_sv_redraw(qp.sv);
     qp_kick();
 }
 
@@ -487,7 +483,7 @@ static void qp_sync(void) {
 /* Server covers that were asked for: their tiles (and the header) look again, once per tick, until the file is there or the source says there is none. */
 static void qp_srv_retry(void) {
     int i, any = 0;
-    if (qp.hpend) qp.hkey = 0, qp_header(), qp_redraw();
+    if (qp.hpend) qp.hkey = 0, qp_header(), grid_sv_redraw(qp.sv);
     for (i = 0; qp.g.tiles && i < qp.g.n; ++i)
         if (qp.g.tiles[i].load) qp.g.tiles[i].load = 0, any = 1;
     if (any) qp_kick();
@@ -522,15 +518,8 @@ static void qp_play_at(int at) {
  */
 static int qp_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(qp.view, pt);
+    grid_ev_local(qp.view, e, pt);
     return qp_at(pt[1]);
-}
-
-static void qp_set_press(int p) {
-    if (qp.press == p) return;
-    qp.press = p;
-    qp_redraw();
 }
 
 static int qp_on_down(void *ctx, void *e) {
@@ -540,15 +529,14 @@ static int qp_on_down(void *ctx, void *e) {
     if (!e || !qp.view || !qp.n || !qp_valid()) return RET_OK;
     a = qp_item_of(e);
     qp.down = a + 1, m1_tap_at(&qp.tap, e);
-    qp_set_press(a + 1);
+    grid_set_press(&qp.press, a + 1, qp.sv);
     return RET_OK;
 }
 
 static int qp_on_up(void *ctx, void *e) {
     int a = qp.down - 1;
     (void)ctx;
-    qp.down = 0;
-    qp_set_press(0);
+    grid_press_end(&qp.down, &qp.press, qp.sv);
     if (a < 0 || !e || !qp.view) return RET_OK;
     if (m1_tap_near(&qp.tap, e) && qp_item_of(e) == a) qp_play_at(a);
     return RET_OK;
@@ -557,8 +545,7 @@ static int qp_on_up(void *ctx, void *e) {
 static int qp_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    qp.down = 0;
-    qp_set_press(0);
+    grid_press_end(&qp.down, &qp.press, qp.sv);
     return RET_OK;
 }
 

@@ -268,10 +268,9 @@ int pal_bg_mode(void) {
 }
 
 int pal_bg_set(int mode) {
-    static const char *const text[4] = {"0\n", "1\n", "2\n", "3\n"};
     if (mode < 0 || mode > 3) return -1;
     if (!pal.read) pal_load();
-    if (home_write_atomic(BG_FILE, BG_TMP, text[mode]) != 0) return -1;
+    if (home_set_digit(BG_FILE, BG_TMP, mode, 3) < 0) return -1;
     pal.mode = mode;
     if (pal_refresh()) pal_apply();
     pal_arm(); /* (an Off with no accent removes the timer at once: a new arm must not wait for the tick to end it) */
@@ -285,10 +284,9 @@ int pal_accent_saved(void) {
 
 /* The accent setting: saved atomically first (a failed save changes nothing), then applied at once: the cached images were tinted (or not) when they were decoded. */
 int pal_accent_set(int index) {
-    static const char *const text[ACC_COUNT] = {"0\n", "1\n", "2\n", "3\n", "4\n", "5\n", "6\n"};
     if (index < 0 || index >= ACC_COUNT) return -1;
     if (!pal.read) pal_load();
-    if (home_write_atomic(ACCENT_FILE, ACCENT_TMP, text[index]) != 0) return -1;
+    if (home_set_digit(ACCENT_FILE, ACCENT_TMP, index, ACC_COUNT - 1) < 0) return -1;
     pal.acc = index;
     if (pal_refresh()) pal_apply();
     pal_arm();

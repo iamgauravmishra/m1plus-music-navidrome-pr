@@ -17,9 +17,9 @@ def parser_tests(ctx):
     expect(bytes(m.u.mem_read(buf + 64, 16)).hex() == '900150983cd24fb0d6963f7d28e17f72',
            'sbnet MD5 matches the RFC 1321 test vector')
     m.u.mem_write(buf, 'a b/é~\0'.encode())
-    n = m.call(PSYMS['sbn_urlenc'], a0=buf + 128, a1=64, a2=0, a3=buf)
+    n = m.call(PSYMS['m1_urlenc'], a0=buf + 128, a1=64, a2=0, a3=buf)
     expect(bytes(m.u.mem_read(buf + 128, n)).decode() == 'a%20b%2F%C3%A9~' and
-           m.call(PSYMS['sbn_urlenc'], a0=buf + 128, a1=4, a2=0, a3=buf) == 0,
+           m.call(PSYMS['m1_urlenc'], a0=buf + 128, a1=4, a2=0, a3=buf) == 0,
            'sbnet URL escaping keeps unreserved characters and fails when the output is too small')
     doc = b'{"subsonic-response":{"status":"ok","n":{"title":"T\\u00e9","count":42,"tail":[{"x":"}"}]}}}'
     m.u.mem_write(src, doc)

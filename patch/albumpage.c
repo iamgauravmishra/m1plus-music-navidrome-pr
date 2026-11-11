@@ -42,7 +42,6 @@
 
 #define ROW LIST_ROW_H
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 static struct {
@@ -107,15 +106,14 @@ static struct {
 static int ab_on_stale(const void *unused);
 static int ab_on_gen(const void *unused);
 
-static int ab_off(void) { return ab.sv ? I(ab.sv, SC_YOFF) : 0; }
-static void ab_redraw(void) { widget_invalidate_force(ab.sv, (void *)0); }
+static void ab_redraw(void) { grid_sv_redraw(ab.sv); }
 
 /* The index is of the stock list `list` as long as that list is still in *pdeq_showlist, as big, and starts with the same record. */
 static int ab_valid(void) {
     void *cur;
     if (ab.src) return ab.list != (void *)0; /* our own copy: nothing replaces it */
     cur = *(void **)PDEQ_SHOWLIST;
-    return ab.list && cur == ab.list && deque_size(cur) == ab.count && (!ab.count || deque_at(cur, 0) == ab.first);
+    return grid_list_same(cur, ab.list, ab.count, ab.first);
 }
 
 /* The browsing record put back (another page's query may have changed it). */
@@ -155,7 +153,7 @@ static int ab_at(int y) {
 
 /* The rows [*r0, *r1] that touch the view (r1 < r0 for none). */
 static void ab_span(int *r0, int *r1) {
-    int s = ab_off(), n = (int)ab.count;
+    int s = grid_sv_off(ab.sv), n = (int)ab.count;
     *r0 = s <= AH_HDR_H ? 0 : (s - AH_HDR_H) / ROW;
     *r1 = s + AH_WIN_H - 1 < AH_HDR_H ? -1 : (s + AH_WIN_H - 1 - AH_HDR_H) / ROW;
     if (*r1 > n - 1) *r1 = n - 1;
@@ -254,7 +252,7 @@ static void ab_paint_pill(void *canvas, int off);
  * for a non-stock source. */
 
 static void ab_paint(void *canvas) {
-    int r0, r1, r, pass, off = ab_off();
+    int r0, r1, r, pass, off = grid_sv_off(ab.sv);
     unsigned playing = 0; /* bit r - r0: the track plays (at most 32 rows are ever in view) */
     unsigned dim = 0; /* bit r - r0: a source's row that cannot play now: its title in the dim style */
     ls_row_t xr[32]; /* a source's row extras, read once per paint (src only) */
@@ -274,12 +272,7 @@ static void ab_paint(void *canvas) {
         if (ab.press == r + 1 && !ab.select) az_fill_h(canvas, 0, y, y + ROW, AB_ROW_W, AB_PRESS, AH_WIN_H);
         if (ab.select && ab.mark[0]) {
             void *m = ab.mark[ab_is_sel(r)];
-            int src[4], dst[4], top = y + (ROW - SG_MARK) / 2;
-            if (top >= 0 && top + SG_MARK <= AH_WIN_H) {
-                src[0] = 0, src[1] = 0, src[2] = SG_MARK, src[3] = SG_MARK;
-                dst[0] = LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2, dst[1] = top, dst[2] = SG_MARK, dst[3] = SG_MARK;
-                canvas_draw_image(canvas, m, src, dst);
-            }
+            grid_mark_draw(canvas, m, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2, y + (ROW - SG_MARK) / 2, AH_WIN_H);
         }
         az_fill_h(canvas, 0, y + ROW - 1, y + ROW, AB_ROW_W, AB_HAIR, AH_WIN_H);
         if (ab_more()) rowmenu_paint(canvas, &ab.rm, RM_MORE_RIGHT, 0, y, ROW, AH_WIN_H);
@@ -323,7 +316,7 @@ static void ab_paint(void *canvas) {
 
 static int ab_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    int off = ab_off();
+    int off = grid_sv_off(ab.sv);
     (void)ctx;
     if (!canvas || !ab.view || !ab.g.tiles) return RET_OK;
     if (ab.count &&
@@ -714,7 +707,7 @@ static void ab_pills(int on) {
 /* The album's tracks again (the stock query of the class, the browsing record put back first) and the page rebuilt from them. */
 static void ab_select_off(void);
 static void ab_load(int keep) {
-    int at = keep ? ab_off() : 0, st = LS_ST_READY;
+    int at = keep ? grid_sv_off(ab.sv) : 0, st = LS_ST_READY;
     void *list = (void *)0;
     grid_drop(&ab.g);
     if (ab.src && ab.list) deque_destroy(ab.list); /* (our copy; the tiles above held texts, not records) */
@@ -826,9 +819,7 @@ static int ab_on_shuffle(void *ctx, void *e) {
 static void ab_selall_icon(void) {
     int all = ab.count &&
               ab.nsel == ab.count; /* the checked disc when every track is marked (stock has no pressed image for it) */
-    widget_set_prop_str(ab.btn_selall, "style:normal:icon", all ? "ah_nav_sel" : "ah_nav_unsel");
-    widget_set_prop_str(ab.btn_selall, "style:over:icon", all ? "ah_nav_sel" : "ah_nav_unsel");
-    widget_set_prop_str(ab.btn_selall, "style:pressed:icon", all ? "ah_nav_sel" : "ah_nav_unsel_down");
+    grid_icons(ab.btn_selall, all ? "ah_nav_sel" : "ah_nav_unsel", all ? "ah_nav_sel" : "ah_nav_unsel_down");
 }
 
 static void ab_select(int on) {
@@ -850,7 +841,7 @@ static void ab_select(int on) {
     ab_selall_icon();
     ab_retext();
     ab_size();
-    if (ab_off() > ab_max_scroll()) widget_set_prop_int(ab.sv, "yoffset", ab_max_scroll());
+    if (grid_sv_off(ab.sv) > ab_max_scroll()) widget_set_prop_int(ab.sv, "yoffset", ab_max_scroll());
     ab_redraw();
 }
 
@@ -916,23 +907,15 @@ static int ab_on_add(void *ctx, void *e) {
 
 static int ab_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(ab.view, pt);
+    grid_ev_local(ab.view, e, pt);
     return ab_at(pt[1]);
-}
-
-static void ab_set_press(int p) {
-    if (ab.press == p) return;
-    ab.press = p;
-    ab_redraw();
 }
 
 /* The press or release is in a row's "..." zone. */
 static int ab_in_zone(void *e) {
     int pt[2], x0;
     if (!ab_more()) return 0;
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(ab.view, pt);
+    grid_ev_local(ab.view, e, pt);
     x0 = rowmenu_zone_x(RM_MORE_RIGHT);
     return pt[0] >= x0 && pt[0] < x0 + RM_MORE_W;
 }
@@ -964,7 +947,7 @@ static int ab_on_down(void *ctx, void *e) {
     a = ab_item_of(e);
     ab.down = a + 1, m1_tap_at(&ab.tap, e);
     ab.down_more = a >= 0 && ab_in_zone(e);
-    if (!ab.select && !ab.down_more) ab_set_press(a + 1);
+    if (!ab.select && !ab.down_more) grid_set_press(&ab.press, a + 1, ab.sv);
     return RET_OK;
 }
 
@@ -972,7 +955,7 @@ static int ab_on_up(void *ctx, void *e) {
     int a = ab.down - 1, more = ab.down_more;
     (void)ctx;
     ab.down = ab.down_more = 0;
-    ab_set_press(0);
+    grid_set_press(&ab.press, 0, ab.sv);
     if (a < 0 || !e || !ab.view) return RET_OK;
     if (m1_tap_near(&ab.tap, e) && ab_item_of(e) == a) {
         if (ab.select)
@@ -989,7 +972,7 @@ static int ab_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     ab.down = ab.down_more = 0;
-    ab_set_press(0);
+    grid_set_press(&ab.press, 0, ab.sv);
     return RET_OK;
 }
 
@@ -1086,10 +1069,8 @@ static int ab_open(const lib_src_t *src, unsigned cls, void *row) {
         return -1; /* (a source's synthetic ids reach -2 too) */
     key = cc_album_key(row);
     if (src) { /* the page keeps its own copy of the row: it is the scope of every read of the tracks */
-        copy = _create_deque("stSongInfo");
+        copy = so_row_deque(row);
         if (!copy) return -1;
-        deque_init(copy);
-        _deque_push_back(copy, row); /* a copy, as the stock queries push rows */
     } else
         loadAlbumdetailList((int)cls, row);
     memset(&ab, 0, sizeof ab);

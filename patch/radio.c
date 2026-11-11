@@ -1082,7 +1082,7 @@ static struct {
 } lg __attribute__((section(".scratch")));
 
 unsigned rd_logo_hash(const char *url) {
-    unsigned h = m1_fnv(2166136261u, url);
+    unsigned h = m1_fnv(FNV_SEED, url);
     return h ? h : 1;
 }
 
@@ -1109,14 +1109,10 @@ int rd_logo_file(unsigned hash, char *path, unsigned n) {
 }
 
 static unsigned rd_logo_write(char *data, unsigned size, unsigned nmemb, void *user) {
-    unsigned len = size * nmemb, at = 0;
+    unsigned len = size * nmemb;
     (void)user;
     if (lg.cancel || len > RD_LOGO_CAP || lg.n > RD_LOGO_CAP - len) return 0;
-    while (at < len) {
-        int w = write(lg.fd, data + at, len - at);
-        if (w <= 0) return 0;
-        at += (unsigned)w;
-    }
+    if (!m1_write_all(lg.fd, data, len)) return 0;
     lg.n += len;
     return len;
 }

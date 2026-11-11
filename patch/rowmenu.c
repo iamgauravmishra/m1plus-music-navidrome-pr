@@ -16,6 +16,7 @@
 #include "upnext.h"
 #include "songinfo.h"
 #include "rowmenu.h"
+#include "songops.h"
 
 int rowmenu_zone_x(int right) { return right - RM_MORE_W; }
 
@@ -244,11 +245,8 @@ int rowmenu_open_src(rowmenu_t *rm, int row, void *rec, rowmenu_add_fn add, cons
     ls_row_t x;
     if (src == &lib_stock) src = (const lib_src_t *)0;
     if (!rm->on || rm->open || !rec) return 0;
-    d = _create_deque("stSongInfo");
+    d = so_row_deque(rec); /* a copy (the page's list may be replaced while the menu is open) */
     if (!d) return 0;
-    deque_init(d);
-    _deque_push_back(
-        d, rec); /* a copy, as the stock queries push rows (the page's list may be replaced while the menu is open) */
     if (deque_size(d) != 1) {
         deque_destroy(d);
         return 0;

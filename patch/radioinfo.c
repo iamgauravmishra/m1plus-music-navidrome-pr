@@ -12,6 +12,7 @@
 #include "stock.h"
 #include "home.h"
 #include "common.h"
+#include "grid.h"
 #include "i18n.h"
 #include "pcdetail.h"
 #include "radio.h"
@@ -182,8 +183,7 @@ static int sinfo_on_paint(void *ctx, void *e) {
     off = SINFO_I(sinfo.sv, SC_YOFF);
     if (sinfo.fade && (off > 0) != sinfo.fade_on) {
         sinfo.fade_on = off > 0;
-        widget_set_visible(sinfo.fade, sinfo.fade_on, 0);
-        widget_set_sensitive(sinfo.fade, 0);
+        grid_fade(sinfo.fade, sinfo.fade_on);
     }
     SINFO_I(canvas, CANVAS_OY) += off;
     for (i = 0; sinfo.lw && sinfo.ln && i < sinfo.nln; ++i) {

@@ -14,6 +14,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "common.h"
+#include "grid.h"
 #include "home.h"
 #include "azlist.h"
 #include "i18n.h"
@@ -131,8 +132,7 @@ static void ns_title_update(void) {
     int off = ns.sv ? *(int *)((char *)ns.sv + SC_YOFF) : 0;
     m1_title_set(ns.title, &ns.title_on, ns.noscroll || m1_title_gone(off, 0));
     if (ns.fade) {
-        widget_set_visible(ns.fade, off > 0, 0);
-        widget_set_sensitive(ns.fade, 0);
+        grid_fade(ns.fade, off > 0);
     }
 }
 

@@ -1027,17 +1027,6 @@ unsigned pf_render_show(const char *title, const char *feed, const char *image, 
     return o;
 }
 
-/* The line [p, stop) up to its newline; the next line starts at *next. Its length is without the CR. */
-static unsigned pf_line(const char *p, const char *stop, const char **next) {
-    const char *q = p;
-    unsigned n;
-    while (q < stop && *q != '\n') ++q;
-    n = (unsigned)(q - p);
-    *next = q < stop ? q + 1 : q;
-    if (n && p[n - 1] == '\r') --n;
-    return n;
-}
-
 /* The value of the field `key=` of a tab separated line (0 when there is none). */
 static int pf_field(const char *line, unsigned n, char key, const char **v, unsigned *vn) {
     unsigned at = 0;
@@ -1077,7 +1066,7 @@ static int pf_file_here(const char *dir, const char *f, unsigned fn) {
 int pf_find_episode(const char *eps, unsigned n, const char *file, char *url, unsigned usize, unsigned *length) {
     const char *stop = eps + n, *q, *next;
     for (q = eps; q < stop; q = next) {
-        unsigned len = pf_line(q, stop, &next), fn, un, ln, i, num = 0;
+        unsigned len = m1_line(q, stop, &next), fn, un, ln, i, num = 0;
         const char *f, *u, *l;
         if (!len || q[0] == '#' || !pf_field(q, len, 'f', &f, &fn) || !pf_same(f, fn, file)) continue;
         if (!pf_field(q, len, 'u', &u, &un) || !un || un >= usize) return 0;
@@ -1140,7 +1129,7 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
         f[0] = od[0] = 0;
         if (old) { /* an old line with this guid keeps its file name (and its description when the feed has none now) */
             for (q = old; q < stop; q = next) {
-                unsigned len = pf_line(q, stop, &next), vn;
+                unsigned len = m1_line(q, stop, &next), vn;
                 const char *v;
                 if (len && pf_field(q, len, 'g', &v, &vn) && vn == gl && pf_same(v, vn, it->guid)) {
                     const char *xv;
@@ -1193,7 +1182,7 @@ unsigned pf_render_episodes(const pf_parser_t *p, const char *dir, const char *o
     }
     if (old) /* the old entries that are not in the feed's window any more but have their file (or a started download) stay, as they were written */
         for (q = old; q < stop; q = next) {
-            unsigned len = pf_line(q, stop, &next), vn, fnn;
+            unsigned len = m1_line(q, stop, &next), vn, fnn;
             const char *v, *fvv;
             int listed = 0;
             if (!len || q[0] == '#' || !pf_field(q, len, 'f', &fvv, &fnn) || !pf_file_here(dir, fvv, fnn)) continue;

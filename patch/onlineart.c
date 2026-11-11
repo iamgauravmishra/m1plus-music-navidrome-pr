@@ -32,8 +32,6 @@
 #include "search.h"
 #include "sbapi.h"
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-
 #define OA_TILE 88
 #define OA_GAP 12
 #define OA_X0 16

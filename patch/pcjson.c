@@ -22,19 +22,12 @@ static void pj_ws(pj_t *p) {
     while (p->s < p->e && (*p->s == ' ' || *p->s == '\t' || *p->s == '\n' || *p->s == '\r')) ++p->s;
 }
 
-static int pj_hex(unsigned c) {
-    return c >= '0' && c <= '9'   ? (int)(c - '0')
-           : c >= 'a' && c <= 'f' ? (int)(c - 'a' + 10)
-           : c >= 'A' && c <= 'F' ? (int)(c - 'A' + 10)
-                                  : -1;
-}
-
 /* The value of the four hex digits at s (all four must be inside the text), -1 for anything else. */
 static int pj_hex4(const unsigned char *s, const unsigned char *e) {
     int v = 0, i;
     if (e - s < 4) return -1;
     for (i = 0; i < 4; ++i) {
-        int h = pj_hex(s[i]);
+        int h = m1_hexval(s[i]);
         if (h < 0) return -1;
         v = v << 4 | h;
     }

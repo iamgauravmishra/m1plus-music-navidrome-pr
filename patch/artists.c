@@ -52,8 +52,6 @@ extern int albums_open_src(const lib_src_t *src,
                            void *artist); /* patch/albums.c: the source's albums of one artist (the record is copied) */
 extern int songs_open_genre(const char *name, int unknown); /* patch/songs.c */
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-
 #define AR_ROW \
     52 /* tools/pod_ui.py ROW_H: the menu's rows (the Artists rows were 52 px before the page took the Songs page's structure) */
 #define AR_TOP \
@@ -114,7 +112,7 @@ static struct {
         cp; /* the shared cover poll (patch/libsrc.c): a source's picture on its way is asked for again, its spinner turned */
 } ar __attribute__((section(".scratch")));
 
-static void ar_redraw(void) { widget_invalidate_force(ar.sv, (void *)0); }
+static void ar_redraw(void) { grid_sv_redraw(ar.sv); }
 
 static const char *ar_name(void *r) {
     const char *s = r ? *(const char **)((char *)r + REC_TITLE) : (const char *)0;
@@ -200,20 +198,13 @@ static void ar_sections(void) {
     for (i = 0; i < ar.count; ++i) {
         void *r = deque_at(ar.artists, ar_stock(i));
         int k = az_rank_of(cc_name_initial(ar_name(r)));
-        if (ar.rev)
-            k = k ? 26 - k
-                  : 26; /* Z-A: Z is rank 0 .. A rank 25 and "#" (symbols, digits) last, so the ranks still rise down the list */
+        if (ar.rev) k = az_flip_rank(k); /* Z-A */
         ar.rank[i] = *(int *)((char *)r + REC_ID) == -1 && i ? (unsigned char)prev : (unsigned char)k;
         prev = ar.rank[i];
     }
     az_sections(&ar.al, ar.rank, 1);
     if (ar.rev) /* the headers and the rail show the letters of those ranks: rank 0 is Z, 25 is A, 26 is "#" */
-        for (i = 0; i < (unsigned)ar.al.nsec; ++i) {
-            int t = ar.al.sec_letter[i] == '#'
-                        ? 0
-                        : ar.al.sec_letter[i] - 'A' + 1; /* (the rank az_sections labelled it with) */
-            ar.al.sec_letter[i] = (unsigned char)(t == 26 ? '#' : 'Z' - t);
-        }
+        az_flip_letters(&ar.al);
 }
 
 static int ar_content(void) { return az_rows_end(&ar.al) + AR_BOTTOM; }
@@ -228,8 +219,7 @@ static void ar_title_text(const char *key) {
 static void ar_title_update(void) {
     m1_title_set(ar.title, &ar.title_on, ar.noscroll || m1_title_gone(az_off(&ar.al), 0));
     if (ar.fade) {
-        widget_set_visible(ar.fade, az_off(&ar.al) > 0, 0);
-        widget_set_sensitive(ar.fade, 0);
+        grid_fade(ar.fade, az_off(&ar.al) > 0);
     }
 }
 
@@ -455,15 +445,8 @@ static int ar_on_photo(const void *unused) {
  */
 static int ar_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(ar.view, pt);
+    grid_ev_local(ar.view, e, pt);
     return az_at(&ar.al, pt[1]);
-}
-
-static void ar_set_press(int p) {
-    if (ar.press == p) return;
-    ar.press = p;
-    ar_redraw();
 }
 
 static int ar_on_down(void *ctx, void *e) {
@@ -473,15 +456,14 @@ static int ar_on_down(void *ctx, void *e) {
     if (!e || !ar.view || !ar.count) return RET_OK;
     a = ar_item_of(e);
     ar.down = a + 1, m1_tap_at(&ar.tap, e);
-    ar_set_press(a + 1);
+    grid_set_press(&ar.press, a + 1, ar.sv);
     return RET_OK;
 }
 
 static int ar_on_up(void *ctx, void *e) {
     int a = ar.down - 1;
     (void)ctx;
-    ar.down = 0;
-    ar_set_press(0);
+    grid_press_end(&ar.down, &ar.press, ar.sv);
     if (a < 0 || !e || !ar.view) return RET_OK;
     if (m1_tap_near(&ar.tap, e) && ar_item_of(e) == a) ar_open((unsigned)a);
     return RET_OK;
@@ -490,8 +472,7 @@ static int ar_on_up(void *ctx, void *e) {
 static int ar_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    ar.down = 0;
-    ar_set_press(0);
+    grid_press_end(&ar.down, &ar.press, ar.sv);
     return RET_OK;
 }
 
@@ -708,6 +689,7 @@ static int ar_on_more(void *ctx, void *e) {
 /* The M1+ Music menu's Artists row (home 0), or Genres (HOME_GENRE) or Composers (HOME_COMPOSER): the same page on another stock class. 0 once the page is up, -1 if
  * it could not open (Genres and Composers then open the tile's stock page, as the Songs lists do). */
 static int ar_open_page(int home, const lib_src_t *src) {
+    int az_ok;
     if (ar.win) return -1;
     memset(&ar, 0, sizeof ar);
     ar.src = src;
@@ -733,15 +715,9 @@ static int ar_open_page(int home, const lib_src_t *src) {
     ar.st_title = widget_lookup(ar.win, "label_row_title", 1);
     ar.al.win = ar.win, ar.al.sv = ar.sv, ar.al.top = AR_TOP, ar.al.row = AR_ROW;
     az_prefs(&ar.al);
-    ar.al.st_hdr = widget_lookup(ar.win, "label_hdr", 1);
-    ar.al.st_rail = widget_lookup(ar.win, "label_rail", 1);
-    ar.al.st_rail_on = widget_lookup(ar.win, "label_rail_on", 1);
-    ar.al.rail = widget_lookup(ar.win, "sg_rail", 1);
-    ar.al.bubble = widget_lookup(ar.win, "sg_bubble", 1);
-    ar.al.bubble_letter = widget_lookup(ar.win, "sg_bubble_letter", 1);
+    az_ok = az_bind(&ar.al, ar.win);
     m1_bind(ar.win, "btn_more", ar_on_more, (void *)0);
-    if (!ar.list || !ar.sv || !ar.view || !ar.status || !ar.st_title || !ar.al.st_hdr || !ar.al.st_rail ||
-        !ar.al.st_rail_on || !ar.al.rail || !ar.al.bubble || !ar.al.bubble_letter) {
+    if (!ar.list || !ar.sv || !ar.view || !ar.status || !ar.st_title || !az_ok) {
         int h = ar.home;
         navigator_back(); /* an asset that is not ours */
         return h ? pod_home_open(h) : -1;
@@ -776,13 +752,7 @@ static int ar_open_page(int home, const lib_src_t *src) {
     ar.rev = set_read(ar_sort_file(0), '0') == 'a';
     az_make_disc(&ar.al);
     ar.chev = m1_make_chevron();
-    ar.noscroll = !widget_on(ar.sv, EVT_SCROLL, ar_on_scroll, (void *)0) ||
-                  !widget_on(ar.sv, EVT_SCROLL_END, ar_on_scroll, (void *)0);
-    if (ar.noscroll && ar.title)
-        widget_set_visible(
-            ar.title, 1,
-            0); /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
-    ar.title_on = ar.noscroll;
+    ar.noscroll = grid_scroll_bind(ar.sv, ar_on_scroll, ar.title, &ar.title_on);
     widget_on(ar.win, EVT_WINDOW_TO_BG, ar_on_bg, (void *)0);
     ar.epoch = ap_epoch();
     widget_on(ar.win, EVT_WINDOW_TO_FG, ar_on_fg, (void *)0);
@@ -790,11 +760,7 @@ static int ar_open_page(int home, const lib_src_t *src) {
     widget_on(ar.view, EVT_POINTER_UP, ar_on_up, (void *)0);
     widget_on(ar.view, EVT_POINTER_ABORT, ar_on_abort, (void *)0);
     widget_on(ar.view, EVT_AFTER_PAINT, ar_on_paint, (void *)0);
-    widget_on(ar.al.rail, EVT_POINTER_DOWN, ar_on_rail, (void *)0);
-    widget_on(ar.al.rail, EVT_POINTER_MOVE, ar_on_rail, (void *)0);
-    widget_on(ar.al.rail, EVT_POINTER_UP, ar_on_rail, (void *)0);
-    widget_on(ar.al.rail, EVT_POINTER_ABORT, ar_on_rail, (void *)0);
-    widget_on(ar.al.rail, EVT_AFTER_PAINT, ar_on_rail_paint, (void *)0);
+    az_bind_rail(&ar.al, ar_on_rail, ar_on_rail_paint);
     ar_mode_show();
     ar_load(0);
     if (ar.src && ar.src->gen) ar.gen_timer = timer_add(ar_on_gen, (void *)0, LS_GEN_MS);

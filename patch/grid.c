@@ -305,15 +305,28 @@ int grid_spin_turn(grid_t *g) {
     return n;
 }
 
-void grid_blit(void *canvas, grid_t *g, grid_tile_t *t, int x, int y, int view_h) {
-    void *bmp = t->art == 1 ? t->bmp : g->placeholder;
-    int top = y < 0 ? -y : 0, bottom = view_h > 0 && y + g->side > view_h ? view_h - y : g->side;
+void grid_blit_from(void *canvas, void *bmp, int sx, int sy, int w, int h, int x, int y, int view_h) {
+    int top = y < 0 ? -y : 0, bottom = view_h > 0 && y + h > view_h ? view_h - y : h;
     int src[4], dst[4];
     if (!bmp || bottom <= top) return;
-    src[0] = 0, src[1] = top, src[2] = g->side, src[3] = bottom - top;
-    dst[0] = x, dst[1] = y + top, dst[2] = g->side, dst[3] = bottom - top;
+    src[0] = sx, src[1] = sy + top, src[2] = w, src[3] = bottom - top;
+    dst[0] = x, dst[1] = y + top, dst[2] = w, dst[3] = bottom - top;
     canvas_draw_image(canvas, bmp, src, dst);
-    if (t->load && t->art != 1 &&
+}
+
+void grid_mark_draw(void *canvas, void *bmp, int x, int top, int view_h) {
+    int src[4], dst[4];
+    if (top < 0 || top + SG_MARK > view_h) return;
+    src[0] = src[1] = 0, src[2] = src[3] = SG_MARK;
+    dst[0] = x, dst[1] = top, dst[2] = dst[3] = SG_MARK;
+    canvas_draw_image(canvas, bmp, src, dst);
+}
+
+void grid_blit(void *canvas, grid_t *g, grid_tile_t *t, int x, int y, int view_h) {
+    void *bmp = t->art == 1 ? t->bmp : g->placeholder;
+    int src[4], dst[4];
+    grid_blit_from(canvas, bmp, 0, 0, g->side, g->side, x, y, view_h);
+    if (bmp && t->load && t->art != 1 &&
         g->spin
             [0]) { /* a source's cover on its way: the spinner on the disc, cut at the view's edges as the cover is */
         int px = g->spin_px, sy = y + (g->side - px) / 2;
@@ -378,13 +391,8 @@ void grid_list_paint(void *canvas, grid_t *g, void *st_title, void *st_sub, int 
         grid_fill(canvas, LIST_TEXT_X + shift, LIST_HAIR_END - inset, y + LIST_ROW_H - 1, y + LIST_ROW_H, LIST_HAIR,
                   view_h);
         if (chev && !t->nochev && g->chev) { /* centred on the row above its hairline, cut to the window by hand */
-            int cy = y + (LIST_ROW_H - 1 - POD_CHEV_H) / 2, top = cy < 0 ? -cy : 0,
-                bottom = view_h > 0 && cy + POD_CHEV_H > view_h ? view_h - cy : POD_CHEV_H, src[4], dst[4];
-            if (bottom > top) {
-                src[0] = 0, src[1] = top, src[2] = POD_CHEV_W, src[3] = bottom - top;
-                dst[0] = LIST_CHEV_X - inset, dst[1] = cy + top, dst[2] = POD_CHEV_W, dst[3] = bottom - top;
-                canvas_draw_image(canvas, g->chev, src, dst);
-            }
+            grid_blit_from(canvas, g->chev, 0, 0, POD_CHEV_W, POD_CHEV_H, LIST_CHEV_X - inset,
+                           y + (LIST_ROW_H - 1 - POD_CHEV_H) / 2, view_h);
         }
     }
     for (

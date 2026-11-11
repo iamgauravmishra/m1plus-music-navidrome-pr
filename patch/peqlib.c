@@ -24,7 +24,6 @@ extern int pod_open_peqlib(void); /* patch/m1plus.c: open_page(POD_PEQLIB_PAGE) 
     (2 * \
      PQ_ROWS) /* the rows after the download row: PQ_ROWS AutoEq slots, then PQ_ROWS On Card slots (row = slot + 1) */
 #define LB_PATH (sizeof(PEQ_DIR) + PEQ_NAME + 1)
-#define LB_STAMP 10 /* "# AutoEq: " */
 #define LB_READ 270 /* the stamp's line: the index path is at most 200 bytes (patch/autoeq.c AE_PATH) */
 
 static struct {
@@ -51,17 +50,17 @@ static int lb_stamp(const char *file, char *sub, unsigned size) {
     if (fd < 0) return 0;
     got = read(fd, buf, LB_READ);
     close(fd);
-    if (got < LB_STAMP + 3) return 0;
+    if (got < (int)sizeof(PEQ_STAMP) + 2) return 0;
     buf[got] = 0;
-    for (i = 0; i < 17 && buf[i] == "# AutoEq edited: "[i]; i++) {
+    for (i = 0; i < (int)sizeof(PEQ_STAMP_EDITED) - 1 && buf[i] == PEQ_STAMP_EDITED[i]; i++) {
     }
-    if (i == 17)
-        p = buf + 17;
+    if (i == (int)sizeof(PEQ_STAMP_EDITED) - 1)
+        p = buf + i;
     else {
-        for (i = 0; i < LB_STAMP && buf[i] == "# AutoEq: "[i]; i++) {
+        for (i = 0; i < (int)sizeof(PEQ_STAMP) - 1 && buf[i] == PEQ_STAMP[i]; i++) {
         }
-        if (i < LB_STAMP) return 0;
-        p = buf + LB_STAMP;
+        if (i < (int)sizeof(PEQ_STAMP) - 1) return 0;
+        p = buf + i;
     }
     for (n = 0; p[n] && p[n] != '\r' && p[n] != '\n'; ++n) {
     }

@@ -417,13 +417,60 @@ __attribute__((noinline)) static void reset_all_ask(void) {
 
 static void pick_choose(const struct pod_row *row);
 
-static int is_pick(const struct pod_row *row) { /* the pickers' check rows */
-    return row->action == ACT_THEMESET || row->action == ACT_RECSET || row->action == ACT_VTHSET ||
-           row->action == ACT_BGSET || row->action == ACT_ACCENTSET || row->action == ACT_REGIONSET ||
-           row->action == ACT_CHGLIMSET || row->action == ACT_LOCKSET || row->action == ACT_IDLESET ||
-           row->action == ACT_NASET || row->action == ACT_LIGHTSET || row->action == ACT_LEDSET ||
-           row->action == ACT_KEYLOCKSET || row->action == ACT_SHUTDOWNSET;
+extern int tape_theme(
+    void); /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal, 3 Auto (by the track's quality) */
+extern int tape_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
+extern int vinyl_record(void); /* patch/vinyl.c: the saved record colour, 0 Black (the default) .. VN_RECS - 1 */
+extern int vinyl_record_set(int rec); /* choose it, saved atomically; the colour or -1 */
+extern int
+lk_layout(void); /* patch/lockscreen.c: the saved lock screen layout, 0 Large Cover (the default), 1 Mini Player */
+extern int lk_layout_set(int layout); /* choose it, saved atomically; the layout or -1 */
+extern int idle_choice(
+    void); /* patch/bigcover.c: Idle Display: 0 Off (stock's Cover mode byte off), 1 Album Cover, 2 Cassette, 3 Vinyl; read live */
+extern int idle_set(
+    int choice); /* choose it, saved (the byte through stock's save, the destination atomically); the choice or -1 */
+extern int vinyl_theme(void); /* patch/vinyl.c: the saved plinth theme, 0 Graphite (the default), 1 White */
+extern int vinyl_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
+
+/* The value rows (act: a row showing the value of vk and opening its picker page) and the pickers' check rows (set_act: a row that sets and checks
+ * a choice with set, and shows it with get). An action in neither does nothing here. */
+static const struct pick_def {
+    int act, vk, set_act;
+    int (*get)(void);
+    int (*set)(int);
+} pick_tab[] = {
+    {ACT_CTHEME, VK_THEME, ACT_THEMESET, tape_theme, tape_theme_set},
+    {ACT_VREC, VK_RECORD, ACT_RECSET, vinyl_record, vinyl_record_set},
+    {ACT_VTHEME, VK_VTHEME, ACT_VTHSET, vinyl_theme, vinyl_theme_set},
+    {ACT_BG, VK_BG, ACT_BGSET, pal_bg_mode, pal_bg_set},
+    {ACT_ACCENT, VK_ACCENT, ACT_ACCENTSET, pal_accent_saved, pal_accent_set},
+    {ACT_REGION, VK_REGION, ACT_REGIONSET, pcregion_saved, pcregion_set},
+    {ACT_PEQ, VK_EQ, 0, (int (*)(void))0, (int (*)(int))0},
+    {ACT_CHGLIM, VK_CHGLIM, ACT_CHGLIMSET, chg_limit, chg_set},
+    {ACT_LOCKSTYLE, VK_LOCKSTYLE, ACT_LOCKSET, lk_layout, lk_layout_set},
+    {ACT_IDLE, VK_IDLE, ACT_IDLESET, idle_choice, idle_set},
+    {ACT_NEXTALBUM, VK_NA, ACT_NASET, na_setting, na_set},
+    {ACT_LIGHT, VK_LIGHT, ACT_LIGHTSET, disp_light, disp_light_set},
+    {ACT_LED, VK_LED, ACT_LEDSET, disp_led, disp_led_set},
+    {ACT_KEYLOCK, VK_KEYLOCK, ACT_KEYLOCKSET, kp_lock, kp_lock_set},
+    {ACT_SHUTDOWN, VK_SHUTDOWN, ACT_SHUTDOWNSET, kp_shutdown, kp_shutdown_set},
+};
+
+static const struct pick_def *pick_value_of(int act) {
+    unsigned i;
+    for (i = 0; i < sizeof pick_tab / sizeof pick_tab[0]; i++)
+        if (pick_tab[i].act == act) return &pick_tab[i];
+    return (const struct pick_def *)0;
 }
+
+static const struct pick_def *pick_set_of(int act) {
+    unsigned i;
+    for (i = 0; i < sizeof pick_tab / sizeof pick_tab[0]; i++)
+        if (pick_tab[i].set && pick_tab[i].set_act == act) return &pick_tab[i];
+    return (const struct pick_def *)0;
+}
+
+static int is_pick(const struct pod_row *row) { return pick_set_of(row->action) != (const struct pick_def *)0; }
 
 static void *stock_front __attribute__((section(
     ".scratch"))); /* the window an ACT_STOCK row opened; forgotten when a Settings page is back in front (page_refresh) */
@@ -434,12 +481,7 @@ static int on_row(void *ctx, void *e) {
     if (!row) return RET_OK;
     if (row->action == ACT_HOME)
         home_open(row->arg);
-    else if (row->action == ACT_PAGE || row->action == ACT_CTHEME || row->action == ACT_VREC ||
-             row->action == ACT_VTHEME || row->action == ACT_BG || row->action == ACT_ACCENT ||
-             row->action == ACT_REGION || row->action == ACT_PEQ || row->action == ACT_CHGLIM ||
-             row->action == ACT_LOCKSTYLE || row->action == ACT_IDLE || row->action == ACT_NEXTALBUM ||
-             row->action == ACT_LIGHT || row->action == ACT_LED || row->action == ACT_KEYLOCK ||
-             row->action == ACT_SHUTDOWN) /* the value rows open their picker page */
+    else if (row->action == ACT_PAGE || pick_value_of(row->action)) /* the value rows open their picker page */
         open_page(row->arg, 0);
     else if (row->action == ACT_PLAYER)
         m1_open_now_playing();
@@ -623,23 +665,9 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
 
 /* The values (tr keys of the stock tables where the value is stock's own, so they follow Settings > Language): Wi-Fi and Bluetooth On / Off (the flags the status bar reads), the EQ (Off, or the preset's name from stock's own lookup), the album order and the
  * cassette theme (ours). */
-extern int tape_theme(
-    void); /* patch/tape.c: the saved theme, 0 Normal (the default), 1 Chrome, 2 Metal, 3 Auto (by the track's quality) */
-extern int tape_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
-extern int vinyl_record(void); /* patch/vinyl.c: the saved record colour, 0 Black (the default) .. VN_RECS - 1 */
-extern int vinyl_record_set(int rec); /* choose it, saved atomically; the colour or -1 */
-extern int
-lk_layout(void); /* patch/lockscreen.c: the saved lock screen layout, 0 Large Cover (the default), 1 Mini Player */
-extern int lk_layout_set(int layout); /* choose it, saved atomically; the layout or -1 */
-extern int idle_choice(
-    void); /* patch/bigcover.c: Idle Display: 0 Off (stock's Cover mode byte off), 1 Album Cover, 2 Cassette, 3 Vinyl; read live */
-extern int idle_set(
-    int choice); /* choose it, saved (the byte through stock's save, the destination atomically); the choice or -1 */
 static const char *const idle_key[4] = {"Off", "Album Cover", "Cassette", "Vinyl"};
 static const char *const tape_theme_key[4] = {"Normal", "Chrome", "Metal", "Auto"};
 static const char *const record_key[VN_RECS] = {"Black", "Cover"};
-extern int vinyl_theme(void); /* patch/vinyl.c: the saved plinth theme, 0 Graphite (the default), 1 White */
-extern int vinyl_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
 static const char *const vtheme_key[VN_THEMES] = {"Graphite", "Snow"};
 static const char *const accent_key[PAL_ACCENTS] = {
     "Neutral", "Red", "Orange", "Green", "Teal", "Purple", "Champagne"}; /* tools/pod_pages.py ACCENT_VALUES */
@@ -767,41 +795,16 @@ static void info_text(void *label, int kind) {
 }
 
 static int row_value(const struct pod_row *row) {
-    return row->action == ACT_STOCK       ? POD_STOCK[row->arg].value
-           : row->action == ACT_CTHEME    ? VK_THEME
-           : row->action == ACT_IDLE      ? VK_IDLE
-           : row->action == ACT_VREC      ? VK_RECORD
-           : row->action == ACT_VTHEME    ? VK_VTHEME
-           : row->action == ACT_BG        ? VK_BG
-           : row->action == ACT_ACCENT    ? VK_ACCENT
-           : row->action == ACT_REGION    ? VK_REGION
-           : row->action == ACT_PEQ       ? VK_EQ
-           : row->action == ACT_CHGLIM    ? VK_CHGLIM
-           : row->action == ACT_LOCKSTYLE ? VK_LOCKSTYLE
-           : row->action == ACT_NEXTALBUM ? VK_NA
-           : row->action == ACT_LIGHT     ? VK_LIGHT
-           : row->action == ACT_LED       ? VK_LED
-           : row->action == ACT_KEYLOCK   ? VK_KEYLOCK
-           : row->action == ACT_SHUTDOWN  ? VK_SHUTDOWN
-                                          : VK_NONE;
+    const struct pick_def *d;
+    if (row->action == ACT_STOCK) return POD_STOCK[row->arg].value;
+    d = pick_value_of(row->action);
+    return d ? d->vk : VK_NONE;
 }
 
-/* The chosen picker row: the cassette theme, the vinyl record or base, the background or the accent. */
+/* The chosen picker row: the one whose argument is the setting's saved value. */
 static int pick_chosen(const struct pod_row *row) {
-    return row->action == ACT_IDLESET       ? row->arg == idle_choice()
-           : row->action == ACT_RECSET      ? row->arg == vinyl_record()
-           : row->action == ACT_BGSET       ? row->arg == pal_bg_mode()
-           : row->action == ACT_ACCENTSET   ? row->arg == pal_accent_saved()
-           : row->action == ACT_REGIONSET   ? row->arg == pcregion_saved()
-           : row->action == ACT_CHGLIMSET   ? row->arg == chg_limit()
-           : row->action == ACT_LOCKSET     ? row->arg == lk_layout()
-           : row->action == ACT_NASET       ? row->arg == na_setting()
-           : row->action == ACT_LIGHTSET    ? row->arg == disp_light()
-           : row->action == ACT_LEDSET      ? row->arg == disp_led()
-           : row->action == ACT_KEYLOCKSET  ? row->arg == kp_lock()
-           : row->action == ACT_SHUTDOWNSET ? row->arg == kp_shutdown()
-           : row->action == ACT_VTHSET      ? row->arg == vinyl_theme()
-                                            : row->arg == tape_theme();
+    const struct pick_def *d = pick_set_of(row->action);
+    return d && row->arg == d->get();
 }
 
 static void page_refresh(void *win, const struct pod_page *page) {
@@ -875,20 +878,8 @@ static void pick_choose(const struct pod_row *row) {
     int i;
     for (i = 0; i < POD_PAGE_COUNT; i++)
         if (POD_PAGES[i].rows && row >= POD_PAGES[i].rows && row < POD_PAGES[i].rows + POD_PAGES[i].count) {
-            if ((row->action == ACT_IDLESET       ? idle_set(row->arg)
-                 : row->action == ACT_RECSET      ? vinyl_record_set(row->arg)
-                 : row->action == ACT_BGSET       ? pal_bg_set(row->arg)
-                 : row->action == ACT_ACCENTSET   ? pal_accent_set(row->arg)
-                 : row->action == ACT_REGIONSET   ? pcregion_set(row->arg)
-                 : row->action == ACT_CHGLIMSET   ? chg_set(row->arg)
-                 : row->action == ACT_LOCKSET     ? lk_layout_set(row->arg)
-                 : row->action == ACT_NASET       ? na_set(row->arg)
-                 : row->action == ACT_LIGHTSET    ? disp_light_set(row->arg)
-                 : row->action == ACT_LEDSET      ? disp_led_set(row->arg)
-                 : row->action == ACT_KEYLOCKSET  ? kp_lock_set(row->arg)
-                 : row->action == ACT_SHUTDOWNSET ? kp_shutdown_set(row->arg)
-                 : row->action == ACT_VTHSET      ? vinyl_theme_set(row->arg)
-                                                  : tape_theme_set(row->arg)) >= 0) {
+            const struct pick_def *d = pick_set_of(row->action);
+            if (d && d->set(row->arg) >= 0) {
                 win = pod_fg[i];
                 if (win) page_refresh(win, &POD_PAGES[i]);
             }

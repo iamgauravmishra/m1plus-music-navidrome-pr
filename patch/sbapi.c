@@ -20,9 +20,6 @@
 #include "sbapi.h"
 #include "fnv.h"
 
-extern int pn_free_kb(const char *path, unsigned *kb);
-
-#define SBA_MIN_EPOCH 1750000000u /* a clock before this was never set (as patch/pcnet.h PN_MIN_EPOCH) */
 #define SBA_SLOTS SBA_QMAX
 #define SBA_STATS 48
 #define SBA_CONF_URL 256
@@ -152,12 +149,7 @@ static void sba_copy(char *out, unsigned cap, const char *s) {
     out[n] = 0;
 }
 
-static int sba_same(const char *x, const char *y) {
-    while (*x && *x == *y) ++x, ++y;
-    return *x == *y;
-}
-
-static unsigned sba_fnv(const char *s) { return m1_fnv(2166136261u, s); }
+static unsigned sba_fnv(const char *s) { return m1_fnv(FNV_SEED, s); }
 
 static unsigned sba_hash2(const char *s) {
     unsigned h = 5381;
@@ -276,14 +268,14 @@ static int sba_wopen(sba_w_t *w, const char *path, unsigned kind, unsigned rowsi
     w->fd = -1;
     if (!m1_card_mounted()) return SBA_STORAGE;
     sba_dirs();
-    if (pn_free_kb(SBA_DIR, &kb) && kb < SBA_CACHE_RESERVE_KB) return SBA_CARDFULL;
+    if (m1_free_kb(SBA_DIR, &kb) && kb < SBA_CACHE_RESERVE_KB) return SBA_CARDFULL;
     sba_copy(w->path, sizeof w->path, path);
     if (snprintf(w->tmp, sizeof w->tmp, "%s.tmp", path) >= (int)sizeof w->tmp) return SBA_STORAGE;
     w->fd = open(w->tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (w->fd < 0) return SBA_STORAGE;
     h.magic[0] = 'S', h.magic[1] = 'B', h.magic[2] = 'A', h.magic[3] = '1';
     h.kind = kind, h.rowsize = rowsize, h.flags = flags;
-    if (!sbn_write_all(w->fd, &h, sizeof h)) {
+    if (!m1_write_all(w->fd, &h, sizeof h)) {
         close(w->fd);
         unlink(w->tmp);
         w->fd = -1;
@@ -292,9 +284,7 @@ static int sba_wopen(sba_w_t *w, const char *path, unsigned kind, unsigned rowsi
     return SBA_OK;
 }
 
-static int sba_wput(sba_w_t *w, const void *rows, unsigned bytes) {
-    return !bytes || sbn_write_all(w->fd, rows, bytes);
-}
+static int sba_wput(sba_w_t *w, const void *rows, unsigned bytes) { return !bytes || m1_write_all(w->fd, rows, bytes); }
 
 static void sba_wabort(sba_w_t *w) {
     if (w->fd < 0) return;
@@ -305,13 +295,9 @@ static void sba_wabort(sba_w_t *w) {
 
 /* fsync, close and rename onto the file. SBA_OK or SBA_STORAGE (nothing left behind). */
 static int sba_wcommit(sba_w_t *w) {
-    int ok = fsync(w->fd) == 0;
-    ok = close(w->fd) == 0 && ok;
+    int fd = w->fd;
     w->fd = -1;
-    if (ok && !m1_card_mounted()) ok = 0;
-    if (ok && rename(w->tmp, w->path)) ok = 0;
-    if (!ok) unlink(w->tmp);
-    return ok ? SBA_OK : SBA_STORAGE;
+    return m1_commit(fd, m1_card_mounted(), w->tmp, w->path) ? SBA_OK : SBA_STORAGE;
 }
 
 /* A whole list in one go. */
@@ -334,7 +320,7 @@ static int sba_wtext(const char *path, const char *tmp, const char *text, unsign
 }
 
 /* The id (the struct's first member) of the row a walk is on. */
-static int sba_row_is(const void *row, const char *id) { return sba_same((const char *)row, id); }
+static int sba_row_is(const void *row, const char *id) { return !strcmp((const char *)row, id); }
 
 /* Set the starred flag of the track rows with that id in a cache file, in place: the file is read to find the rows and only the flag byte of a row that must change is written (lseek + write at
  * its offset). Nothing is copied, so a star costs a read of the file and no rewrite (a 50,000-song songs.idx is 41 MB), and a file that does not have the row is left untouched. A one-byte
@@ -608,7 +594,7 @@ static int sba_url_clean(const char *url, char *out) {
     for (i = 0; i < n; ++i)
         if (out[i] == ' ' || out[i] == '?' || out[i] == '#') return 0;
     while (n > 8 && out[n - 1] == '/') out[--n] = 0;
-    if (n >= 5 && sba_same(out + n - 5, "/rest")) out[n -= 5] = 0;
+    if (n >= 5 && !strcmp(out + n - 5, "/rest")) out[n -= 5] = 0;
     host = sbn_prefix(out, "https://") ? 8 : 7;
     if (n <= host || out[host] == '/' || out[host] == ':') return 0;
     return 1;
@@ -619,7 +605,7 @@ int sba_conf_url_set(const char *url) {
     int code;
     sba_conf_load();
     if (!url || !sba_url_clean(url, clean)) return SBA_PARSE;
-    if (sba_same(clean, sba.url)) return SBA_OK;
+    if (!strcmp(clean, sba.url)) return SBA_OK;
     sba_copy(old, sizeof old, sba.url);
     sba_copy(sba.url, sizeof sba.url, clean);
     code = sba_conf_save();
@@ -640,7 +626,7 @@ int sba_conf_user_set(const char *user) {
     int code;
     sba_conf_load();
     if (!user || !sba_text_ok(user, 0, SBA_CONF_USER)) return SBA_PARSE;
-    if (sba_same(user, sba.user)) return SBA_OK;
+    if (!strcmp(user, sba.user)) return SBA_OK;
     sba_copy(old, sizeof old, sba.user);
     sba_copy(sba.user, sizeof sba.user, user);
     code = sba_conf_save();
@@ -689,8 +675,8 @@ static int sba_guard_for(const char *url) {
     if (!m1_card_mounted()) return SBA_STORAGE;
     if (get_wifisignal() <= 0) return SBA_NOWIFI;
     if (sbn_https(url)) {
-        if ((unsigned)time((long *)0) < SBA_MIN_EPOCH) return SBA_NOCLOCK;
-        if (access(SBA_CA, 0)) return SBA_NOCERT;
+        if ((unsigned)time((long *)0) < M1_MIN_EPOCH) return SBA_NOCLOCK;
+        if (access(M1_CA, 0)) return SBA_NOCERT;
     }
     return SBA_OK;
 }
@@ -867,7 +853,7 @@ static int sba_store(sba_wk_t *w, const char *path, unsigned kind, unsigned rows
 /* The library's signature, the sync's own totals (no extra request): the track count, the seconds, the album count and the newest album's creation time, mixed (never 0). Phase 2 fills the library again when it changes. */
 static unsigned sba_mix(unsigned h, unsigned v) {
     unsigned i;
-    for (i = 0; i < 4; ++i) h = (h ^ ((v >> (8 * i)) & 0xff)) * 16777619u;
+    for (i = 0; i < 4; ++i) h = (h ^ ((v >> (8 * i)) & 0xff)) * FNV_PRIME;
     return h;
 }
 
@@ -929,7 +915,7 @@ static int sba_sync_albums(sba_wk_t *w, unsigned *songs, int *trunc, unsigned *s
         }
     }
     if (g.fd >= 0) sba_wabort(&g);
-    if (!code) *sig = sba_mix(sba_mix(sba_mix(sba_mix(2166136261u, *songs), secs), total), newest) | 1u;
+    if (!code) *sig = sba_mix(sba_mix(sba_mix(sba_mix(FNV_SEED, *songs), secs), total), newest) | 1u;
     free(ent);
     free(page);
     return code;
@@ -1025,7 +1011,7 @@ static int sba_run_search(sba_wk_t *w, const char *term) {
     char extra[SBA_TERM * 3 + 96];
     unsigned o = (unsigned)snprintf(extra, sizeof extra, "&query=");
     int code;
-    o = sbn_urlenc(extra, sizeof extra, o, term);
+    o = m1_urlenc(extra, sizeof extra, o, term);
     if (!o) return SBA_PARSE;
     snprintf(extra + o, sizeof extra - o, "&songCount=%u&albumCount=%u&artistCount=%u", SBA_SEARCH_N, SBA_SEARCH_N,
              SBA_SEARCH_N);
@@ -1050,14 +1036,14 @@ static int sba_webp(const unsigned char *d, unsigned n) {
 
 static int sba_run_cover(sba_wk_t *w, const char *cover) {
     char path[SBA_PATH], extra[32], tmp[SBA_PATH + 8];
-    int code, fd, have;
+    int code, have;
     unsigned kb = 0;
     if (sba_cover_path(path, sizeof path, cover)) return SBA_PARSE;
     have = sba_cover_have(cover);
     if (have) return have > 0 ? SBA_OK : SBA_NOTFOUND;
     if (!m1_card_mounted()) return SBA_STORAGE;
     sba_dirs();
-    if (pn_free_kb(SBA_DIR, &kb) && kb < SBA_CACHE_RESERVE_KB) return SBA_CARDFULL;
+    if (m1_free_kb(SBA_DIR, &kb) && kb < SBA_CACHE_RESERVE_KB) return SBA_CARDFULL;
     snprintf(extra, sizeof extra, "&size=%u", SBA_COVER_PX);
     code = sba_get(w, "getCoverArt", cover, extra);
     snprintf(tmp, sizeof tmp, "%s.tmp", path);
@@ -1072,16 +1058,9 @@ static int sba_run_cover(sba_wk_t *w, const char *cover) {
     if (w->sink->used > SBA_COVER_MAX || !sba_png_or_jpeg((const unsigned char *)w->sink->data, w->sink->used))
         return SBA_PARSE;
     if ((code = sba_stop(w)) != 0) return code;
-    fd = open(tmp, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (fd < 0) return SBA_STORAGE;
-    code = sbn_write_all(fd, w->sink->data, w->sink->used) && fsync(fd) == 0 ? SBA_OK : SBA_STORAGE;
-    if (close(fd)) code = SBA_STORAGE;
-    if (!code && rename(tmp, path)) code = SBA_STORAGE;
-    if (code)
-        unlink(tmp);
-    else
-        sba_cbump();
-    return code;
+    if (!m1_save(path, tmp, 0644, w->sink->data, w->sink->used)) return SBA_STORAGE;
+    sba_cbump();
+    return SBA_OK;
 }
 
 /* The empty "no art" marker for a cover id (what a 404 leaves): 1 when it is there. */
@@ -1111,7 +1090,7 @@ static int sba_ov_hold(const char *id, int on) {
     for (i = 0; i < SBA_OV; ++i) {
         if (!sba.ov[i].id[0]) {
             if (free_at < 0) free_at = i;
-        } else if (sba_same(sba.ov[i].id, id))
+        } else if (!strcmp(sba.ov[i].id, id))
             break;
     }
     if (i == SBA_OV) i = free_at;
@@ -1131,7 +1110,7 @@ static void sba_ov_release(const char *id) {
     int i;
     sba_ov_lock();
     for (i = 0; i < SBA_OV; ++i)
-        if (sba.ov[i].id[0] && sba_same(sba.ov[i].id, id)) {
+        if (sba.ov[i].id[0] && !strcmp(sba.ov[i].id, id)) {
             if (sba.ov[i].pend > 1)
                 --sba.ov[i].pend;
             else
@@ -1145,7 +1124,7 @@ int sba_star_pending(const char *id) {
     int i, r = -1;
     sba_ov_lock();
     for (i = 0; i < SBA_OV; ++i)
-        if (sba.ov[i].id[0] && sba_same(sba.ov[i].id, id)) {
+        if (sba.ov[i].id[0] && !strcmp(sba.ov[i].id, id)) {
             r = sba.ov[i].on;
             break;
         }
@@ -1169,7 +1148,7 @@ static void sba_ov_apply(sba_track_t *v, int n) {
     if (!held) return;
     for (i = 0; i < n; ++i)
         for (j = 0; j < held; ++j)
-            if (sba_same(v[i].id, snap[j].id)) v[i].starred = snap[j].on;
+            if (!strcmp(v[i].id, snap[j].id)) v[i].starred = snap[j].on;
 }
 
 /* A star in the cache files, on the worker (it is the only thread that writes them): the starred flag flips in place in the files that have the row (songs.idx, search.idx, the album's
@@ -1353,7 +1332,7 @@ static int sba_bg_pending(void) {
     sba_bgs_t s;
     if (!sba_sync_read(v) || !v[3]) return 0;
     if (!sba_bg_read(&s) || s.sig != v[3] || s.stage != BGS_DONE) return 1;
-    return now >= SBA_MIN_EPOCH && now >= s.when && now - s.when >= SBA_BG_MAX_AGE;
+    return now >= M1_MIN_EPOCH && now >= s.when && now - s.when >= SBA_BG_MAX_AGE;
 }
 
 static void sba_bg_pub(int kind, unsigned done, unsigned total) {
@@ -1408,7 +1387,7 @@ static int sba_bg_fail(const sba_wk_t *w, int code) {
 /* Phase 2 keeps the card's free space above the downloads' floor (SBA_RESERVE_KB). */
 static int sba_bg_room(void) {
     unsigned kb = 0;
-    return pn_free_kb(SBA_DIR, &kb) && kb <= SBA_RESERVE_KB ? SBA_CARDFULL : SBA_OK;
+    return m1_free_kb(SBA_DIR, &kb) && kb <= SBA_RESERVE_KB ? SBA_CARDFULL : SBA_OK;
 }
 
 /* Leave for another stage (and write it down). */
@@ -1470,18 +1449,16 @@ static int sba_part_trim(int fd, unsigned *rows) {
     buf = calloc(SBA_CHUNK_BYTES, 1);
     if (!buf) return 0;
     out = open(SBA_DIR "/songs.cut", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    ok = out >= 0 && sbn_write_all(out, &h, sizeof h);
+    ok = out >= 0 && m1_write_all(out, &h, sizeof h);
     for (left = whole; ok && left;) {
         unsigned take = left < (long)SBA_CHUNK_BYTES ? (unsigned)left : SBA_CHUNK_BYTES;
-        ok = sba_read_all(fd, buf, take) && sbn_write_all(out, buf, take);
+        ok = sba_read_all(fd, buf, take) && m1_write_all(out, buf, take);
         left -= (long)take;
     }
-    ok = ok && fsync(out) == 0;
-    if (out >= 0 && close(out)) ok = 0;
     free(buf);
-    ok = ok && rename(SBA_DIR "/songs.cut", SBA_BG_PART) == 0;
-    if (!ok) unlink(SBA_DIR "/songs.cut");
-    return ok;
+    if (out >= 0) return m1_commit(out, ok, SBA_DIR "/songs.cut", SBA_BG_PART);
+    unlink(SBA_DIR "/songs.cut");
+    return 0;
 }
 
 static int sba_bg_page(sba_wk_t *w) {
@@ -1500,7 +1477,7 @@ static int sba_bg_page(sba_wk_t *w) {
         h.kind = SBK_TRACK, h.rowsize = sizeof(sba_track_t), h.flags = 0;
         rows = 0;
         fd = open(SBA_BG_PART, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        ok = fd >= 0 && sbn_write_all(fd, &h, sizeof h);
+        ok = fd >= 0 && m1_write_all(fd, &h, sizeof h);
         if (fd >= 0) close(fd);
         if (!ok) {
             unlink(SBA_BG_PART);
@@ -1519,7 +1496,7 @@ static int sba_bg_page(sba_wk_t *w) {
     if (!code && n) sba_copy(bg.pfirst, sizeof bg.pfirst, page[0].id);
     if (!code) {
         fd = open(SBA_BG_PART, O_WRONLY | O_APPEND, 0);
-        ok = fd >= 0 && (!n || sbn_write_all(fd, page, (unsigned)n * (unsigned)sizeof *page)) && fsync(fd) == 0;
+        ok = fd >= 0 && (!n || m1_write_all(fd, page, (unsigned)n * (unsigned)sizeof *page)) && fsync(fd) == 0;
         if (fd >= 0 && close(fd)) ok = 0;
         if (!ok) code = SBA_STORAGE;
     }
@@ -1573,7 +1550,7 @@ static int sba_derive_one(const sba_album_t *a, int sfd) {
     for (i = lo; i < bg.en && bg.e[i].hash == h && !code; ++i) {
         if (lseek(sfd, (long)(sizeof(sba_head_t) + bg.e[i].row * sizeof t), 0) < 0 || !sba_read_all(sfd, &t, sizeof t))
             code = SBA_STORAGE;
-        else if (sba_same(t.album_id, a->id)) {
+        else if (!strcmp(t.album_id, a->id)) {
             if (sba_wput(&f, &t, sizeof t))
                 ++got;
             else
@@ -1793,7 +1770,7 @@ static int sba_bg_step(sba_wk_t *w, sbn_sink_t *sink) {
             if (!v[3]) return sba_bg_stop(); /* no finished sync, so no library to fill from */
             bg.s.sig = 0;
         }
-        old = now >= SBA_MIN_EPOCH && now >= bg.s.when && now - bg.s.when >= SBA_BG_MAX_AGE;
+        old = now >= M1_MIN_EPOCH && now >= bg.s.when && now - bg.s.when >= SBA_BG_MAX_AGE;
         if (bg.s.sig == v[3] && bg.s.stage == BGS_DONE && !old) return sba_bg_stop(); /* done for this library */
         if (bg.s.sig != v[3] || bg.s.stage == BGS_NONE ||
             bg.s.stage == BGS_DONE) { /* a new library, or a week old: from the start */
@@ -1913,7 +1890,7 @@ static int sba_enqueue(int kind, const char *id, unsigned arg, const char *term,
         }
         if (sba.q[i].kind == SBA_K_COVER) ++covers;
         if ((st == SLOT_WAIT || st == SLOT_ACTIVE) && sba.q[i].kind == kind && kind != SBA_K_STAR &&
-            sba_same(sba.q[i].id, id) && (kind != SBA_K_SEARCH || sba_same(sba.q[i].term, term ? term : "")) &&
+            !strcmp(sba.q[i].id, id) && (kind != SBA_K_SEARCH || !strcmp(sba.q[i].term, term ? term : "")) &&
             (kind != SBA_K_SONGS || sba.q[i].arg == arg) && (kind != SBA_K_PING || sba.q[i].arg == arg))
             return SBA_OK;
     }
@@ -2044,7 +2021,7 @@ int sba_sync_due(void) {
     unsigned songs, when, now = (unsigned)time((long *)0);
     int trunc;
     if (!sba_summary(&songs, &when, &trunc)) return 1;
-    return now < SBA_MIN_EPOCH || now < when || now - when >= SBA_SYNC_MAX_AGE;
+    return now < M1_MIN_EPOCH || now < when || now - when >= SBA_SYNC_MAX_AGE;
 }
 
 int sba_sync_auto(void) {
@@ -2349,7 +2326,7 @@ static int sba_tracks_at(const char *path, unsigned max, sba_tracks_t *out) {
     int n = sba_load(path, SBK_TRACK, sizeof(sba_track_t), max, (void **)&out->v, (unsigned *)0);
     out->n = n < 0 ? 0 : n;
     if (n > 0) {
-        if (!sba_same(path, SBA_DIR "/starred.idx")) sba_starred_apply(out->v, n); /* (its own rows are starred) */
+        if (strcmp(path, SBA_DIR "/starred.idx")) sba_starred_apply(out->v, n); /* (its own rows are starred) */
         sba_ov_apply(out->v, n);
     }
     return n;
@@ -2417,7 +2394,7 @@ int sba_artist_albums(const char *id, sba_albums_t *out) {
     do {
         got = sba_bg_albums(from, SBA_CHUNK, chunk, &total);
         for (i = 0; i < got; ++i) {
-            if (!sba_same(chunk[i].artist_id, id)) continue;
+            if (strcmp(chunk[i].artist_id, id)) continue;
             if (out->n == cap) {
                 sba_album_t *v = calloc((unsigned)cap + 64, sizeof *v);
                 if (!v) {
@@ -2484,7 +2461,7 @@ int sba_album_artist(const char *album_id, char *out, unsigned cap) {
     if (fd >= 0) {
         if (sba_head(fd, SBK_ALBUM, sizeof *row, &rows, (unsigned *)0))
             for (i = 0; i < rows && i < SBA_MAX_ALBUMS && sba_read_all(fd, row, sizeof *row); ++i)
-                if (sba_same(row->id, album_id)) {
+                if (!strcmp(row->id, album_id)) {
                     row->artist[sizeof row->artist - 1] = 0;
                     sba_copy(out, cap, row->artist);
                     r = out[0] != 0;

@@ -137,3 +137,7 @@ typedef struct af_instance {
     struct af_instance *next, *prev;
     double delay, mul;
 } af_instance;
+
+/* The first line of a preset file downloaded from AutoEq (autoeq.c), and what a Save writes over it (peqpage.c); peqlib.c reads both. */
+#define PEQ_STAMP "# AutoEq: "
+#define PEQ_STAMP_EDITED "# AutoEq edited: "

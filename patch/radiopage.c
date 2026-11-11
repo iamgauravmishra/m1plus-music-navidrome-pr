@@ -70,7 +70,6 @@ static const char *const RP_ROW_TEXT[RR_N] = {"Now Playing",  "My Stations", "Re
                                               "Top Stations", "By Country",  "By Genre"};
 static const int RP_ROW_ICON[RR_N] = {RI_NOW, RI_STATIONS, RI_RECENT, RI_BROWSER, RI_TOP, RI_COUNTRY, RI_GENRE};
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 static struct {
@@ -104,8 +103,7 @@ static void rp_note(const char *text);
 static int rp_on_tick(const void *unused);
 static void rp_search_layout(void);
 
-static int rp_off(void) { return rp.sv ? I(rp.sv, SC_YOFF) : 0; }
-static void rp_redraw(void) { widget_invalidate_force(rp.sv, (void *)0); }
+static int rp_off(void) { return grid_sv_off(rp.sv); }
 static int rp_rows_lvl(void) { return rp.level == L_ROOT || rp.level == L_DIR; } /* the levels of menu rows */
 static int rp_az(void) { return rp.level == L_PICK && !rp.genre; } /* the countries: the A-Z list */
 static int rp_grid(void) { return rp.level == L_LIST && !rp.vlist; } /* the stations as the Albums grid */
@@ -222,12 +220,7 @@ static grid_tile_t *rp_tile(int r) {
  * Paint
  */
 static void rp_blit(void *canvas, void *bmp, int w, int h, int x, int y) {
-    int top = y < 0 ? -y : 0, bottom = y + h > GRID_VIEW_H ? GRID_VIEW_H - y : h;
-    int src[4], dst[4];
-    if (!bmp || bottom <= top) return;
-    src[0] = 0, src[1] = top, src[2] = w, src[3] = bottom - top;
-    dst[0] = x, dst[1] = y + top, dst[2] = w, dst[3] = bottom - top;
-    canvas_draw_image(canvas, bmp, src, dst);
+    grid_blit_from(canvas, bmp, 0, 0, w, h, x, y, GRID_VIEW_H);
 }
 
 static grid_tile_t *rp_tile_of(void *ctx, int a) {
@@ -348,8 +341,7 @@ static void rp_title_update(void) {
     m1_title_set(rp.title, &rp.title_on,
                  rp.noscroll || rp.note || rp.search || !rp.nrows || m1_title_gone(rp_off(), 0));
     if (rp.fade) {
-        widget_set_visible(rp.fade, rp_off() > 0, 0);
-        widget_set_sensitive(rp.fade, 0);
+        grid_fade(rp.fade, rp_off() > 0);
     }
 }
 
@@ -391,14 +383,9 @@ static void rp_nav(void) {
     m1_show(rp.view_btn, tog);
     snprintf(n, sizeof n, "%s%s", g, find ? "" : "l");
     snprintf(nd, sizeof nd, "%s_down", n);
-    widget_set_prop_str(rp.view_btn, "style:normal:icon", n);
-    widget_set_prop_str(rp.view_btn, "style:over:icon", n);
-    widget_set_prop_str(rp.view_btn, "style:pressed:icon", nd);
-    widget_resize(rp.title, (tog && find ? NAV_CF_X : NAV_VIEW_X) - NAV_TITLE_X,
-                  22); /* the small title ends at the capsule */
-    widget_set_prop_str(rp.np, "style:normal:icon", img);
-    widget_set_prop_str(rp.np, "style:over:icon", img);
-    widget_set_prop_str(rp.np, "style:pressed:icon", cap ? "ah_nav_play_down" : "ah_nav_np_down");
+    grid_icons(rp.view_btn, n, nd);
+    grid_title_end(rp.title, tog && find ? NAV_CF_X : NAV_VIEW_X); /* the small title ends at the capsule */
+    grid_icons(rp.np, img, cap ? "ah_nav_play_down" : "ah_nav_np_down");
 }
 
 /* The level's rows on the page: the large title, the heights, the offset (keep: the one the level was left at). */
@@ -447,7 +434,7 @@ static void rp_show_level(int level, int keep) {
                         keep ? (rp.sel[level] > rp_max_scroll() ? rp_max_scroll() : rp.sel[level]) : 0);
     rp.title_on = -1;
     rp_title_update();
-    rp_redraw();
+    grid_sv_redraw(rp.sv);
 }
 
 /* A caption over no rows (loading, a failure, nothing found): the level's rows stay where they were for Back. */
@@ -571,7 +558,7 @@ static int rp_logo_step(int r) {
             grid_art_url(&rp.g, t, url);
         else
             t->art = 2;
-        rp_redraw();
+        grid_sv_redraw(rp.sv);
         return 1;
     }
     if (st < 0) {
@@ -736,7 +723,7 @@ static int rp_on_field(void *ctx, void *e) {
     if (e && *(int *)e == EVT_POINTER_UP && rp.search && !keyboard_shown()) {
         keyboard_show(1);
         rp_search_layout();
-        rp_redraw();
+        grid_sv_redraw(rp.sv);
     }
     return RET_OK;
 }
@@ -776,15 +763,8 @@ static int rp_on_view(void *ctx, void *e) {
  */
 static int rp_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(rp.view, pt);
+    grid_ev_local(rp.view, e, pt);
     return rp_item_at(pt[0], pt[1]);
-}
-
-static void rp_set_press(int p) {
-    if (rp.press == p) return;
-    rp.press = p;
-    rp_redraw();
 }
 
 static int rp_on_down(void *ctx, void *e) {
@@ -794,15 +774,14 @@ static int rp_on_down(void *ctx, void *e) {
     if (!e || !rp.view || !rp.nrows || rp.note) return RET_OK;
     a = rp_item_of(e);
     rp.down = a + 1, m1_tap_at(&rp.tap, e);
-    rp_set_press(a + 1);
+    grid_set_press(&rp.press, a + 1, rp.sv);
     return RET_OK;
 }
 
 static int rp_on_up(void *ctx, void *e) {
     int a = rp.down - 1;
     (void)ctx;
-    rp.down = 0;
-    rp_set_press(0);
+    grid_press_end(&rp.down, &rp.press, rp.sv);
     if (a < 0 || !e || !rp.view || rp.note) return RET_OK;
     if (!m1_tap_near(&rp.tap, e) || rp_item_of(e) != a || a >= rp.nrows) return RET_OK;
     if (rp_rows_lvl())
@@ -817,8 +796,7 @@ static int rp_on_up(void *ctx, void *e) {
 static int rp_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
-    rp.down = 0;
-    rp_set_press(0);
+    grid_press_end(&rp.down, &rp.press, rp.sv);
     return RET_OK;
 }
 
@@ -938,7 +916,7 @@ static int rp_on_fg(void *ctx, void *e) {
                 rp_off(); /* Stations changed (Now Playing's sheet): read again, a removed station leaves */
         rp_stations(1);
     } else
-        rp_redraw();
+        grid_sv_redraw(rp.sv);
     return RET_OK;
 }
 
@@ -1053,7 +1031,7 @@ static void rp_placeholder(void) {
 
 /* The Radio page (the Radio items of Home's menu, Extras and the Pod). 0 once it is up, -1 when it could not open. */
 int radio_open(void) {
-    int i;
+    int i, az_ok;
     if (rp.win) return -1;
     memset(&rp, 0, sizeof rp);
     rp.win = window_open(RP_ASSET);
@@ -1085,16 +1063,10 @@ int radio_open(void) {
     rp.st_gsub = widget_lookup(rp.win, "label_grid_sub", 1);
     rp.al.win = rp.win, rp.al.sv = rp.sv, rp.al.top = SG_TITLE_H, rp.al.row = RP_ROW_ROOT;
     az_prefs(&rp.al);
-    rp.al.st_hdr = widget_lookup(rp.win, "label_hdr", 1);
-    rp.al.st_rail = widget_lookup(rp.win, "label_rail", 1);
-    rp.al.st_rail_on = widget_lookup(rp.win, "label_rail_on", 1);
-    rp.al.rail = widget_lookup(rp.win, "sg_rail", 1);
-    rp.al.bubble = widget_lookup(rp.win, "sg_bubble", 1);
-    rp.al.bubble_letter = widget_lookup(rp.win, "sg_bubble_letter", 1);
+    az_ok = az_bind(&rp.al, rp.win);
     if (!rp.back || !rp.np || !rp.find || !rp.view_btn || !rp.more || !rp.sh_scrim || !rp.sh_card || !rp.sh_row ||
         !rp.sh_hr || !rp.sh_clear || !rp.sh_clear_hr || !rp.lv || !rp.credit || !rp.field || !rp.title || !rp.big ||
-        !rp.view || !rp.sv || !rp.status || !rp.st_title || !rp.st_sub || !rp.st_gtitle || !rp.st_gsub ||
-        !rp.al.st_hdr || !rp.al.st_rail || !rp.al.st_rail_on || !rp.al.rail || !rp.al.bubble || !rp.al.bubble_letter) {
+        !rp.view || !rp.sv || !rp.status || !rp.st_title || !rp.st_sub || !rp.st_gtitle || !rp.st_gsub || !az_ok) {
         navigator_back(); /* an asset that is not ours */
         return -2;
     }
@@ -1104,10 +1076,7 @@ int radio_open(void) {
     widget_on(rp.sv, EVT_POINTER_UP, rp_on_retry, (void *)0);
     rp.chev = m1_make_chevron();
     for (i = 0; i < RI_N; ++i) rp.ic[i] = rp_bitmap(rp.win, RP_ICON_NAME[i]);
-    rp.noscroll = !widget_on(rp.sv, EVT_SCROLL, rp_on_scroll, (void *)0) ||
-                  !widget_on(rp.sv, EVT_SCROLL_END, rp_on_scroll, (void *)0);
-    if (rp.noscroll) widget_set_visible(rp.title, 1, 0);
-    rp.title_on = rp.noscroll;
+    rp.noscroll = grid_scroll_bind(rp.sv, rp_on_scroll, rp.title, &rp.title_on);
     widget_on(rp.win, EVT_WINDOW_TO_FG, rp_on_fg, (void *)0);
     widget_on(rp.win, EVT_WINDOW_TO_BG, rp_on_bg, (void *)0);
     widget_on(rp.view, EVT_POINTER_DOWN, rp_on_down, (void *)0);
@@ -1131,11 +1100,7 @@ int radio_open(void) {
     }
     rp.g.st_title = rp.st_gtitle, rp.g.st_sub = rp.st_gsub;
     az_make_disc(&rp.al);
-    widget_on(rp.al.rail, EVT_POINTER_DOWN, rp_on_rail, (void *)0);
-    widget_on(rp.al.rail, EVT_POINTER_MOVE, rp_on_rail, (void *)0);
-    widget_on(rp.al.rail, EVT_POINTER_UP, rp_on_rail, (void *)0);
-    widget_on(rp.al.rail, EVT_POINTER_ABORT, rp_on_rail, (void *)0);
-    widget_on(rp.al.rail, EVT_AFTER_PAINT, rp_on_rail_paint, (void *)0);
+    az_bind_rail(&rp.al, rp_on_rail, rp_on_rail_paint);
     rp.ltimer = timer_add(rp_on_ltick, (void *)0, 300);
     rp.level = L_ROOT;
     rp_show_level(L_ROOT, 0);

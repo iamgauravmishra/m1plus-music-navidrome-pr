@@ -72,11 +72,6 @@ static unsigned pd_load(unsigned char *ord) {
 
 /* ---- the pull-down */
 
-static void pd_hide(void *w) {
-    widget_set_visible(w, 0, 0);
-    widget_set_sensitive(w, 0);
-}
-
 static void pd_start(void *dlg) {
     void *img[PD_N], *lab[PD_N];
     int px[PD_N], py[PD_N], dx[PD_N], dy[PD_N];
@@ -102,8 +97,8 @@ static void pd_start(void *dlg) {
     }
     for (i = 0; i < PD_N; i++)
         if (!(shown >> i & 1)) {
-            pd_hide(img[i]);
-            pd_hide(lab[i]);
+            m1_show(img[i], 0);
+            m1_show(lab[i], 0);
         }
 }
 

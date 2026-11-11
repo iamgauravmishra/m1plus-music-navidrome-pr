@@ -42,8 +42,6 @@ extern int albums_open_artist(void *artists, unsigned index,
 extern int songs_open_playlist(int id, const char *name); /* patch/songs.c: -1 when it did not open */
 extern int album_open_src(const lib_src_t *src, unsigned cls, void *row); /* patch/albumpage.c */
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
-
 #define SE_TERMS 8 /* terms taken from the query (the rest are ignored) */
 #define SE_QMAX 64 /* the keyboard's 63 bytes and the NUL */
 #define SE_KEY 160 /* code points of a record's key (a longer one is cut) */
@@ -114,8 +112,7 @@ static struct {
     void *spin; /* a source's page: the loading spinner (se_spin) */
 } se __attribute__((section(".scratch")));
 
-static int se_off(void) { return se.sv ? I(se.sv, SC_YOFF) : 0; }
-static void se_redraw(void) { widget_invalidate_force(se.sv, (void *)0); }
+static void se_redraw(void) { grid_sv_redraw(se.sv); }
 
 /* ---------------------------------------------------------------------------
  * Folding. A text becomes lower-case code points with the marks of the Latin letters taken off, katakana as hiragana, full / half width forms as plain, every kind of space as
@@ -736,7 +733,7 @@ static void se_spinner(void) { ls_spin(se.spin, se.spin && se.src && se.srch && 
 /* The content: the rows, then the air under them, or the keyboard's height while it is up (the list scrolls clear of it); the list or "No Results" shows.
  * With no query and a history the content is the recent searches instead (se.rm). */
 static void se_layout(void) {
-    int pad = keyboard_shown() ? KB_H : SE_BOTTOM, h, off = se_off();
+    int pad = keyboard_shown() ? KB_H : SE_BOTTOM, h, off = grid_sv_off(se.sv);
     se.rm = se.nterms == 0 && se.nrows == 0 && se.nrec != 0;
     se.content = se.rm ? SE_REC_HEAD_H + se.nrec * SE_REC_ROW_H + pad : se.nrows * SE_ROW_H + pad;
     h = se.content < SE_LIST_H ? SE_LIST_H : se.content;
@@ -824,7 +821,7 @@ static void se_prep(grid_tile_t *t, int r) {
  * Paint: the rows (one EVT_AFTER_PAINT of the content view, in window coordinates: the Artists page's), and the chips
  */
 static void se_span(int *r0, int *r1) {
-    int off = se_off();
+    int off = grid_sv_off(se.sv);
     *r0 = off < 0 ? 0 : off / SE_ROW_H;
     *r1 = (off + SE_LIST_H - 1) / SE_ROW_H;
     if (*r1 > se.nrows - 1) *r1 = se.nrows - 1;
@@ -843,7 +840,7 @@ static grid_tile_t *se_tile(int r) {
 static grid_tile_t *se_cover_next(grid_t **gp);
 
 static void se_paint_rows(void *canvas) {
-    int r0, r1, r, off = se_off(), pass;
+    int r0, r1, r, off = grid_sv_off(se.sv), pass;
     se_span(&r0, &r1);
     for (r = r0; r <= r1; ++r) {
         int y = r * SE_ROW_H - off, kind = se.rows[r].kind;
@@ -872,7 +869,7 @@ static void se_paint_rows(void *canvas) {
 
 /* The recent searches: the header, then a row each (the query, an x on the right), a hairline under every row. */
 static void se_paint_recent(void *canvas) {
-    int i, off = se_off(), pass;
+    int i, off = grid_sv_off(se.sv), pass;
     for (i = 0; i < se.nrec; ++i) {
         int y = SE_REC_HEAD_H + i * SE_REC_ROW_H - off;
         if (se.press == i + 1) az_fill(canvas, 0, y, y + SE_REC_ROW_H - 1, 320, LIST_PRESS);
@@ -901,7 +898,7 @@ static void se_paint_recent(void *canvas) {
 
 static int se_on_paint(void *ctx, void *e) {
     void *canvas = e ? *(void **)((char *)e + EVENT_PAINT_CANVAS) : (void *)0;
-    int off = se_off();
+    int off = grid_sv_off(se.sv);
     grid_t *g;
     (void)ctx;
     if (canvas && se.view && se.rm) {
@@ -1001,8 +998,7 @@ static int se_on_chips(void *ctx, void *e) {
     int pt[2], type = e ? *(int *)e : 0, mx = se_chips_end() - 320;
     (void)ctx;
     if (!se.win || !e) return RET_OK;
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(se.chips, pt);
+    grid_ev_local(se.chips, e, pt);
     if (type == EVT_POINTER_DOWN) {
         se.chip_down = 1, se.chip_drag = 0, se.chip_dx = pt[0], se.chip_sx0 = se.chip_sx;
     } else if (type == EVT_POINTER_MOVE && se.chip_down) {
@@ -1035,68 +1031,21 @@ static int se_at(int y) {
 
 static int se_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(se.view, pt);
+    grid_ev_local(se.view, e, pt);
     se.hitx = pt[0] >= SE_REC_X && pt[0] < SE_REC_X + SE_REC_X_W;
     return se_at(pt[1]);
 }
 
-static void se_set_press(int p) {
-    if (se.press == p) return;
-    se.press = p;
-    se_redraw();
-}
-
 /* A song: the library in its stock order (the Songs page's class) as the queue, Now Playing at the song (patch/songs.c sg_play_at: the stock Songs row's handler). */
-static void se_open_player(void *queue, int idx, int cls) {
-    struct {
-        void *dq;
-        int idx, cls, mode;
-    } context;
-    context.dq = queue, context.idx = idx, context.cls = cls, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context);
-}
-
 static void se_play(int at) {
-    void *pick, *queue, *first;
     if (se.src) { /* the results list is the queue, the source plays it */
-        if (so_play_src(se.src, CLASS_ALL_SONGS, se.lists[SE_SONG], (int)se.rows[at].idx, SO_KEEP, se_open_player) ==
+        if (so_play_src(se.src, CLASS_ALL_SONGS, se.lists[SE_SONG], (int)se.rows[at].idx, SO_KEEP, pod_start_player) ==
             -2)
             ls_dsd_confirm(se.src, se.lists[SE_SONG],
                            (int)se.rows[at].idx); /* a DSD track that is not downloaded: the confirm */
         return;
     }
-    unsigned n, idx = 0;
-    int found;
-    struct {
-        void *dq;
-        int idx, cls, mode;
-    } context;
-    pick = deque_at(se.lists[SE_SONG], se.rows[at].idx);
-    queue = _create_deque("stSongInfo");
-    if (!queue) return;
-    deque_init(queue);
-    found = loadSongList(queue, cc_str(pick, REC_NAME), I(pick, REC_CUE_START), CLASS_ALL_SONGS);
-    n = deque_size(queue);
-    if (n) { /* loadSongList finds a song by file name and CUE start: the row's own index in the list wins for a duplicate name */
-        unsigned row = se.rows[at].idx;
-        if (row < n && !strcmp(cc_str(deque_at(queue, row), REC_PATH), cc_str(pick, REC_PATH)) &&
-            I(deque_at(queue, row), REC_CUE_START) ==
-                I(pick, REC_CUE_START)) /* (a CUE image's tracks share the path) */
-            idx = row;
-        else if (found >= 0 && (unsigned)found < n)
-            idx = (unsigned)found;
-    }
-    first = n ? deque_at(queue, idx) : (void *)0;
-    if (!first || access(cc_str(first, REC_PATH), F_OK)) {
-        deque_destroy(queue);
-        pod_toast(TR(n ? "Storage unavailable" : "Update Local Music first"));
-        return;
-    }
-    *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS;
-    context.dq = queue, context.idx = (int)idx, context.cls = CLASS_ALL_SONGS, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
-    deque_destroy(queue);
+    so_play(CLASS_ALL_SONGS, se.lists[SE_SONG], (int)se.rows[at].idx, SO_KEEP, pod_start_player);
 }
 
 /* A tap on a result row (a symbol of its own: the tests call it with a row). */
@@ -1165,7 +1114,7 @@ static int se_on_down(void *ctx, void *e) {
     a = se_item_of(e);
     se.dx = se.hitx;
     se.down = a + 1, m1_tap_at(&se.tap, e);
-    se_set_press(a + 1);
+    grid_set_press(&se.press, a + 1, se.sv);
     return RET_OK;
 }
 
@@ -1173,7 +1122,7 @@ static int se_on_up(void *ctx, void *e) {
     int a = se.down - 1;
     (void)ctx;
     se.down = 0, se.pressing = 0;
-    se_set_press(0);
+    grid_set_press(&se.press, 0, se.sv);
     if (a < 0 || !e || !se.view) return RET_OK;
     if (m1_tap_near(&se.tap, e) && se_item_of(e) == a && se.hitx == se.dx) {
         if (se.rm)
@@ -1196,7 +1145,7 @@ static int se_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     se.down = se.pressing = 0;
-    se_set_press(0);
+    grid_set_press(&se.press, 0, se.sv);
     if (drag && keyboard_shown()) se_kb_hide();
     return RET_OK;
 }
@@ -1206,7 +1155,7 @@ static int se_on_bg(void *ctx,
     (void)ctx;
     (void)e;
     se.down = se.pressing = 0;
-    se_set_press(0);
+    grid_set_press(&se.press, 0, se.sv);
     return RET_OK;
 }
 

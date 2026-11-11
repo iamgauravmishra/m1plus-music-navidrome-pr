@@ -37,7 +37,7 @@ int battpct_setting(void) { return bp_read_setting(); }
 
 int battpct_toggle(void) {
     int next = !bp_read_setting();
-    if (home_write_atomic(BP_FILE, BP_TMP, next ? "1\n" : "0\n") != 0) return -1;
+    if (home_set_digit(BP_FILE, BP_TMP, next, 1) < 0) return -1;
     bp.state = next ? 2 : 1;
     return next;
 }

@@ -376,10 +376,10 @@ static void pg_stamp(const char *path, char *out, unsigned size) {
     n = fread(buf, 1, sizeof buf - 1, f);
     fclose(f);
     buf[n] = 0;
-    from = pg_pre(buf, "# AutoEq: ");
-    if (!from) from = pg_pre(buf, "# AutoEq edited: ");
+    from = pg_pre(buf, PEQ_STAMP);
+    if (!from) from = pg_pre(buf, PEQ_STAMP_EDITED);
     if (!from) return;
-    o = snprintf(out, size, "# AutoEq edited: ");
+    o = snprintf(out, size, PEQ_STAMP_EDITED);
     for (i = from; buf[i] && buf[i] != '\n' && buf[i] != '\r' && o < size - 1; ++i) out[o++] = buf[i];
     out[o] = 0;
 }

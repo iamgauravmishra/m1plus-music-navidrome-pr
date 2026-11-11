@@ -37,6 +37,7 @@
 #include "podcasts.h"
 #include "home.h"
 #include "nextalbum.h"
+#include "songops.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
 #define I(r, off) (*(int *)((char *)(r) + (off)))
@@ -645,10 +646,6 @@ int shuffle_play(int kind) {
     void *list, *queue, *pick, *first;
     unsigned n, at = 0, idx = 0;
     int found;
-    struct {
-        void *dq;
-        int idx, cls, mode;
-    } context;
     if (kind < SHUFFLE_SONGS || kind > SHUFFLE_FOLDERS) return -1;
     /* the library, exactly as the Songs page loads it */
     list = loadLocalClassList(CLASS_ALL_SONGS) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
@@ -713,8 +710,7 @@ int shuffle_play(int kind) {
     else
         set_in_order(1);
     *(int *)G_CLASS_TYPE = CLASS_ALL_SONGS; /* as allmusic_page_init leaves it (@0x5289e8) */
-    context.dq = queue, context.idx = (int)idx, context.cls = CLASS_ALL_SONGS, context.mode = PLAY_MODE;
-    navigator_to_with_context("playing_page", &context); /* start_player copies the queue */
+    pod_start_player(queue, (int)idx, CLASS_ALL_SONGS);
     deque_destroy(queue);
     return 0;
 }

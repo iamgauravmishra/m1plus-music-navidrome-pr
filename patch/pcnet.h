@@ -8,10 +8,9 @@
  */
 #pragma once
 
-#define PN_CA \
-    "/etc/m1plus-cacert.pem" /* the CA bundle libcurl verifies with: Mozilla's roots, in the firmware (tools/mod_cacerts.py; stock's /etc/ssl/certs is empty) */
-#define PN_MIN_EPOCH \
-    1750000000u /* a clock before this (mid 2025, before the firmware existed) was never set: certificates would not verify */
+#include "common.h"
+#define PN_CA M1_CA /* (common.h) */
+#define PN_MIN_EPOCH M1_MIN_EPOCH
 #define PN_FEED_CAP 8388608u /* a feed larger than this (after gzip) is refused */
 #define PN_COVER_CAP 6291456u /* a cover picture larger than this is refused while it downloads */
 #define PN_IMPORT_FILE "subscriptions.txt" /* in the Podcasts folder: one feed url a line */
@@ -121,8 +120,8 @@ unsigned pn_dl_current(unsigned *got, unsigned *total);
 void pn_dl_clear(unsigned key);
 /* The n-th download the Downloads page lists, from 0: the queue in the order it was asked (dir, file, *code 0), then the failed ones (*code the PN_* reason). Returns its key, 0 past the last. dir and file take PC_FILE bytes. */
 unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
-/* KB free for a non-root user on the file system of path (statfs); 0 when it fails (*kb is then not set). The Downloads page's storage line. */
-int pn_free_kb(const char *path, unsigned *kb);
+/* KB free on the file system of path (common.h m1_free_kb). The Downloads page's storage line. */
+#define pn_free_kb m1_free_kb
 
 /* ---- Search (docs/modules/podcasts.md "Search"). One worker at a time, never beside a refresh or a download (the page pauses the downloads first, as for a refresh). All of these run on the UI thread; the worker only
  * writes the record they read. The store's country is the Podcast Region (patch/pcregion.h): the search puts pcregion_code() after PN_SEARCH_URL's "country=", then "&term=". */

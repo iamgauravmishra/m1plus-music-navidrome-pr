@@ -12,6 +12,7 @@
 #include "pccover.h"
 #include "artistphoto.h"
 #include "common.h"
+#include "fnv.h"
 
 #define AP_STR_(x) #x
 #define AP_STR(x) AP_STR_(x)
@@ -262,12 +263,12 @@ static void ap_pur_add(const char *dir, unsigned key) {
     }
     for (i = 0;; ++i) {
         char c = dir[i];
-        if (((c == '/' && i) || !c) && !ap_pur_put(ap_hf(h * 16777619u), key)) {
+        if (((c == '/' && i) || !c) && !ap_pur_put(ap_hf(h * FNV_PRIME), key)) {
             ap.purbad = 1;
             return;
         }
         if (!c) break;
-        h = (h ^ (unsigned char)c) * 16777619u;
+        h = (h ^ (unsigned char)c) * FNV_PRIME;
     }
 }
 
@@ -435,21 +436,12 @@ static void ap_empty_marker(unsigned key) {
 static void ap_write_src(unsigned key, const char *src) {
     char p[72], t[72], b[AP_PATH + 80];
     unsigned st[40], n;
-    void *f;
     memset(st, 0, sizeof st);
     if (__xstat(3, src, st)) return;
     n = (unsigned)snprintf(b, sizeof b, "m1plus artist 1\nsrc: %s\nsize: %u\nmtime: %u\nend\n", src, st[0x30 / 4],
                            st[0x40 / 4]);
     ap_path(p, key, ".src"), ap_path(t, key, ".src.tmp");
-    f = fopen(t, "w");
-    if (!f) return;
-    if (fwrite(b, n, 1, f) == 1) {
-        fclose(f);
-        if (rename(t, p)) unlink(t);
-    } else {
-        fclose(f);
-        unlink(t);
-    }
+    m1_save(p, t, 0644, b, n);
 }
 
 /* The source picture at both sizes, each a square (cropped by pv_square), made from one decode of it (the 44 px file from the 168 px one). 1 when both files are published (the -44 file last). */

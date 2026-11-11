@@ -22,13 +22,11 @@
 #endif
 #include "covercache.h"
 #include "durations.h"
+#include "common.h"
 #include "fnv.h"
 
 /* FNV-1a over a string, with a separator so "ab"+"c" and "a"+"bc" differ (q2-pod). */
-unsigned cc_fnv(unsigned h, const char *s) {
-    for (; s && *s; ++s) h = (h ^ (unsigned char)*s) * 16777619u;
-    return h * 16777619u;
-}
+unsigned cc_fnv(unsigned h, const char *s) { return m1_fnv(h, s ? s : "") * FNV_PRIME; }
 
 /* One source pixel over black (straight alpha; the offsets of r, g, b, a in the pixel), into the sums. The fully
  * opaque pixel, which is nearly all of them, takes no multiplication. -Oz would call this per pixel. */
@@ -219,7 +217,6 @@ void cc_stock_dims(unsigned w0, unsigned h0, unsigned ncomp, unsigned *w, unsign
 
 #ifndef CF_HOST
 #define P(r, off) (*(char **)((char *)(r) + (off)))
-#define I(r, off) (*(int *)((char *)(r) + (off)))
 #define CF_STR_(x) #x
 #define CF_STR(x) CF_STR_(x)
 
@@ -520,7 +517,7 @@ struct cc_cmap {
 /* no file, or the no-art marker: the placeholder, not looked at again */
 #define CMAP_NONE 2
 
-static unsigned cmap_hash(const char *s) { return m1_fnv_fold(2166136261u, s); }
+static unsigned cmap_hash(const char *s) { return m1_fnv_fold(FNV_SEED, s); }
 
 static int cmap_less(const cc_cmap_e *x, const cc_cmap_e *y) {
     return x->hash != y->hash ? x->hash < y->hash : x->key < y->key;
@@ -1291,12 +1288,10 @@ static void at(int phase, const char *img, unsigned w, unsigned h, unsigned kind
     pthread_mutex_unlock(cb_mutex);
 }
 
-/* Whether dir's file system has MIN_FREE_MB free (statfs, MIPS o32 layout: f_bsize is word 1,
- * f_bavail word 7), as q2-pod's card_space. */
+/* Whether dir's file system has MIN_FREE_MB free, as q2-pod's card_space. */
 static int card_space(const char *dir) {
-    unsigned fs[32];
-    memset(fs, 0, sizeof fs);
-    return !statfs(dir, fs) && (unsigned long long)fs[7] * fs[1] >= (unsigned long long)MIN_FREE_MB << 20;
+    unsigned kb;
+    return m1_free_kb(dir, &kb) && kb >= MIN_FREE_MB << 10;
 }
 
 /* The longer side of the JPEG at path (its SOF marker, in the first 4 KB: the stock encoder's files have a short header), 0 when it cannot be read. */

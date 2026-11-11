@@ -8,9 +8,6 @@
 #include "common.h"
 #include "curlopts.h"
 
-extern int pn_free_kb(const char *path, unsigned *kb);
-
-#define SBN_CA "/etc/m1plus-cacert.pem"
 #define SBN_TEXT 192 /* longest password the token input holds */
 
 /* Writable state lives in .scratch (the payload has no .bss). */
@@ -45,13 +42,6 @@ int sbn_prefix(const char *value, const char *prefix) {
 int sbn_https(const char *url) { return sbn_prefix(url, "https://"); }
 
 int sbn_http_url(const char *url) { return sbn_prefix(url, "http://") || sbn_https(url); }
-
-static int sbn_hex(unsigned c) {
-    if (c >= '0' && c <= '9') return (int)(c - '0');
-    if (c >= 'a' && c <= 'f') return (int)(c - 'a' + 10);
-    if (c >= 'A' && c <= 'F') return (int)(c - 'A' + 10);
-    return -1;
-}
 
 static int sbn_put(char *out, unsigned cap, unsigned *used, unsigned c) {
     if (*used + m1_utf8_len(c) >= cap) return 0;
@@ -90,13 +80,13 @@ const char *sbn_string(const char *p, const char *end, char *out, unsigned cap) 
             c = (unsigned char)*p++;
             if (c == 'u') {
                 int a, b, d, e;
-                if (end - p < 4 || (a = sbn_hex(p[0])) < 0 || (b = sbn_hex(p[1])) < 0 || (d = sbn_hex(p[2])) < 0 ||
-                    (e = sbn_hex(p[3])) < 0)
+                if (end - p < 4 || (a = m1_hexval(p[0])) < 0 || (b = m1_hexval(p[1])) < 0 ||
+                    (d = m1_hexval(p[2])) < 0 || (e = m1_hexval(p[3])) < 0)
                     return 0;
                 c = (unsigned)((a << 12) | (b << 8) | (d << 4) | e);
                 p += 4;
                 if (c >= 0xd800 && c <= 0xdbff && end - p >= 6 && p[0] == '\\' && p[1] == 'u') {
-                    int x = sbn_hex(p[2]), y = sbn_hex(p[3]), z = sbn_hex(p[4]), w = sbn_hex(p[5]);
+                    int x = m1_hexval(p[2]), y = m1_hexval(p[3]), z = m1_hexval(p[4]), w = m1_hexval(p[5]);
                     unsigned lo =
                         x < 0 || y < 0 || z < 0 || w < 0 ? 0 : (unsigned)((x << 12) | (y << 8) | (z << 4) | w);
                     if (lo >= 0xdc00 && lo <= 0xdfff) c = 0x10000u + ((c - 0xd800u) << 10) + lo - 0xdc00u, p += 6;
@@ -303,24 +293,6 @@ int sbn_array_member(const char *obj, const char *end, const char *key, const ch
     }
 }
 
-unsigned sbn_urlenc(char *out, unsigned cap, unsigned used, const char *s) {
-    static const char hex[] = "0123456789ABCDEF";
-    unsigned i;
-    if (!s) return 0;
-    for (i = 0; s[i]; ++i) {
-        unsigned c = (unsigned char)s[i];
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
-            c == '.' || c == '~') {
-            if (used + 1 >= cap) return 0;
-            out[used++] = (char)c;
-        } else {
-            if (used + 3 >= cap) return 0;
-            out[used++] = '%', out[used++] = hex[c >> 4], out[used++] = hex[c & 15];
-        }
-    }
-    return used;
-}
-
 int sbn_response_ok(const char *json, unsigned n) {
     char status[16];
     const char *end, *root, *after, *p;
@@ -441,7 +413,7 @@ int sbn_url(char *out, unsigned cap, sbn_server_t srv, const char *method, const
     if (!out || !cap || !base || !method || !user || !sbn_auth_ok(auth) || !sbn_http_url(base)) return -1;
     k = snprintf(out, cap, "%s/rest/%s.view?u=", base, method);
     if (k < 0 || (unsigned)k >= cap) return -1;
-    n = sbn_urlenc(out, cap, (unsigned)k, user);
+    n = m1_urlenc(out, cap, (unsigned)k, user);
     if (!n) return -1;
     memcpy(salt, auth, 16);
     salt[16] = 0;
@@ -451,7 +423,7 @@ int sbn_url(char *out, unsigned cap, sbn_server_t srv, const char *method, const
     if (id) {
         k = snprintf(out + n, cap - n, "&id=");
         if (k < 0 || (unsigned)k >= cap - n) return -1;
-        n = sbn_urlenc(out, cap, n + (unsigned)k, id);
+        n = m1_urlenc(out, cap, n + (unsigned)k, id);
         if (!n) return -1;
     }
     if (sbn_eq(method, sbn_len(method), "stream")) {
@@ -465,7 +437,7 @@ int sbn_url(char *out, unsigned cap, sbn_server_t srv, const char *method, const
         for (i = 0; i < x; ++i) out[n++] = extra[i];
     }
     out[n] =
-        0; /* sbn_urlenc leaves no terminator: this is the one place that ends the string (n < cap on every path here) */
+        0; /* m1_urlenc leaves no terminator: this is the one place that ends the string (n < cap on every path here) */
     return 0;
 }
 
@@ -552,7 +524,7 @@ static unsigned sbn_write(void *ptr, unsigned size, unsigned nmemb, void *ctx) {
         }
         if (s->written - s->last_check >= 1024 * 1024) {
             unsigned free_kb = 0;
-            if (!pn_free_kb("/mnt/mmc", &free_kb)) {
+            if (!m1_free_kb("/mnt/mmc", &free_kb)) {
                 s->werr = SBN_W_CARD;
                 return 0;
             }
@@ -746,7 +718,7 @@ int sbn_http(const char *url, sbn_sink_t *sink, long timeout, const char *range)
     SBN_SETOPT(CURLOPT_MAXREDIRS, 5L);
     SBN_SETOPT(CURLOPT_REDIR_PROTOCOLS, sbn_https(url) ? CURLPROTO_HTTPS : CURLPROTO_HTTP_HTTPS);
     SBN_SETOPT(CURLOPT_PROTOCOLS, CURLPROTO_HTTP_HTTPS);
-    SBN_SETOPT(CURLOPT_CAINFO, SBN_CA);
+    SBN_SETOPT(CURLOPT_CAINFO, M1_CA);
     SBN_SETOPT(CURLOPT_SSL_VERIFYPEER, 1L);
     SBN_SETOPT(CURLOPT_SSL_VERIFYHOST, 2L);
     if (range && *range) SBN_SETOPT(CURLOPT_RANGE, range);
@@ -780,17 +752,6 @@ cleanup:
 }
 
 #undef SBN_SETOPT
-
-int sbn_write_all(int fd, const void *data, unsigned size) {
-    const char *p = (const char *)data;
-    unsigned done = 0;
-    while (done < size) {
-        int n = write(fd, p + done, size - done);
-        if (n <= 0) return 0;
-        done += (unsigned)n;
-    }
-    return 1;
-}
 
 static int sbn_text_type(const char *type) {
     char lower[64];
@@ -900,7 +861,7 @@ int sbn_download(const char *url, const char *part, const char *final, const cha
     unsigned free_kb = 0;
     *resumable_out = -1;
     etag[0] = 0;
-    if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &free_kb)) {
+    if (!m1_card_mounted() || !m1_free_kb("/mnt/mmc", &free_kb)) {
         sink->werr = SBN_W_CARD;
         return -1;
     }

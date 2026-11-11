@@ -8,6 +8,7 @@
 #include "pcfeed.h"
 #include "pcnotes.h"
 #include "common.h"
+#include "fnv.h"
 
 #define PNO_CHUNK 1024
 static const char pno_head[] = "M1PLUS-NOTES 1\n";
@@ -77,7 +78,7 @@ unsigned pno_read(const char *path, unsigned guid, char *out, unsigned cap) {
                 } else if (c == '\n')
                     state = S_START, at = 0;
                 else
-                    h = (h ^ c) * 16777619u;
+                    h = (h ^ c) * FNV_PRIME;
                 break;
             case S_TEXT:
                 if (c == '\n' && !esc) goto done;

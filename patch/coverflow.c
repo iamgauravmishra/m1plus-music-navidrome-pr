@@ -269,7 +269,6 @@ void coverflow_render(const cfg_t *g, unsigned *d, int pitch, int frac, const un
 /* ===========================================================================
  * The page. UI thread only, except the worker thread marked below.
  */
-#define I(r, off) (*(int *)((char *)(r) + (off)))
 
 #define POSITION_FILE \
     CARD_DIR "/coverflow-position" /* the centre album's key (8 hex digits), so a reboot opens on it */
@@ -595,12 +594,6 @@ typedef struct {
     const unsigned char *data;
 } glyph_t;
 
-static unsigned mix(unsigned v, unsigned c, unsigned a) { /* c over v by a (of 255) */
-    unsigned w = a + (a >> 7);
-    return 0xff000000u | (((v & 0xff00ffu) * (256 - w) + (c & 0xff00ffu) * w) >> 8 & 0xff00ffu) |
-           (((v & 0xff00u) * (256 - w) + (c & 0xff00u) * w) >> 8 & 0xff00u);
-}
-
 /* The physical pixel of the logical (x, y), 0 outside the frame. */
 static unsigned *turned(unsigned *d, int pitch, int x, int y) {
     return (unsigned)x < CFL_W && (unsigned)y < CFL_H ? d + x * pitch + (CFL_H - 1 - y) : (unsigned *)0;
@@ -635,7 +628,7 @@ static void caption(unsigned *d, int pitch, void *canvas, unsigned *s, int len, 
             for (c = 0; c < g.w; ++c) {
                 unsigned a = g.data[r * g.w + c];
                 unsigned *px = a ? turned(d, pitch, x + g.x + c, y + g.y + ascent + r) : (unsigned *)0;
-                if (px) *px = mix(*px, rgb, a);
+                if (px) *px = m1_mix(*px, rgb, a);
             }
     }
 }
@@ -962,7 +955,7 @@ int coverflow_landscape(void) { return use_land(); }
 /* Flip it (atomic write, patch/home.c); the new state, or -1 when it could not be saved. */
 int coverflow_landscape_toggle(void) {
     int next = !use_land();
-    return home_write_atomic(LANDSCAPE_FILE, LANDSCAPE_TMP, next ? "1\n" : "0\n") == 0 ? next : -1;
+    return home_set_digit(LANDSCAPE_FILE, LANDSCAPE_TMP, next, 1);
 }
 
 /* The widgets for the current mode. */
@@ -1199,7 +1192,7 @@ static void pick_start(void) {
  * library per 24 scans). Open addressing, at most half full: a slot holds a library row + 1. */
 #define IDX_MIN 24
 static unsigned nc_hash(const char *s) { /* FNV-1a over the ASCII-folded bytes (cc_nocase's equality) */
-    return m1_fnv_fold(2166136261u, s);
+    return m1_fnv_fold(FNV_SEED, s);
 }
 
 static unsigned *name_index(void *all, unsigned m, unsigned *mask) {
@@ -1370,7 +1363,7 @@ int coverflow_volkeys(void) { return volkeys_on(); }
 
 int coverflow_volkeys_toggle(void) {
     int next = !volkeys_on();
-    return home_write_atomic(VOLKEYS_FILE, VOLKEYS_TMP, next ? "1\n" : "0\n") == 0 ? next : -1;
+    return home_set_digit(VOLKEYS_FILE, VOLKEYS_TMP, next, 1);
 }
 
 static int on_volkey(void *ctx, void *e) {

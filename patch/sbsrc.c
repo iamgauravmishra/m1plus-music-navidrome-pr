@@ -25,7 +25,6 @@
 #include "fnv.h"
 
 #define P(r, off) (*(char **)((char *)(r) + (off)))
-#define I(r, off) (*(int *)((char *)(r) + (off)))
 #define REC_ALBUMARTIST 0x24
 #define REC_RESERVED_A 0x1c
 #define REC_RESERVED_B 0x20
@@ -59,7 +58,7 @@ static struct {
 /* ---------------------------------------------------------------------------
  * Small helpers
  */
-static unsigned nl_fnv(const char *a, const char *b) { return m1_fnv(m1_fnv(2166136261u, a), b) | 1u; }
+static unsigned nl_fnv(const char *a, const char *b) { return m1_fnv(m1_fnv(FNV_SEED, a), b) | 1u; }
 
 static void nl_copy(char *out, unsigned cap, const char *s) {
     unsigned n = strlen(s);

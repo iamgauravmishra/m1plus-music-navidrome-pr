@@ -27,8 +27,6 @@
 #include "fnv.h"
 #include "m1job.h"
 
-extern int pn_free_kb(const char *path, unsigned *kb);
-
 #define SBD_IDX SBA_DIR "/dl.idx"
 #define SBD_IDX_TMP SBA_DIR "/dl.idx.tmp"
 #define SBD_HEAD "M1PLUS-DL 1\n"
@@ -103,8 +101,6 @@ static void sbd_bump(void) {
 /* ---- small string helpers (the payload has no libc string set beyond the few stock.h declares) ---- */
 
 static unsigned sbd_len(const char *s) { return sbn_len(s); }
-
-static int sbd_same(const char *a, const char *b) { return strcmp(a, b) == 0; }
 
 /* Two file names that are one file on the card: exFAT and FAT fold the case, so "03 Song One.flac" and "03 SONG ONE.flac" are the same file. The ASCII letters only: this is the cheap
  * first answer; the card folds every script, and sbd_shared asks the card itself before a file is adopted. */
@@ -432,8 +428,8 @@ static int sbd_edit(const char *remove_id, const char *row) {
     while (sbd_next(&p, end, &ls, &le)) {
         char id[SBA_ID];
         if (le - ls < 4 || ls[0] != 'i' || ls[1] != '=') continue; /* the head line, blank or odd lines go */
-        if (remove_id && sbd_field(ls, le, 'i', id, sizeof id) && sbd_same(id, remove_id)) continue;
-        if (row_id[0] && sbd_field(ls, le, 'i', id, sizeof id) && sbd_same(id, row_id))
+        if (remove_id && sbd_field(ls, le, 'i', id, sizeof id) && !strcmp(id, remove_id)) continue;
+        if (row_id[0] && sbd_field(ls, le, 'i', id, sizeof id) && !strcmp(id, row_id))
             continue; /* the row being added replaces an older one of the same track */
         memcpy(buf + out, ls, (unsigned)(le - ls));
         out += (unsigned)(le - ls);
@@ -458,7 +454,7 @@ static int sbd_find(const char *id, sbd_ent_t *out) {
     sbd_ensure();
     sbd_lock();
     for (i = 0; i < sbd.nix; ++i)
-        if (sbd_same(sbd.ix[i].id, id)) {
+        if (!strcmp(sbd.ix[i].id, id)) {
             memcpy(
                 out, &sbd.ix[i],
                 sizeof *out); /* (no struct assignment: the compiler would call a memcpy the payload does not have) */
@@ -506,7 +502,7 @@ static int sbd_shared(const char *final, const char *id) {
         sbd_lock();
         have = i < sbd.nix;
         if (have) {
-            other = !sbd_same(sbd.ix[i].id, id);
+            other = strcmp(sbd.ix[i].id, id);
             sbd_set(rel, sizeof rel, sbd.ix[i].file);
         }
         sbd_unlock();
@@ -545,7 +541,7 @@ static void sbd_clean(char *out, const char *s, unsigned max, const char *empty)
  * have the album. Worker only. */
 static const char *sbd_artist(const sba_track_t *t) {
     if (!t->album_id[0]) return t->artist;
-    if (!sbd_same(sbd.al_id, t->album_id)) {
+    if (strcmp(sbd.al_id, t->album_id)) {
         sbd_set(sbd.al_id, sizeof sbd.al_id, t->album_id);
         if (!sba_album_artist(t->album_id, sbd.al_artist, sizeof sbd.al_artist)) sbd.al_artist[0] = 0;
     }
@@ -589,7 +585,7 @@ static int sbd_slot(const char *id) {
     int i;
     if (!sbd.q) return -1;
     for (i = 0; i < SBA_DLMAX; ++i)
-        if (sbd.q[i].state && sbd_same(sbd.q[i].id, id)) return i;
+        if (sbd.q[i].state && !strcmp(sbd.q[i].id, id)) return i;
     return -1;
 }
 
@@ -632,7 +628,7 @@ static void sbd_q_load(void) {
         if (sbd_q_gone(
                 ls, le, id,
                 sizeof id)) { /* cancelled after its row was written (sbd_q_cancelled): the rows before this line are not the queue's */
-            for (i = 0; i < cnt && !sbd_same(q[i].id, id); ++i) {
+            for (i = 0; i < cnt && strcmp(q[i].id, id); ++i) {
             }
             if (i < cnt) {
                 memmove(&q[i], &q[i + 1], (unsigned)(cnt - i - 1) * sizeof *q);
@@ -641,10 +637,10 @@ static void sbd_q_load(void) {
             continue;
         }
         if (cnt >= SBA_DLMAX || !sbd_q_line(ls, le, id, sizeof id)) continue;
-        for (i = 0; i < sbd.nix && !sbd_same(sbd.ix[i].id, id); ++i) {
+        for (i = 0; i < sbd.nix && strcmp(sbd.ix[i].id, id); ++i) {
         }
         if (i < sbd.nix) continue; /* downloaded since */
-        for (i = 0; i < cnt && !sbd_same(q[i].id, id); ++i) {
+        for (i = 0; i < cnt && strcmp(q[i].id, id); ++i) {
         }
         if (i < cnt) continue;
         sbd_set(q[cnt].id, sizeof q[cnt].id, id);
@@ -678,9 +674,9 @@ static int sbd_q_row(const char *id, sba_track_t *t) {
     while (sbd_next(
         &p, end, &ls,
         &le)) { /* the last row of the track: an add after a cancel appends a new one, and that is the one asked for; a cancel's line after it leaves none */
-        if (sbd_q_line(ls, le, rid, sizeof rid) && sbd_same(rid, id))
+        if (sbd_q_line(ls, le, rid, sizeof rid) && !strcmp(rid, id))
             r = sbd_parse_row(ls, le, t, file, sizeof file, &fsize);
-        else if (sbd_q_gone(ls, le, rid, sizeof rid) && sbd_same(rid, id))
+        else if (sbd_q_gone(ls, le, rid, sizeof rid) && !strcmp(rid, id))
             r = 0;
     }
     free(text);
@@ -1032,13 +1028,13 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
     g = sba_guard();
     if (g) return g;
     if (sba_net_open(base, sizeof base, user, sizeof user, auth, sizeof auth) != SBA_OK) return SBA_NOCONF;
-    if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
+    if (!m1_card_mounted() || !m1_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
     artist = sbd_artist(t);
     /* the name: a free one, or the one an earlier download of this track left (the file is never overwritten) */
     for (v = 0, ok = 0; v < 9; ++v) {
         if (!sbd_file_name(t, artist, v, file, SBD_FILE) || !sbd_path(final, sizeof final, file)) return SBA_STORAGE;
         owner[0] = 0;
-        if (sbd_owner(file, owner, sizeof owner) && !sbd_same(owner, t->id))
+        if (sbd_owner(file, owner, sizeof owner) && strcmp(owner, t->id))
             continue; /* another track's name (whatever the card says of the file, and in any letter case): the next one */
         if (access(final, 0) != 0) {
             ok = 1;
@@ -1081,7 +1077,7 @@ static int sbd_run(const sba_track_t *t, char *file, unsigned *size) {
         free(sink);
         return SBA_OK;
     }
-    free_ok = pn_free_kb("/mnt/mmc", &kb);
+    free_ok = m1_free_kb("/mnt/mmc", &kb);
     code = sbd_http_code(sink, free_ok, kb);
     sbd.status = (int)sink->http_status;
     if (sbd.stop || sink->curl_result == CURLE_ABORTED_BY_CALLBACK) code = SBA_CANCELLED;
@@ -1157,7 +1153,7 @@ static void *sbd_main(void *arg) {
                 free(row);
             }
         }
-        if (code == SBA_OK && sbd_dir(dir, sizeof dir, file) && !sbd_same(dir, scan)) {
+        if (code == SBA_OK && sbd_dir(dir, sizeof dir, file) && strcmp(dir, scan)) {
             sbd_scan(scan); /* the album before this one is complete */
             sbd_set(scan, sizeof scan, dir);
         }
@@ -1197,7 +1193,7 @@ static int sbd_view(const char *id, int *code) {
             st = SBA_DL_NONE;
         else if (m->op == SBD_OP_RESUME)
             st = st == SBA_DL_FAILED && sbd_later(why) ? SBA_DL_WAIT : st;
-        else if ((m->op == SBD_OP_ADD || m->op == SBD_OP_CANCEL) && sbd_same(((const sbd_msg_t *)m)->id, id))
+        else if ((m->op == SBD_OP_ADD || m->op == SBD_OP_CANCEL) && !strcmp(((const sbd_msg_t *)m)->id, id))
             st = m->op == SBD_OP_CANCEL ? SBA_DL_NONE : st == SBA_DL_NONE || st == SBA_DL_FAILED ? SBA_DL_WAIT : st;
     }
     return st;
@@ -1268,7 +1264,7 @@ int sba_dl_add(const sba_track_t *t) {
     g = sba_guard();
     if (g) return known && sbd.job.busy ? SBA_OK : g;
     if (!known) {
-        if (!m1_card_mounted() || !pn_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
+        if (!m1_card_mounted() || !m1_free_kb("/mnt/mmc", &kb)) return SBA_STORAGE;
         if (noq)
             return bad ? SBA_STORAGE
                        : SBA_MEM; /* (the queue on the card would not read: nothing is added on top of rows not seen) */
@@ -1537,7 +1533,7 @@ int sba_dl_queue(sba_tracks_t *out) {
             &le)) { /* the last row of a track is the track's; a cancel's line after it leaves none (sbd_q_row) */
             int row = sbd_q_line(ls, le, rid, sizeof rid), gone = !row && sbd_q_gone(ls, le, rid, sizeof rid);
             if (!row && !gone) continue;
-            for (k = 0; k < cnt && !sbd_same(e[k].id, rid); ++k) {
+            for (k = 0; k < cnt && strcmp(e[k].id, rid); ++k) {
             }
             if (k == cnt) continue;
             e[k].have = (unsigned char)(row && sbd_parse_row(ls, le, t, file, sizeof file, &fsize));

@@ -10,13 +10,7 @@
 #include "offsets.inc"
 #include "stock.h"
 #include "wifictl.h"
-
-static int wf_hexv(int c) {
-    return c >= '0' && c <= '9'   ? c - '0'
-           : c >= 'a' && c <= 'f' ? c - 'a' + 10
-           : c >= 'A' && c <= 'F' ? c - 'A' + 10
-                                  : -1;
-}
+#include "utf8.h"
 
 int wf_unescape(const char *s, unsigned n, unsigned char *out, unsigned max) {
     unsigned i = 0, o = 0;
@@ -39,10 +33,10 @@ int wf_unescape(const char *s, unsigned n, unsigned char *out, unsigned max) {
         else if (c == '\\' || c == '"')
             out[o++] = c;
         else if (c == 'x') {
-            int h = i < n ? wf_hexv(s[i]) : -1, l;
+            int h = i < n ? m1_hexval(s[i]) : -1, l;
             if (h < 0) continue; /* hostap's printf_decode drops an escape it cannot read */
             i++;
-            l = i < n ? wf_hexv(s[i]) : -1;
+            l = i < n ? m1_hexval(s[i]) : -1;
             if (l >= 0) h = h * 16 + l, i++;
             out[o++] = (unsigned char)h;
         } else if (c >= '0' && c <= '7') {
@@ -378,7 +372,7 @@ int wf_parse_route(const char *text, char *out, unsigned size) {
             for (k = 0; k < 3; k++) { /* destination, gateway, flags: hex words */
                 const char *p = f[k + 1], *q = k < 2 ? f[k + 2] - 1 : e;
                 unsigned x = 0, n = 0;
-                for (; p < q && wf_hexv(*p) >= 0 && n < 8; p++, n++) x = x << 4 | (unsigned)wf_hexv(*p);
+                for (; p < q && m1_hexval(*p) >= 0 && n < 8; p++, n++) x = x << 4 | (unsigned)m1_hexval(*p);
                 if (!n) ok = 0;
                 if (k < 2)
                     v[k] = x;
@@ -405,7 +399,7 @@ int wf_parse_route(const char *text, char *out, unsigned size) {
 int wf_pass_hex(const char *pass) {
     unsigned n = 0;
     for (; pass[n]; n++)
-        if (wf_hexv(pass[n]) < 0) return 0;
+        if (m1_hexval(pass[n]) < 0) return 0;
     return n == 64;
 }
 
@@ -413,7 +407,7 @@ int wf_pass_ok(const char *pass, int sec) {
     unsigned n = 0, hex = 1;
     for (; pass[n]; n++) {
         if ((unsigned char)pass[n] < 32 || (unsigned char)pass[n] > 126) return 0;
-        if (wf_hexv(pass[n]) < 0) hex = 0;
+        if (m1_hexval(pass[n]) < 0) hex = 0;
     }
     if (sec == WF_SAE) return n >= 1 && n <= WF_SAE_MAX;
     return (n >= WF_PASS_MIN && n <= WF_PASS_MAX) || (n == 64 && hex);

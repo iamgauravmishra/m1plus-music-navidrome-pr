@@ -46,7 +46,6 @@ extern void *pg_episode_queue(
 extern int ipcf_open(void *win), ipcf_up(void), ipcf_busy(void), ipcf_tick(void *list, unsigned count);
 extern void ipcf_close(void), ipcf_goto(int sel), ipcf_paint(void *canvas, void *list, unsigned count, void *style);
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define ART_GREY 0xff2b2b2bu
 
 enum {

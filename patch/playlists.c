@@ -42,6 +42,7 @@
 #include "sbsrc.h"
 #include "songops.h"
 #include "playlists.h"
+#include "fnv.h"
 
 extern int
 songs_open_playlist(int id,
@@ -62,7 +63,6 @@ songs_open_playlist(int id,
 #error GRID_TILES cannot hold the visible rows, the next two and the history
 #endif
 
-#define I(w, off) (*(int *)((char *)(w) + (off)))
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
 #define PL_SIG 9 /* pl_dbsig: three files, three words each */
@@ -131,7 +131,7 @@ static int pl_max_scroll(void) {
     int m = pl_content() - GRID_VIEW_H;
     return m > 0 ? m : 0;
 }
-static int pl_off(void) { return pl.sv ? I(pl.sv, SC_YOFF) : 0; }
+static int pl_off(void) { return grid_sv_off(pl.sv); }
 /* The same offset measured from the top of the rows (negative while the title block is in view). */
 static int pl_coff(void) { return pl_off() - PL_TOP; }
 
@@ -141,10 +141,9 @@ static int pl_coff(void) { return pl_off() - PL_TOP; }
 static void pl_fade(void) {
     m1_title_set(pl.title, &pl.title_on, pl.noscroll || pl.select || m1_title_gone(pl_off(), 0));
     if (!pl.fade) return;
-    widget_set_visible(pl.fade, pl_off() > 0, 0);
-    widget_set_sensitive(pl.fade, 0);
+    grid_fade(pl.fade, pl_off() > 0);
 }
-static void pl_redraw(void) { widget_invalidate_force(pl.sv, (void *)0); }
+static void pl_redraw(void) { grid_sv_redraw(pl.sv); }
 
 /* Pick mode (the Add to Playlist picker, patch/picker.c; docs/modules/picker.md): "New playlist" is row 0, the playlists follow. When the picker opens over
  * our own Songs page of a playlist, the Playlists page below it has a state, kept aside here and put back when the picker goes. */
@@ -284,11 +283,7 @@ static int pl_is_sel(int i) { return pl.sel && (pl.sel[i >> 3] >> (i & 7) & 1); 
 /* The select mark of playlist a: the list's rows have a column left of the cover (the cover and the texts move right by SG_SEL_COL, as the Songs page's); a grid cell
  * has it at the bottom right of its cover (SG_MARK px, 6 px in). Drawn only when wholly inside the window. */
 static void pl_mark(void *canvas, int a, int x, int y) {
-    int src[4], dst[4];
-    if (y < 0 || y + SG_MARK > GRID_VIEW_H) return;
-    src[0] = src[1] = 0, src[2] = src[3] = SG_MARK;
-    dst[0] = x, dst[1] = y, dst[2] = dst[3] = SG_MARK;
-    canvas_draw_image(canvas, pl.mark[pl_is_sel(a)], src, dst);
+    grid_mark_draw(canvas, pl.mark[pl_is_sel(a)], x, y, GRID_VIEW_H);
 }
 
 /* The picker's New playlist row: a dark rounded square over the placeholder disc and a plus (two 2 px bars, as Lucide's plus at this size) in the art box. Only when
@@ -607,15 +602,15 @@ static void pl_sort(void) {
 
 /* A source's list as the page shows it: a hash of every row's id, name and content (cover, song count, length; the source's gen moves for any fetch anywhere, so it says nothing about this list). */
 static unsigned pl_src_sig(void *list) {
-    unsigned h = 2166136261u, i, k;
+    unsigned h = FNV_SEED, i, k;
     for (i = 0; list && i < deque_size(list); ++i) {
         void *r = deque_at(list, i);
         const char *s[3];
         s[0] = pl.src->rec_id(pl.src, r), s[1] = cc_str(r, REC_TITLE), s[2] = pl_meta(r);
         for (k = 0; k < 3; ++k) {
             const unsigned char *p = (const unsigned char *)s[k];
-            for (; *p; ++p) h = (h ^ *p) * 16777619u;
-            h = (h ^ 0x100) * 16777619u; /* (the field's end: "ab","c" is not "a","bc") */
+            for (; *p; ++p) h = (h ^ *p) * FNV_PRIME;
+            h = (h ^ 0x100) * FNV_PRIME; /* (the field's end: "ab","c" is not "a","bc") */
         }
     }
     return h ? h : 1;
@@ -807,16 +802,9 @@ static int pl_cell_at(int x, int y) {
     return a < (int)pl.count ? a : -1;
 }
 
-static void pl_set_press(int p) {
-    if (pl.press == p) return;
-    pl.press = p;
-    pl_redraw();
-}
-
 static int pl_item_of(void *e) {
     int pt[2];
-    pt[0] = I(e, PE_X), pt[1] = I(e, PE_Y);
-    widget_to_local(pl.view, pt);
+    grid_ev_local(pl.view, e, pt);
     return pl_cell_at(pt[0], pt[1]);
 }
 
@@ -896,11 +884,9 @@ static void pl_select(int on) {
     m1_show(pl.btn_plactions, !on);
     m1_show(pl.btn_selall, on);
     m1_show(pl.bar, on);
-    if (pl.title) widget_resize(pl.title, (on ? SG_SELALL_X : NAV_CF_X) - NAV_TITLE_X, 22);
+    if (pl.title) grid_title_end(pl.title, on ? SG_SELALL_X : NAV_CF_X);
     if (pl.back) {
-        widget_set_prop_str(pl.back, "style:normal:icon", on ? "ah_nav_close" : "ah_nav_back");
-        widget_set_prop_str(pl.back, "style:over:icon", on ? "ah_nav_close" : "ah_nav_back");
-        widget_set_prop_str(pl.back, "style:pressed:icon", on ? "ah_nav_close_down" : "ah_nav_back_down");
+        grid_icons(pl.back, on ? "ah_nav_close" : "ah_nav_back", on ? "ah_nav_close_down" : "ah_nav_back_down");
     }
     pl_head();
     pl_retext();
@@ -946,7 +932,7 @@ static int pl_on_down(void *ctx, void *e) {
     if (!e || !pl.view) return RET_OK;
     a = pl_item_of(e);
     pl.down = a + 1, m1_tap_at(&pl.tap, e);
-    if (pl.list && !pl.select) pl_set_press(a + 1);
+    if (pl.list && !pl.select) grid_set_press(&pl.press, a + 1, pl.sv);
     return RET_OK;
 }
 
@@ -954,7 +940,7 @@ static int pl_on_up(void *ctx, void *e) {
     int a = pl.down - 1;
     (void)ctx;
     pl.down = 0;
-    if (pl.list) pl_set_press(0);
+    if (pl.list) grid_set_press(&pl.press, 0, pl.sv);
     if (a < 0 || !e || !pl.view) return RET_OK;
     if (m1_tap_near(&pl.tap, e) && pl_item_of(e) == a) {
         if (pl.select)
@@ -969,7 +955,7 @@ static int pl_on_abort(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     pl.down = 0;
-    if (pl.list) pl_set_press(0);
+    if (pl.list) grid_set_press(&pl.press, 0, pl.sv);
     return RET_OK;
 }
 
@@ -1346,25 +1332,18 @@ static int pl_open_page(const lib_src_t *src) {
     pl_shape(pl.list);
     if (pl.src) { /* read-only remote playlists: no list-plus button (New Playlist, Import, Export, Delete Playlists, Clean Up are the stock library's), the title runs on */
         m1_show(pl.btn_plactions, 0);
-        widget_set_prop_str(pl.btn_more, "style:normal:icon",
-                            "pod_nav_more"); /* (the capsule's left cap is gone: "..." takes its rounded edge) */
-        widget_set_prop_str(pl.btn_more, "style:over:icon", "pod_nav_more");
-        widget_set_prop_str(pl.btn_more, "style:pressed:icon", "pod_nav_more_down");
-        if (pl.title) widget_resize(pl.title, NAV_VIEW_X - NAV_TITLE_X, 22);
+        grid_icons(pl.btn_more, "pod_nav_more",
+                   "pod_nav_more_down"); /* (the capsule's left cap is gone: "..." takes its rounded edge) */
+        if (pl.title) grid_title_end(pl.title, NAV_VIEW_X);
         pl.gen_timer = timer_add(pl_on_gen, (void *)0, LS_GEN_MS);
     }
     if (pl_v()) { /* the picker: Back and the title only */
         m1_show(pl.btn_more, 0), m1_show(pl.np, 0), m1_show(pl.btn_plactions, 0);
-        if (pl.title) widget_resize(pl.title, SG_SELALL_X - NAV_TITLE_X, 22);
+        if (pl.title) grid_title_end(pl.title, SG_SELALL_X);
         pl_head();
     }
     if (pl.big) az_fit(pl.big, pl_v() ? TR("Add to Playlist") : TR("Playlists")); /* (296 px, an ellipsis when wider) */
-    pl.noscroll = !widget_on(pl.sv, EVT_SCROLL, pl_on_scroll, (void *)0) ||
-                  !widget_on(pl.sv, EVT_SCROLL_END, pl_on_scroll, (void *)0);
-    if (pl.noscroll &&
-        pl.title) /* the large title's collapse needs the scroll events: without them the navbar keeps its title */
-        widget_set_visible(pl.title, 1, 0);
-    pl.title_on = pl.noscroll;
+    pl.noscroll = grid_scroll_bind(pl.sv, pl_on_scroll, pl.title, &pl.title_on);
     widget_on(pl.win, EVT_WINDOW_TO_FG, pl_on_fg, (void *)0);
     widget_on(pl.win, EVT_WINDOW_TO_BG, pl_on_bg, (void *)0);
     widget_on(pl.view, EVT_POINTER_DOWN, pl_on_down, (void *)0);

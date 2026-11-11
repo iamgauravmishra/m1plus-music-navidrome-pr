@@ -8,6 +8,10 @@
 #define ELLIPSIS 0x2026 /* U+2026 HORIZONTAL ELLIPSIS, the wide char texts are cut with */
 #define POD_DARK_MS 1000
 
+/* A stock object's field at a byte offset (the offsets are patch/offsets.inc's): an int, a byte. */
+#define I(w, off) (*(int *)((char *)(w) + (off)))
+#define B(w, off) (*(unsigned char *)((char *)(w) + (off)))
+
 /* The widget's text as UTF-8 in buf (size bytes, cut at a character boundary, always NUL terminated). Returns the length the whole text needs: it fitted when the result is below
  * size; -1 when the widget has no text. Use this, never stock widget_get_text_utf8, which ignores size for a wide text (docs/modules/payload.md). */
 int m1_text_utf8(void *widget, char *buf, unsigned size);
@@ -35,6 +39,17 @@ int m1_card_mounted(
  * the folders made first. 0 on success, -1 (nothing written) with the card not mounted. */
 int m1_card_write(const char *dir, const char *path, const char *tmp, const void *a, unsigned na, const void *b,
                   unsigned nb);
+/* write() all n bytes of data to fd; 1 on success, 0 on a failed or empty write. */
+int m1_write_all(int fd, const void *data, unsigned n);
+#define M1_CA \
+    "/etc/m1plus-cacert.pem" /* the CA bundle libcurl verifies with: Mozilla's roots, in the firmware (tools/mod_cacerts.py; stock's /etc/ssl/certs is empty) */
+#define M1_MIN_EPOCH \
+    1750000000u /* a clock before this (mid 2025, before the firmware existed) was never set: certificates would not verify */
+/* Percent-escape s into out at offset used (RFC 3986 unreserved characters pass, every other byte is %XX); returns the new length, or 0 when s is NULL or the result does not fit
+ * (a terminator's room is kept, none is written). */
+unsigned m1_urlenc(char *out, unsigned cap, unsigned used, const char *s);
+/* KB free for a non-root user on the file system of path (statfs); 0 when it fails (*kb is then not set). */
+int m1_free_kb(const char *path, unsigned *kb);
 /* The topmost opened window called name (the asset's root name, not the navigator_to path) brought to the front by stock's own restack, nothing closed. The window, or NULL (no such window, it is closing, or stock refused) with the stack as it was. */
 void *m1_restack_window(const char *name);
 /* A stock page: its opened window called window (the asset's root name; NULL: none) restacked as m1_restack_window does, else stock's navigator_to(path) (always, for NULL: a page whose init a restack would not redo). RET_OK, or navigator_to's result. */
@@ -130,3 +145,13 @@ void m1_segmented(void *canvas, int view_h, int x, int y, int w, int h, int n, i
 /* A POD_CROSS px square bitmap of a grey x (the Search page's recent searches remove it), made as the chevron; NULL when it cannot be made. */
 #define POD_CROSS 12
 void *m1_make_cross(void);
+/* c over v by a (of 255), opaque result: w = a + (a >> 7), both colour lanes at once. */
+static inline __attribute__((always_inline)) unsigned m1_mix(unsigned v, unsigned c, unsigned a) {
+    unsigned w = a + (a >> 7);
+    return 0xff000000u | (((v & 0xff00ffu) * (256 - w) + (c & 0xff00ffu) * w) >> 8 & 0xff00ffu) |
+           (((v & 0xff00u) * (256 - w) + (c & 0xff00u) * w) >> 8 & 0xff00u);
+}
+/* The integer square root of v (the largest s with s * s <= v). */
+unsigned m1_isqrt(unsigned v);
+/* A bitmap of ours from the asset `name` of win, w x h as the image is stored, as RGBA8888 whatever order the decoder gave (premultiplied when pm). NULL when it cannot be loaded or has another size. */
+void *m1_asset_rgba(void *win, const char *name, unsigned w, unsigned h, int pm);
