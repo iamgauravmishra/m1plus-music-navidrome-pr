@@ -204,7 +204,7 @@ The UI is dark by construction (stock theme edits, our own pages), so Light Mode
   has no colour (no opaque pixel more than `LIGHT_CHROMA` 40 saturated) and is mostly glyph (under 1/`LIGHT_SURFACE` of its area opaque and darker than `LIGHT_GLYPH`). So white marks, chevrons and status icons turn
   dark, and a grey or dark disc keeps its white glyph, as on the Home grid. `tools/palette_audit.py WORKDIR --sheet X.png [--kept] [--only P1,P2]` draws what flips and what stays.
 - **The payload's own drawing** goes through `ui_ink` (`ui_fill_color`: the list hairlines and press fills, the rail dots, Daily Mix fills, the cover corners) and the Cover Flow shelf is composited over paper
-  (`cfg_t.bg`; the landscape captions' ink flips). Album art, covers, wallpapers, photos and videos never change; neither do the placeholders drawn into cover bitmaps.
+  (`cfg_t.bg`; on Tinted with an accent over the washed black, `pal_map(black)`; the landscape captions' ink flips). Album art, covers, wallpapers, photos and videos never change; neither do the placeholders drawn into cover bitmaps.
 - **Exempt windows** (`EXEMPT` in `tools/palette.py`): while the top main window is the lock screen (`screensaver_page`: a wallpaper under text and a dark glass card), the full-screen cover (`bigcover_page`), the power-off
   splash, the Pod (`m1plus_ipod_page`, which has its own light and dark theme) or Cassette Mode (`m1plus_tape_page`), the style hooks pass through (`pal_exempt`: the answer is cached per top window and its name
   pointer; a page that slides in over a light one is painted dark for the transition). Images are global, so exempt pages' own pictures are in `KEEP`.
