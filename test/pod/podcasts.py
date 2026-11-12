@@ -132,8 +132,11 @@ class PM(ListMachine):
         n = self.call(PSYMS['pc_parse_eps'], a0=buf, a1=len(raw), a2=out, a3=mx, count=20000000)
         return [self.ep(out + i * O['PC_EP_SIZE']) for i in range(n)]
 
-    def shows(self, mx=40):
-        out = self.alloc(mx * O['PC_SHOW_SIZE']); self.u.mem_write(out, bytes(mx * O['PC_SHOW_SIZE']))
+    def shows(self, mx=None):
+        mx = mx or O['PC_MAX_SHOWS']
+        bufs = self.__dict__.setdefault('_show_buffers', {})   # (one array per machine and size: 100 shows are 134 kB and a test reads them many times)
+        if mx not in bufs: bufs[mx] = self.malloc(mx * O['PC_SHOW_SIZE'])   # (from the heap: the scratch area is small)
+        out = bufs[mx]; self.u.mem_write(out, bytes(mx * O['PC_SHOW_SIZE']))
         n = self.call(PSYMS['pc_scan_shows'], a0=out, a1=mx, count=200000000)
         return [self.show(out + i * O['PC_SHOW_SIZE']) for i in range(n)], out
 

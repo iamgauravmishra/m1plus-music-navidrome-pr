@@ -108,8 +108,13 @@ def shows_layout(n_shows, has_line, n_cont, discover=True):
     L['y_shows'] = y
     y += o['PP_HEAD_PITCH']
     L['y_grid'] = y
-    y += (n_shows + o['GRID_COLS'] - 1) // o['GRID_COLS'] * grid_pitch()
-    y += o['PP_LIB_GAP'] if n_shows else 0
+    y += (min(n_shows, o['PP_SHOWS_MAX']) + o['GRID_COLS'] - 1) // o['GRID_COLS'] * grid_pitch()
+    L['y_all'] = 0
+    if n_shows > o['PP_SHOWS_MAX']:   # the See All row (the All Shows page) in place of the gap
+        L['y_all'] = y
+        y += o['PS_MORE_H']
+    else:
+        y += o['PP_LIB_GAP'] if n_shows else 0
     if discover:
         L['y_srch'] = y
         y += o['PC_ROW_H']

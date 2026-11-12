@@ -340,7 +340,7 @@ def subscribe_tests(ctx):
     # a full list of shows
     m = machine(site=site)
     m.thread = None; fn(m, 'pn_preview', m.cstr(F_WSJ), m.cstr(''), m.cstr('')); PCN.work(m, m.thread)
-    expect(fn(m, 'pn_subscribe', m.cstr(ROOT_DIR), m.shows()[1], 40, out, 128) == PN['STORAGE'] and fn(m, 'pn_preview_parser') != 0, '40 shows already: PN_STORAGE, nothing written')
+    expect(fn(m, 'pn_subscribe', m.cstr(ROOT_DIR), m.shows()[1], O['PC_MAX_SHOWS'], out, 128) == PN['STORAGE'] and fn(m, 'pn_preview_parser') != 0, 'PC_MAX_SHOWS shows already: PN_STORAGE, nothing written (the page says Too many shows before it asks)')
 
 
 def fallback_tests(ctx):

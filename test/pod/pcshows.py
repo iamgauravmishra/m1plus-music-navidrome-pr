@@ -850,4 +850,46 @@ def caption_tests(ctx):
         expect(r[2] == GC, f'the caption box is the cover\'s width ({r})')
 
 
-SECTIONS = [layout_tests, title_tests, line_tests, cont_tests, library_tests, grid_tests, caption_tests, sheet_tests, gone_tests, empty_tests, width_tests, off_tests]
+def more_tests(ctx):
+    """More shows than the grid has (PP_SHOWS_MAX): the grid keeps the most recently updated, a See All (N) row under it opens the All Shows page (every show, the grid's order, no "..."); a tap opens
+    the show and Back returns to the list, then to the Shows level. With PP_SHOWS_MAX shows there is no row."""
+    expect = ctx.expect
+    MAXG, MORE_H = O['PP_SHOWS_MAX'], O['PS_MORE_H']
+    names = lambda n: [f'S{i:02d}' for i in range(n)]
+    def many(n):
+        def put(mm):
+            for i, d in enumerate(names(n)): mm.put(f'{RP}/{d}/.episodes', (PCP.EPS_HEAD + f'g=a\tp={90000 - 100 * i}\tf=a.mp3\tt=A\tu=https://e/a\n').encode())
+        return put
+    def see_all(m, L):
+        off = max(0, L['y_all'] - 200)
+        return [(t, r[0], r[1] + off) for t, r in texts_of(m, 'label_ps_ctitle', off) if t.startswith('See All')]
+    n = MAXG + 3
+    m = opened(many(n), lambda x: None)
+    L = pod_show.shows_layout(n, False, 0)
+    expect([t for t, _ in grid(m)] == names(MAXG), f'the grid has the {MAXG} most recently updated shows ({[t for t, _ in grid(m)]})')
+    expect(L['y_all'] and m.props[(m.sv, 'virtual_h')] == L['h'], f'the content is the model\'s height with the See All row ({m.props[(m.sv, "virtual_h")]} / {L["h"]})')
+    got = see_all(m, L)
+    expect(got == [(f'See All ({n})', O['PP_SHOWS_X'], L['y_all'] + (MORE_H - O['PS_TITLE_PITCH']) // 2)], f'the row under the grid counts every show ({got})')
+    PCP.tap(m, 100, L['y_all'] + MORE_H // 2, off=max(0, L['y_all'] - 200))
+    rows = []
+    for off in range(0, max(m.props[(m.sv, 'virtual_h')] - 300, 100), 100):
+        for t, r in texts_of(m, 'label_row_title', off):
+            if (r[1] + off, t) not in rows: rows.append((r[1] + off, t))
+    top = O['PP_TITLE_H']
+    expect(PCP.title_text(m) == 'Shows' and [t for _, t in sorted(rows)] == names(n) and flags(m, 'btn_more') == (0, 0),
+           f'the row opens the All Shows page: every show in the grid\'s order, no "..." ({PCP.title_text(m)}, {sorted(rows)})')
+    PCP.tap(m, 150, top + 10)
+    expect(PCP.title_text(m) == 'S00', f'a tap on a row opens its show ({PCP.title_text(m)})')
+    PCP.click(m, 'btn_return')
+    expect(PCP.title_text(m) == 'Shows', 'Back returns to the All Shows page')
+    PCP.click(m, 'btn_return')
+    expect(PCP.title_text(m) == 'Podcasts' and see_all(m, L), 'and Back again to the Shows level')
+    PCP.tap(m, 150, pod_show.shows_layout(n, False, 0)['y_dl'] + 10, off=max(0, L['y_dl'] - 200))
+    expect(PCP.title_text(m) == 'Downloaded', f'the Downloaded row under the See All row still opens its page ({PCP.title_text(m)})')
+    m = opened(many(MAXG), lambda x: None)
+    L = pod_show.shows_layout(MAXG, False, 0)
+    expect(not L['y_all'] and len(grid(m)) == MAXG and m.props[(m.sv, 'virtual_h')] == L['h'] and not [t for off in range(0, L['h'], 100) for t, _ in texts_of(m, 'label_ps_ctitle', off)],
+           f'{MAXG} shows: all in the grid, no See All row')
+
+
+SECTIONS = [more_tests, layout_tests, title_tests, line_tests, cont_tests, library_tests, grid_tests, caption_tests, sheet_tests, gone_tests, empty_tests, width_tests, off_tests]

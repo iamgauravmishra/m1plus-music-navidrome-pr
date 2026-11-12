@@ -1093,7 +1093,7 @@
 #define PC_TITLE 96               /* a title, UTF-8 bytes with the NUL (cut before a continuation byte) */
 #define PC_URL 320                /* a feed or image url of the show file (the feed url the refresh fetches: a longer one is refused at import) */
 #define PC_MAX_EPS 300            /* episodes of one show the model holds (newest kept) */
-#define PC_MAX_SHOWS 40           /* shows the page lists */
+#define PC_MAX_SHOWS 100          /* shows the page holds: the Shows grid has the first PP_SHOWS_MAX, the All Shows page every one */
 #define PC_DESC 208               /* a description: at most PC_DESC_CUT bytes of UTF-8 (cut before a continuation byte) and the NUL, with room */
 #define PC_DESC_CUT 200           /* the bytes of a description the feed reader keeps (HTML stripped, entities decoded, white space collapsed) */
 #define PC_AUTHOR 64              /* a show's author (itunes:author), UTF-8 bytes with the NUL */
@@ -1134,7 +1134,7 @@
 #define PC_SEEK_WAIT_MS 15000     /* a seek that has not happened this long after the episode started is dropped */
 #define PC_COVER_MAX_PX 2100000   /* a cover picture is decoded only when width * height is at most this (the stock loader holds the whole bitmap) */
 #define PC_ROW_H 64               /* the page's rows (LIST_ROW_H) */
-#define PC_TILES 44               /* text / cover tiles: every show (PC_MAX_SHOWS) and a few spare */
+#define PC_TILES 44               /* text / cover tiles: the rows and cells in view and spare (a ring: the least recently used leaves) */
 #define PC_SPEEDS 4               /* playspeed_mode 0..3: 1x, 1.25x, 1.5x, 2x (stock "Multiple Speed", images p_1_25 / p_1_5 / p_2) */
 /* The Podcasts Show page (patch/podcasts.c, docs/modules/podcasts.md "The Show page"; tools/preview/preview_podcasts_revamp.py reads these). Content y is from the list's top (window row
  * PG_LIST_Y = the navbar's bottom), x is the window's. HEADER, in the album page's and the playlist header's manner: the PS_ART px cover at x PS_ART_X with PS_ART_R px corners (flush with
@@ -1281,6 +1281,7 @@
 #define PP_DL_TEXT_W 206 /* the text ends at x 278 (72 + 206), 10 px before the shared chevron */
 #define PP_DL_CHEV_X 288 /* = LIST_CHEV_X: the shared chevron (m1_make_chevron), centred on the row above its hairline */
 #define PP_SEC_GAP 12
+#define PP_SHOWS_MAX 10 /* the grid's shows (the most recently updated); with more, a See All (N) row (PS_MORE_H high, its text at PP_SHOWS_X) is under the grid in place of PP_LIB_GAP and opens the All Shows page */
 #define PP_LIB_GAP 24 /* the air between the grid's last row and the Library rows (Search, Downloads, Subscriptions, Saved) that close the Shows page */
 #define PP_BOTTOM 10
 /* The Downloads page (patch/podcasts.c, docs/modules/podcasts.md "The Downloaded page"; tools/pod_show.py downloads_layout is the model): content y from the list's top. The storage line (15 px grey, PP_LINE_H high) at PDL_LINE_Y, x PP_LINE_X;

@@ -79,7 +79,7 @@ enum {
 }; /* the search: nothing asked, asked and waiting for the worker, the worker has it, the answer is in */
 
 #define PG_DNA_MAX 16 /* Discover rows remembered as having no feed */
-#define PG_IP_MAX PC_MAX_SHOWS /* In Progress rows of the Downloads level (queued, running, failed, paused) */
+#define PG_IP_MAX 40 /* In Progress rows of the Downloads level (queued, running, failed, paused) */
 #define PG_DLD_MAX 300 /* Downloaded rows: the newest this many (docs/modules/podcasts.md "The Downloaded page") */
 #define PG_DLS_MAX \
     (PG_IP_MAX + PG_DLD_MAX) /* slots of the Downloads level: In Progress in 0..PG_IP_MAX - 1, Downloaded after */
@@ -138,7 +138,8 @@ enum {
     PH_SAVROW = 13,
     PH_SRCHROW = 14,
     PH_SEG = 15,
-    PH_MORE = 16 /* the Show level's See All row */
+    PH_MORE = 16, /* the Show level's See All row */
+    PH_ALLROW = 17 /* the Shows level's See All row (more shows than the grid has) */
 }; /* what a touch hit: on the Show level the first four (the episode page's show row: PH_SHOW); on the Shows level the Search, Downloads and Subscriptions rows, a Continue Listening item, a show's cover and captions */
 enum {
     SR_SPEED = 0,
@@ -239,6 +240,8 @@ static struct {
         sv_n; /* the Downloads-style level (L_DLS) lists the Saved episodes (docs/modules/podcasts.md "Saved"); the offset the list is to come back to once its rows are in; the Saved episodes counted by pg_saved_load */
     unsigned *sv_h,
         *sv_d; /* their ring keys (pc_hash of the path), the last saved first, and the hashes of their show folders */
+    int allsh; /* the Subscriptions-style page (pg.subs) is the All Shows page: every show, in the Shows level's order, no "..." */
+    int y_all; /* the Shows level's See All row (content y; 0: the grid has every show) */
     int subs, from_subs,
         subs_off; /* the Downloads-style level (L_DLS) lists the Subscriptions instead of the downloads; the Show level was opened from it (Back returns there, to this offset) */
     void *
@@ -352,6 +355,8 @@ static int pg_shown(void) {
     int n = pg_nrows();
     return pg.allv || pg.preview || n <= PS_SHOW_MAX ? n : PS_SHOW_MAX;
 }
+/* The shows of the Shows level's grid: the first PP_SHOWS_MAX (the most recently updated); the rest are on the All Shows page. */
+static int pg_gn(void) { return pg.nshows > PP_SHOWS_MAX ? PP_SHOWS_MAX : pg.nshows; }
 static int pg_count(void) {
     return pg.level == L_EPS    ? pg_shown()
            : pg.level == L_DLS  ? pg.nrows
@@ -719,7 +724,7 @@ static void pg_gspan(int *c0, int *c1) {
     if (r0 < 0) r0 = 0;
     *c0 = r0 * GRID_COLS;
     *c1 = r1 * GRID_COLS + GRID_COLS - 1;
-    if (*c1 > pg.nshows - 1) *c1 = pg.nshows - 1;
+    if (*c1 > pg_gn() - 1) *c1 = pg_gn() - 1;
 }
 
 /* The tile of show a (a cell of the Shows grid); a new tile gets its title and caption. */
@@ -1480,11 +1485,16 @@ static void pg_home_layout(void) {
     pg.y_shows = y;
     y += PP_HEAD_PITCH;
     pg.y_grid = y;
-    y += (pg.nshows + GRID_COLS - 1) / GRID_COLS * GRID_PITCH;
-    y +=
-        pg.nshows
-            ? PP_LIB_GAP
-            : 0; /* the Library rows close the page: Discover while Podcast Discover is on, Downloads always, Subscriptions while a show has a feed */
+    y += (pg_gn() + GRID_COLS - 1) / GRID_COLS * GRID_PITCH;
+    pg.y_all = 0;
+    if (pg.nshows > PP_SHOWS_MAX) { /* the See All row, in place of the gap */
+        pg.y_all = y;
+        y += PS_MORE_H;
+    } else
+        y +=
+            pg.nshows
+                ? PP_LIB_GAP
+                : 0; /* the Library rows close the page: Discover while Podcast Discover is on, Downloads always, Subscriptions while a show has a feed */
     if (pg.searchon) {
         pg.y_srch = y;
         y += PC_ROW_H;
@@ -1613,6 +1623,8 @@ static void pg_paint_home(void *canvas) {
         pg_chev(canvas, PP_DL_CHEV_X, y + (PC_ROW_H - 1 - POD_CHEV_H) / 2);
         az_fill(canvas, PP_DL_TEXT_X, y + PC_ROW_H - 1, y + PC_ROW_H, PG_W - PP_DL_TEXT_X, LIST_HAIR);
     }
+    if (pg.y_all && pg.press == 5 && !pg.select)
+        az_fill(canvas, 0, pg.y_all - off, pg.y_all - off + PS_MORE_H, PG_W, 0x30ffffffu);
     pg_gspan(&c0, &c1);
     for (a = c0; a <= c1; ++a)
         grid_blit(canvas, &pg.gg, pg_gtile(a), grid_cell_x(a), grid_cell_y(a, pg.y_grid - off), GRID_VIEW_H);
@@ -1663,6 +1675,15 @@ static void pg_paint_home(void *canvas) {
         pg_paint_text_at(canvas, pg.st_sub, w, n, PP_DL_TEXT_X, y + LIST_SUB_Y, PP_DL_TEXT_W, LIST_SUB_H);
     }
     if (pg.y_shows) pg_paint_head(canvas, pg.y_shows - off, "Shows", PP_SHOWS_X);
+    if (pg.y_all) { /* the See All row: the count of every show */
+        char line[64];
+        unsigned w[64];
+        int n;
+        pc_fmt(line, sizeof line, TR("See All (%d)"), (unsigned)pg.nshows);
+        n = pg_wide(w, 64, line);
+        pg_paint_text_at(canvas, pg.st[ST_CTITLE], w, n, PP_SHOWS_X, pg.y_all + (PS_MORE_H - PS_TITLE_PITCH) / 2 - off,
+                         PG_W - 2 * PP_SHOWS_X, PS_TITLE_PITCH);
+    }
     /* the grid's titles, then its grey lines (the Albums grid's styles) */
     for (i = 0; i < 2; ++i) {
         pg_style(canvas, i ? ST_GSUB : ST_GTITLE);
@@ -2023,7 +2044,7 @@ static int pg_home_next(int *idx) {
     pg_gspan(&c0, &c1);
     c0 -= GRID_COLS, c1 += GRID_COLS;
     if (c0 < 0) c0 = 0;
-    if (c1 > pg.nshows - 1) c1 = pg.nshows - 1;
+    if (c1 > pg_gn() - 1) c1 = pg_gn() - 1;
     for (a = c0; a <= c1 && pg.gg.tiles; ++a) {
         grid_tile_t *t = grid_find(&pg.gg, a);
         if (!t || !t->art) return *idx = a, 2;
@@ -2213,7 +2234,7 @@ static void pg_nav(void) {
     int more =
             !pg.select && pg.btn_more &&
             ((pg.level == L_EPS && !pg.preview && !pg.det) || (pg.level == L_SHOWS && (pg.has_import || pg.has_line)) ||
-             (pg.level == L_DLS && pg.nrows && !pg.saved)),
+             (pg.level == L_DLS && pg.nrows && !pg.saved && !pg.allsh)),
         find =
             pg.find && (pg.level == L_DISC ||
                         (pg.level == L_EPS && !pg.preview && !pg.det && !pg.select &&
@@ -2399,7 +2420,8 @@ static void pg_load_shows(int keep) {
     } else
         pg_drop_tiles();
     pg.level = L_SHOWS;
-    pg.preview = pg.from_search = pg.subs = pg.from_subs = pg.from_dls = pg.saved = pg.from_disc = pg.pv_disc = 0;
+    pg.preview = pg.from_search = pg.subs = pg.allsh = pg.from_subs = pg.from_dls = pg.saved = pg.from_disc =
+        pg.pv_disc = 0;
     pg_leave_show();
     pg_scan();
     pg_saved_load(); /* (the Saved row's count) */
@@ -2652,7 +2674,14 @@ static void pg_dscan_step(void) {
 
 /* The Subscriptions page's rows (docs/modules/podcasts.md "Subscriptions and OPML"): every show with a feed address, by title; a row is the show (its cover, its name, its feed status line: pg_row_sub). */
 static void pg_subs_build(void) {
-    int order[PC_MAX_SHOWS], n = po_order(pg.shows, pg.nshows, order), i;
+    int order[PC_MAX_SHOWS], n, i;
+    if (pg.allsh) { /* the All Shows page: every show, in the Shows level's order */
+        for (i = 0; i < pg.nshows; ++i)
+            pg_dl_row(i, i, pg.shows[i].dir, "", pg.shows[i].title, pc_hash(pg.shows[i].feed));
+        pg.nrows = pg.nshows;
+        return;
+    }
+    n = po_order(pg.shows, pg.nshows, order);
     for (i = 0; i < n; ++i)
         pg_dl_row(i, order[i], pg.shows[order[i]].dir, "", pg.shows[order[i]].title, pc_hash(pg.shows[order[i]].feed));
     pg.nrows = n;
@@ -2731,7 +2760,7 @@ static void pg_load_downloads(int keep) {
     }
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
     pg.rev = pc_rev();
-    pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloaded", (const char *)0);
+    pg_title(pg.allsh ? "Shows" : pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloaded", (const char *)0);
     grid_shape(&pg.g, LIST_ART, LIST_R, 1);
     grid_placeholder(&pg.g);
     pg_dls_apply();
@@ -3315,6 +3344,10 @@ static void pg_subscribe(void) {
     char dir[PC_FILE];
     int r, si;
     if (!pg.preview) return;
+    if (pg.nshows >= PC_MAX_SHOWS) { /* (said in its own words: the card is fine) */
+        pod_toast(TR("Too many shows"));
+        return;
+    }
     r = pn_subscribe(pg.root, pg.shows, pg.nshows, dir, sizeof dir);
     if (r != PN_OK) {
         pg_srch_fail(r);
@@ -3672,7 +3705,11 @@ static void pg_head(void) { /* the navbar's title: "N Selected" in select mode, 
         else if (pg.level == L_SHOWS)
             pg_title("Podcasts", (const char *)0);
         else if (pg.level == L_DLS)
-            pg_title(pg.subs ? "Subscriptions" : pg.saved ? "Saved" : "Downloaded", (const char *)0);
+            pg_title(pg.allsh   ? "Shows"
+                     : pg.subs  ? "Subscriptions"
+                     : pg.saved ? "Saved"
+                                : "Downloaded",
+                     (const char *)0);
         return;
     }
     pc_fmt(buf, sizeof buf, TR("%d Selected"), pg.npick);
@@ -3943,8 +3980,13 @@ static void pg_refresh(int only_new) { pg_refresh_job(only_new, 0); }
 
 /* The sheet's Import from Card: subscribe to what subscriptions.txt lists, then refresh the new ones. */
 static void pg_import(void) {
-    int n = pn_import(pg.root, pg.shows, pg.nshows);
+    int n;
     char msg[64];
+    if (pg.nshows >= PC_MAX_SHOWS) {
+        pod_toast(TR("Too many shows"));
+        return;
+    }
+    n = pn_import(pg.root, pg.shows, pg.nshows);
     if (n < 0) {
         pod_toast(TR("Storage unavailable"));
         return;
@@ -4130,7 +4172,8 @@ static int pg_hit(void *e, int *part) {
         if (pt[1] >= pg.y_dl && pt[1] < pg.y_dl + PC_ROW_H) return *part = PH_DLROW, 0;
         if (pg.y_sub && pt[1] >= pg.y_sub && pt[1] < pg.y_sub + PC_ROW_H) return *part = PH_SUBROW, 1;
         if (pg.y_sav && pt[1] >= pg.y_sav && pt[1] < pg.y_sav + PC_ROW_H) return *part = PH_SAVROW, 2;
-        a = grid_cell_at(pt[0], pt[1], pg.y_grid, pg.nshows);
+        if (pg.y_all && pt[1] >= pg.y_all && pt[1] < pg.y_all + PS_MORE_H) return *part = PH_ALLROW, 4;
+        a = grid_cell_at(pt[0], pt[1], pg.y_grid, pg_gn());
         if (a >= 0) *part = PH_CELL;
         return a;
     }
@@ -4195,7 +4238,8 @@ static int pg_on_down(void *ctx, void *e) {
     pg.down_part = part;
     m1_tap_at(&pg.tap, e);
     if (a >= 0 && !pg.select &&
-        (pg.level == L_SHOWS ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW || part == PH_SRCHROW
+        (pg.level == L_SHOWS
+             ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW || part == PH_SRCHROW || part == PH_ALLROW
          : pg.level == L_SRCH || pg.level == L_DISC ? part == PH_BODY
                                                     : pg.level != L_EPS || part == PH_BODY || part == PH_MORE))
         grid_set_press(
@@ -4835,7 +4879,7 @@ static int pg_on_more(void *ctx, void *e) {
         pg_sheet_open(SH_SHOW, 0);
     else if (pg.win && pg.level == L_SHOWS)
         pg_sheet_open(SH_HOME, 0);
-    else if (pg.win && pg.level == L_DLS && !pg.select && !pg.saved)
+    else if (pg.win && pg.level == L_DLS && !pg.select && !pg.saved && !pg.allsh)
         pg_sheet_open(pg.subs ? SH_SUBS : SH_DLS, 0);
     return RET_OK;
 }
@@ -4945,7 +4989,10 @@ static void pg_home_tap(int part, int a) {
         pg_load_downloads(0);
     else if (part == PH_SUBROW)
         pg_load_subs(0);
-    else if (part == PH_SAVROW)
+    else if (part == PH_ALLROW) {
+        pg.allsh = 1;
+        pg_load_subs(0);
+    } else if (part == PH_SAVROW)
         pg_load_saved();
     else if (part == PH_SRCHROW) {
         if (pg.searchon && !pg.dlg && !pg.sheet) pg_load_disc(1);
