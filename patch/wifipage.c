@@ -1360,6 +1360,16 @@ static int wp_tick(const void *timer) {
     return RET_REPEAT;
 }
 
+/* The window is about to open: stock has just resolved every widget's style (offsets.inc WINDOW_STAGE_CREATED). The rows wifipage_open filled (the supplicant's
+ * table as it was) were cut in the label's default style, a smaller font than the row's 21 px, so a long name was left too long and the label clipped it, ellipsis
+ * and all, until the list changed. The names are cut again in the row's style. */
+static int wp_on_will_open(void *ctx, void *e) {
+    (void)ctx;
+    (void)e;
+    if (wp.win) wp_layout();
+    return RET_OK;
+}
+
 static int wp_on_fg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
@@ -1413,6 +1423,7 @@ int wifipage_open(void) {
         return -1;
     }
     widget_on(wp.win, EVT_DESTROY, wp_on_destroy, wp.win);
+    widget_on(wp.win, EVT_WINDOW_WILL_OPEN, wp_on_will_open, (void *)0);
     widget_on(wp.win, EVT_WINDOW_TO_FG, wp_on_fg, (void *)0);
     widget_on(wp.win, EVT_WINDOW_TO_BG, wp_on_bg, (void *)0);
     m1_bind(wp.win, "btn_return", m1_on_back, (void *)0);

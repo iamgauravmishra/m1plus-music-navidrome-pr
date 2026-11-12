@@ -494,6 +494,9 @@
  * to the one it uncovers, @0x69182c / @0x691b3c), the stock black, and the largest weighted square sum (2126 r^2 + 7152 g^2
  * + 722 b^2, channels 0..255) the bar colour may have: gamma 2 is above the sRGB luminance, so L <= 0.183 and white text
  * keeps 4.5:1 (test/pod/nowplaying.py checks the true figure). */
+/* (EVT_WINDOW_WILL_OPEN: see WINDOW_STAGE_CREATED; a handler bound on the window runs after stock has resolved the styles, widget_dispatch calls the widget's
+ * on_event @0x66cf38 before the emitter @0x66cf6c) */
+#define EVT_WINDOW_WILL_OPEN 0x12a
 #define EVT_WINDOW_TO_BG 0x12c
 #define EVT_WINDOW_TO_FG 0x12d
 #define NP_BAR_STOCK 0xff000000u

@@ -701,13 +701,16 @@ def page(supp=None, wifi=True, bt=False, copy=True, tick=True, language=None, co
 
 
 class Fit(PM):
-    """The widgets' text and its measure (13 px a character) for az_fit_room and the info page's name lines."""
+    """The widgets' text and its measure (13 px a character) for az_fit_room and the info page's name lines; `char_w` is the width of a character
+    (a window whose styles are not resolved yet measures in the default style's smaller font)."""
+    char_w = 13.0
+
     def _hook(self, u, address, size, _):
         name = self.handlers.get(address, '')
         if name not in ('widget_get_text', 'widget_measure_text'): return super()._hook(u, address, size, _)
         a0, a1 = (u.reg_read(r) for r in (UC_MIPS_REG_A0, UC_MIPS_REG_A1))
         if name == 'widget_measure_text':
-            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', 13.0 * len(self.words_until_zero(a1))))[0])
+            u.reg_write(UC_MIPS_REG_F0, struct.unpack('<I', struct.pack('<f', self.char_w * len(self.words_until_zero(a1))))[0])
         else:
             t = next((c[2] for c in reversed(self.hist + self.calls) if c[0] == 'widget_set_text_utf8' and c[1] == a0), '').encode('latin-1').decode('utf-8')
             ret = self.alloc(4 * len(t) + 4); self.u.mem_write(ret, struct.pack(f'<{len(t) + 1}I', *map(ord, t), 0))
@@ -816,8 +819,19 @@ def layout_tests(ctx):
     opened(m)
     shown = [g[0].encode('latin-1').decode('utf-8') for g in m.rows()]
     expect(shown == ['ElevenChars', 'TwelveChar…', 'A very lon…', '咖啡店的无线网络名字…'], f'11 characters (143 px) stay whole, 12 (156 px, the box but not its 152 px of text room) and longer names end in an ellipsis: {shown}')
+    # the page opens before stock resolves the styles (EVT_WINDOW_WILL_OPEN, from an idle): the names of the supplicant's table are measured in the default style
+    # (18 px for the row's 21: 11 px a character here) and cut again in the row's style when the window is about to open, with no change in the list
+    m = fit_page(Supp(scan=[(-40 - i, '[WPA2-PSK-CCMP][ESS]', n) for i, n in enumerate(names)], known=[]))
+    m.char_w = 11.0
+    opened(m)
+    early = [g[0].encode('latin-1').decode('utf-8') for g in m.rows()]
+    m.char_w = 13.0
+    m.fire(O['EVT_WINDOW_WILL_OPEN'])
+    shown = [g[0].encode('latin-1').decode('utf-8') for g in m.rows()]
+    expect(early[1] == 'TwelveChars!' and shown == ['ElevenChars', 'TwelveChar…', 'A very lon…', '咖啡店的无线网络名字…'],
+           f'names cut too long in the default style at open are cut to the row\'s style when the window is about to open: {early} -> {shown}')
     # every row is bound
-    bound = {n: m.bound.get((m.widgets[n], O['EVT_CLICK'])) for n in ('wf_row_sw', 'wf_row_other', 'wf_row0', 'wf_row1', f'wf_row{WP_ROWS - 1}', 'btn_return', 'btn_backtoplayer')}
+    bound ={n: m.bound.get((m.widgets[n], O['EVT_CLICK'])) for n in ('wf_row_sw', 'wf_row_other', 'wf_row0', 'wf_row1', f'wf_row{WP_ROWS - 1}', 'btn_return', 'btn_backtoplayer')}
     expect(all(bound.values()) and bound[f'wf_row{WP_ROWS - 1}'][1] == WP_ROWS and bound['wf_row0'][1] == 1 and bound['wf_row_sw'][0] != bound['wf_row_other'][0], 'the rows, Back and Now Playing take a tap')
     # the connected network sits in the switch row's card
     supp = Supp(scan=SCAN, known=KNOWN); supp.state, supp.cur, supp.ip = 'COMPLETED', 0, '192.168.1.20'
