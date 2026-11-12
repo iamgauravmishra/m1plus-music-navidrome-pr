@@ -179,7 +179,7 @@ runs one table delete per marked row and then `remove_file` `0x4e1264` (`access`
 | `0xf00a` Favourites | `0x4e1710` | `0x4ede88` (`myfav`: unfavourite) |
 | `0xf008` Most played | `0x4e17b4` | `0x4edf10` (`oftenplay`) |
 | `0xf007` Recently played | `0x4e1858` | `0x4edecc` (`recentplay`) |
-| `0xff13` a playlist's songs | `0x4e18fc` | `deleteMusicFromPlaylist` `0x4edf54` (`playlist`) |
+| `0xff13` a playlist's songs | `0x4e18fc` | `deleteMusicFromPlaylist` `0x4edf54` (`playlist`; WHERE `filename`, `fileurl`, `time`, `time_end`, no id / cd_num: every playlist's row of that song, docs/modules/playlists.md) |
 | `0xff04..0xff08`, `0xff0a..0xff0f` | none | nothing |
 
 Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools/pod.py`. Stock `awake_screen` sets it to 1 before enabling the framebuffer; zero means off. Existing page-owned timers use it to defer visual work.

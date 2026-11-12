@@ -115,7 +115,7 @@ def run(ctx):
         expect(all(dict(built[stub])[k] == dict(built[twin])[k] for k in pod_i18n.TEXT), f'{stub} holds {twin}\'s language')
     for k, by in pod_i18n.TEXT.items():
         counts = {loc: by[loc].count('%d') for loc in LOC}
-        expect(set(counts.values()) == ({k.count('%d')} if k.startswith(('%d', 'Added %d', 'Downloading %d', 'See All (')) or k.startswith('Cancelled, ') or k in pod_i18n.DATE_KEYS else {0}) and all('%' not in by[l].replace('%d', '').replace('%s', '') for l in LOC)
+        expect(set(counts.values()) == ({k.count('%d')} if k.startswith(('%d', 'Added %d', 'Downloading %d', 'See All (', 'Remove %d ')) or k.startswith('Cancelled, ') or k in pod_i18n.DATE_KEYS else {0}) and all('%' not in by[l].replace('%d', '').replace('%s', '') for l in LOC)
                and all(by[l].count('%s') == k.count('%s') for l in LOC),
                f'{k!r}: %d only in the track counts, once each; %s only in the Daily Mix templates, as often as the key has it')
     expect(sorted(pod_i18n.TEXT) == pod_i18n.KEYS and all(set(by) == set(LOC) for by in pod_i18n.TEXT.values()), 'every key has all 13 languages')

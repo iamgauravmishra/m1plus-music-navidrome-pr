@@ -846,12 +846,16 @@ class Machine:
             f_ = re.fullmatch(r"select \* from songtable where fileurl='((?:[^']|'')*)' limit 1", sql)   # one file's row (patch/folders.c fo_album_of): the library's first row with that path
             d_ = re.fullmatch(r"select \* from songtable where fileurl>='((?:[^']|'')*)/' and fileurl<'((?:[^']|'')*)0' order by fileurl limit 1", sql)   # a folder's first row in path order (BINARY: bytes)
             album_sql = sql == pod.ALBUM_SQL and a2 == 0x4e93c8   # getAllAlbum's statement with stock's album row callback (payload cc_cmap_build): one record per album (class_lists[0xf003]), the empty-album group skipped as the callback does
+            n_ = re.fullmatch(r"select \* from songtable where filename in \((.*)\)", sql)   # the library's rows with those file names (Clean Up Playlist's repair, patch/songops.c so_relink_chunk)
             if (album_sql or a_) and self.__dict__.get('album_query_fails'):
                 ret = -1
-            elif not m_ and not a_ and not album_sql and not f_ and not d_:
+            elif not m_ and not a_ and not album_sql and not f_ and not d_ and not n_:
                 ret = -1
             else:
-                if album_sql:
+                if n_:
+                    wanted = {p.replace("''", "'") for p in re.findall(r"'((?:[^']|'')*)'", n_.group(1))}
+                    rows = [r for r in self.class_lists.get(0xf001, self.showlist) if self.read_cstr(self.word(r + O['REC_NAME'])) in wanted]
+                elif album_sql:
                     rows = [r for r in self.class_lists.get(O['CLASS_ALBUMS'], []) if self.read_cstr(self.word(r + O['REC_ALBUM']))]
                 elif f_ or d_:
                     lib = self.class_lists.get(0xf001, self.showlist)
@@ -871,6 +875,18 @@ class Machine:
                 if not self.word(tmp): self.setword(tmp, self.new_deque())
                 self.deques[self.word(tmp)] = rows
                 ret = len(rows)
+        elif name == 'toolsUpdateDbTable':   # (db, sql): one statement, 1 when it ran. `update playlist set fileurl='..' where id=N` rewrites the path of the playlist row with that id (self.playlist_songs)
+            sql = self.read_cstr(a1); self.calls.append(('toolsUpdateDbTable', self.read_cstr(a0), sql))
+            u_ = re.fullmatch(r"update playlist set fileurl='((?:[^']|'')*)' where id=(\d+)", sql)
+            ret = 1 if u_ and not self.__dict__.get('update_fails') else 0xffffffff
+            if ret == 1:
+                for rows in self.playlist_songs.values():
+                    for r in rows:
+                        if self.word(r + O['REC_ID']) == int(u_.group(2)): self.setword(r + O['REC_PATH'], self.cstr(u_.group(1).replace("''", "'")))
+        elif name == 'toolsDeleteItemById':   # (table, db, id): `delete from table where id=N`, 1 when it ran: the playlist row with that id goes (self.playlist_songs)
+            self.calls.append(('toolsDeleteItemById', self.read_cstr(a0), self.read_cstr(a1), a2)); ret = 1
+            if self.read_cstr(a0) == 'playlist':
+                for k in self.playlist_songs: self.playlist_songs[k] = [r for r in self.playlist_songs[k] if self.word(r + O['REC_ID']) != a2]
         elif name == 'deque_clear':
             self.deques[a0] = []; self.calls.append(('deque_clear', a0))
         elif name == 'loadSongList':

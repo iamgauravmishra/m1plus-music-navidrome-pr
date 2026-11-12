@@ -29,7 +29,7 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 | Songs | Jump with the A–Z rail (Settings → Library → Index Rail, on by default); Search in the navbar; the **…** has Select and Sort (Title, File Name, Format, Recently Added; tap the ticked order to reverse it) |
 | Recently Added | The newest songs; the navbar's **…** switches to the newest albums |
 | Album | Play, shuffle the album, or tap a track; the footer shows the track count and length once measured |
-| Playlists | Open a playlist (Play, Shuffle, or tap a track); the list-plus button creates, imports, exports or deletes; the **…** switches grid/list and the name order |
+| Playlists | Open a playlist (Play, Shuffle, or tap a track); the list-plus button creates, imports, exports or deletes; the **…** switches grid/list and the name order. Inside a playlist, **…** → **Clean Up Playlist** repairs songs whose files were moved to another folder (run Update Library first) and offers to remove the ones that are no longer on the card; only that playlist changes and no file is deleted |
 | Folders | Extras → Folders lists the card's folders and audio files. With the Playback setting **Folder cover** on, a row with a cover shows it (40 px) in place of its icon: a file's is its album's, a folder's is the album of the first song of the library inside it (also in sub-folders); rows without one keep their icon. Only music in the library gets a cover; the covers are the ones the app has already made (Albums, Cover Flow), none are made here |
 | Shuffle | Shuffle songs, albums or folders from Extras |
 

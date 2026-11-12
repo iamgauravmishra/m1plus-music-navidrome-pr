@@ -853,6 +853,7 @@ SONGS_IMAGES = {'sg_play': ('play:filled', WHITE, 14, 16), 'sg_shuffle': ('shuff
                 'pod_ic_vsartist': ('mic-vocal', WHITE, None, 20), 'pod_ic_vsalbumartist': ('user-star', WHITE, None, 20),
                 'pod_ic_vsrefresh': ('refresh-cw', WHITE, None, 20), 'pod_ic_vsserver': ('server', WHITE, None, 20),   # the Subsonic root's "..." card (patch/ndroot.c): Sync Now, Server Settings
                 'pod_ic_vsdownload': ('download', WHITE, None, 20),   # the Subsonic album page's "..." card (patch/albumpage.c): Download Album
+                'pod_ic_vsclean': ('list-x', WHITE, None, 20),   # a playlist's "..." card (patch/songs.c): Clean Up Playlist
                 'nd_st_ok': ('circle-check', WIFI_GREY, 14, 14), 'nd_st_off': ('unplug', WIFI_GREY, 14, 14)}   # the Subsonic root's status line: connected, and not connected / offline (14 px, the spinner's size, the line's grey)   # the "..." cards' row glyphs (bare, as the Playlists menu's rows); ink None: drawn on the icon set's own 24 grid at VS_GRID_PX, not fitted to the box, so a round or square shape keeps the set's optical balance and the rows' glyphs look one size
 VS_GRID_PX = 21   # the "..." card glyphs' grid: 24 units = 21 px (1.5 px stroke), so a full-grid shape (layout-grid, circle-check) has about 17 px of ink in its 20 px box
 ALBUM += sorted(SONGS_IMAGES)

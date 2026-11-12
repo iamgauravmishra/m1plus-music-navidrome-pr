@@ -462,6 +462,33 @@ TEXT = dict([
        'Eliminar listas', 'Elimina playlist', 'ลบเพลย์ลิสต์', 'Usuń playlisty', 'Удалить плейлисты', 'Видалити плейлисти'),
     _t('No playlists', '没有歌单', '沒有歌單', 'プレイリストがありません', '재생 목록 없음', 'Aucune playlist', 'Keine Playlists',
        'No hay listas', 'Nessuna playlist', 'ไม่มีเพลย์ลิสต์', 'Brak playlist', 'Нет плейлистов', 'Немає плейлистів'),
+    # A playlist's "..." > Clean Up Playlist (patch/songs.c sg_clean; docs/modules/playlists.md "Clean Up Playlist"): the card's row, the confirm text (the key by
+    # 1 / more; ru, pl, uk, th and the CJK languages need no plural), the messages; "File not found" is the toast of a song whose file is not on the card that is in
+    # (patch/songops.c so_missing). Machine translations, unreviewed.
+    _t('Clean Up Playlist', '清理歌单', '清理歌單', 'プレイリストを整理', '재생 목록 정리', 'Nettoyer la playlist', 'Playlist bereinigen',
+       'Limpiar lista', 'Pulisci playlist', 'ล้างเพลย์ลิสต์', 'Wyczyść playlistę', 'Очистить плейлист', 'Очистити плейлист'),
+    _t('Remove %d missing song from this playlist?', '从此歌单移除 %d 首缺失歌曲？', '從此歌單移除 %d 首缺失歌曲？', '存在しない曲を%d曲、このプレイリストから削除しますか？',
+       '없는 곡 %d곡을 이 재생 목록에서 제거할까요?', 'Retirer %d titre manquant de cette playlist ?', '%d fehlenden Titel aus dieser Playlist entfernen?',
+       '¿Quitar %d canción que falta de esta lista?', 'Rimuovere %d brano mancante da questa playlist?', 'ลบเพลงที่ไม่พบ %d เพลงออกจากเพลย์ลิสต์นี้?',
+       'Usunąć brakujące utwory z tej playlisty: %d?', 'Удалить отсутствующие треки из плейлиста: %d?', 'Видалити відсутні треки з плейлиста: %d?'),
+    _t('Remove %d missing songs from this playlist?', '从此歌单移除 %d 首缺失歌曲？', '從此歌單移除 %d 首缺失歌曲？', '存在しない曲を%d曲、このプレイリストから削除しますか？',
+       '없는 곡 %d곡을 이 재생 목록에서 제거할까요?', 'Retirer %d titres manquants de cette playlist ?', '%d fehlende Titel aus dieser Playlist entfernen?',
+       '¿Quitar %d canciones que faltan de esta lista?', 'Rimuovere %d brani mancanti da questa playlist?', 'ลบเพลงที่ไม่พบ %d เพลงออกจากเพลย์ลิสต์นี้?',
+       'Usunąć brakujące utwory z tej playlisty: %d?', 'Удалить отсутствующие треки из плейлиста: %d?', 'Видалити відсутні треки з плейлиста: %d?'),
+    _t('%d song updated', '已更新 %d 首歌曲', '已更新 %d 首歌曲', '%d曲を更新しました', '%d곡 업데이트됨', '%d titre mis à jour', '%d Titel aktualisiert',
+       '%d canción actualizada', '%d brano aggiornato', 'อัปเดตแล้ว %d เพลง', 'Zaktualizowano utwory: %d', 'Обновлено треков: %d', 'Оновлено треків: %d'),
+    _t('%d songs updated', '已更新 %d 首歌曲', '已更新 %d 首歌曲', '%d曲を更新しました', '%d곡 업데이트됨', '%d titres mis à jour', '%d Titel aktualisiert',
+       '%d canciones actualizadas', '%d brani aggiornati', 'อัปเดตแล้ว %d เพลง', 'Zaktualizowano utwory: %d', 'Обновлено треков: %d', 'Оновлено треків: %d'),
+    _t('File not found', '找不到文件', '找不到檔案', 'ファイルが見つかりません', '파일을 찾을 수 없음', 'Fichier introuvable', 'Datei nicht gefunden',
+       'Archivo no encontrado', 'File non trovato', 'ไม่พบไฟล์', 'Nie znaleziono pliku', 'Файл не найден', 'Файл не знайдено'),
+    _t('All songs are on the card', '所有歌曲都在存储卡中', '所有歌曲都在記憶卡中', 'すべての曲がカードにあります', '모든 곡이 카드에 있습니다', 'Tous les titres sont sur la carte',
+       'Alle Titel sind auf der Karte', 'Todas las canciones están en la tarjeta', 'Tutti i brani sono sulla scheda', 'เพลงทั้งหมดอยู่ในการ์ด', 'Wszystkie utwory są na karcie',
+       'Все треки на карте', 'Усі треки на карті'),
+    _t('Card not readable, nothing removed', '无法读取存储卡，未移除任何内容', '無法讀取記憶卡，未移除任何內容', 'カードを読み取れません。削除していません', '카드를 읽을 수 없어 제거하지 않았습니다',
+       'Carte illisible, rien retiré', 'Karte nicht lesbar, nichts entfernt', 'Tarjeta ilegible, nada eliminado', 'Scheda non leggibile, nulla rimosso', 'อ่านการ์ดไม่ได้ ไม่มีการลบ',
+       'Nie można odczytać karty, nic nie usunięto', 'Карта не читается, ничего не удалено', 'Картку не прочитано, нічого не видалено'),
+    _t('Playlist cleaned up', '歌单已清理', '歌單已清理', 'プレイリストを整理しました', '재생 목록을 정리했습니다', 'Playlist nettoyée', 'Playlist bereinigt',
+       'Lista limpiada', 'Playlist pulita', 'ล้างเพลย์ลิสต์แล้ว', 'Playlista wyczyszczona', 'Плейлист очищен', 'Плейлист очищено'),
     # The song count under the last row of the Songs page and its lists (patch/songs.c sg_foot_text; chosen by n == 1 as the track count above;
     # pl, ru, uk the label form that needs no plural)
     _t('%d song', '%d 首歌曲', '%d 首歌曲', '%d 曲', '%d곡', '%d titre', '%d Titel',

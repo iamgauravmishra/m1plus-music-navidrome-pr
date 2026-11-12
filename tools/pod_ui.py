@@ -978,11 +978,11 @@ def view_sort_card(sort_keys=VS_SORT_KEYS, view_keys=VS_VIEW_KEYS, search_key=VS
         styled(card, (st,), 'border_width', '0')
     acts = tuple(act_keys) if act_keys else (search_key, select_key)
     act_gl = tuple(act_glyphs) if act_glyphs else ('pod_ic_vssearch', 'pod_ic_vsselect')
-    assert len(acts) == len(act_gl) and len(acts) in (2, 4)
+    assert len(acts) == len(act_gl) and len(acts) in (2, 3, 4)
     keys = tuple(sort_keys) + tuple(view_keys) + acts
     assert len(sort_keys) == len(VS_SORT_KEYS) and len(view_keys) == len(VS_VIEW_KEYS)
     slots = (6, 7, 8, 9)[:len(acts)] + (4, 5, 0, 1, 2, 3)   # the actions, Grid, List, Title, Artist, Recently Added, Year: the payload packs the rows a page offers (the asset is seven rows high, Select shares Grid's place until then)
-    where = {6: 0, 7: 1, 4: 1, 5: 2, 0: 3, 1: 4, 2: 5, 3: 6} if len(acts) == 2 else {6: 0, 7: 1, 8: 2, 9: 3, 4: 4, 5: 5, 0: 6, 1: 6, 2: 6, 3: 6}   # (four actions, two views and one sort fill the seven rows; the other sort rows share the last)
+    where = {6: 0, 7: 1, 8: 2, 4: 1, 5: 2, 0: 3, 1: 4, 2: 5, 3: 6} if len(acts) < 4 else {6: 0, 7: 1, 8: 2, 9: 3, 4: 4, 5: 5, 0: 6, 1: 6, 2: 6, 3: 6}   # (a third action, the Songs page's, shares List's place as Select shares Grid's; four actions, two views and one sort fill the seven rows; the other sort rows share the last)
     for slot in slots:
         pos = where[slot]
         key, y, glyph = keys[slot], pos * VS_ROW_H, slot >= len(VS_SORT_KEYS)
@@ -1264,7 +1264,8 @@ def build_songs_page(page):
     root.children.extend(azlist_rail())
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
                                                               ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
-    root.children.extend(view_sort_card(sort_keys=pod_pages.SONGS_SORT_KEYS, view_keys=('Albums', 'Songs'), search_key='Search Songs'))   # above the list, the rail and the select bar (the "..." card: Select, Albums / Songs on Recently Added, the four sort rows of the library; vs_bind hides what a list does not offer; the Search Songs row is never offered, Search is the navbar button)
+    root.children.extend(view_sort_card(sort_keys=pod_pages.SONGS_SORT_KEYS, view_keys=('Albums', 'Songs'), act_keys=('Search Songs', 'Select', 'Clean Up Playlist'),
+                                        act_glyphs=('pod_ic_vssearch', 'pod_ic_vsselect', 'pod_ic_vsclean')))   # above the list, the rail and the select bar (the "..." card: Select, a playlist's Clean Up Playlist (slot 8), Albums / Songs on Recently Added, the four sort rows of the library; vs_bind hides what a list does not offer; the Search Songs row is never offered, Search is the navbar button)
     root.children.extend(row_menu())   # last: above everything (the track rows' "..." menu, patch/rowmenu.c)
     return root
 

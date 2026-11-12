@@ -1527,7 +1527,7 @@
 #define VS_VIEWS 2
 #define VS_SEARCH (VS_SORTS + VS_VIEWS) /* slot 6: the optional Search row, the card's first (a glyph, no tick) */
 #define VS_SELECT (VS_SEARCH + 1) /* slot 7: the optional Select row, second in the card (a check-circle glyph, no tick) */
-#define VS_ACT2 (VS_SELECT + 1) /* slot 8: an optional third action row (only the Playlists asset has it: New Playlist, Import, Export, Delete Playlists are slots 6..9), a glyph, no tick */
+#define VS_ACT2 (VS_SELECT + 1) /* slot 8: an optional third action row (the Songs asset has it for a playlist's Clean Up Playlist; the Playlists asset has it and slot 9: New Playlist, Import, Export, Delete Playlists are slots 6..9), a glyph, no tick */
 #define VS_ACT3 (VS_ACT2 + 1) /* slot 9: the fourth */
 #define VS_ROWS (VS_ACT3 + 1)
 #define VS_ALL_SORTS ((1u << VS_SORTS) - 1)

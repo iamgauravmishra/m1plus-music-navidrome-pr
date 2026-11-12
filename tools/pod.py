@@ -171,8 +171,11 @@ FUNCTIONS = {
     'loadAlbumdetailList':     ('int', 'int, void *', 0x4eea98),   # an album row (a RECORD pointer, not an index) to its songs: loadLocalClassList(0xff11) for the All songs row
     'loadSongList':            ('int', 'void *, const char *, int, int', 0x4e2ce0),
     'toolsQueryDbTable':       ('int', 'const char *, const char *, void *, int', 0x5ee77c),   # (db, sql, row callback, sort); hooked (pc_library_query), so a call goes through the Library filter
+    # Clean Up Playlist (patch/songops.c so_relink / so_clean, docs/modules/playlists.md; PLAYLIST_PINS): one statement on the shared database handle, and one row out by its id
+    'toolsUpdateDbTable':      ('int', 'const char *, const char *', 0x5eefb0),   # (db, sql): sqlite3_exec(sql) with no callback; 1 done, -1 failed (stock: the Most Played count)
+    'toolsDeleteItemById':     ('int', 'const char *, const char *, int', 0x5ef370),   # (table, db, id): `delete from %s where id=%d`; 1 done, 0 failed (stock: deletePlaylist)
     'navigator_to_with_context': ('int', 'const char *, const void *', 0x4d1d48),
-    'toolsGetAlbumCover':      ('int', 'const char *, const char *, int, int', 0x5eaee0),
+    'toolsGetAlbumCover':     ('int', 'const char *, const char *, int, int', 0x5eaee0),
     'toolsGetExternCover':     ('int', 'const char *, const char *, int, int', 0x5eafec),
     # Shuffle (patch/shuffle.c, docs/architecture.md): the stock play mode as the Play settings page
     # sets it (@0x49fc78), the random seed, and the message box
@@ -444,6 +447,7 @@ DATA = {
     'TIDAL_TRACKS':       (0xa10264, None), 'TIDAL_ARTISTS': (0xa10254, None), 'TIDAL_ALBUMS': (0xa10244, None), 'TIDAL_SCROLL': (0xa04150, None),
     'BACKLIGHT_STATUS':   (0x97cae4, 'backlight_status'), # byte: 0 off, 1 lit (awake_screen)
     'PDEQ_SHOWLIST':      (0xa045d8, 'pdeq_showlist'),   # deque_t * of the loaded list
+    'DELETE_FLAG':        (0xa05a5a, 'delete_flag'),     # byte: batch_delete_file sets it to 1 after every delete (@0x4e1474), the stock list pages read it; Clean Up Playlist sets it as that would
     'PDEQ_TOOLS_TMP':     (0xa03964, 'tools_pdeq_directory'),   # deque_t * the stock song row callback fills (toolsQueryDbTable clears it first; loadLocalClassList assigns it to the show list, then clears it)
     'PARSE_COVER_MUTEX':  (0xa04588, 'parse_cover_mutex'),  # the lock every stock art caller holds
     # g_class_type: albuminfo_page_init stores classinfo[0] (0xff10) there @0x5268ec, and the row

@@ -631,6 +631,15 @@ PLAYLIST_PINS = (   # (address, stock word, what it proves)
     (0x53dcd0, 0x00003825, 'delete handler: a3 = 0'), (0x53dcd4, 0xafa00010, 'delete handler: delete_file (the 5th argument) = 0'),
     (0x53dcf0, 0x0320f809, 'delete handler: jalr batch_delete_file (a0 = the browsing class *0x97cad4)'),
     (0x74b7d0, 0xffade414, 'batch_delete_file jump table: the class 0xf00b word (+ gp 0xa03ed0 = 0x4e22e4, the playlist loop\'s test)'),
+    # Clean Up Playlist (patch/songops.c so_relink / so_clean, from a playlist's "..." card, patch/songs.c sg_clean; docs/modules/playlists.md). A playlist's songs are read with
+    # `select * from %s where id > 100 and cd_num=%d` (getMusicByPlayList), so a record's id (column 0, the row callback's atoi into +0) is its row's own id in the `playlist` table.
+    # toolsUpdateDbTable(db, sql) opens the shared handle and runs sqlite3_exec(sql, no callback); toolsDeleteItemById(table, db, id) runs `delete from %s where id=%d`
+    (0x4ede0c, 0x24a5c510, 'getMusicByPlayList: a1 = "select * from %s where id > 100 and cd_num=%d" 0x74c510'),
+    (0x5eefb0, 0x3c1c0041, 'toolsUpdateDbTable prologue'), (0x5eefb4, 0x279c4f20, 'toolsUpdateDbTable prologue'), (0x5eefb8, 0x0399e021, 'toolsUpdateDbTable prologue'),
+    (0x5ef008, 0x0320f809, 'toolsUpdateDbTable: jalr sqlite3_exec(db handle, sql = the second argument, 0, 0, &err)'),
+    (0x5ef370, 0x3c1c0041, 'toolsDeleteItemById prologue'), (0x5ef374, 0x279c4b60, 'toolsDeleteItemById prologue'), (0x5ef378, 0x0399e021, 'toolsDeleteItemById prologue'),
+    (0x5ef3f8, 0x24c67ec0, 'toolsDeleteItemById: a2 = "delete from %s where id=%d" 0x757ec0'), (0x5ef418, 0x0320f809, 'toolsDeleteItemById: jalr sqlite3_exec'),
+    (0x4edfc4, 0x0320f809, 'deletePlaylist: jalr toolsDeleteItemById("playlist", the database path, id): stock\'s own use on this table'),
     (0x4e22b0, 0x04112f39, 'batch_delete_file, class 0xf00b loop: bal deletePlaylist 0x4edf98'), (0x4e22d4, 0x04112f41, 'batch_delete_file, class 0xf00b loop: bal deleteAllMusicByPlaylist 0x4edfdc'),
 )
 PICKER_PINS = (
