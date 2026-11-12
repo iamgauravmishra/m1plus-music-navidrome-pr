@@ -62,6 +62,8 @@ int pj_episodes(const char *json, unsigned n, pj_ep_t *out, int max);
 
 /* The same for Deezer's album search (https://api.deezer.com/search/album): the objects of the top-level "data" array, with title as name, artist.name as author, cover_medium (250 px) as art and id. -1: no "data" array. */
 int pj_deezer(const char *json, unsigned n, pj_result_t *out, int max);
+/* The same for Deezer's artist search (https://api.deezer.com/search/artist): name as name and, not cut, as feed ("" for one longer than the field: the match of a name is made on it), picture_medium (250 px) as art and nb_fan (the artist's followers) as id; author is "". -1: no "data" array. */
+int pj_deezer_artists(const char *json, unsigned n, pj_result_t *out, int max);
 
 typedef struct {
     char title[PJ_NAME], artist[PJ_AUTHOR], album[PJ_NAME]; /* trackName, artistName, albumName */

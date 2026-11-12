@@ -1,6 +1,6 @@
 # Find Cover & Lyrics (`patch/onlineart.c`, `patch/pcnet.c` "Find Cover & Lyrics", `patch/pcjson.c`, `test/pod/onlineart.py`, `test/pod/onlineartpage.py`)
 
-An online lookup for the playing track: the album's cover from the **iTunes Search API**, then **Deezer**, and the lyrics from **LRCLIB**. It is a row on page 2 of Now Playing's More
+An online lookup for the playing track (and, from an artist's page, for that artist's photo: "Artist photos" below): the album's cover from the **iTunes Search API**, then **Deezer**, and the lyrics from **LRCLIB**. It is a row on page 2 of Now Playing's More
 sheet (`docs/modules/playmore.md`) and a page of our own. Stock has a hidden "Online search" row (`listitem3`, Baidu / Kugou / NetEase over plain HTTP); it stays hidden and is not used.
 No new hook and no new patched stock word: the row is the existing More dialog hook's, the page a new window asset, the network the Podcasts worker's libcurl client.
 
@@ -88,6 +88,30 @@ libcurl's time-outs (connect 20 s, 30 s under 1 kB/s, 120 s total) with `Can't c
 - Scratch, in `/mnt/mmc/.m1plus/art/`: `a<n>.jpg|png` (thumbnails), `pick.src`, `full.jpg|png` (the larger picture of the confirmation), `l<n>.txt` (the lyrics candidates, until one is saved), `lyrics.tmp`; removed by the next lookup and by the page's destroy when no worker runs.
 
 Not done (a stock limit, no hook): tracks **with embedded art** keep it on stock Now Playing, the lock screen and the stock album pages; only our pages (and the Cover Flow cache users above) show the picked cover.
+
+## Artist photos (Find Artist Photo)
+
+The same page, worker and scratch files for **an artist of the library**: `onlineart_open_artist(name)` (`oa.ar`, `oa.akey` = `ap_key(name)`; a blank name opens nothing), reached from the "..." card of a library artist's page
+(`patch/albums.c`, `docs/modules/albums.md` "Scoped artist page"; not on a composer's, a source's or Unknown Artist's page). It needs no playing track and never touches the track's cover, folder or lyrics.
+
+- **The page**: the navbar's title is **Artist Photo**; there are no chips (`oa_chips` hidden and insensitive): the artist's name (`oa_dh_title`) and `Deezer` (`oa_dh_sub`), the lyrics detail's header labels, stand in the chip row's place over the
+  same line and list. The list is the Covers grid (88 px tiles, three a row) of the photos found; the states are the Covers tab's, with two of its own (`pod_ui.OA_ES_STATES` `no photos`: No Photos Found / Nothing on Deezer for this artist.;
+  `photos busy`: Photo Service Busy / Deezer is busy. Try again in a moment., with Try Again). A tap opens the same **confirmation** (the 500 px picture, Deezer's name of that artist, `Deezer`) with the pill **Use This Photo**
+  (**Replace Photo** when the artist already has a picked photo, `ap_picked`); nothing is written before the pill; afterwards the grid with that photo framed.
+- **The lookup**, `pn_artist(name)` (`pn.aartist`; the covers part only, `pn_art_again` refuses the lyrics part): one request, `https://api.deezer.com/search/artist?limit=25&q=<name>` (`PN_ART_DEEZER_ARTIST`, the name cut and URL-encoded as any query
+  field), taken apart by `pj_deezer_artists` (`name`, `picture_medium` 250 px as the thumbnail, `nb_fan`). Offered (`pn_artist_covers`): the artists whose picture is their own (Deezer gives an artist without one a blank whose address has an empty
+  picture id, `.../images/artist//250x250-...`: left out), a picture once, **the artists of that very name first** (`ap_key` of Deezer's name equals the asked name's: the case, the white space around it and a leading "The " do not count; both keys are of the whole names, `pn.akey` taken before the query is cut to 95 bytes and Deezer's name as `pj_deezer_artists` keeps it uncut in `feed`, since the `name` shown holds 79), then
+  at most `PN_ARTIST_OTHER` 4 of the others, `PN_ARTIST_MAX` 6 in all; in each group **the most followed first** (a name often has several entries, most of them empty shells with few followers; equal counts keep the service's order).
+  The search is a loose one: it answers with other artists of a like name, some more followed than the one asked for, so by followers alone the grid was mostly other people. The others are not dropped: the same artist under another
+  spelling or script (`Eason Chan` for `陈奕迅`, an accented letter) is among them, and with no entry of the very name they are all there is. The larger picture is `pn_art_full`'s `500x500-` address, fetched by `pn_art_fetch` as for a cover. A busy answer (503 / 429) is `PN_OVERLOAD` from the one request.
+- **The save**, `pn_artist_pick(i, key)` (the pick worker, `pkmode` 2): `ap_pick(src, key)` of `patch/artistphoto.c` makes the artist's two cache files (`a<key>-168.jpg`, `a<key>-44.jpg`, cropped square by `pv_square` as a local `artist.jpg` is) and
+  the `a<key>.pick` marker in `/mnt/mmc/.m1plus/artists`, and bumps `ap_epoch`, so the artist's page (`al_on_fg`) and the Artists list (`ar_on_fg`) show it when they come back to the front. A photo that cannot be made, or whose marker cannot be written, is `PN_STORAGE` (the save is whole or nothing, under `ap_mutex` against the cover worker's automatic builds) and the
+  artist's files stay as they were. The marker keeps every automatic build off the artist (`docs/modules/artists.md` "Cache"). The photo is filed under the name as the library has it ("A feat. B" gets its own photo; its lead artist's is untouched).
+- **Why Deezer alone**: no key, one request, and its artist search matches names across scripts (周杰伦 finds Jay Chou). fanart.tv's pictures need a MusicBrainz id first (a second service, one request a second) and an API key in the firmware,
+  and cover few CJK artists; the iTunes Search API has no artist pictures.
+- Tests: `test/pod/onlineart.py` `artist_tests` (the extractor against `json.loads` on `test/data/onlineart/deezer_artist.json`, the one request, the order and what is left out, Try Again, the 500 px picture, the cache files and marker, a failed
+  publish, an album lookup afterwards, nothing found, busy, no connection), `test/pod/onlineartpage.py` `artist_tests` (the header in the chips' place, the title, the grid, the confirmation, nothing written before the pill, Use / Replace This
+  Photo, the frame, the two states in 13 languages, Try Again, a failed save, destroy), `test/pod/artists.py` `find_photo_tests` (the card's row and what the artist's page does when it comes back). Not seen on the device.
 
 ## Pins and hooks
 

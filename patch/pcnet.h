@@ -194,6 +194,8 @@ void pn_chart_clean(void); /* remove the artwork files and forget that any was t
  * the same guards, libcurl options and thread rules as the search. All of these run on the UI thread; the worker only writes the record they read. */
 #define PN_ART_MAX 12 /* covers offered: iTunes' first (at most PN_ART_ITUNES_MAX), Deezer's after them */
 #define PN_ART_ITUNES_MAX 6
+#define PN_ARTIST_MAX 6 /* photos offered for an artist: those under the very name first */
+#define PN_ARTIST_OTHER 4 /* of them, at most this many under another name */
 #define PN_ART_Q \
     96 /* a query field (artist, album, title), UTF-8 bytes with the NUL; longer is cut on a character boundary */
 #define PN_LYR_MAX 20 /* lyrics candidates kept: the exact match, then LRCLIB's search results */
@@ -204,6 +206,7 @@ void pn_chart_clean(void); /* remove the artwork files and forget that any was t
 #define PN_ART_ITUNES "https://itunes.apple.com/search?media=music&entity=album&limit=8&term="
 #define PN_ART_DEEZER "https://api.deezer.com/search/album?limit=8&q="
 #define PN_ART_LRCLIB "https://lrclib.net/api/"
+#define PN_ART_DEEZER_ARTIST "https://api.deezer.com/search/artist?limit=25&q="
 
 enum { PN_A_IDLE = 0, PN_A_COVERS = 1, PN_A_THUMBS = 2, PN_A_DONE = 3 };
 enum { PN_SRC_ITUNES = 0, PN_SRC_DEEZER = 1 };
@@ -259,6 +262,13 @@ int pn_lyr_save(int i, const char *path);
  * honours) and, when dir is not empty, put the original JPEG into that folder as the folder picture stock's Now Playing reads. The larger picture is the one pn_art_fetch downloaded for i, else it is
  * downloaded now. 0 when the worker runs; PN_BUSY, or a guard's code. */
 int pn_art_pick(int i, const char *dir, unsigned key0, unsigned key1);
+/* Find Artist Photo (docs/modules/onlineart.md "Artist photos"): the same lookup for an artist's name alone. The covers part is Deezer's artist search (the artists that have a picture, those under the very name
+ * first, then at most PN_ARTIST_OTHER others, the most followed first in each, up to PN_ARTIST_MAX; pn_art_name is the artist, pn_art_artist "", the source PN_SRC_DEEZER); there is no lyrics part (pn_art_again takes PN_PART_COVERS only). Thumbnails, pn_art_fetch and the
+ * larger picture as for a cover. Same returns as pn_art. */
+int pn_artist(const char *name);
+/* Make picture i the photo of the artist with this key (patch/artistphoto.c ap_key, ap_pick: both cache files and the .pick marker). 0 when the worker runs; PN_BUSY, or a guard's code. The result is pn_pick_state /
+ * pn_pick_code (PN_STORAGE: the files could not be made). */
+int pn_artist_pick(int i, unsigned key);
 int pn_pick_state(void); /* 0 none, 1 running, 2 done */
 int pn_pick_code(
     void); /* PN_OK: the cover is in the cache (or, after pn_art_fetch, the picture is there); else why not */

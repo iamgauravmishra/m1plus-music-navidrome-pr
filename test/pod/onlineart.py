@@ -646,4 +646,165 @@ def busy_tests(ctx):
     expect(fn(m, 'pn_art_again', 2) == PN['NOWIFI'], 'the guards run for a part too')
 
 
-SECTIONS = [json_tests, job_tests, lyrics_tests, failure_tests, busy_tests, cancel_tests, pick_tests, rebuild_tests]
+DEEZER_ARTIST = 'https://api.deezer.com/search/artist?limit=25&q='
+AP = '/mnt/mmc/.m1plus/artists'
+
+
+def artist_tests(ctx):
+    """Find Artist Photo (pn_artist, pn_artist_pick, pj_deezer_artists, ap_pick; docs/modules/onlineart.md "Artist photos"): Deezer's artist search alone, the artists that have a picture of their own with the most followed
+    first, and the picked picture as the artist's photo in the artists cache with its .pick marker."""
+    expect = ctx.expect
+    raw = data('deezer_artist.json')
+    d = json.loads(raw)['data']
+    # the extractor against json.loads
+    m = Machine()
+    for base in (0x30000000, 0x30100000): m.u.mem_map(base, 0x40000)
+
+    def call(name, text, mx=8):
+        src, dst = 0x30000000 + 0x40000 - len(text), 0x30100000
+        m.u.mem_write(src, text)
+        n = fn(m, name, src, len(text), dst, mx)
+        n = n - (1 << 32) if n >= 1 << 31 else n
+        return n, Rec.parse(bytes(m.u.mem_read(dst, mx * Rec.SIZE)), max(n, 0))
+    n, got = call('pj_deezer_artists', raw)
+    expect(n == 6 and got == [(r['nb_fan'], r['name'], '', r['name'], r['picture_medium'] or '') for r in d], f'Deezer\'s artist answer: nb_fan as the id, the name (in the feed field too, where it is not cut), no author, picture_medium ({n})')
+    long = [{'name': nm, 'nb_fan': 1, 'picture_medium': None} for nm in ('n' * 79, 'n' * 80, '汉' * 27, 'n' * 319, 'n' * 320)]
+    lgot = call('pj_deezer_artists', json.dumps({'data': long}).encode())[1]
+    expect([(g[1], g[3]) for g in lgot] == [('n' * 79,) * 2, ('n' * 79, 'n' * 80), ('汉' * 26, '汉' * 27), ('n' * 79, 'n' * 319)], f'a long name: cut at 79 bytes on a character as the name, whole beside it; one of 320 bytes is no artist ({len(lgot)})')
+    expect(got[0][1] == '陈奕迅' and got[4][1] == 'Eason & Friends "Duo"' and got[5][4] == '', 'CJK, & and an escaped quote as they are; a null picture is empty')
+    expect(call('pj_deezer_artists', data('itunes_album.json'))[0] == -1 and call('pj_deezer_artists', b'{"data":[],"total":0}')[0] == 0, 'the store\'s answer is not one; an empty "data" is 0 artists')
+    expect([g[1] for g in call('pj_deezer_artists', data('deezer_album.json'))[1]] == [], 'an album answer has no artist names at its top level: nothing is kept')
+
+    # the job: one request, the artists with a picture, the most followed first
+    def site_for(**over):
+        return Site(**{DEEZER_ARTIST: {'body': raw}, **over})
+
+    def begin(m, name='陈奕迅'):
+        m.thread = None
+        return fn(m, 'pn_artist', m.cstr(name)), m.thread
+    def cmachine(site):
+        """The lookup's machine on the cover tests' card machine (ftell over a file's bytes: ap_make sizes its source), set up as machine() does."""
+        m = sibling('coverart').CM()
+        m.dirs.update({PCN.ROOT_DIR, '/mnt/mmc/.m1plus', '/mnt/mmc'})
+        m.present.add(PCN.CA)
+        m.curl_site = site
+        m.jinit()
+        m.slept = []
+        m.on_sleep = lambda k, m=m: m.slept.append(1)
+        return m
+    site = site_for()
+    m = cmachine(site)
+    r, th = begin(m)
+    st = state(m)
+    expect(r == 0 and th and th[0] == PSYMS['pn_amain'] and st['state'] == 1 and st['busy'] == 1, f'pn_artist starts the lookup\'s worker ({st})')
+    expect(begin(m)[0] == PN['BUSY'] and start(m)[0] == PN['BUSY'], 'a second lookup while it runs: PN_BUSY')
+    PCN.work(m, th)
+    st = state(m)
+    urls = site.urls()
+    want = [d[0], d[1], d[4]]   # the entry of the very name (178 followers), then the others: 8879 twice (the service's order between them); the blank, the repeated picture and the null one are not offered
+    expect(urls[0] == DEEZER_ARTIST + enc('陈奕迅') and urls[1:] == [r['picture_medium'] for r in want], f'one request, Deezer\'s artist search with the name URL-encoded, then the thumbnails of the artists offered: {urls}')
+    expect(not [u for u in urls if u.startswith((ITUNES, LRCLIB, DEEZER))], 'no album search and no lyrics request')
+    expect(st['state'] == 3 and st['code'] == 0 and st['count'] == 3 and st['busy'] == 0, f'three photos: an artist with the service\'s blank picture (an empty picture id), a picture already offered and a null picture are left out ({st})')
+    expect([info(m, i) for i in range(3)] == [(r['name'], '', 1) for r in want], f'the very name first, then the most followed, equal counts in the service\'s order; the name, no second line, the source Deezer: {[info(m, i)[0] for i in range(3)]}')
+    expect([thumb_path(m, i) for i in range(3)] == [f'{ART_DIR}/a{i}.jpg' for i in range(3)], 'the thumbnails are the lookup\'s a<n>.jpg')
+    for u, o in site.reqs:
+        expect(o[10065] == PCN.CA and o[52] == 1 and 64 not in o and 81 not in o and o[10018].startswith('M1PlusMusic/'), f'{u[:40]}: the CA bundle, verification on, the app\'s user agent')
+    # a loose answer: the entries of the very name first, at most PN_ARTIST_OTHER others, PN_ARTIST_MAX in all
+    def offered(asked, names):
+        rows = [{'name': nm, 'nb_fan': fans, 'picture_medium': f'https://cdn-images.dzcdn.net/images/artist/{i:032x}/250x250-000000-80-0-0.jpg'} for i, (nm, fans) in enumerate(names)]
+        mm = cmachine(site_for(**{DEEZER_ARTIST: {'body': json.dumps({'data': rows}).encode()}}))
+        PCN.work(mm, begin(mm, asked)[1])
+        return [info(mm, i)[0] for i in range(state(mm)['count'])]
+    loose = [(f'Beatles Tribute {i}', 9000 - i) for i in range(6)]
+    expect(offered('The Beatles', loose) == [nm for nm, _ in loose[:4]], 'no entry of the very name: the four most followed of the others')
+    got = offered('The Beatles', loose[:3] + [('beatles', 5), (' THE BEATLES ', 7), ('The Beatles', 6)] + loose[3:])
+    expect(got == [' THE BEATLES ', 'The Beatles', 'beatles'] + [nm for nm, _ in loose[:3]], f'the very name (the case, the spaces around it and "The " apart) before the more followed others, six in all: {got}')
+    got = offered('Beatles', [(f'Other {i}', 99) for i in range(3)] + [('The Beatles', 10 + i) for i in range(8)])
+    expect(got == ['The Beatles'] * 6, f'six entries of the very name leave no room for the others: {got}')
+    for nm in ('n' * 79, 'n' * 80, '汉' * 27, 'n' * 95, 'The ' + 'n' * 100):   # the name kept is 79 bytes and the query 95: the match is on the whole names
+        got = offered(nm.upper(), loose[:5] + [(nm, 1)])
+        expect(got[0] == nm.encode()[:79].decode(errors='ignore') and len(got) == 5, f'a name of {len(nm.encode())} bytes is still the very name: first, before four more followed others ({got[0][:12]}, {len(got)})')
+    # Try Again: the covers part only, the same search
+    expect(fn(m, 'pn_art_again', 2) == PN['MEM'], 'there is no lyrics part to ask again')
+    n0 = len(site.reqs)
+    m.thread = None
+    r = fn(m, 'pn_art_again', 1); PCN.work(m, m.thread)
+    expect(r == 0 and site.urls()[n0] == DEEZER_ARTIST + enc('陈奕迅') and state(m)['count'] == 3, 'pn_art_again(covers) asks the artist search again')
+    # the pick: the 500 px picture into the artists cache, with the marker
+    key = fn(m, 'ap_key', m.cstr('陈奕迅'))
+    ep0 = fn(m, 'ap_epoch')
+    expect(key and fn(m, 'ap_picked', key) == 0 and fn(m, 'pn_artist_pick', 0, 0) == PN['NOFEED'] and fn(m, 'pn_artist_pick', 7, key) == PN['NOFEED'], 'no key, or a photo that is not there: refused')
+    m.thread = None
+    fn(m, 'pn_art_fetch', 0); PCN.work(m, m.thread)
+    big = want[0]['picture_medium'].replace('250x250-', '500x500-')
+    expect(site.urls()[-1] == big and fn(m, 'pn_pick_code') == 0 and not [p for p in m.fs if p.startswith(AP)], f'the confirmation\'s larger picture is the 500 px one; a fetch writes nothing to the artists cache: {site.urls()[-1][-40:]}')
+    n1 = len(site.reqs)
+    m.thread = None
+    r = fn(m, 'pn_artist_pick', 0, key)
+    expect(r == 0 and m.thread and m.thread[0] == PSYMS['pn_kmain'] and fn(m, 'pn_pick_state') == 1, 'the pick starts the worker')
+    PCN.work(m, m.thread)
+    f168, f44 = f'{AP}/a{key:08x}-168.jpg', f'{AP}/a{key:08x}-44.jpg'
+    expect(len(site.reqs) == n1 and fn(m, 'pn_pick_state') == 2 and fn(m, 'pn_pick_code') == 0, 'the picture already held is used: no request, OK')
+    expect(all(p in m.fs and m.fs[p][:2] == b'\xff\xd8' for p in (f168, f44)) and f'{AP}/a{key:08x}.pick' in m.fs, 'both cache files of the artist are JPEGs and the .pick marker is beside them')
+    expect(sorted(p for p in m.fs if p.startswith(AP)) == sorted([f168, f44, f'{AP}/a{key:08x}.pick']), f'nothing else: no .src (the source was a scratch file), no temp file ({sorted(p for p in m.fs if p.startswith(AP))})')
+    expect(fn(m, 'ap_picked', key) == 1 and fn(m, 'ap_epoch') == ep0 + 1 and not [p for p in m.fs if p.startswith(COVERS)], 'ap_picked says so, the epoch moved (the pages read the photo again), the album cover cache is untouched')
+    # a second pick replaces the first; one that cannot be written leaves it
+    old = m.fs[f168]
+    m.fail = {('rename', f168)}
+    m.thread = None
+    fn(m, 'pn_artist_pick', 1, key); PCN.work(m, m.thread)
+    expect(fn(m, 'pn_pick_code') == PN['STORAGE'] and m.fs[f168] == old and fn(m, 'ap_picked', key) == 1 and fn(m, 'ap_epoch') == ep0 + 1 and not [p for p in m.fs if p.endswith('.tmp')],
+           'a photo that cannot be published: PN_STORAGE, the old photo and its marker stay, no temp file')
+    expect(site.urls()[-1] == want[1]['picture_medium'].replace('250x250-', '500x500-'), 'a pick of another photo than the fetched one downloads its own 500 px picture')
+    m.fail = set()
+    m.thread = None
+    fn(m, 'pn_artist_pick', 1, key); PCN.work(m, m.thread)
+    expect(fn(m, 'pn_pick_code') == 0 and fn(m, 'ap_epoch') == ep0 + 2 and f168 in m.fs, 'the next pick replaces it')
+    # the save is whole or not at all: a -44 file that cannot be published leaves BOTH old files (the -168 file was already replaced when it failed), and a marker that cannot be written is no pick
+    old168, old44 = m.fs[f168], m.fs[f44]
+    m.fail = {('rename', f44)}
+    m.thread = None
+    fn(m, 'pn_artist_pick', 0, key); PCN.work(m, m.thread)
+    expect(fn(m, 'pn_pick_code') == PN['STORAGE'] and m.fs[f168] == old168 and m.fs[f44] == old44 and fn(m, 'ap_picked', key) == 1 and fn(m, 'ap_epoch') == ep0 + 2,
+           'the list file cannot be published: PN_STORAGE, the header photo is the old one again, the epoch did not move')
+    expect(sorted(p for p in m.fs if p.startswith(AP)) == sorted([f168, f44, f'{AP}/a{key:08x}.pick']), f'and nothing is left behind (no set-aside or temporary file): {sorted(p for p in m.fs if p.startswith(AP))}')
+    k2 = fn(m, 'ap_key', m.cstr('Somebody Else'))
+    m.fail = {('fopen', f'{AP}/a{k2:08x}.pick')}
+    m.thread = None
+    fn(m, 'pn_artist_pick', 0, k2); PCN.work(m, m.thread)
+    expect(fn(m, 'pn_pick_code') == PN['STORAGE'] and not [p for p in m.fs if p.startswith(f'{AP}/a{k2:08x}')] and fn(m, 'ap_picked', k2) == 0 and fn(m, 'ap_epoch') == ep0 + 2,
+           f'the marker cannot be written: PN_STORAGE, no photo is saved without it, the epoch did not move ({sorted(p for p in m.fs if p.startswith(AP))})')
+    m.fs[f'{AP}/a{k2:08x}-168.jpg'] = b'auto168'; m.fs[f'{AP}/a{k2:08x}-44.jpg'] = b'auto44'; m.fail = {('rename', f'{AP}/a{k2:08x}-44.jpg')}
+    m.thread = None
+    fn(m, 'pn_artist_pick', 0, k2); PCN.work(m, m.thread)
+    expect(fn(m, 'pn_pick_code') == PN['STORAGE'] and m.fs[f'{AP}/a{k2:08x}-168.jpg'] == b'auto168' and m.fs[f'{AP}/a{k2:08x}-44.jpg'] == b'auto44' and f'{AP}/a{k2:08x}.pick' not in m.fs,
+           'a first pick over an automatic photo that fails: the automatic photo stays and gets no marker')
+    m.fail = {('rename', f'{AP}/a{k2:08x}-44.jpg'), ('open', f'{AP}/a{k2:08x}-168.jpg.old')}   # ... and the old header cannot be written back either
+    m.thread = None
+    fn(m, 'pn_artist_pick', 0, k2); PCN.work(m, m.thread)
+    expect(fn(m, 'pn_pick_code') == PN['STORAGE'] and m.fs.get(f'{AP}/a{k2:08x}-168.jpg', b'')[:2] == b'\xff\xd8' and m.fs[f'{AP}/a{k2:08x}-44.jpg'] == b'auto44' and fn(m, 'ap_epoch') == ep0 + 2,
+           'the old header cannot be written back: the header path still names a whole photo (the new one), the list file is the old one, the save failed')
+    expect(sorted(p for p in m.fs if p.startswith(f'{AP}/a{k2:08x}')) == [f'{AP}/a{k2:08x}-168.jpg', f'{AP}/a{k2:08x}-44.jpg'], f'and nothing is left behind, no marker: {sorted(p for p in m.fs if p.startswith(AP))}')
+    m.fail = set()
+    # an album lookup after an artist's is the album's again
+    n2 = len(site.reqs)
+    r, th = start(m); PCN.work(m, th)
+    expect(site.urls()[n2].startswith(ITUNES) and state(m)['lstate'] == 1, 'pn_art after pn_artist asks the store, Deezer\'s albums and the lyrics as ever')
+    # nothing found, failures
+    site = Site(**{DEEZER_ARTIST: {'body': b'{"data":[],"total":0}'}})
+    m = machine(site=site)
+    r, th = begin(m, 'Nobody'); PCN.work(m, th)
+    expect(state(m)['state'] == 3 and state(m)['code'] == 0 and state(m)['count'] == 0 and len(site.reqs) == 1, 'no artist: OK with no photos, one request')
+    for label, bad, code in (('a busy service', {'rc': 22, 'code': 503}, PN['OVERLOAD']), ('an answer that is not the service\'s', {'body': b'<html>'}, PN['HTTP']), ('no connection', {'rc': 7}, PN['NET'])):
+        site = Site(**{DEEZER_ARTIST: bad})
+        m = machine(site=site)
+        r, th = begin(m); PCN.work(m, th)
+        expect(state(m)['state'] == 3 and state(m)['code'] == code and state(m)['count'] == 0 and len(site.reqs) == 1, f'{label}: code {code} from one request ({state(m)["code"]})')
+    # the name is URL-encoded like any query field
+    site = site_for()
+    m = machine(site=site)
+    r, th = begin(m, 'Sigur Rós & Co'); PCN.work(m, th)
+    expect(site.urls()[0] == DEEZER_ARTIST + 'Sigur%20R%C3%B3s%20%26%20Co', f'space, accent and & are escaped: {site.urls()[0]}')
+
+
+SECTIONS = [json_tests, job_tests, lyrics_tests, failure_tests, busy_tests, cancel_tests, pick_tests, rebuild_tests, artist_tests]

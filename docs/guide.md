@@ -25,7 +25,7 @@ Open **Extras → Settings** to customize the player. To return to the stock gri
 |---|---|
 | Cover Flow | Drag to browse, tap a side cover to centre it, tap the centre cover to open its album; with Settings > Library > Volume Buttons on, volume down / up moves to the next / previous album |
 | Albums | The navbar's **…** switches grid/list and sorts by Title, Artist, Recently Added or Year; the choices are remembered; the list in Title order has section letters |
-| Artists | Switch Artist/Album Artist in the navbar's **…**, then open an artist's albums: Play or Shuffle all the artist's songs, each album with its year; the **…** switches grid/list and the album order; the rows and the artist's page show [artist photos](#artist-photos). A composer's page (Extras → Composers) looks the same, without a photo; its All Songs lists the composer's songs |
+| Artists | Switch Artist/Album Artist in the navbar's **…**, then open an artist's albums: Play or Shuffle all the artist's songs, each album with its year; the **…** finds a photo of the artist online, switches grid/list and sets the album order; the rows and the artist's page show [artist photos](#artist-photos). A composer's page (Extras → Composers) looks the same, without a photo; its All Songs lists the composer's songs |
 | Songs | Jump with the A–Z rail (Settings → Library → Index Rail, on by default); Search in the navbar; the **…** has Select and Sort (Title, File Name, Format, Recently Added; tap the ticked order to reverse it) |
 | Recently Added | The newest songs; the navbar's **…** switches to the newest albums |
 | Album | Play, shuffle the album, or tap a track; the footer shows the track count and length once measured |
@@ -62,6 +62,11 @@ The Artists list and an artist's page show a photo you put on the card:
 Home looks for photos while it builds covers after a library change. To pick up a photo added
 later, open that artist's page, or use **Settings → Library → Rebuild Artist Photos**, which checks
 every artist again in the background.
+
+No picture on the card? Open the artist's page, tap **…** → **Find Artist Photo** (needs Wi-Fi): it
+shows up to six photos from Deezer, those under that exact name first. Tap one, then **Use This Photo**. A photo picked this
+way stays until you pick another: Rebuild Artist Photos and an `artist.jpg` added later do not
+replace it.
 
 A Subsonic server's artists show the server's own artist picture instead, fetched in the background after a sync (the Subsonic page's status line says "Loading artist images…"); an artist the server has no picture for shows the grey placeholder in the list and the page without a circle.
 

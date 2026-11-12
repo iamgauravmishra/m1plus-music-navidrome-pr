@@ -1132,16 +1132,16 @@ def scoped_sort_tests(ctx):
         m.touch('down', 100, 80 + TOP_ROWS + y, 1000, fn='al_on_down')
         m.touch('up', 100, 80 + TOP_ROWS + y, 1080, fn='al_on_up', count=40000000)
         return [c[3] for c in m.calls if c[:2] == ('navigator_to_with_context', 'albuminfo_page')]
-    # the card: Grid, List and three sort rows, packed, 250 px, the five-row glass; no Search row (it searched every album, not the artist's); hidden rows are insensitive; the names are all there
+    # the card: Find Artist Photo (the Search row's slot: find_photo_tests), Grid, List and three sort rows, packed, 300 px, the six-row glass; no Search Albums (it searched every album, not the artist's); hidden rows are insensitive; the names are all there
     m = scoped_machine(); m.call(PSYMS['ar_open'], a0=0, count=40000000)
     m.click('btn_more')
-    expect(vis(m, 'vs_item1') == (0, 0) and vis(m, 'vs_item6') == (0, 0), 'the scoped card has no Artist row and no Search row: hidden and insensitive')
-    expect(all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 2, 3, 4, 5)) and vis(m, 'vs_card') == (1, 1), 'Grid, List, Title, Recently Added and Year are shown')
-    moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']] for i in (0, 2, 3, 4, 5)}
-    expect(moves == {4: [(0, 0)], 5: [(0, 50)], 0: [(0, 100)], 2: [(0, 150)], 3: [(0, 200)]}, f'the rows are packed from the top, Grid and List first ({moves})')
-    expect(vis(m, 'vs_hair')[0] == 0, 'no hairline over Grid (nothing above it)')
-    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass5' for st in ('normal', 'pressed', 'over')), 'the card is drawn in the 250 px, five-row glass')
-    expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 250, 'the card is 250 px high')
+    expect(vis(m, 'vs_item1') == (0, 0) and m.wtext.get(m.widgets['vs_label6']) == 'Find Artist Photo', 'the scoped card has no Artist row (hidden and insensitive) and no Search Albums row')
+    expect(all(vis(m, f'vs_item{i}') == (1, 1) for i in (0, 2, 3, 4, 5, 6)) and vis(m, 'vs_card') == (1, 1), 'Find Artist Photo, Grid, List, Title, Recently Added and Year are shown')
+    moves = {i: [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets[f'vs_item{i}']] for i in (0, 2, 3, 4, 5, 6)}
+    expect(moves == {6: [(0, 0)], 4: [(0, 50)], 5: [(0, 100)], 0: [(0, 150)], 2: [(0, 200)], 3: [(0, 250)]}, f'the rows are packed from the top: the action row, Grid and List, the sorts ({moves})')
+    expect(vis(m, 'vs_hair')[0] == 1 and ('widget_move', m.widgets['vs_hair'], 0, 50) in m.calls, 'the hairline under the action row')
+    expect(all(m.props.get((m.widgets['vs_card'], f'style:{st}:bg_image')) == 'vs_glass6' for st in ('normal', 'pressed', 'over')), 'the card is drawn in the 300 px, six-row glass')
+    expect([c[2:] for c in m.calls if c[0] == 'widget_resize' and c[1] == m.widgets['vs_card']][-1][1] == 300, 'the card is 300 px high')
     expect([vis(m, f'vs_tick{i}')[0] for i in range(4)] == [1, 0, 0, 0], 'the saved Artist (the default) shows as Title: Title is ticked')
     # the library page keeps four sorts, the 350 px card and the asset's own seven-row glass
     ml = scoped_machine(); ml.call(PSYMS['albums_open'], count=20000000); ml.calls = []; ml.click('btn_more')
@@ -2217,6 +2217,95 @@ def scoped_plain_tests(ctx):
     expect(not [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_retry']], 'and the row\'s marker is known now (no more waiting)')
 
 
+def find_photo_tests(ctx):
+    """Find Artist Photo on a library artist's page (docs/modules/onlineart.md "Artist photos"): the "..." card's first row (the Search row's slot with its own text and glyph) opens the Find page for the artist's name;
+    back on the page a photo that was picked shows at once (the circle appears, or the picture is read again). A composer's page has no such row."""
+    expect = ctx.expect
+    PX1, PY, NX, NY = O['AL_PLAY_X'], O['AL_HEAD_PILL_Y'], O['PH_NAME_X'], O['AL_NAME_Y']
+    CX, CY, CD = O['AL_PHOTO_X'], O['AL_PHOTO_Y'], O['AL_PHOTO_D']
+    P168 = f'{AP_DIR}/a{ap_key("Miles Davis"):08x}-168.jpg'
+
+    def stub(m, ret=0):
+        """onlineart_open_artist answered by the test (the page itself: test/pod/onlineartpage.py): m.found gets the names asked."""
+        m.found = []
+        m.handlers[PSYMS['onlineart_open_artist']] = 'onlineart_open_artist'
+        inner = m._hook
+        def hook(u, address, size, _):
+            if m.handlers.get(address) == 'onlineart_open_artist':
+                m.found.append(undo(m.read_cstr(u.reg_read(UC_MIPS_REG_A0))))   # noqa: F821
+                u.reg_write(UC_MIPS_REG_V0, ret & 0xffffffff); u.reg_write(UC_MIPS_REG_PC, u.reg_read(UC_MIPS_REG_RA)); return   # noqa: F821
+            return inner(u, address, size, _)
+        m._hook = hook
+
+    def fire(m, name):
+        m.calls = []
+        m.call(PSYMS[name], a0=0, a1=0, count=40000000)
+        return list(m.calls)
+
+    def photo(m, colour):
+        m.files[P168] = 5000; m.present.add(P168); m.images['file://' + P168] = (168, 168, bytes((*colour, 255)) * (168 * 168))
+
+    def picked(m): m.setword(PSYMS['ap_ep'], m.word(PSYMS['ap_ep']) + 1)   # what ap_pick does once the files are there
+
+    # the row
+    m = head_machine()
+    expect(('widget_set_tr_text', m.widgets['vs_label6'], 'Find Artist Photo') in m.open_calls and ('image_base_set_image', m.widgets['vs_glyph6'], 'pod_ic_vsphoto') in m.open_calls,
+           'the page gives the card\'s action slot its own text and glyph: Find Artist Photo, a picture')
+    m.calls = []; m.click('btn_more')
+    expect(vis(m, 'vs_item6') == (1, 1) and vis(m, 'vs_item7') == (0, 0) and ('widget_move', m.widgets['vs_item6'], 0, 0) in m.calls, 'it is the card\'s first row; no Select row')
+    stub(m)
+    m.calls = []; m.click('vs_item6', count=40000000)
+    expect(m.found == ['Miles Davis'] and vis(m, 'vs_card') == (0, 0) and not [c for c in m.calls if c[0] == 'window_open'], f'a tap closes the card and opens the Find page for the artist\'s name, not the Search page ({m.found})')
+    # back with nothing picked: nothing changes
+    new = fire(m, 'al_on_fg')
+    expect(not [c for c in new if c[0] == 'widget_move' and c[1] in (m.widgets['btn_play'], m.widgets['al_name'])] and not [c for c in new if c[0] in ('fopen', 'access') and AP_DIR in str(c[1:])],
+           'back with nothing picked: the header stays, no photo file is looked at')
+    # back with a photo picked: the circle appears in place
+    m.calls = []; m.click('btn_more'); m.click('vs_item6', count=40000000)
+    photo(m, (60, 90, 200)); picked(m)
+    new = fire(m, 'al_on_fg')
+    expect(('widget_move', m.widgets['btn_play'], PX1, PY) in new and ('widget_move', m.widgets['al_name'], NX, NY) in new, 'back with a photo picked: the name and the pills move down by the circle\'s room')
+    al_settle(m)
+    expect(len([b for b in al_paint(m) if tuple(b[2]) == (CX, CY, CD, CD)]) == 1, 'and the circle is drawn once the loader has made it')
+    new = fire(m, 'al_on_fg')
+    expect(not [c for c in new if c[0] == 'widget_move' and c[1] == m.widgets['btn_play']], 'a later return to the page (from an album) does not look again')
+    # an artist that had a photo: the picked one replaces it on the page
+    m = head_machine(photo=(60, 90, 200))
+    al_settle(m)
+    stub(m)
+    m.click('btn_more'); m.click('vs_item6', count=40000000)
+    photo(m, (200, 40, 40)); picked(m)
+    fire(m, 'al_on_fg')
+    seen = []
+    for _ in range(30):
+        m.calls = []
+        m.call(PSYMS['al_on_load'], count=40000000)
+        seen += m.calls
+        if not [c for c in m.calls if c[0] == 'timer_add']: break
+    expect([c for c in seen if c[0] == 'widget_load_image' and c[1] == 'file://' + P168], 'a replaced photo is decoded again for the circle')
+    # the Find page would not open: nothing is waited for
+    m = head_machine()
+    stub(m, -1)
+    m.click('btn_more'); m.click('vs_item6', count=40000000)
+    photo(m, (60, 90, 200)); picked(m)
+    new = fire(m, 'al_on_fg')
+    expect(m.found == ['Miles Davis'] and not [c for c in new if c[0] == 'widget_move' and c[1] == m.widgets['btn_play']], 'a Find page that did not open leaves nothing to look at on the return')
+    # a composer's page: no row
+    m = artists_machine(albums_page=True, photos=False, composers=('Bach',))
+    m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'
+    m.call(PSYMS['artists_open'], a0=pod_pages.HOME_COMPOSER, count=20000000)
+    forget_card(m)
+    m.calls = []
+    m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    opened = [c for c in m.calls if c == ('window_open', 'm1plus_albums')]
+    expect(opened and not [c for c in m.calls if c[0] == 'widget_set_tr_text' and c[2] == 'Find Artist Photo'], 'a composer\'s page: the slot keeps its text')
+    m.calls = []; m.click('btn_more')
+    expect(vis(m, 'vs_item6') == (0, 0) and m.props.get((m.widgets['vs_card'], 'style:normal:bg_image')) == 'vs_glass5', 'and its card has no action row: five rows, the five-row glass')
+    for loc in pod_i18n.LOCALES:
+        if not pod_i18n.TEXT['Find Artist Photo'].get(loc): expect(False, f'Find Artist Photo has no {loc} text')
+    expect(len({pod_i18n.TEXT['Find Artist Photo'][loc] for loc in pod_i18n.LOCALES}) >= 12, 'the row\'s text is translated in the 13 languages')
+
+
 def reread_tests(ctx):
     """Back on a page after songs were deleted above it, the local list is read again (docs/modules/artists.md, albums.md "Returning to the page"): an artist with no songs left is gone from
     the Artists page and an album with none from the artist's page, and a row opens the one it shows."""
@@ -2269,4 +2358,4 @@ def reread_tests(ctx):
     expect('file://' + other in loaded(m), 'the same albums with a new cover key (the compilation\'s representative changed): the tile loads the new cover')
 
 
-SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, source_tests, source_photo_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests, reread_tests]
+SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, source_tests, source_photo_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests, reread_tests, find_photo_tests]

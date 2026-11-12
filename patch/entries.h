@@ -141,3 +141,4 @@ int kp_shutdown_set(int v);
 
 /* patch/onlineart.c */
 int onlineart_open(void);
+int onlineart_open_artist(const char *name);

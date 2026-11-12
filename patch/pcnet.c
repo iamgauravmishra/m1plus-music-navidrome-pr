@@ -23,6 +23,7 @@
 #include "upver.h"
 #include "curlopts.h"
 #include "covercache.h"
+#include "artistphoto.h"
 #include "pcregion.h"
 
 #define PN_PATH 400
@@ -91,6 +92,8 @@ static struct {
     char aq[3][PN_ART_Q], pkdir[PN_PATH];
     unsigned adur, pkkey[2];
     int amask; /* the parts the worker looks up: PN_PART_COVERS | PN_PART_LYRICS */
+    unsigned akey; /* pn_artist's: ap_key of the whole name asked for (aq[0] is cut) */
+    int aartist; /* the lookup is pn_artist's: Deezer's artists (their photos) in place of the album covers, no lyrics */
     /* Software Update (docs/modules/update.md; new fields go below). ustate: PN_U_*; ucode: the PN_* of a failure; ustage: what the last failure or the running job was (1 the check, 2 the download); ures: the check's verdict
      * (PN_U_CURRENT, PN_U_AVAILABLE, 0 none); umode: 0 the worker checks, 1 it downloads; utag: the release the check offered (held for the download). The state is written after the code and the tag. */
     volatile int ustate, ucode, ustage, ures, umode;
@@ -1689,6 +1692,54 @@ static int pn_art_covers(char *buf) {
     return ok || n ? PN_OK : bad ? bad : PN_OK;
 }
 
+/* part occurs in s. */
+static int pn_has(const char *s, const char *part) {
+    for (; *s; ++s)
+        if (pn_starts(s, part)) return 1;
+    return 0;
+}
+
+/* Deezer's artists for the name in pn.aq[0] into pn.ares: those that have a picture of their own (an artist without one is given the service's blank, whose address has an empty picture id: ".../artist//250x250..."), the
+ * most followed first (the service lists a name's duplicates, most of them empty shells, in no useful order), a picture once. The search is a loose one (other artists with a like name, the more followed of them
+ * above the one asked for), so the artists of that very name (ap_key of the whole names, before either is cut: the case, a leading "The ") come first, then at most PN_ARTIST_OTHER of the others (the same artist under another spelling or script is among
+ * them), PN_ARTIST_MAX in all. The code as pn_art_covers. */
+static int pn_artist_covers(char *buf) {
+    char *url = calloc(PN_ART_URL, 1);
+    pj_result_t *tmp = calloc(PJ_MAX, sizeof *tmp);
+    unsigned char ord[PJ_MAX], same[PJ_MAX];
+    unsigned got = 0, key = pn.akey;
+    int n = 0, m = 0, others = 0, i, j, c = PN_MEM;
+    pn.an = 0;
+    if (url && tmp && pn_cat(url, PN_ART_URL, PN_ART_DEEZER_ARTIST) && pn_urlenc(url, PN_ART_URL, pn.aq[0])) {
+        c = pn_fetch_json_api(url, buf, &got);
+        if (c == PN_GONE) c = PN_HTTP;
+        if (c == PN_OK && (m = pj_deezer_artists(buf, got, tmp, PJ_MAX)) < 0) c = PN_HTTP, m = 0;
+    }
+    for (i = 0; i < m; ++i) { /* (stable: equal counts keep the service's order) */
+        same[i] = key && ap_key(tmp[i].feed) == key; /* (the whole name: name is cut at PJ_NAME) */
+        for (j = i; j; --j) {
+            int k = ord[j - 1];
+            if (same[k] > same[i] || (same[k] == same[i] && tmp[k].id >= tmp[i].id)) break;
+            ord[j] = ord[j - 1];
+        }
+        ord[j] = (unsigned char)i;
+    }
+    for (i = 0; i < m && n < PN_ARTIST_MAX; ++i) {
+        const pj_result_t *r = &tmp[ord[i]];
+        if (!pn_starts(r->art, "https://") || pn_has(r->art, "/artist//")) continue;
+        for (j = 0; j < n && strcmp(pn.ares[j].art, r->art); ++j);
+        if (j < n) continue;
+        if (!same[ord[i]] && others++ >= PN_ARTIST_OTHER) break;
+        memcpy(&pn.ares[n], r, sizeof pn.ares[n]);
+        pn.asrc[n] = PN_SRC_DEEZER;
+        ++n;
+    }
+    free(url);
+    free(tmp);
+    pn.an = n;
+    return pn.cancel ? PN_CANCELLED : c;
+}
+
 /* Cover i's thumbnail into PN_ART_DIR/a<i>.jpg|png, when the answer is a picture the page can decode; else none (the placeholder stays). */
 static void pn_art_thumb_get(int i) {
     char src[PN_PATH], dst[PN_PATH];
@@ -1821,7 +1872,7 @@ static void *pn_amain(void *arg) {
     int code = PN_MEM, i;
     (void)arg;
     if (pn.amask & PN_PART_COVERS) {
-        if (buf) code = pn_art_covers(buf);
+        if (buf) code = pn.aartist ? pn_artist_covers(buf) : pn_art_covers(buf);
         pn.acode = code;
         __sync_synchronize();
         pn.astate = code == PN_OK && pn.an > 0 ? PN_A_THUMBS : PN_A_DONE;
@@ -1872,12 +1923,23 @@ int pn_art(const char *artist, const char *album, const char *title, unsigned se
     pn_art_field(pn.aq[1], album ? album : "");
     pn_art_field(pn.aq[2], title ? title : "");
     pn.adur = seconds;
+    pn.aartist = 0;
     return pn_art_run(PN_PART_COVERS | PN_PART_LYRICS);
+}
+
+int pn_artist(const char *name) {
+    if (pn.busy) return PN_BUSY;
+    pn_art_field(pn.aq[0], name ? name : "");
+    pn.aq[1][0] = pn.aq[2][0] = 0;
+    pn.adur = 0;
+    pn.akey = ap_key(name);
+    pn.aartist = 1;
+    return pn_art_run(PN_PART_COVERS);
 }
 
 int pn_art_again(int part) {
     if (pn.busy) return PN_BUSY;
-    if (part != PN_PART_COVERS && part != PN_PART_LYRICS) return PN_MEM;
+    if (part != PN_PART_COVERS && (part != PN_PART_LYRICS || pn.aartist)) return PN_MEM;
     return pn_art_run(part);
 }
 
@@ -1922,6 +1984,8 @@ static void *pn_kmain(void *arg) {
                 code = PN_NOTFEED;
         }
         if (pn.cancel) code = PN_CANCELLED;
+    } else if (pn.pkmode == 2) { /* an artist's photo: the cache files of patch/artistphoto.c and its .pick marker */
+        if (kind) code = pn.cancel ? PN_CANCELLED : ap_pick(src, pn.pkkey[0]) ? PN_OK : PN_STORAGE;
     } else if (kind) {
         code = PN_NOTFEED;
         for (k = 0; k < 2; ++k) {
@@ -1986,6 +2050,11 @@ int pn_art_fetch(int i) { return pn_pick_spawn(i, 0, (const char *)0, 0, 0); }
 int pn_art_pick(int i, const char *dir, unsigned key0, unsigned key1) {
     if (!key0 && !key1) return PN_NOFEED;
     return pn_pick_spawn(i, 1, dir, key0, key1);
+}
+
+int pn_artist_pick(int i, unsigned key) {
+    if (!key) return PN_NOFEED;
+    return pn_pick_spawn(i, 2, (const char *)0, key, 0);
 }
 
 int pn_lyr_save(int i, const char *path) {

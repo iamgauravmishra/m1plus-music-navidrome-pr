@@ -203,7 +203,7 @@ static int pj_nested_name(pj_t *p, char *dst, unsigned cap) {
     }
 }
 
-/* The object whose '{' is at p->s into r. dz 0: the store's (collectionId, collectionName, artistName, feedUrl, artworkUrl100, artworkUrl600); 1: Deezer's album (id, title, artist.name, cover_medium as art).
+/* The object whose '{' is at p->s into r. dz 0: the store's (collectionId, collectionName, artistName, feedUrl, artworkUrl100, artworkUrl600); 1: Deezer's album (id, title, artist.name, cover_medium as art); 2: Deezer's artist (name, whole in feed too, picture_medium as art, nb_fan as id).
  * 1 when its '}' was reached, 0 when the text ended (or it was not an object): then r is not an answer. */
 static int pj_obj(pj_t *p, pj_result_t *r, int dz) {
     r->id = 0;
@@ -225,7 +225,9 @@ static int pj_obj(pj_t *p, pj_result_t *r, int dz) {
             continue;
         }
         if (c != '"' || !pj_key(p, key, sizeof key)) return 0;
-        if (dz)
+        if (dz == 2)
+            which = pj_is("nb_fan", key) ? 1 : pj_is("name", key) ? 4 : pj_is("picture_medium", key) ? 5 : 0;
+        else if (dz)
             which = pj_is("id", key)             ? 1
                     : pj_is("title", key)        ? 2
                     : pj_is("artist", key)       ? 3
@@ -241,9 +243,9 @@ static int pj_obj(pj_t *p, pj_result_t *r, int dz) {
                                                    : 0;
         if (which == 1 && *p->s >= '0' && *p->s <= '9')
             r->id = pj_num(p);
-        else if (dz && which == 3 && *p->s == '{') {
+        else if (dz == 1 && which == 3 && *p->s == '{') {
             if (!pj_nested_name(p, r->author, PJ_AUTHOR)) return 0;
-        } else if (which >= 2 && *p->s == '"' && !(dz && which == 3)) {
+        } else if (which >= 2 && *p->s == '"' && !(dz == 1 && which == 3)) {
             char *dst = which == 2   ? r->name
                         : which == 3 ? r->author
                         : which == 4 ? r->feed
@@ -252,6 +254,14 @@ static int pj_obj(pj_t *p, pj_result_t *r, int dz) {
             if (!pj_val(p, dst, which == 2 ? PJ_NAME : which == 3 ? PJ_AUTHOR : which == 4 ? PC_URL : PJ_ART, &cut))
                 return 0;
             if (cut && which >= 4) dst[0] = 0; /* a cut address is no address */
+            if (dz == 2 && which == 4) { /* (an artist's name: whole in feed, cut as any name in name) */
+                unsigned k = 0, j;
+                while (dst[k] && k < PJ_NAME - 1) ++k;
+                if (dst[k])
+                    while (k && ((unsigned char)dst[k] & 0xc0) == 0x80) --k;
+                for (j = 0; j < k; ++j) r->name[j] = dst[j];
+                r->name[k] = 0;
+            }
         } else if (!pj_skip(p))
             return 0;
     }
@@ -314,6 +324,10 @@ int pj_results(const char *json, unsigned n, pj_result_t *out, int max) {
 }
 
 int pj_deezer(const char *json, unsigned n, pj_result_t *out, int max) { return pj_top(json, n, out, max, "data", 1); }
+
+int pj_deezer_artists(const char *json, unsigned n, pj_result_t *out, int max) {
+    return pj_top(json, n, out, max, "data", 2);
+}
 
 /* The digits of s, nothing else in it, 1 to 15 of them and not all zeros, into out (16 bytes); 1 when they are an Apple id. */
 static int pj_digits(const char *s, char *out) {
