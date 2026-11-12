@@ -194,7 +194,10 @@ Conditional requests use the server's Last-Modified time, never the device clock
 A 304 preserves episodes; a missing episodes file forces an unconditional retry.
 
 The streaming RSS parser keeps the 20 newest enclosed items, handles arbitrary chunk splits,
-entities and CDATA, and strips HTML from descriptions. Atom is unsupported.
+entities and CDATA, and strips HTML from descriptions. Unicode spaces (U+00A0, U+2000..200A,
+U+202F, U+205F, U+3000) count as white space, U+2028 and U+2029 as paragraph breaks, and the zero
+width U+200B, U+2060 and U+FEFF are dropped, so a description that starts with one has no blank
+first line. Atom is unsupported.
 Refresh writes episodes before show metadata and preserves local filenames.
 Cover failures do not fail the feed or replace user-supplied artwork.
 Large JPEG/PNG art is reduced to 192 px with bounded-memory decoders; malformed images
