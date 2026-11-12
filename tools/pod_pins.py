@@ -100,10 +100,10 @@ LOCKSCREEN_PINS = (   # (address, stock word, what it proves)
     (0x4a43ac, 0x2405011d, 'brightness page: widget_on(slider, 0x11d, ..)'), (0x4a43bc, 0x24c64744, '... the changing handler 0x4a4744'),
     (0x4a43c0, 0x2405011c, 'brightness page: widget_on(slider, 0x11c, ..)'), (0x4a43d0, 0x24c64678, '... the changed handler 0x4a4678'),
     (0x4a46b8, 0x2c430065, 'brightness changed handler: sltiu v1, v0, 0x65: 0 .. 100'), (0x4a4780, 0x2c430065, 'brightness changing handler: sltiu v1, v0, 0x65'),
-    # LED Light and Follow Screen (patch/display.c disp_led_set, disp_follow_toggle): stock's systemset/atmosphereled_page. The byte atmosphereled_mode is 0 off, 1 orange, 2 blue. The navbar switch 0x4a1c30 stores 0
+    # LED Light and Follow Screen (patch/display.c disp_led_set, disp_follow_toggle): stock's systemset/atmosphereled_page. The byte atmosphereled_mode is 0 off, 1 green, 2 blue. The navbar switch 0x4a1c30 stores 0
     # (from non-zero) or 1 (from 0); img_orange 0x4a1e14 stores 1 and img_blue 0x4a1d8c stores 2 unless it is the mode already; each then saves [SYSSET] ATMOSPHERELEDMODE and calls reset_atmosphereled_rgb.
     # Follow Screen 0x4a1940 stores the byte ledfollowscreen_flag xor 1 (as 0 / 1) in the delay slot of write_int_config(new, "SYSSET", "LEDFOLLOWSCREEN") and calls nothing else. config_init keeps 0 .. 2 and 0 .. 1.
-    (0x4a1ca8, 0x82220000, 'led switch 0x4a1c30: lb v0, (s1): atmosphereled_mode'), (0x4a1cbc, 0xa2200000, 'led switch: sb zero, (s1): off'), (0x4a1d60, 0xa2220000, 'led switch: sb v0 (1), (s1): on is orange'),
+    (0x4a1ca8, 0x82220000, 'led switch 0x4a1c30: lb v0, (s1): atmosphereled_mode'), (0x4a1cbc, 0xa2200000, 'led switch: sb zero, (s1): off'), (0x4a1d60, 0xa2220000, 'led switch: sb v0 (1), (s1): on is green'),
     (0x4a1d04, 0x24c67820, 'led switch: a2 = "ATMOSPHERELEDMODE"'), (0x4a1d18, 0x0320f809, 'led switch: jalr reset_atmosphereled_rgb after the save'),
     (0x4a1db8, 0x10830011, 'led blue 0x4a1d8c: beq a0, v1 (2): the same mode does nothing'), (0x4a1dd0, 0xa0430000, 'led blue: sb v1 (2), (v0) before the save'),
     (0x4a1e40, 0x10830011, 'led orange 0x4a1e14: beq a0, v1 (1): the same mode does nothing'), (0x4a1e58, 0xa0430000, 'led orange: sb v1 (1), (v0) before the save'),

@@ -122,7 +122,7 @@ void pulldown_page_opened(void *win); /* the Pull-down page's switches and arrow
 /* patch/display.c */
 int disp_light(void); /* stock's backlight time index, 0 never .. 4 five minutes */
 int disp_light_set(int index); /* ... chosen the way stock's own page does; -1 for an index stock does not have */
-int disp_led(void); /* stock's lamp mode: 0 off, 1 orange, 2 blue */
+int disp_led(void); /* stock's lamp mode: 0 off, 1 green, 2 blue */
 int disp_led_set(int mode);
 int disp_follow(void); /* stock's Follow Screen switch */
 int disp_follow_toggle(void);

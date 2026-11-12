@@ -24,7 +24,7 @@ STATE = {
     'm1plus_accent': {'shown': {'pod_check0'}},
     'm1plus_battery': {'values': {'pod_value1': '80%'}, 'switches': {'pod_switch0': True}},
     'm1plus_chargelimit': {'shown': {'pod_check0'}},
-    'm1plus_display': {'values': {'pod_value0': '30s', 'pod_value2': 'Orange'}, 'switches': {'pod_switch3': True}},
+    'm1plus_display': {'values': {'pod_value0': '30s', 'pod_value2': 'Green'}, 'switches': {'pod_switch3': True}},
     'm1plus_lighttime': {'shown': {'pod_check2'}},
     'm1plus_keyspower': {'values': {'pod_value0': 'Both', 'pod_value3': '5min'}, 'switches': {'pod_switch1': True, 'pod_switch2': False}},
     'm1plus_keylock': {'shown': {'pod_check3'}},

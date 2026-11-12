@@ -619,7 +619,7 @@ DATA.update({
     'LOCK_ON':            (0xa05aa3, 'screensaver_mode'),   # byte: stock's lock screen switch ([SYSSET] SCREENSAVER; patch/lockscreen.c lk_enabled)
     'LOCK_TIMESHOW':      (0xa05aa2, 'screensaver_timeshow'),   # byte: stock's lock screen "show time" switch ([SYSSET] SSAVERTIMESHOW; patch/lockscreen.c lk_time)
     'LIGHT_MODE':         (0xa05a7c, 'backlighttime_mode'),   # int: stock's backlight time index, 0 never .. 4 five minutes ([SYSSET] LIGHTTIME; patch/display.c disp_light)
-    'LED_MODE':           (0xa05a75, 'atmosphereled_mode'),   # byte: stock's lamp mode, 0 off, 1 orange, 2 blue ([SYSSET] ATMOSPHERELEDMODE; patch/display.c disp_led)
+    'LED_MODE':           (0xa05a75, 'atmosphereled_mode'),   # byte: stock's lamp mode, 0 off, 1 green, 2 blue ([SYSSET] ATMOSPHERELEDMODE; patch/display.c disp_led)
     'LED_FOLLOW':         (0xa05a74, 'ledfollowscreen_flag'),   # byte: stock's Follow Screen switch ([SYSSET] LEDFOLLOWSCREEN; patch/display.c disp_follow)
     # Settings > System > Buttons & Power (patch/keyspower.c, docs/modules/keyspower.md): stock's own state words
     'KEY_LOCK_FLAG':      (0xa05aa0, 'keylock_flag'),   # byte: Button Lock on ([SYSSET] LOCKFLAG; the Control Center tile system_keylock writes it too)

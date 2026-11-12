@@ -123,8 +123,8 @@ ACT_NASET = 91      # picker row (Continue Playing): choose the mode (arg = 0 Of
 ACT_LOCKTIME = 86   # switch row (Settings > Lock Screen): Show Time, stock's lock screen clock switch, the byte screensaver_timeshow saved as [SYSSET] SSAVERTIMESHOW (patch/lockscreen.c lk_time_toggle)
 ACT_LIGHT = 97      # value row (Settings > System > Display): Screen Timeout, stock's backlight time (Never, 15s, 30s, 1min, 5min: the word lighttime_index saved as [SYSSET] LIGHTTIME); opens its picker page (arg = the page index; patch/display.c disp_light)
 ACT_LIGHTSET = 98   # picker row (Screen Timeout): choose the time (arg = stock's index, 0 Never .. 4 5min); a check shows on the chosen row (patch/display.c disp_light_set)
-ACT_LED = 99        # value row (Settings > System > Display): LED Light, stock's lamp mode (Off, Orange, Blue: the byte atmosphereled_mode saved as [SYSSET] ATMOSPHERELEDMODE); opens its picker page (arg = the page index; patch/display.c disp_led)
-ACT_LEDSET = 100    # picker row (LED Light): choose the mode (arg = stock's value, 0 off, 1 orange, 2 blue); a check shows on the chosen row (patch/display.c disp_led_set)
+ACT_LED = 99        # value row (Settings > System > Display): LED Light, stock's lamp mode (Off, Green, Blue: the byte atmosphereled_mode saved as [SYSSET] ATMOSPHERELEDMODE); opens its picker page (arg = the page index; patch/display.c disp_led)
+ACT_LEDSET = 100    # picker row (LED Light): choose the mode (arg = stock's value, 0 off, 1 green, 2 blue); a check shows on the chosen row (patch/display.c disp_led_set)
 ACT_LEDFOLLOW = 101 # switch row (Settings > System > Display): Follow Screen, stock's switch of the same name (the byte ledfollowscreen_flag saved as [SYSSET] LEDFOLLOWSCREEN; patch/display.c disp_follow_toggle)
 ACT_KEYLOCK = 102     # value row (Settings > System > Buttons & Power): Button Lock, stock's key lock (Off, Volume, Buttons, Both: the byte keylock_flag saved as [SYSSET] LOCKFLAG and the word keylock_mode as LOCKMODE); opens its picker page (arg = the page index; patch/keyspower.c kp_lock)
 ACT_KEYLOCKSET = 103  # picker row (Button Lock): choose Off (arg 0) or stock's mode (1 volume keys, 2 the other keys, 3 both); a check shows on the chosen row (patch/keyspower.c kp_lock_set)
@@ -797,7 +797,7 @@ DISPLAY_PAGE = Page('m1plus_display', 'm1plus_display_page', 'Display', layout=[
     Row('LED Light', ACT_LED, LED_PAGE_INDEX),
     Row('Follow Screen', ACT_LEDFOLLOW),
 ])
-LED_VALUES = ('Off', 'Orange', 'Blue')   # stock's atmosphereled_mode 0, 1, 2
+LED_VALUES = ('Off', 'Green', 'Blue')   # stock's atmosphereled_mode 0, 1, 2
 LED_PAGE = Page('m1plus_ledlight', 'm1plus_ledlight_page', 'LED Light', layout=[Row(v, ACT_LEDSET, i) for i, v in enumerate(LED_VALUES)])
 LIGHTTIME_PAGE = Page('m1plus_lighttime', 'm1plus_lighttime_page', 'Screen Timeout', layout=[Row(v, ACT_LIGHTSET, i) for i, v in enumerate(LIGHTTIME_VALUES)])
 # Settings > System > Buttons & Power (patch/keyspower.c, docs/modules/keyspower.md): Button Lock (a value row and its picker, stock's switch and three choices merged: Off, or one of the three modes) with its note,

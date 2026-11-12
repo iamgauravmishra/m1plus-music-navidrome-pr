@@ -93,7 +93,7 @@ enum {
     ACT_LIGHT = 97, /* Settings > System > Display: Screen Timeout, a value row opening its picker */
     ACT_LIGHTSET = 98, /* the Screen Timeout picker's rows (arg = stock's backlight time index, 0 .. 4) */
     ACT_LED = 99, /* Settings > System > Display: LED Light, a value row opening its picker */
-    ACT_LEDSET = 100, /* the LED Light picker's rows (arg = stock's lamp mode: 0 off, 1 orange, 2 blue) */
+    ACT_LEDSET = 100, /* the LED Light picker's rows (arg = stock's lamp mode: 0 off, 1 green, 2 blue) */
     ACT_LEDFOLLOW = 101, /* Settings > System > Display: Follow Screen, a switch row, stock's own switch */
     ACT_KEYLOCK = 102, /* Settings > System > Buttons & Power: Button Lock, a value row opening its picker */
     ACT_KEYLOCKSET =
@@ -648,7 +648,7 @@ static void value_text(void *label, int kind) {
         }
         key = light[0];
     } else if (kind == VK_LED) {
-        key = disp_led() == 1 ? "Orange" : disp_led() == 2 ? "Blue" : "Off";
+        key = disp_led() == 1 ? "Green" : disp_led() == 2 ? "Blue" : "Off";
     } else if (kind == VK_KEYLOCK) {
         static const char *const lock[] = {"Off", "Volume", "Buttons", "Both"};
         key = lock[kp_lock()];
