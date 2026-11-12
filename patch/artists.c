@@ -493,9 +493,25 @@ static int ar_on_scroll(void *ctx, void *e) {
 }
 
 /* The page is in front again: a re-check on an artist's page since the circles were last looked at made, replaced or removed a photo, so every circle is looked for again (the tiles dropped, the answers forgotten; one decode a tick as ever). */
+/* The local list is read once at open: songs deleted elsewhere (an album page above) leave an artist (genre, composer) that has none, and a row then opens another one. Back on the page the stock query is read
+ * again and compared with the page's rows (the capped count): 1 when they differ (a list that is now empty too). */
+static void ar_load(int keep);
+static int ar_local_changed(void) {
+    void *list = loadLocalClassList(ar.cls) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
+    unsigned n = list ? deque_size(list) : 0;
+    if (!n && !ar.count) return 0;
+    if (n > MAX_ARTISTS) n = MAX_ARTISTS;
+    return !(n && ar.artists && ar.count == n && ls_same_list(ar.artists, n, list, n));
+}
+
 static int ar_on_fg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
+    if (!ar.src && ar.view && ar_local_changed()) {
+        ar.epoch = ap_epoch(); /* (the page is made again below: its circles are looked for afresh) */
+        ar_load(1);
+        return RET_OK;
+    }
     if (!ar.photo || ar.src || !ar.view || ar.epoch == ap_epoch())
         return RET_OK; /* (a source has no photos to change) */
     ar.epoch = ap_epoch();

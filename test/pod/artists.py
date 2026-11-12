@@ -2217,4 +2217,56 @@ def scoped_plain_tests(ctx):
     expect(not [c for c in new if c[0] == 'timer_add' and c[1] == PSYMS['ar_on_retry']], 'and the row\'s marker is known now (no more waiting)')
 
 
-SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, source_tests, source_photo_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests]
+def reread_tests(ctx):
+    """Back on a page after songs were deleted above it, the local list is read again (docs/modules/artists.md, albums.md "Returning to the page"): an artist with no songs left is gone from
+    the Artists page and an album with none from the artist's page, and a row opens the one it shows."""
+    expect = ctx.expect
+    open_ = PSYMS['artists_open']
+    def names(m):
+        blits, texts, styles, fills = ar_paint(m, 0)
+        return [t[0] for t, sty in zip(texts, styles) if sty == 'label_row_title']
+    m = artists_machine(); m.call(open_, a0=0, count=20000000)
+    expect(names(m) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'], f'three artists at open ({names(m)})')
+    m.calls = []
+    fired(m, 'ar_on_fg')
+    expect(not [c for c in m.calls if c[0] == 'deque_assign'], 'the same list at foreground is not copied again')
+    m.class_lists[O['CLASS_ARTISTS']] = m.class_lists[O['CLASS_ARTISTS']][:1] + m.class_lists[O['CLASS_ARTISTS']][2:]   # Nina Simone's songs were all removed
+    fired(m, 'ar_on_fg')
+    expect(names(m) == ['Miles Davis', 'Unknown Artist'], f'an artist with no songs left is gone at foreground ({names(m)})')
+    m.calls = []
+    m.touch('down', 100, SCREEN_Y0 + HDR + TOP + ROW + 10, 1000, fn='ar_on_down'); m.touch('up', 100, SCREEN_Y0 + HDR + TOP + ROW + 10, 1080, fn='ar_on_up', count=20000000)
+    expect(not [c for c in m.calls if c[0] == 'loadAlbumList' and c[3] == 'Nina Simone'], 'no row opens the removed artist')
+    # the artist's own Albums page: Jazz Hits is gone from the artist's list
+    m = artists_machine(albums_page=True); m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'; m.call(open_, a0=0, count=20000000); m.calls = []
+    m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    def al_names(m):
+        al_paint(m, 0)
+        return [t[0] for t, sty in zip(m.texts, m.text_styles) if sty == 'label_row_title']
+    before = al_names(m)
+    expect(before[:3] == ['Bitches Brew', 'Jazz Hits', 'Kind of Blue'], f'the artist\'s three albums at open ({before})')
+    rows = m.artist_albums['Miles Davis']
+    m.artist_albums['Miles Davis'] = rows[:1] + rows[2:]
+    fired(m, 'al_on_fg')
+    after = al_names(m)
+    expect(after[:2] == ['Bitches Brew', 'Kind of Blue'] and 'Jazz Hits' not in after, f'the album with no songs left is gone from the artist\'s page at foreground ({after})')
+
+    # a compilation's library representative was deleted: the albums, order and years are the same but the cover key is another, so the tile is made again and loads the new file
+    m = artists_machine(albums_page=True); m.fs['/mnt/data/m1plus/albums-view'] = b'0\n'; m.call(open_, a0=0, count=20000000); m.calls = []
+    m.call(PSYMS['ar_open'], a0=0, count=40000000)
+    def loaded(m):
+        got = []
+        for _ in range(12):
+            m.calls = []; m.call(PSYMS['al_on_load'], count=40000000)
+            got += [c[1] for c in m.calls if c[0] == 'widget_load_image' and c[1].startswith('file://') and AP_DIR not in c[1]]
+            if not any(c[0] == 'timer_add' and c[1] == PSYMS['al_on_load'] for c in m.calls): break
+        return got
+    loaded(m)
+    lib = m.class_lists[O['CLASS_ALBUMS']]
+    other = art_file(fnv(fnv(O['FNV_SEED'], 'Other Artist'), 'Jazz Hits'))
+    m.present.add(other); m.files[other] = 4096
+    m.class_lists[O['CLASS_ALBUMS']] = lib[:1] + [m.record(album='Jazz Hits', artist='Other Artist', path='/mnt/mmc/o/1.flac', rid=900)] + lib[2:]
+    fired(m, 'al_on_fg')
+    expect('file://' + other in loaded(m), 'the same albums with a new cover key (the compilation\'s representative changed): the tile loads the new cover')
+
+
+SECTIONS = [artists_tests, scoped_albums_tests, scoped_nextalbum_tests, scoped_pills_tests, scoped_sort_tests, genre_composer_tests, index_tests, sort_tests, name_order_tests, source_tests, source_photo_tests, photo_rows_tests, scoped_head_tests, scoped_plain_tests, reread_tests]

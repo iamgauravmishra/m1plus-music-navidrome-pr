@@ -623,10 +623,24 @@ static void al_build_later(void) {
         al.build_timer = timer_add(al_on_build_start, (void *)0, AL_BUILD_START_MS);
 }
 
+static void al_reload_with(void *albums, unsigned n, unsigned *keys, unsigned *years);
+static void al_scoped_reload(void);
 static int al_on_fg(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     al.fg = 1;
+    /* The local library's list is read once at open: songs deleted on an album page above leave the removed album in the grid, and its tile then opens
+     * whatever the stock query makes of the stale row. The unscoped list is read again (same list: the records swap, nothing redraws). */
+    if (al.started && !al.src) {
+        if (al.artist_row)
+            al_scoped_reload();
+        else {
+            void *fresh = cc_albums();
+            if (fresh || !cc_list_failed())
+                al_reload_with(fresh, fresh ? deque_size(fresh) : 0, (unsigned *)0,
+                               (unsigned *)0); /* (a failed read keeps the grid) */
+        }
+    }
     al_kick();
     al_build_later();
     return RET_OK;
@@ -1089,21 +1103,55 @@ static void al_empty(void) {
 static void al_src_reload(void) {
     void *albums = al.src->list(al.src, LS_ALBUMS, al.artist_row ? deque_at(al.artist_row, 0) : (void *)0);
     unsigned n = albums ? deque_size(albums) : 0;
-    int max;
     if (n && al.artist_row && I(deque_at(albums, n - 1), REC_ID) == ID_ALL_SONGS && n - 1 < 2)
         --n; /* (the stock rule: the All Songs tile needs two albums) */
+    al_reload_with(albums, n, (unsigned *)0, (unsigned *)0);
+}
+
+/* The scoped local list again (an artist's, a composer's): the albums, their cache keys and the years, as al_open reads them. */
+static void al_scoped_reload(void) {
+    void *albums = (void *)0, *songs;
+    unsigned *keys = (unsigned *)0, *years = (unsigned *)0;
+    int n = coverflow_artist_albums(al.artist_row, al.scope, 1, &albums, &keys);
+    if (n < 0) n = 0;
+    if (n && (songs = songs_artist_list(deque_at(al.artist_row, 0), al.scope)) != (void *)0)
+        years = cc_album_years(albums, songs);
+    al_reload_with(albums, (unsigned)n, keys, years);
+}
+
+static int al_same_u(const unsigned *a, const unsigned *b, unsigned n) {
+    unsigned i;
+    if (!a || !b) return a == b;
+    for (i = 0; i < n; ++i)
+        if (a[i] != b[i]) return 0;
+    return 1;
+}
+
+/* The list is now albums (n of them, with keys and years by stock row for a scoped page; the page owns all three). The same albums in the same order with the same years and keys swap the records only; anything else
+ * makes the tiles again, which are by display position and hold the years as text and the cover keys. */
+static void al_reload_with(void *albums, unsigned n, unsigned *keys, unsigned *years) {
+    int max, same = 0;
     if (al.started && n && al.count == n && ls_same_list(al.albums, n, albums, n)) {
-        free(al.order);
+        unsigned *old = al.order;
         deque_destroy(al.albums);
         al.albums = albums;
         al.order = al_order();
-        return;
+        /* (a deleted track can move an album in the Year or Recently Added order with the rows the same, change a year, or, for a compilation whose library representative was deleted, its cover key: the tiles are by display position and hold the year and the key, so they are made again) */
+        same = old && al.order && al_same_u(old, al.order, n) && al_same_u(al.years, years, n) &&
+               al_same_u(al.keys, keys, n);
+        free(old);
+    } else {
+        free(al.order);
+        if (al.albums) deque_destroy(al.albums);
+        al.albums = albums;
+        al.order = al_order();
     }
-    free(al.order);
-    if (al.albums) deque_destroy(al.albums);
-    al.albums = albums, al.count = n;
+    free(al.keys);
+    free(al.years);
+    al.keys = keys, al.years = years;
+    if (same) return;
+    al.count = n;
     al.az.count = (int)n;
-    al.order = al_order();
     if (n) ls_spin(al.spin, 0);
     if (!al.started) {
         if (!n || !al_begin()) {
