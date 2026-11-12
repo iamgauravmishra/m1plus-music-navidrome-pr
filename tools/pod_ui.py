@@ -2673,6 +2673,7 @@ def build_wifi_page(page):
 # stock layouter's stacking agrees): Forget This Network (a saved network), the info card (WI_FIELDS label / value rows, room for the enterprise rows of a later stage), Auto-Join (saved) or Join (not saved),
 # with the card gaps between them. The navbar's title is the network's name (set by the payload).
 WI_FIELDS = 4   # patch/wifipage.c WI_FIELDS
+WI_NAME_H = 20  # patch/wifipage.c WI_NAME_H: a line of the whole name above the cards
 WI_LABEL_W, WI_VALUE_X, WI_VALUE_PX = 116, 140, 18   # a field row: the label's box (card relative from x 24) and the right aligned grey value's box up to the card's right ink edge (x 296)
 
 
@@ -2700,6 +2701,10 @@ def build_wifiinfo_page(page):
     join = hidden(wf_row('wi_row_join', 'single'))
     join.children = [centred('wi_join_t', 'Join')]
     sv.children.append(cards_spacer('pod_top', ST.CM))
+    for k in range(2):   # the whole name's lines, shown above the cards when the navbar's title is cut (patch/wifipage.c wi_name): grey, centred, as the password page's line
+        nm = hidden(cards_spacer(f'wi_nm{k}', WI_NAME_H))
+        nm.children = [label(f'wi_name{k}', ST.CM, 0, ST.CARD_W, WI_NAME_H, '', WK_LINE_PX, ST.GREY, 'center')]
+        sv.children.append(nm)
     sv.children.append(forget)
     sv.children.append(hidden(cards_spacer('wi_gap0', ST.GAP_H)))
     for k in range(WI_FIELDS):

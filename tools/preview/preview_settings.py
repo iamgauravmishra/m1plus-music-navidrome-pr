@@ -291,6 +291,16 @@ def draw_wifiinfo(s, title, fields, saved=True, auto=True):
     def centred(name, y):
         w = by[name]; s.text(im, w.x + w.w // 2, y + ST.ROW_H / 2, s.shown(w), 21, (255, 255, 255), 'm')
     y = ST.CM
+    lt = by['label_title']; tpx = PI.title_px(s.tree); cut = s.clip(title, tpx, lt.w)
+    if cut != title:   # wi_name: the whole name in one grey line, or two (broken at a space in the first line's second half, else at the last character that fits)
+        nl = by['wi_name0']; npx = int(nl.get('style:normal:font_size')); lines = [title]
+        if s.font.width(title, npx) > nl.w:
+            lo = max(k for k in range(1, len(title)) if k == 1 or s.font.width(title[:k], npx) <= nl.w)
+            sp = title.rfind(' ', lo // 2 + 1, lo + 1)
+            lines = [title[:sp], s.clip(title[sp + 1:], npx, nl.w)] if sp > 0 else [title[:lo], s.clip(title[lo:], npx, nl.w)]
+        for t in lines:
+            s.text(im, nl.x + nl.w // 2, y + nl.h / 2, t, npx, grey, 'm'); y += nl.h
+        y += 8   # patch/wifipage.c WI_NAME_GAP
     if saved:
         row(y, 'single', False); centred('wi_forget_t', y); y += ST.ROW_H + ST.GAP_H
     for i, (lab, val) in enumerate(fields):
@@ -306,8 +316,7 @@ def draw_wifiinfo(s, title, fields, saved=True, auto=True):
     else:
         centred('wi_join_t', y)
     out = Image.new('RGBA', (W, SCREEN), (0, 0, 0, 255)); out.alpha_composite(im.crop((0, 0, W, SCREEN - NAV)), (0, NAV))
-    lt = by['label_title']; tpx = PI.title_px(s.tree)
-    s.text(out, lt.x, NAV / 2, title, tpx)
+    s.text(out, lt.x, NAV / 2, cut, tpx)
     for name, bx, bw in (('ah_nav_back', 7, 44), ('ah_nav_np', 260, 60)):
         g = s.img(name); out.alpha_composite(g, (bx + (bw - g.width) // 2, (NAV - g.height) // 2))
     return out
@@ -365,11 +374,14 @@ def main():
            ('Settings > About (first screen)', draw_page(s, 'm1plus_about')),
            ('Settings > Wi-Fi', draw_wifi(s, True, WIFI_NETS)),
            ('Settings > Wi-Fi, scrolled', draw_wifi(s, True, WIFI_NETS, scroll=116)),
+           ('Settings > Wi-Fi, long names', draw_wifi(s, True, [('TwentyCharactersLong 5G', 4, True, True, True), ('A very long network name of 32 b', 3, True, True, False), ('一个很长的无线网络名字', 3, True, False, False)] + WIFI_NETS[3:])),
            ('Settings > Wi-Fi, joining', draw_wifi(s, True, WIFI_NETS, scanning=False, joining=True)),
            ('Settings > Wi-Fi, off', draw_wifi(s, False)),
            ('Wi-Fi > info (saved)', draw_wifiinfo(s, 'Studio', [('Security', 'WPA2/WPA3')])),
            ('Wi-Fi > info (connected)', draw_wifiinfo(s, 'Home', [('Security', 'WPA/WPA2'), ('IP Address', '192.168.1.42'), ('Router', '192.168.1.1')], auto=False)),
            ('Wi-Fi > info (not saved)', draw_wifiinfo(s, 'Cafe Open', [('Security', 'Open')], saved=False)),
+           ('Wi-Fi > info (long name)', draw_wifiinfo(s, 'TwentyCharactersLong 5G', [('Security', 'WPA2')])),
+           ('Wi-Fi > info (longest name)', draw_wifiinfo(s, 'A very long network name of 32 b', [('Security', 'WPA2')], saved=False)),
            ('Wi-Fi > Join Wi-Fi Network > Security', draw_wifisec(s)),
            ('Settings > Appearance', draw_page(s, 'm1plus_appearance')),
            ('Settings > Appearance > Accent', draw_page(s, 'm1plus_accent')),
