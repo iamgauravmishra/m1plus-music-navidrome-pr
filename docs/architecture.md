@@ -55,6 +55,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Daily Mix](modules/dailymix.md) | Selection job, stored mix, card and page |
 | [Home cover build](modules/homecover.md) | Background cover cache build and its progress line |
 | [Podcasts](modules/podcasts.md) | Local episodes, feeds, covers, resume and speed |
+| [Network](modules/network.md) | One HTTP request: the shared libcurl layer under Podcasts, the radio and Subsonic |
 | [Radio](modules/radio.md) | Internet radio: stations page, directory worker, playback through stock's hciplayer, Now Playing |
 | [Virtual iPod](modules/ipod.md) | Touch wheel, navigation and playback |
 | [iPod Cover Flow](modules/ipod-coverflow.md) | Embedded carousel and album navigation |

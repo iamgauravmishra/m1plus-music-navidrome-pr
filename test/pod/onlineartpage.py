@@ -683,7 +683,7 @@ def life_tests(ctx):
     m = AM(OA.Site()); m.open(); m.ready(); m.tap_tile(0); m.work(); m.tick()
     m.destroy()
     expect(f'{OA.ART_DIR}/full.jpg' not in m.fs, 'destroy from the confirmation: the held picture is removed')
-    # the downloads: a running one is asked to pause, the lookup starts when it has stopped, and the queue goes on once the lookup has ended
+    # the downloads: a running one goes on beside the lookup, which starts at once; the queue is never touched
     site = OA.Site()
     m = AM(site)
     m.thread = None
@@ -691,16 +691,15 @@ def life_tests(ctx):
     dl = m.thread
     expect(r == 0 and dl and dl[0] == PSYMS['pn_dmain'] and fn(m, 'pn_dl_running') == 1, 'a download is running')
     m.open()
-    expect('pthread_create' not in [c[0] for c in m.calls] and m.text('oa_status') == 'Searching…' and not site.reqs, 'the page opens while it runs: the lookup waits, "Searching…"')
+    expect([c[0] for c in m.calls].count('pthread_create') == 1 and m.thread[0] == PSYMS['pn_amain'] and m.text('oa_status') == 'Searching…' and fn(m, 'pn_job_busy') == 1 and fn(m, 'pn_dl_running') == 1 and fn(m, 'pn_dl_waiting') == 1,
+           'the page opens while a download runs: the lookup thread is created at once ("Searching…"), the download thread keeps running with its queue')
     m.tick()
-    expect('pthread_create' not in [c[0] for c in m.calls] and fn(m, 'pn_dl_running') == 1, 'the download was asked to pause: it has not stopped yet, so the lookup still waits')
-    m.thread = None; PCN.work(m, dl)
-    expect(fn(m, 'pn_dl_running') == 0 and fn(m, 'pn_dl_waiting') == 1, 'the paused download stopped and stays queued')
-    m.tick()
-    expect([c[0] for c in m.calls].count('pthread_create') == 1 and m.thread[0] == PSYMS['pn_amain'], 'the tick starts the lookup now')
+    expect('pthread_create' not in [c[0] for c in m.calls] and fn(m, 'pn_dl_running') == 1 and fn(m, 'pn_dl_waiting') == 1, 'the tick starts no second thread and does not touch the download')
     m.work()
     for _ in range(10): m.tick()
-    expect(fn(m, 'pn_job_busy') == 0 and fn(m, 'pn_dl_running') == 1 and m.thread[0] == PSYMS['pn_dmain'], 'the lookup ended: the queued download is started again by the page\'s tick')
+    expect(fn(m, 'pn_job_busy') == 0 and fn(m, 'pn_dl_running') == 1 and 'pthread_create' not in [c[0] for c in m.calls] and site.reqs, 'the lookup ended with its result: the download thread still runs, the page restarts nothing')
+    m.thread = None; PCN.work(m, dl)
+    expect(fn(m, 'pn_dl_running') == 0 and fn(m, 'pn_dl_waiting') == 0 and fn(m, 'pn_job_busy') == 0, 'then the download thread ends by itself with its queue taken')
 
 
 BUSY = {'rc': 22, 'code': 503}

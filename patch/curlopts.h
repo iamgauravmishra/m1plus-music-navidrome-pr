@@ -1,5 +1,5 @@
 /* libcurl 7.73 option and info numbers (curl/curl.h), the ones the payload uses: demo imports the easy interface, there is no header on the build host's side of the cross compile.
- * Used by patch/pcnet.c and patch/sbnet.c; test/pod/pcnet.py mocks these option and info numbers.
+ * patch/net.c sets and reads them (the one place that holds a handle); its callers (pcnet.c, radio.c, sbnet.c) use the CURLE_* results. test/pod/harness.py mocks these option and info numbers.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  */

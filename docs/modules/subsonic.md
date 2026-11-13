@@ -80,7 +80,7 @@ sbnet  ->  sbparse  ->  sbapi / sbdl  ->  sbsrc (lib_nd)  ->  pages, through lib
 
 | File | Content |
 |---|---|
-| `patch/sbnet.c`, `patch/sbnet.h` | HTTP (libcurl), salted-token auth, URL building (`sbn_url` terminates the string on every successful return; `sbn_urlenc` does not), JSON walker, MD5, `sbn_download` (`.part`, validated resume) |
+| `patch/sbnet.c`, `patch/sbnet.h` | HTTP (`sbn_http`, a request of [network](network.md)), salted-token auth, URL building (`sbn_url` terminates the string on every successful return; `sbn_urlenc` does not), JSON walker, MD5, `sbn_download` (`.part`, validated resume) |
 | `patch/sbparse.c` | `sba_parse_*` (pure: no network, no files) |
 | `patch/sbapi.c`, `patch/sbapi.h` | conf, guard, cache files, the metadata worker, requests, status record, the queue map, covers, `sba_retire_old` |
 | `patch/sbdl.c` | download worker, manifest `dl.idx`, stall and free-space rules |
@@ -230,7 +230,7 @@ drops its `.part`; a network fault keeps it, so the next download resumes.
 
 A download keeps the device awake: a successful add (`LS_ACT_DOWNLOAD`) arms `nl_awake_tick` (`patch/sbsrc.c`, see "Keep awake" under Playback and the queue), which calls `reset_poweroptions_timer(1, 1, 0)` every second while `sba_dl_busy()`, so stock standby does not stop Wi-Fi and the CPU mid-file. A full queue (`SBA_QFULL`, 1024 files) toasts "Download queue is full" (the play queue's "Queue is full" is another text). Download Album (`LS_ACT_DOWNLOAD_ALL`, the album page's "...") adds the page's tracks one by one through the same `sba_dl_add` with a single toast at the end, and arms the timer once if any was queued.
 
-**Safe resume** (`sbn_download`, the PR's rules). When the first body byte of a download arrives the worker saves a resume record `<part>.etag` (magic `SBRES1`, the identity
+**Safe resume** (`sbn_download`, the PR's rules; the header reader, the reserve, the file write and the rename are the shared ones of [network](network.md)). When the first body byte of a download arrives the worker saves a resume record `<part>.etag` (magic `SBRES1`, the identity
 server, user and track id, and the response's ETag), but only for a strong ETag (quoted, no `W/`); a failure without one keeps no `.part`. A `.part` is continued only if its
 record exists for the same identity: the request is `Range: bytes=N-` with `If-Range: <ETag>`, and a 206 is appended only if its Content-Range starts at N, ends at the file's last
 byte with a known total, and its ETag is the recorded one. A 200, a 416, or any other 206 (and a `.part` with no record, or another track's) starts the file again from byte 0. Every

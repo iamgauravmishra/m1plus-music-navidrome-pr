@@ -139,7 +139,7 @@ def shown(**kw):
     assert m.state(h2)[0] == 1, m.state(h2)
     DL.poke_slot(m, 0, DEEP, 'e5.mp3', 2, seq=1)
     m.setword(DL.pn_at(DL.DKEY), DL.key_of(DEEP, 'e5.mp3')); m.setword(DL.pn_at(DL.DGOT), 420000); m.setword(DL.pn_at(DL.DTOTAL), 1000000)
-    m.setword(DL.pn_at(DL.KIND), 2); m.setword(DL.pn_at(0), 1); m.setword(DL.pn_at(DL.DSEQ), 10)
+    m.setword(DL.pn_at(DL.DBUSY), 1); m.setword(DL.pn_at(DL.DSEQ), 10)
     DL.poke_fail(m, 0, DEEP, 'e7.mp3', PN['NET'])
     open_show(m)
     return m
@@ -411,9 +411,9 @@ def tap_tests(ctx):
     m.thread = None
     PCP.act(m, 4)
     expect(DL.state(m, 'e4.mp3', DEEP)[0] == 1, 'the "Download" pill (no size) downloads too')
-    m.setword(DL.pn_at(DL.DCANCEL), 0)
+    DL.unstop(m)
     PCP.act(m, 5)
-    expect(m.word(DL.pn_at(DL.DCANCEL)) == k5, 'a tap on the downloading pill (the ring, 42%) pauses it: the worker is told to cancel it, the .part stays')
+    expect(DL.run_state(m, k5) == DL.QS['STOPPING'], 'a tap on the downloading pill (the ring, 42%) pauses it: the worker is told to cancel it, the .part stays')
     PCP.act(m, 6)
     expect(DL.state(m, 'e6.mp3', DEEP)[0] == 1, 'the Paused pill resumes it (queued: it goes on from the .part)')
     PCP.act(m, 7)
@@ -469,7 +469,7 @@ def latest_tests(ctx):
     # it arrives: a file on the card, the page reads the episodes again, the pill is the white play pill
     m.put(f'{RP}/{DEEP}/e0.mp3', b'audio')
     for i in range(8): DL.poke_slot(m, i, DEEP, 'x.mp3', 0)
-    m.setword(DL.pn_at(DL.KIND), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(12), 900)
+    m.setword(DL.pn_at(DL.DBUSY), 0); m.setword(DL.pn_at(12), 900)
     DL.tick(m)
     lat = texts_of(m, 'label_ps_latest')
     expect(lat and lat[0][0] == 'Latest Episode' and not texts_of(m, 'label_ps_latestw'), 'when the download is done the pill is the white "Latest Episode" play pill')
@@ -845,7 +845,7 @@ def refresh_tests(ctx):
     m = shown()
     # no download runs now (a running one is poked in `shown`: stop it)
     for i in range(8): DL.poke_slot(m, i, DEEP, 'x.mp3', 0)
-    m.setword(DL.pn_at(DL.KIND), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.DKEY), 0)
+    m.setword(DL.pn_at(DL.DBUSY), 0); m.setword(DL.pn_at(DL.DKEY), 0)
     m.curl_site = lambda url, o: {'body': PCN.feed_bytes('headlines-3items.xml')} if 'f.example' in url else DL.server(DL.DATA)(url, o)
     m.thread = None; m.calls = []
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_refresh')
@@ -864,27 +864,21 @@ def refresh_tests(ctx):
     titles = [' '.join(c[i]['title']) for i in sorted(c)]
     expect(len(titles) == 7 and {'Episode 1', 'Episode 2', 'Episode 6'} <= set(titles) and sum(t.endswith('…') or t.startswith(('Trump', 'At Least', 'Fl')) for t in titles) == 4,
            f'the feed\'s three episodes join the ones the card keeps (the files, and the paused .part: its line is kept) ({titles})')
-    # a download runs: Refresh Feed pauses it first, as Refresh All does; the refresh starts when its thread has stopped
+    # a download runs: Refresh Feed starts at once beside it, as Refresh All does; nothing pauses or restarts the downloads
     m = shown()   # (the status record says a download runs)
     m.curl_site = lambda url, o: {'body': PCN.feed_bytes('headlines-3items.xml')} if 'f.example' in url else DL.server(DL.DATA)(url, o)
     m.thread = None; m.calls = []
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_refresh')
-    expect(m.word(DL.pn_at(DL.DPAUSE)) == 1 and m.thread is None and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0 and DL.fn(m, 'pn_busy') == 0,
-           'a download runs: it is asked to pause, no refresh thread yet, no dialog yet')
-    m.setword(DL.pn_at(DL.KIND), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.DPAUSE), 0); m.setword(DL.pn_at(DL.DKEY), 0)
-    DL.poke_slot(m, 0, DEEP, 'e5.mp3', 1, seq=5)   # (it stopped and kept its place in the queue)
-    m.thread = None
-    DL.tick(m)
-    expect(m.thread and m.thread[0] == PSYMS['pn_main'] and flags(m, 'pod_pd_scrim') == (1, 1) and text_of(m, 'pod_pd_count') == '1 of 1',
-           'the next tick starts the single-feed refresh once the download has stopped, and opens the dialog ("1 of 1")')
+    expect(m.thread and m.thread[0] == PSYMS['pn_main'] and DL.fn(m, 'pn_busy') == 1 and DL.fn(m, 'pn_dl_running') == 1 and flags(m, 'pod_pd_scrim') == (1, 1) and text_of(m, 'pod_pd_count') == '1 of 1',
+           'a download runs: the single-feed refresh thread is created in the same tap and the dialog opens ("1 of 1"), the download thread keeps running')
     m.call(m.thread[0], a0=m.thread[1], count=1 << 40)
-    m.thread = None
+    m.thread = None; m.calls = []
     m.call(PSYMS['pg_dlg_tick'], a0=0, count=40000000)
-    expect(m.thread and m.thread[0] == PSYMS['pn_dmain'], 'when the dialog closes the paused downloads go on')
+    expect(m.thread is None and 'pthread_create' not in [c[0] for c in m.calls] and DL.fn(m, 'pn_dl_running') == 1 and DL.fn(m, 'pn_busy') == 0, 'when the dialog closes no download is restarted: its thread was never stopped')
     # Cancel stops the refresh at once and the show stays as it was
     m = shown()
     for i in range(8): DL.poke_slot(m, i, DEEP, 'x.mp3', 0)
-    m.setword(DL.pn_at(DL.KIND), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.DKEY), 0)
+    m.setword(DL.pn_at(DL.DBUSY), 0); m.setword(DL.pn_at(DL.DKEY), 0)
     m.thread = None
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_refresh')
     PCP.click(m, 'pod_pd_cancel')
@@ -909,7 +903,7 @@ def unsub_tests(ctx):
     expect(f'{RP}/{DEEP}/.episodes' in m.fs and b'f=e0.mp3' in m.fs[f'{RP}/{DEEP}/.episodes'], 'the .episodes stay: the titles and dates of the files on the card')
     expect(f'{RP}/{DEEP}/e6.mp3.part' not in m.fs, 'the .part files go')
     expect(all(f'{RP}/{DEEP}/e{i}.mp3' in m.fs for i in range(3)), 'the episode files stay')
-    expect(m.word(DL.pn_at(DL.DCANCEL)) == DL.key_of(DEEP, 'e5.mp3') and DL.fn(m, 'pn_dl_count') <= 1, 'the running download is told to stop (the worker drops it) and nothing else of the show is queued')
+    expect(DL.run_state(m, DL.key_of(DEEP, 'e5.mp3')) == DL.QS['DROPPING'] and DL.fn(m, 'pn_dl_count') <= 1, 'the running download is told to stop (the worker drops it) and nothing else of the show is queued')
     expect(PCP.title_text(m).startswith('All-In') and flags(m, 'btn_more') == (1, 1), 'the page is still the show (it has files)')
     PCP.click(m, 'btn_more')
     expect(sheet_state(m)[0] == ['speed', 'order', 'filter', 'select', 'markall'], 'its sheet has no Refresh Feed and no Unsubscribe now')
@@ -1056,14 +1050,12 @@ def screen_off_tests(ctx):
     m.calls = []
     r = m.call(PSYMS['pg_tick'], a0=0, count=4000000)
     expect(r == 0 and not m.calls, 'in the background the page\'s tick ends at once and touches nothing')
-    # a refresh waiting for the downloads to pause is dropped when the screen is dark (no dialog is opened in the dark): the downloads go on
+    # the screen dark with a download running: the timer starts nothing (the refresh is not held back, the thread is there)
     m = shown(); m.thread = None
     PCP.click(m, 'btn_more'); PCP.click(m, 'pg_sh_refresh')
-    m.setword(DL.pn_at(DL.KIND), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.DPAUSE), 0); m.setword(DL.pn_at(DL.DKEY), 0)
-    DL.poke_slot(m, 0, DEEP, 'e5.mp3', 1, seq=5)
-    m.screen(False); m.thread = None
+    m.screen(False); m.thread = None; m.calls = []
     m.call(PSYMS['pg_awake_tick'], a0=0, count=40000000)
-    expect(m.thread and m.thread[0] == PSYMS['pn_dmain'] and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0, 'the dark: the waiting refresh is dropped, the downloads go on, no dialog')
+    expect(m.thread is None and 'pthread_create' not in [c[0] for c in m.calls] and DL.fn(m, 'pn_dl_running') == 1, 'the dark: the timer starts no second thread, the download thread goes on')
 
 
 def ring_accent_tests(ctx):

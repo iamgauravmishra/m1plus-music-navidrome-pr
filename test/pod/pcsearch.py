@@ -9,7 +9,7 @@ DATA = os.path.join(ROOT, 'test', 'data', 'search')
 
 
 PCN = sibling('pcnet')
-PN, CA, ROOT_DIR = dict(PCN.PN, CANCELLED=12, NOFEED=17), PCN.CA, PCN.ROOT_DIR
+PN, CA, ROOT_DIR = dict(PCN.PN, CANCELLED=12, NOFEED=16), PCN.CA, PCN.ROOT_DIR
 SDIR = '/mnt/mmc/.m1plus/podcasts/search'
 SEARCH = 'https://itunes.apple.com/search?media=podcast&entity=podcast&limit=25&country=US&term='
 LOOKUP = 'https://itunes.apple.com/lookup?id='

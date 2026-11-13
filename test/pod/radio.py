@@ -2516,6 +2516,17 @@ def retry_tests(ctx):
     m = machine(); m.setword(PSYMS['pn'], 1)
     r, _ = fetch(m, path, 1)
     expect(r == E['PODBUSY'], 'rd_fetch: a podcast job in the way is RD_E_PODBUSY')
+    DL = sibling('pcdl')
+    m = machine(); m.setword(PSYMS['pn'] + DL.DBUSY, 1)   # an episode download runs, no job
+    r, _ = fetch(m, path, 1)
+    expect(r == E['OK'] and 'pthread_create' in m.names(), 'rd_fetch: a podcast download running alone (no job) does not refuse the fetch: it starts beside it')
+    m = opened(); m.answer = TOP_CSV.encode(); sites_of(m)
+    m.setword(PSYMS['pn'] + DL.DBUSY, 1)
+    tap_dir(m, 0)
+    expect(text_of(m, 'label_status') == 'Loading…' and m.names().count('pthread_create') == 1, 'the directory page with a download running: the tap fetches at once, no waiting for the downloads')
+    m = opened(); sites_of(m); m.setword(PSYMS['pn'] + DL.DBUSY, 1)
+    r = m.call(PSYMS['rd_logo_start'], a0=m.buf('https://logo.example/a.png'), count=40000000)
+    expect(r == 1, 'a logo job starts beside a running download too')
 
 
 SECTIONS = [parsers_tests, table_tests, play_tests, poll_tests, stop_tests, reroute_tests, fetch_tests, card_tests, asset_tests, open_tests, levels_tests, directory_tests, search_tests, logo_tests, favs_tests, np_tests, info_tests, entry_tests, view_tests, nowifi_tests, retry_tests]

@@ -22,7 +22,7 @@ def machine(*a, **kw):
     m.on_sleep = lambda k, m=m: m.slept.append(1)
     return m
 
-PN = dict(PCN.PN, CANCELLED=12, NOFEED=17, NOLYRICS=18, OVERLOAD=19)
+PN = dict(PCN.PN, CANCELLED=12, NOFEED=16, NOLYRICS=17, OVERLOAD=18)
 ART_DIR, COVERS = '/mnt/mmc/.m1plus/art', '/mnt/mmc/.m1plus/covers'
 ITUNES = 'https://itunes.apple.com/search?media=music&entity=album&limit=8&term='
 DEEZER = 'https://api.deezer.com/search/album?limit=8&q='
@@ -600,7 +600,7 @@ def busy_tests(ctx):
     st = state(m)
     expect(st['lcode'] == 0 and st['lcount'] >= 1 and not sleeps(m), f'a busy search after a good get: the candidates of the get are offered ({st})')
     # Cancel (Back) while the busy answer is on its way: PN_CANCELLED, no further request, the worker ends
-    site = Site(**{LRCLIB: lambda u, o: (m.nested(PSYMS['pn_cancel']), BUSY)[1]})
+    site = Site(**{LRCLIB: lambda u, o: (m.nested(PSYMS['pn_cancel'], 3 << 5), BUSY)[1]})
     m = machine(site=site)
     r, th = start(m); PCN.work(m, th)
     st = state(m)

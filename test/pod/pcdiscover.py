@@ -913,19 +913,17 @@ def state_tests(ctx):
     PCP.click(m, 'btn_return')
     expect(PCP.title_text(m) == 'Podcasts' and SU.has_row(m), 'and Back from the chart: the Shows level')
     # a search started from the Shows level path does not exist any more: the keyboard's Back with nothing typed returns to the chart
-    # downloads that run pause for the chart; the refresh in progress is waited for
+    # downloads that run go on beside the chart; the refresh in progress is waited for
     DL = sibling('pcdl')
     m = SU.opened()
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 2, seq=1)
-    m.setword(DL.pn_at(DL.DKEY), DL.key_of('Sub One', 'a.mp3')); m.setword(DL.pn_at(DL.KIND), 2); m.setword(DL.pn_at(0), 1); m.setword(DL.pn_at(DL.DSEQ), 10)
+    m.setword(DL.pn_at(DL.DKEY), DL.key_of('Sub One', 'a.mp3')); m.setword(DL.pn_at(DL.DBUSY), 1); m.setword(DL.pn_at(DL.DSEQ), 10)
     PCP.tap_discover(m); SU.tick(m)
-    expect(m.thread is None and m.word(DL.pn_at(DL.DPAUSE)) == 1 and SU.hint(m) == 'Loading…', 'a download runs: it is asked to pause, the chart waits (Loading...)')
-    m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.KIND), 0)
-    SU.tick(m)
-    expect(m.thread is not None and m.thread[0] == PSYMS['pn_cmain'], 'the next tick starts the chart when the downloads have paused')
+    expect(m.thread is not None and m.thread[0] == PSYMS['pn_cmain'] and DL.fn(m, 'pn_dl_running') == 1 and SU.hint(m) == 'Loading…',
+           'a download runs: the chart thread is created at once (Loading...), the download thread keeps running, nothing is asked to pause')
     SU.work(m); SU.tick(m)
-    m.calls = []; SU.tick(m)
-    expect(('curl_global_init', 3) in m.calls or 'pthread_create' in [c[0] for c in m.calls] or m.word(DL.pn_at(DL.DPAUSE)) == 1, 'afterwards the queued downloads are started again')
+    m.thread = None; m.calls = []; SU.tick(m)
+    expect(m.thread is None and 'pthread_create' not in [c[0] for c in m.calls] and DL.fn(m, 'pn_dl_running') == 1, 'afterwards the tick starts nothing: the downloads were never stopped')
     m = SU.opened()
     m.setword(PSYMS['pn'], 1); m.setword(PSYMS['pn'] + 4, 0); m.setword(PSYMS['pn'] + 8, 3)   # a refresh in progress (kind 0)
     PCP.tap_discover(m); SU.tick(m)

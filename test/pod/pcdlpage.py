@@ -210,8 +210,8 @@ def inprogress_tests(ctx):
     # taps: the running one is paused, the waiting one leaves, the failed one is tried again, the paused one resumes
     m.calls = []; m.thread = None
     tap_row(m, 0, 4, 7)
-    expect(m.word(DL.pn_at(DL.DCANCEL)) == DL.key_of('Sub One', 'e.mp3') and toasts_fixed(m) == [], 'a tap on the running one pauses it (the worker is told to cancel it; the .part stays)')
-    m.setword(DL.pn_at(DL.DCANCEL), 0)
+    expect(DL.run_state(m, DL.key_of('Sub One', 'e.mp3')) == DL.QS['STOPPING'] and toasts_fixed(m) == [], 'a tap on the running one pauses it (the worker is told to cancel it; the .part stays)')
+    DL.unstop(m)
     tap_row(m, 1, 4, 7)
     expect(DL.fn(m, 'pn_dl_count') == 1 and DL.state(m, 'c.mp3', 'Sub One')[0] == 0, 'a tap on a waiting one takes it out of the queue')
     got = rows(m)
@@ -228,7 +228,7 @@ def inprogress_tests(ctx):
     SEL_E = f'{RP}/Sub One/e.mp3'
     m.put(SEL_E, b'done', NOW - 5); m.sizes[SEL_E] = 3 << 20
     DL.poke_slot(m, 0, 'Sub One', 'e.mp3', 0)
-    m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.KIND), 0)
+    m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(DL.DBUSY), 0)
     m.setword(DL.pn_at(12), 500)
     m.calls = []
     PCS.tick(m)
@@ -243,7 +243,7 @@ def inprogress_tests(ctx):
     m.put(f'{RP}/Sub One/e.mp3.part', b'x' * 10)
     to_page(m)
     DL.poke_slot(m, 0, 'Sub One', 'e.mp3', 0)
-    m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.KIND), 0)
+    m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(DL.DBUSY), 0)
     m.setword(DL.pn_at(12), 501)
     PCS.tick(m)
     got = rows(m)
@@ -532,7 +532,7 @@ def heads_tests(ctx):
     f = f'{RP}/Sub One/e.mp3'
     m.put(f, b'done', NOW - 5); m.sizes[f] = 3 << 20
     DL.poke_slot(m, 0, 'Sub One', 'e.mp3', 0)
-    m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.KIND), 0)
+    m.setword(DL.pn_at(DL.DKEY), 0); m.setword(DL.pn_at(DL.DBUSY), 0)
     m.setword(DL.pn_at(12), 500)
     PCS.tick(m)
     expect(heads(m) == ['In Progress'] and sorted(rows_y(m)) == lay(3, 1)['rows'], f'a finished download gives the page both sections: the In Progress header comes ({heads(m)})')

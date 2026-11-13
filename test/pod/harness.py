@@ -1260,6 +1260,7 @@ class Machine:
             else: self.fs[p] = self.fs.get(p, b'') + data; ret = a2
         elif name == 'fsync':
             p = self.fds[a0][0]; self.calls.append(('fsync', p))
+            if getattr(self, 'on_fsync', None): self.on_fsync(p)   # a test's way to act while a file or a folder is being synced
             ret = -1 if ('fsync', p) in self.fail else 0
         elif name == 'close':
             self.calls.append(('close', self.fds.pop(a0)[0]))

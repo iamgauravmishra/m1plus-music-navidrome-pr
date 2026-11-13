@@ -565,24 +565,21 @@ def preview_tests(ctx):
 
 
 def job_tests(ctx):
-    """One worker at a time: a download that runs pauses for the search; a refresh is waited for; a newer search cancels the running one."""
+    """One job at a time: a download that runs goes on beside the search; a refresh is waited for; a newer search cancels the running one."""
     expect = ctx.expect
     DL = sibling('pcdl')
     m = opened()
     # a download is running
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 2, seq=1)
-    m.setword(DL.pn_at(DL.DKEY), DL.key_of('Sub One', 'a.mp3')); m.setword(DL.pn_at(DL.KIND), 2); m.setword(DL.pn_at(0), 1); m.setword(DL.pn_at(DL.DSEQ), 10)
+    m.setword(DL.pn_at(DL.DKEY), DL.key_of('Sub One', 'a.mp3')); m.setword(DL.pn_at(DL.DBUSY), 1); m.setword(DL.pn_at(DL.DSEQ), 10)
     enter(m); submit(m, 'all in')
-    expect(m.thread is None and m.word(DL.pn_at(DL.DPAUSE)) == 1 and hint(m) == 'Searching…', 'a download runs: it is asked to pause, the search waits ("Searching...")')
-    m.setword(DL.pn_at(0), 0); m.setword(DL.pn_at(DL.KIND), 0)   # the download thread has stopped
-    tick(m)
-    expect(m.thread is not None and m.thread[0] == PSYMS['pn_smain'], 'the next tick starts the search when the downloads have paused')
+    expect(m.thread is not None and m.thread[0] == PSYMS['pn_smain'] and m.word(DL.pn_at(DL.DBUSY)) == 1 and DL.fn(m, 'pn_dl_running') == 1 and m.word(PSYMS['pn']) == 1 and hint(m) == 'Searching…',
+           'a download runs: the search thread is created in the same submit ("Searching..."), the download thread keeps running, nothing is asked to pause')
     work(m); tick(m)
-    expect(len(level_rows(m)) >= 5, 'and its rows come')
-    # the awake timer / tick starts the downloads again when the job is over
-    m.calls = []
+    expect(len(level_rows(m)) >= 5 and DL.fn(m, 'pn_dl_running') == 1, 'its rows come, the download thread still running')
+    m.thread = None; m.calls = []
     tick(m)
-    expect(('curl_global_init', 3) in m.calls or 'pthread_create' in [c[0] for c in m.calls] or m.word(DL.pn_at(DL.DPAUSE)) == 1, 'afterwards the queued downloads are started again')
+    expect(m.thread is None and 'pthread_create' not in [c[0] for c in m.calls] and DL.fn(m, 'pn_dl_running') == 1, 'afterwards the tick starts nothing and stops nothing: the downloads were never paused')
     # a refresh in progress: the job waits, nothing is cancelled
     m = opened()
     m.setword(PSYMS['pn'], 1); m.setword(PSYMS['pn'] + 4, 0); m.setword(PSYMS['pn'] + 8, 3)   # busy (kind 0 counts as a refresh)

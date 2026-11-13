@@ -74,8 +74,8 @@ only while loading; Back sets a cancel flag the transfer callback returns). Requ
 bundle; ISRG Root X1 is in it), 10 s to connect, 30 s in all, 5 redirects limited to http(s),
 256 KB cap (a cut answer is used up to its last whole row). Guards, in this order: Wi-Fi (`RD_E_WIFI`), a clock after
 `PN_MIN_EPOCH` (`RD_E_CLOCK`), the CA file, then the busy ones: the radio's own logo job is asked to end
-(`rd_logo_cancel`, it stops within a transfer callback; the directory goes first) and a podcast refresh, search, art job or download
-(`pn_busy`, `pn_job_busy`, `pn_dl_running`) is never cut short (`RD_E_PODBUSY`). Podcast jobs do not check for a radio fetch.
+(`rd_logo_cancel`, it stops within a transfer callback; the directory goes first) and a podcast refresh, search or art job
+(`pn_busy`, `pn_job_busy`) is never cut short (`RD_E_PODBUSY`). A podcast download is no job: the fetch runs beside it. Podcast jobs do not check for a radio fetch.
 
 Retries (`rd_fetch_retry`, the worker): a network or TLS failure (any libcurl code but a cancel, 42 or 23) or an HTTP 5xx is tried
 again up to twice, 1 s then 2 s later, each attempt on a fresh libcurl handle so the round-robin name may resolve to another mirror and

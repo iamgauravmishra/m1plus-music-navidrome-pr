@@ -410,14 +410,10 @@ static void oa_sync(void) {
     oa_redraw();
 }
 
-/* The lookup, once no other job (a refresh, a download, a search) is running: downloads are asked to pause first, as a Podcasts search does. */
+/* The lookup, once no other job (a refresh, a search) is running; a Podcasts download goes on beside it. */
 static void oa_start(void) {
     int rc, part = oa.want;
     if (!part) return;
-    if (pn_dl_running()) {
-        pn_dl_pause();
-        return;
-    }
     if (pn_busy() || pn_job_busy()) return;
     rc = oa.ar ? pn_artist(oa.artist)
          : part == (PN_PART_COVERS | PN_PART_LYRICS)
@@ -483,8 +479,7 @@ static grid_tile_t *oa_dtile(void) {
 /* Ask for the larger picture, or wait for the worker (the lookup may still be on its lyrics) to end. */
 static void oa_fetch_start(void) {
     int rc;
-    if (pn_dl_running()) pn_dl_pause(); /* downloads give way, as they do to the lookup */
-    if (pn_job_busy() || pn_dl_running() || pn_busy()) {
+    if (pn_job_busy() || pn_busy()) {
         oa.fpend = 1;
         return;
     }
@@ -662,7 +657,7 @@ static void oa_leave(void) {
     if (was == 0) return;
     oa.mode = 0;
     if (was == 1) {
-        if (oa.fetching || oa.saving) pn_cancel(); /* (it ends by itself) */
+        if (oa.fetching || oa.saving) pn_cancel(PN_K_ART); /* (it ends by itself) */
         oa.fetching = oa.fpend = oa.saving = oa.ready = 0;
         oa.pend = -1;
         oa.hint_code = 0;
@@ -731,9 +726,6 @@ static int oa_tick(const void *timer) {
     }
     if (oa.loaded < pn_art_count() && !(oa.want & PN_PART_COVERS)) oa_load_one();
     if (changed) oa_sync();
-    if (!oa.want && !oa.fetching && !oa.fpend && oa.pend < 0 && !oa.saving && !pn_job_busy() && pn_dl_waiting() &&
-        !pn_dl_running())
-        pn_dl_start();
     return RET_REPEAT;
 }
 
@@ -1017,7 +1009,6 @@ static int oa_on_use(void *ctx, void *e) {
     (void)e;
     if (oa.mode != 1 || !oa.ready || oa.saving || oa.pend >= 0) return RET_OK;
     oa.hint_code = 0;
-    if (pn_dl_running()) pn_dl_pause();
     oa_pick_start();
     oa_sync();
     return RET_OK;
@@ -1043,10 +1034,9 @@ static int oa_on_destroy(void *ctx, void *e) {
     if (ctx != oa.win) return RET_OK; /* an earlier window's end leaves a newer page alone */
     m1_timer_stop(&oa.timer);
     if (pn_job_busy())
-        pn_cancel(); /* the worker ends by itself; its scratch files are removed by the next lookup */
+        pn_cancel(PN_K_ART); /* the worker ends by itself; its scratch files are removed by the next lookup */
     else
         pn_art_clean();
-    if (!pn_job_busy() && pn_dl_waiting() && !pn_dl_running()) pn_dl_start();
     oa_ly_free();
     grid_free(&oa.g);
     grid_free(&oa.gl);

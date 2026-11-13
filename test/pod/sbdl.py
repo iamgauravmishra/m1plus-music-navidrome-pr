@@ -320,6 +320,8 @@ def transfer_tests(ctx):
     expect('secret' not in o[10002], 'the password is not in the URL')
     expect(not o.get(10007), 'no Range on a fresh download')
     expect(o.get(19) == 512 and o.get(20) == 45 and o.get(10065) == PCN.CA and o.get(64, 1) == 1 and o.get(81, 2) == 2, 'sbnet\'s stall limit (512 B/s for 45 s), CA bundle and verification are on')
+    expect(64 not in o and 81 not in o and o[99] == 1 and o[52] == 1 and o[68] == 5 and o[181] == 3 and o[182] == 3 and o[45] == 1 and o[78] == 12 and o[10018].startswith('M1PlusMusic/') and o.get(10102) is None,
+           'the request is made by the shared layer (patch/net.c): verification left at libcurl\'s defaults, no signals, 5 hops to http(s), an HTTP error fails, the app\'s user agent, no Accept-Encoding')
     expect(m.fs.get(final) == DATA and f'{final}.part' not in m.fs, 'the file is complete under its name (<artist>/<album>/<nn> <title>.<suffix>) and the .part file is gone')
     expect(final == ALBUM_DIR + '/03 Song One.flac' and [c[1] for c in calls if c[0] == 'mkdir' and c[1].startswith(MUSIC)] == [MUSIC, MUSIC + '/An Artist', ALBUM_DIR],
            f'the artist and album folders are made for it ({final})')

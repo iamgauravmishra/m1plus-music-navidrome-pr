@@ -221,8 +221,6 @@ static struct {
     int filt,
         nvis; /* the Show page's Filter (PG_F_*, page state, not saved) and the rows it leaves; vis (NULL for All): row -> index into eps, the show's order (pg_ix) */
     unsigned short *vis;
-    unsigned
-        apend; /* pc_hash of the show whose See All row was tapped while a download ran: the job starts when it has paused */
     unsigned acnt; /* the item count the See All row was painted with */
     int level, sel,
         show_off; /* the level, the show open (an index into shows), the Shows level's offset to come back to */
@@ -234,8 +232,6 @@ static struct {
     unsigned spin_t; /* the See All row's spinner timer (pg_spin_arm), 0 when none */
     unsigned timer, load_timer, dlg_timer,
         awake; /* awake: the downloads' timer (keeps the device awake, starts the queue again): scoped to the window, in front or not */
-    int rpend; /* a refresh waits for the downloads to pause: 1 + only_new */
-    int rone; /* ... and it is of the show open only (the Show level's Refresh Feed): 1, else 0 (Refresh All / Import) */
     int saved, want_off,
         sv_n; /* the Downloads-style level (L_DLS) lists the Saved episodes (docs/modules/podcasts.md "Saved"); the offset the list is to come back to once its rows are in; the Saved episodes counted by pg_saved_load */
     unsigned *sv_h,
@@ -522,13 +518,13 @@ static void pg_cat(char *out, unsigned size, const char *s) {
     out[o] = 0;
 }
 
-/* The See All row's text into out; 1 when the job is on (running for this show, or waiting for the downloads to pause: dim, no tap). Running: Loading… and the items written so far once there are some ("Loading… 340").
+/* The See All row's text into out; 1 when the job is on (running for this show: dim, no tap). Running: Loading… and the items written so far once there are some ("Loading… 340").
  * After a failure for this show (pn_arch_failed, kept for the session): the page's word for the reason and the hint. */
 static int pg_more_line(char *out, unsigned size, const char *idle) {
     unsigned h = pg.shows[pg.sel].hash, n = 0;
     int run = pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == h;
     out[0] = 0;
-    if (run || pg.apend) { /* (the spinner turns beside this text: pg_spin_tick, pf_spin_tick) */
+    if (run) { /* (the spinner turns beside this text: pg_spin_tick, pf_spin_tick) */
         pg_cat(out, size, TR("Loading…"));
         if (run) n = pn_arch_count();
         if (n) pc_fmt(out + strlen(out), size - (unsigned)strlen(out), " %d", (int)n);
@@ -1454,19 +1450,16 @@ static void pg_when_text(unsigned checked, char *text, unsigned size) {
         pg_cat(text, size, TR("Never refreshed"));
 }
 
-/* The refresh line from the worker's state: "Refreshing 2/5…" while it runs, "Waiting" while the downloads pause for it, else "Updated 1h ago" (or "Never refreshed"). A status only: Refresh All is a row of the
+/* The refresh line from the worker's state: "Refreshing 2/5…" while it runs, else "Updated 1h ago" (or "Never refreshed"). A status only: Refresh All is a row of the
  * sheet. */
 static void pg_line_make(pg_line_t *l) {
     char buf[120];
     unsigned last = (unsigned)pg_last_checked();
     memset(l, 0, sizeof *l);
-    if (pn_busy() && !pg.rpend) {
+    if (pn_busy()) {
         int done, total;
         pn_progress(&done, &total);
         pc_fmt2(buf, sizeof buf, TR("Refreshing %d/%d…"), (unsigned)done, (unsigned)total);
-    } else if (pg.rpend) {
-        buf[0] = 0;
-        pg_cat(buf, sizeof buf, TR("Waiting"));
     } else if (!last) {
         buf[0] = 0;
         pg_cat(buf, sizeof buf, TR("Never refreshed"));
@@ -2832,7 +2825,6 @@ static void pg_open_show_with(int si, int off, pc_ep_t *all, int m) {
     pg.has_arch = !pg.preview && pc_has_archive(&pg.shows[si]);
     pg.nall = pg.has_arch ? pc_count_all(&pg.shows[si])
                           : m; /* (once, now: the count of See All (N); a Show page paint never reads the archive) */
-    pg.apend = 0;
     pg.feed_hash = pg.shows[si].feed[0] ? pc_hash(pg.shows[si].feed) : 0;
     pg.rev = pc_rev();
     pg.collapsed = 0;
@@ -2964,7 +2956,7 @@ static void pg_all_leave_search(void) {
 /* ---------------------------------------------------------------------------
  * The search level (docs/modules/podcasts.md "Search"): behind Discover's magnifier while Podcast Discover is on in Settings. The field at the top opens our keyboard (the Playlists page's New
  * playlist does the same: keyboard_open, its Search key calls back when the page is in front again); the answer, the thumbnails and the preview are the worker's (patch/pcnet.c): this reads its record from
- * the page's 1 s tick and does no widget work in the dark. A job waits for the downloads to pause, as a refresh does; a running one is cancelled by a newer one and by leaving the page.
+ * the page's 1 s tick and does no widget work in the dark. The downloads go on beside a job; a running one is cancelled by a newer one and by leaving the page.
  */
 static void pg_copy(char *dst, unsigned size, const char *src) {
     dst[0] = 0;
@@ -3068,7 +3060,7 @@ static void pg_srch_leave(void) {
     pg.spend = SP_NONE;
     pg.loading = 0;
     if (pg.sstate == SS_WAIT) pg.sstate = SS_IDLE;
-    if (pn_job_busy()) pn_cancel();
+    pn_cancel(PN_K_PODCASTS);
 }
 
 /* The preview (or the lookup of an Apple link) failed, or Subscribe could not write: the toast says Can't subscribe and why; where that is wider than the toast (300 px, 18 px text) only why. No folder was made. */
@@ -3120,17 +3112,12 @@ static void pg_preview_fail(int code) {
     pg_srch_fail(code);
 }
 
-/* Start the job the level waits for: the downloads that run are asked to pause first (the page's tick asks again), a search or preview that runs is cancelled, a refresh is waited for. */
+/* Start the job the level waits for: a search or preview that runs is cancelled, a refresh is waited for (the page's tick asks again). The downloads go on beside it. */
 static void pg_srch_pump(void) {
     int r, job = pg.spend;
     if (!job) return;
-    if (pn_dl_running()) {
-        pn_dl_pause();
-        pg_awake_arm();
-        return;
-    }
     if (pn_busy() || pn_job_busy()) {
-        if (pn_job_busy()) pn_cancel();
+        pn_cancel(PN_K_PODCASTS);
         return;
     }
     r = job == SP_SEARCH ? pn_search(pg.sq)
@@ -3210,7 +3197,7 @@ static void pg_srch_edit(void) {
     keyboard_open(TR("Apple Podcasts"), TR("Search Apple Podcasts"), pg.sq, pg_srch_done, pg_srch_cancel, KB_LONG);
 }
 
-/* The preview that is ready is opened (or its failure shown), and the downloads that paused for the job go on (the 1 s tick of the search and Discover levels). */
+/* The preview that is ready is opened, or its failure shown (the 1 s tick of the search and Discover levels). */
 static void pg_preview_sync(void) {
     if (pg.loading && !pg.spend && !pn_job_busy() && pn_preview_state() == 2) {
         if (pn_preview_code() == PN_OK) {
@@ -3220,8 +3207,6 @@ static void pg_preview_sync(void) {
             pg_job_refresh();
         }
     }
-    if (!pn_job_busy() && !pg.spend && pn_dl_waiting() && !pn_dl_running())
-        pn_dl_start(); /* the downloads that paused go on */
 }
 
 /* The 1 s tick of the level (lit screen only): a job that waits, the answer that came, a thumbnail that arrived, the preview that is ready. */
@@ -3263,7 +3248,7 @@ static void pg_srch_clear(void) {
     pg.spend = SP_NONE;
     pg.loading = 0;
     pg.sstate = SS_IDLE;
-    if (pn_job_busy()) pn_cancel();
+    pn_cancel(PN_K_PODCASTS);
     pg_srch_rows_reset();
     pg_srch_apply();
     pg_srch_edit();
@@ -3383,7 +3368,7 @@ static void pg_subscribe(void) {
 
 /* ---------------------------------------------------------------------------
  * The Discover level (docs/modules/podcasts.md "Discover"): behind the Shows level's Discover row. The charts (Apple's top 25 shows and top 25 episodes of the Podcast Region) are fetched by the worker (patch/pcnet.c), a chart when it is first viewed;
- * this reads its record from the page's 1 s tick and does no widget work in the dark. A job waits for the downloads to pause, as a refresh does; a running one is cancelled by a newer one and by leaving the level. A row opens the show's
+ * this reads its record from the page's 1 s tick and does no widget work in the dark. The downloads go on beside a job; a running one is cancelled by a newer one and by leaving the level. A row opens the show's
  * preview (the lookup of its Apple id gives the feed), the navbar's magnifier the search level.
  */
 /* What the level shows for the state of the chart in view: its rows, or the status line (Loading... while it is asked for, the failure's words, No results). */
@@ -3421,17 +3406,12 @@ static void pg_disc_ask(void) {
     pg.dpend = 1;
 }
 
-/* Start the job the level waits for: the downloads that run are asked to pause first (the tick asks again), a job that runs is cancelled, a refresh is waited for. */
+/* Start the job the level waits for: a job that runs is cancelled, a refresh is waited for (the tick asks again). The downloads go on beside it. */
 static void pg_disc_pump(void) {
     int r;
     if (!pg.dpend) return;
-    if (pn_dl_running()) {
-        pn_dl_pause();
-        pg_awake_arm();
-        return;
-    }
     if (pn_busy() || pn_job_busy()) {
-        if (pn_job_busy()) pn_cancel();
+        pn_cancel(PN_K_PODCASTS);
         return;
     }
     r = pn_chart(pg.dtab);
@@ -3902,8 +3882,6 @@ static void pg_dlg_finish(void) {
     const char *shown = msg;
     pg_dlg_show(0);
     pn_summary(&ok, &failed, &cancelled);
-    pn_dl_start(); /* the downloads that paused for the refresh go on */
-    pg_awake_arm();
     if (cancelled) {
         if (ok)
             pc_fmt(msg, sizeof msg, TR("Cancelled, %d updated"), ok);
@@ -3959,7 +3937,7 @@ static int pg_on_cancel(void *ctx, void *e) {
     (void)ctx;
     (void)e;
     if (!pg.dlg) return RET_OK;
-    pn_cancel();
+    pn_cancel(PN_K_REFRESH);
     widget_set_sensitive(pg.dlg_cancel, 0);
     if (pn_busy()) pg_dlg_update();
     pg_dlg_arm();
@@ -3973,14 +3951,6 @@ static void pg_toast_code(int code) {
 /* Refresh the subscriptions (every show with a feed: the Shows level's refresh line; only those never refreshed after an import), or the show open (one: the Show level's Refresh Feed). */
 static void pg_refresh_job(int only_new, int one) {
     int idx[PC_MAX_SHOWS], n = 0, i, r;
-    if (pn_dl_running()) { /* downloads pause for a refresh (the queue stays, they go on when it ends): the refresh starts from the page's tick once the thread has stopped */
-        pn_dl_pause();
-        pg.rpend = only_new + 1;
-        pg.rone = one;
-        pg_awake_arm();
-        pg_redraw();
-        return;
-    }
     if (one)
         idx[n++] = pg.sel;
     else
@@ -4396,7 +4366,7 @@ static int pg_on_delete(void *ctx, void *e) {
             ++kept;
             continue;
         }
-        pn_dl_cancel(key); /* a waiting one leaves the queue */
+        pn_dl_drop(key); /* a waiting one leaves the queue, the running one stops and leaves no .part */
         if (dld || pg.level == L_EPS) unlink(path);
         pg_cat(path, sizeof path, ".part");
         unlink(path);
@@ -4712,7 +4682,7 @@ static void pg_remove(int ep) {
     }
     key = pn_dl_key(pg.shows[pg.sel].dir, e->file);
     hash = e->state == PC_LOCAL ? e->hash : 0;
-    pn_dl_cancel(key);
+    pn_dl_drop(key);
     unlink(path);
     pg_cat(path, sizeof path, ".part");
     unlink(path);
@@ -4760,8 +4730,10 @@ static void pg_unsub(void) {
         unsigned key;
         if (!e->file[0]) continue;
         key = pn_dl_key(dir, e->file);
-        pn_dl_cancel(key);
+        pn_dl_drop(key);
         if (pg_join(path, sizeof path - 6, dir, e->file)) {
+            /* (a download that finished since the list was read is an episode on the card: it stays, and so does the show) */
+            if (e->state != PC_LOCAL && !access(path, F_OK)) ++left;
             pg_cat(path, sizeof path, ".part");
             unlink(path);
         }
@@ -4845,8 +4817,8 @@ static int pg_on_sheet_row(void *ctx, void *e) {
     switch (id) {
     case SR_REFRESH:
         if (pg.level ==
-            L_SHOWS) { /* Refresh All: the guards' words as toasts, the progress dialog; nothing while a refresh runs or waits */
-            if (!pn_busy() && !pg.rpend) pg_refresh(0);
+            L_SHOWS) { /* Refresh All: the guards' words as toasts, the progress dialog; nothing while a refresh runs */
+            if (!pn_busy()) pg_refresh(0);
         } else if (pg.shows[pg.sel].feed[0])
             pg_refresh_job(0, 1);
         break;
@@ -4900,7 +4872,7 @@ static int pg_on_more(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* The See All job for the show open (docs/modules/podcasts.md "All episodes"): started at once, or, while a download runs, after the downloads have paused (the tick). The words of a guard that fails are a toast. */
+/* The See All job for the show open (docs/modules/podcasts.md "All episodes"): started at once (a download goes on beside it). The words of a guard that fails are a toast. */
 static void pg_arch_go(void) {
     int r = pn_arch_start(pg.root, &pg.shows[pg.sel]);
     if (r != PN_OK && r != PN_BUSY) pod_toast(pg_status_word(r));
@@ -4909,13 +4881,12 @@ static void pg_arch_go(void) {
     pg_redraw();
 }
 
-/* The spinner of the See All row and of the Discover and search levels' status line (Loading…, Searching…: pg_hint_busy): a 250 ms timer that exists only while the row is busy (the job runs for this show, or waits for the downloads) or the line is a busy one, and the page is in front. It turns the
+/* The spinner of the See All row and of the Discover and search levels' status line (Loading…, Searching…: pg_hint_busy): a 250 ms timer that exists only while the row is busy (the job runs for this show) or the line is a busy one, and the page is in front. It turns the
  * frame and repaints when the row is in view; it ends itself (return RET_OK) when the row is no longer busy, the level changes or the page goes to the background (pg_on_bg stops it, pg_arm_spin starts it again). */
 static int pg_spin_busy(void) {
     return pg.win && pg.fg &&
            (pg_hint_busy() ||
-            (pg_fetch_on() &&
-             ((pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == pg.shows[pg.sel].hash) || pg.apend)));
+            (pg_fetch_on() && pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == pg.shows[pg.sel].hash));
 }
 static int pg_spin_tick(const void *timer) {
     int y, h;
@@ -4939,22 +4910,14 @@ static void pg_spin_arm(void) {
     pg.spin_t = timer_add(pg_spin_tick, (void *)0, PS_SPIN_MS);
 }
 
-/* 1 when the job started or waits for the downloads to pause. */
+/* 1 when the job started. */
 static int pg_arch_tap(void) {
-    if (!pg_fetch_on() || pn_arch_state() == PN_AR_RUNNING || pg.apend || pn_busy() || pn_job_busy()) return 0;
-    if (pn_dl_running()) {
-        pn_dl_pause();
-        pg.apend = pg.shows[pg.sel].hash;
-        pg_awake_arm();
-        pg_spin_arm();
-        pg_redraw();
-        return 1;
-    }
+    if (!pg_fetch_on() || pn_arch_state() == PN_AR_RUNNING || pn_busy() || pn_job_busy()) return 0;
     pg_arch_go();
     return pn_arch_state() == PN_AR_RUNNING;
 }
 
-/* A tap on the Show page's See All row: with an archive (or a show of copied files) the All Episodes page opens; a subscription with none starts the fetch (the downloads pause first), and the page opens when the job has
+/* A tap on the Show page's See All row: with an archive (or a show of copied files) the All Episodes page opens; a subscription with none starts the fetch, and the page opens when the job has
  * ended well while this Show page is still on screen (pg_arch_poll). */
 static void pg_see_all_tap(void) {
     if (pg_fetch_on()) {
@@ -5053,8 +5016,7 @@ static int pg_on_abort(void *ctx, void *e) {
 }
 
 /* The See All job as the page sees it, from the page's tick and the downloads' timer (that one runs while the page is in the background too, so the end does not wait for the page to come back): the count on the row
- * about once a second while the screen is lit; at the end the failure (remembered by the job itself, pn_arch_failed) is toasted when that show is on screen; the finished job is forgotten and the
- * downloads it paused go on (its show reads the file in the reload the end's pn_gen asks for). */
+ * about once a second while the screen is lit; at the end the failure (remembered by the job itself, pn_arch_failed) is toasted when that show is on screen; the finished job is forgotten (its show reads the file in the reload the end's pn_gen asks for). */
 static void pg_arch_poll(void) {
     int st = pn_arch_state(), code, here;
     unsigned h;
@@ -5072,8 +5034,6 @@ static void pg_arch_poll(void) {
     here = pg.fg && pg.level == L_EPS && !pg.preview && pg.shows[pg.sel].hash == h;
     if (st == PN_AR_FAILED && code != PN_CANCELLED && here) pod_toast(pg_status_word(code));
     pn_arch_reset();
-    pn_dl_start(); /* (the downloads that paused go on) */
-    pg_awake_arm();
     if (pg.aopen == h) {
         pg.aopen = 0;
         if (st == PN_AR_DONE && here && !pg.det && !pg.select && !pg.sheet && !pg.dlg && !pg.allv && pg.sel >= 0 &&
@@ -5082,16 +5042,6 @@ static void pg_arch_poll(void) {
     } else if (pg.aopen && (st == PN_AR_DONE || st == PN_AR_FAILED))
         pg.aopen = 0;
     if (pg.fg) pg_redraw();
-}
-
-/* A See All tap that waited for the downloads to pause: the job starts once they have (from the page's tick and from the downloads' timer, which also runs while the search inside the show is in front). */
-static void pg_arch_pend(void) {
-    if (pg.apend && (pg.level != L_EPS || pg.shows[pg.sel].hash != pg.apend))
-        pg.apend = 0; /* (left the show: nothing starts) */
-    if (pg.apend && m1_screen_lit() && !pn_dl_running() && !pn_busy() && !pn_job_busy()) {
-        pg.apend = 0; /* the downloads have paused: the archive job starts */
-        pg_arch_go();
-    }
 }
 
 /* ---------------------------------------------------------------------------
@@ -5166,31 +5116,22 @@ static int pg_tick(const void *timer) {
         pg.rev = pc_rev();
         pg_redraw();
     }
-    pg_arch_pend();
     pg_arch_poll();
     pg_spin_arm();
-    if (pg.rpend && (pg.level == L_SHOWS || (pg.level == L_EPS && pg.rone)) && m1_screen_lit() && !pn_dl_running() &&
-        !pn_busy()) {
-        int only_new = pg.rpend - 1,
-            one = pg.rone; /* the downloads have paused: the refresh the user asked for starts */
-        pg.rpend = pg.rone = 0;
-        pg_refresh_job(only_new, one);
-    }
     return RET_REPEAT;
 }
 
-/* The page is closed while the archive job runs: a timer with no page (UI thread, no widget, ends by itself) starts the downloads that paused for it once the worker is free. */
+/* The page is closed while the archive job runs: a timer with no page (UI thread, no widget, ends by itself) forgets the job once the worker is free. */
 static int pg_resume_tick(const void *timer) {
     (void)timer;
     if (pn_busy() || pn_job_busy()) return RET_REPEAT;
     pn_arch_reset();
-    if (pn_dl_waiting() && !pn_dl_running()) pn_dl_start();
     return RET_OK;
 }
 
 /* The downloads' timer (1 s), page-scoped like the others but kept in the background too: while a download runs it calls stock's reset_poweroptions_timer(1, 1, 0), which sets the standby and
  * auto power-off countdowns again and leaves the screen's alone (stock standby would stop the Wi-Fi and the CPU, found by a device probe). It runs on the UI thread, never from the worker. It also starts the
- * queue again when no thread runs (after a refresh, or a tap that raced the worker's end) and drops a refresh nobody can see start. No widget is touched. It ends when nothing is queued. */
+ * queue again when no thread runs (one that could not be made). No widget is touched. It ends when nothing is queued. */
 static int pg_awake_tick(const void *timer) {
     (void)timer;
     if (!pg.win) {
@@ -5198,13 +5139,9 @@ static int pg_awake_tick(const void *timer) {
         return RET_OK;
     }
     if (pn_dl_running() || pn_arch_state() == PN_AR_RUNNING) reset_poweroptions_timer(1, 1, 0);
-    pg_arch_pend(); /* (the job's start and end do not wait for the page's tick: it stops while the page is in the background) */
-    pg_arch_poll();
-    if (pg.rpend && !pn_dl_running() && !pn_busy() &&
-        (!(pg.level == L_SHOWS || (pg.level == L_EPS && pg.rone)) || !pg.fg || !m1_screen_lit()))
-        pg.rpend = pg.rone = 0; /* the page is not there to open the refresh's dialog: the downloads go on */
-    if (!pg.rpend && !pg.apend && pn_dl_waiting() && !pn_dl_running()) pn_dl_start();
-    if (!pn_dl_count() && !pg.rpend && !pg.apend && pn_arch_state() != PN_AR_RUNNING) {
+    pg_arch_poll(); /* (the job's end does not wait for the page's tick: it stops while the page is in the background) */
+    if (pn_dl_waiting() && !pn_dl_running()) pn_dl_start();
+    if (!pn_dl_count() && pn_arch_state() != PN_AR_RUNNING) {
         pg.awake = 0;
         return RET_OK;
     }
@@ -5212,7 +5149,7 @@ static int pg_awake_tick(const void *timer) {
 }
 
 static void pg_awake_arm(void) {
-    if (pg.win && !pg.awake && (pn_dl_count() > 0 || pg.rpend || pg.apend || pn_arch_state() == PN_AR_RUNNING))
+    if (pg.win && !pg.awake && (pn_dl_count() > 0 || pn_arch_state() == PN_AR_RUNNING))
         pg.awake = timer_add(pg_awake_tick, (void *)0, PG_AWAKE_MS);
 }
 
@@ -5291,12 +5228,13 @@ static int pg_on_destroy(void *ctx, void *e) {
     if (pg.awake)
         timer_remove(
             pg.awake); /* the downloads go on while the device is awake; nothing keeps it awake without this window */
-    if (pg.dlg) pn_cancel(); /* the page is closed (the hardware Back key) with the dialog up: that is Cancel too */
-    if (pn_job_busy()) pn_cancel(); /* ... and a search or preview that runs stops */
-    if (pn_arch_state() == PN_AR_RUNNING || pg.apend)
+    if (pg.dlg)
+        pn_cancel(PN_K_REFRESH); /* the page is closed (the hardware Back key) with the dialog up: that is Cancel too */
+    pn_cancel(PN_K_PODCASTS); /* ... and a search or preview that runs stops */
+    if (pn_arch_state() == PN_AR_RUNNING)
         timer_add(
             pg_resume_tick, (void *)0,
-            PG_AWAKE_MS); /* the archive job (stopped above) paused the downloads: they go on when it has ended, with no page to see it */
+            PG_AWAKE_MS); /* the archive job (stopped above) is forgotten when it has ended, with no page to see it */
     pn_search_clean();
     pn_chart_clean();
     pn_preview_drop();

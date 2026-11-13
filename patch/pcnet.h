@@ -5,10 +5,15 @@
  * ONE detached pthread does all the network and card writes of a refresh, one show at a time; the UI never calls into it. The page asks pn_refresh (UI thread: the guards, then the
  * thread) and afterwards only READS the status record (pn_busy / pn_gen / pn_progress / pn_current / pn_status) from its own timer, and reloads the shows when pn_gen changed: AWTK is
  * not thread safe, and the model's list functions stay the one source of the page's rows (the worker writes the same .episodes / .show files they read).
+ *
+ * Two lanes: the JOB lane (a refresh, a search, a preview, a chart, Find Cover & Lyrics, Software Update, AutoEq, the archive: one at a time, PN_BUSY to the next) and the DOWNLOAD lane (the episode
+ * queue's own thread, pn_dl_*). A download runs beside a job and never gives way to one: no page pauses the downloads.
  */
 #pragma once
 
 #include "common.h"
+#include "net.h"
+#include "netfile.h"
 #define PN_CA M1_CA /* (common.h) */
 #define PN_MIN_EPOCH M1_MIN_EPOCH
 #define PN_FEED_CAP 8388608u /* a feed larger than this (after gzip) is refused */
@@ -37,7 +42,6 @@ enum {
     PN_CARDFULL, /* a download: the card would keep less than PN_DL_MARGIN_KB free */
     PN_NOTAUDIO, /* a download: the answer is a web page (Content-Type text/...), not an episode */
     PN_QFULL, /* the download queue is full (PN_QMAX) */
-    PN_PAUSED, /* a download stopped for a refresh and kept in the queue (never shown) */
     PN_NOFEED, /* search: an Apple Podcasts address whose show has no feed address */
     PN_NOLYRICS, /* lyrics: no LRCLIB record has any */
     PN_OVERLOAD, /* find cover & lyrics: the service answered 503 or 429 (busy) on every try */
@@ -53,7 +57,7 @@ enum {
  * refused (the file offsets are 32 bit). PN_FAILS: download failures remembered for the rows. */
 #define PN_QMAX 32
 #define PN_DL_BUF 524288u
-#define PN_DL_MARGIN_KB 32768u
+#define PN_DL_MARGIN_KB NET_RESERVE_KB /* (patch/netfile.h: one reserve for every download) */
 #define PN_DL_PATH_MAX 240
 #define PN_DL_STALL 60
 #define PN_DL_RETRIES 3
@@ -68,8 +72,29 @@ int pn_guard(void);
 int pn_refresh(const char *root, const pc_show_t *shows, const int *idx, int n);
 int pn_busy(
     void); /* a refresh worker is running (a download worker is pn_dl_running, a search or preview worker pn_job_busy) */
-void pn_cancel(
-    void); /* UI thread: ask the worker to stop: the transfer in progress is aborted (libcurl's transfer-info callback), no further show is started */
+/* What a job's thread does. A page cancels only the kinds it starts (pn_cancel): another page's job is never its to stop. */
+enum {
+    PN_KIND_REFRESH = 1, /* Refresh All, one show, Import (the Podcasts page's dialog) */
+    PN_KIND_SEARCH = 3,
+    PN_KIND_PREVIEW = 4,
+    PN_KIND_ART = 5, /* Find Cover & Lyrics, Find Artist Photo: the lookup */
+    PN_KIND_PICK = 6, /* ... and the save */
+    PN_KIND_UPDATE = 7, /* Software Update: the check and the download */
+    PN_KIND_CHART = 8,
+    PN_KIND_EQ = 9, /* AutoEq */
+    PN_KIND_ARCH = 10 /* a show's whole episode list */
+};
+#define PN_K(kind) (1u << (kind))
+#define PN_K_REFRESH PN_K(PN_KIND_REFRESH)
+#define PN_K_PODCASTS \
+    (PN_K(PN_KIND_SEARCH) | PN_K(PN_KIND_PREVIEW) | PN_K(PN_KIND_CHART) | \
+     PN_K(PN_KIND_ARCH)) /* the Podcasts page's jobs */
+#define PN_K_ART (PN_K(PN_KIND_ART) | PN_K(PN_KIND_PICK))
+#define PN_K_UPDATE PN_K(PN_KIND_UPDATE)
+#define PN_K_EQ PN_K(PN_KIND_EQ)
+/* UI thread: ask the running job to stop if it is one of kinds (PN_K_*): the transfer in progress is aborted (libcurl's transfer-info callback), no further show is started. A job of another
+ * kind, another page's, goes on; with no job running nothing happens. */
+void pn_cancel(unsigned kinds);
 int pn_cancelling(void); /* a worker is running and was asked to stop */
 unsigned pn_part(
     void); /* how far the show being refreshed has come, 0..1000 (the feed's length when the server gave it; the picture is the last tenth) */
@@ -95,7 +120,7 @@ int pn_unsubscribe(const char *root, const pc_show_t *show);
 /* Unsubscribe completely, as the Show page does: pn_unsubscribe, the .part files and queued downloads of the show gone, and with no episode file left its own files and folder too. 0 not written (nothing touched), 1 the show stays (files left), 2 gone. */
 int pn_unsubscribe_show(const char *root, const pc_show_t *show);
 
-/* ---- Downloads. All of these run on the UI thread; the worker thread (one at a time, never beside a refresh) only reads and writes the status record. */
+/* ---- Downloads. All of these run on the UI thread; the download thread (one, with one episode at a time; it runs beside a job) only reads and writes the status record. */
 /* The key of an episode in the queue and the failure table: pc_hash of "<show folder>/<file name>". */
 unsigned pn_dl_key(const char *dir, const char *file);
 /* Queue the download of file in the show folder dir (the names as the model has them; root is the Podcasts folder). The guards run first (card, Wi-Fi, clock, CA bundle: PN_*), a path over PN_DL_PATH_MAX is PN_STORAGE, a full queue PN_QFULL;
@@ -103,11 +128,12 @@ unsigned pn_dl_key(const char *dir, const char *file);
 int pn_dl_add(const char *root, const char *dir, const char *file);
 /* Take the episode out of the queue; one that is running is aborted at once (the .part stays: a later add resumes it). */
 void pn_dl_cancel(unsigned key);
-/* Start the worker for the queued downloads when none runs (the page's timer calls this after a refresh and after a pause). The guards run first; when they fail every queued download fails with their code (shown on its row). 0 or PN_*. */
+/* Cancel and delete (Remove Download, Delete, Unsubscribe; the caller unlinks the .part and the file itself): as pn_dl_cancel, and the running one writes nothing more, never puts its file in place and removes its .part when it ends.
+ * A download whose file is already in place (the thread may still be syncing the folder) is a finished episode: the drop flags nothing and the file is the caller's to keep or unlink. An add of the same episode before the thread has ended is queued afresh behind it. */
+void pn_dl_drop(unsigned key);
+/* Start the download thread for the queued downloads when it does not run (pn_dl_add does; the Podcasts page's timer asks again for a queue whose thread could not be made). The guards run first; when they fail every queued download fails with their code (shown on its row). 0 or PN_*. */
 int pn_dl_start(void);
-/* Ask a running download worker to stop and keep the queue (for a refresh); pn_dl_running() turns 0 when it has. */
-void pn_dl_pause(void);
-int pn_dl_running(void); /* the download worker thread is running */
+int pn_dl_running(void); /* the download thread is running */
 int pn_dl_count(void); /* downloads queued or running */
 int pn_dl_waiting(void); /* downloads queued and not running */
 unsigned pn_dl_gen(
@@ -123,7 +149,7 @@ unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
 /* KB free on the file system of path (common.h m1_free_kb). The Downloads page's storage line. */
 #define pn_free_kb m1_free_kb
 
-/* ---- Search (docs/modules/podcasts.md "Search"). One worker at a time, never beside a refresh or a download (the page pauses the downloads first, as for a refresh). All of these run on the UI thread; the worker only
+/* ---- Search (docs/modules/podcasts.md "Search"). One job at a time, never beside a refresh (a download goes on). All of these run on the UI thread; the worker only
  * writes the record they read. The store's country is the Podcast Region (patch/pcregion.h): the search puts pcregion_code() after PN_SEARCH_URL's "country=", then "&term=". */
 #define PN_SEARCH_URL "https://itunes.apple.com/search?media=podcast&entity=podcast&limit=25&country="
 #define PN_LOOKUP_URL "https://itunes.apple.com/lookup?id="
@@ -140,8 +166,6 @@ int pn_classify(const char *text, char *id, unsigned size);
 /* Start the search for the UTF-8 term: the guards, the old thumbnails removed, one worker (the query, then the artwork of each result one by one). 0 when it runs; PN_BUSY when a worker runs (the page waits and asks again). */
 int pn_search(const char *term);
 int pn_job_busy(void); /* a search or preview worker is running */
-/* The options every request of ours sets on a libcurl easy handle (redirect hops, connect and total time-outs in seconds): see patch/pcnet.c. */
-void pn_easy_net(void *h, int redirs, int connect_s, int total_s);
 int pn_search_state(
     void); /* PN_S_*: the query runs / its answer is in and the artwork follows / the worker has ended */
 int pn_search_code(
@@ -190,7 +214,7 @@ int pn_chart_thumb(int kind, int i, char *path,
 int pn_chart_pending(int kind); /* rows of a held chart whose artwork has not been tried */
 void pn_chart_clean(void); /* remove the artwork files and forget that any was tried (the answers stay) */
 
-/* ---- Find Cover & Lyrics (docs/modules/onlineart.md): album covers from the iTunes Search API then Deezer, lyrics from LRCLIB. One worker at a time, never beside a refresh or a download (the page pauses the downloads first);
+/* ---- Find Cover & Lyrics (docs/modules/onlineart.md): album covers from the iTunes Search API then Deezer, lyrics from LRCLIB. One job at a time, never beside a refresh (a download goes on);
  * the same guards, libcurl options and thread rules as the search. All of these run on the UI thread; the worker only writes the record they read. */
 #define PN_ART_MAX 12 /* covers offered: iTunes' first (at most PN_ART_ITUNES_MAX), Deezer's after them */
 #define PN_ART_ITUNES_MAX 6
@@ -276,12 +300,13 @@ void pn_art_clean(
     void); /* remove the thumbnails, the larger picture and the held lyrics, forget the results (no worker must run) */
 
 /* ---- Software Update (docs/modules/update.md): the newest release of the project from GitHub, downloaded to the card as update.bin for stock's own TF card update. Two jobs of the one worker slot (never beside
- * another job; the page pauses the Podcasts downloads first). All of these run on the UI thread; the worker only writes the record they read. Cancel is pn_cancel(). */
+ * another job; the Podcasts downloads go on). All of these run on the UI thread; the worker only writes the record they read. Cancel is pn_cancel(PN_K_UPDATE). */
 #define PN_UP_DIR "/mnt/mmc"
 #define PN_UP_FILE PN_UP_DIR "/update.bin" /* where stock's TF card update looks */
 #define PN_UP_PART PN_UP_FILE ".part" /* the download, until it is checked */
 #define PN_UP_NEED_KB \
     112640u /* free on the card before a download starts: 110 MB (the package is about 55 MB, and the one it replaces stays until the rename) */
+#define PN_UP_LOC 256 /* the longest redirect address the check reads the tag from; a longer one is no release news */
 #define PN_UP_CAP 134217728u /* a package larger than this (128 MB) is refused while it downloads */
 
 enum {
@@ -332,8 +357,8 @@ void pn_up_reset(void);
 
 enum { PN_E_IDLE = 0, PN_E_RUNNING = 1, PN_E_DONE = 2, PN_E_FAILED = 3 };
 
-/* See All (docs/modules/podcasts.md "All episodes"): the show's feed fetched again with every item kept, into its .archive. pn_arch_start: the guards, then the worker (0 when it runs; PN_BUSY while another job or a
- * download runs, the page pauses the downloads and asks again; PN_NOFEED for a show with no feed address). State: PN_AR_*, of the show pn_arch_hash() (pc_show_t.hash); after a failure pn_arch_code() is the PN_* why. pn_arch_reset forgets a
+/* See All (docs/modules/podcasts.md "All episodes"): the show's feed fetched again with every item kept, into its .archive. pn_arch_start: the guards, then the worker (0 when it runs; PN_BUSY while another job
+ * runs, the page asks again; PN_NOFEED for a show with no feed address). State: PN_AR_*, of the show pn_arch_hash() (pc_show_t.hash); after a failure pn_arch_code() is the PN_* why. pn_arch_reset forgets a
  * finished job (nothing while one runs). A finished job bumps pn_gen. */
 enum { PN_AR_IDLE = 0, PN_AR_RUNNING = 1, PN_AR_DONE = 2, PN_AR_FAILED = 3 };
 int pn_arch_start(const char *root, const pc_show_t *s);
