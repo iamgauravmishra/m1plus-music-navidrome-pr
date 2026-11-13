@@ -565,6 +565,7 @@ def page_tests(expect, cover_asset):
     m.call(open_, count=2000000)
     expect(any(c[0] == 'widget_set_text_utf8' and 'Update Local Music' in c[2] for c in m.calls), 'no artists says so')
     expect(m.props.get((m.lv, 'sensitive')) == 0 and m.props.get((m.widgets['label_status'], 'visible')) == 1 and vis(m, 'sg_rail')[0] == 0, 'the empty list is hidden, the message shown, no rail')
+    expect(('widget_move', m.widgets['label_status'], 10, 235) in m.calls, 'the title is hidden with the list: the message is centred in the 400 px under the navbar (y 235, 30 px high)')
     for gone in ('artists_scrollview', 'view_grid', 'sg_rail', 'label_hdr', 'label_row_title', 'sg_bubble_letter', 'artists_listview'):
         m = artists_machine(); del m.widgets[gone]
         expect(m.call(open_, count=2000000) == 0xffffffff and 'navigator_back' in m.names(), f'an Artists asset without {gone} closes')
@@ -1556,6 +1557,9 @@ def source_tests(ctx):
     m.call(open_src, a0=src, count=20000000)
     expect(vis(m, 'ar_spin')[0] == 1 and vis(m, 'label_status')[0] == 0 and ('timer_add', PSYMS['ls_spin_tick'], 250) in m.calls and vis(m, 'artists_listview')[0] == 1 and vis(m, 'sg_rail')[0] == 0,
            'loading: one spinner on its timer, no status line, the title block shows, no rail')
+    room = lambda h: 102 + (450 - 102 - h) // 2   # the room under the navbar (50) and the large title (SG_TITLE_H 52) the source's page keeps: patch/libsrc.c ls_room
+    expect(('widget_move', m.widgets['ar_spin'], 153, room(14)) in m.calls and ('widget_move', m.widgets['label_status'], 10, room(30)) in m.calls,
+           'the spinner and the status line are centred in the room under the large title')
     m.fake_ar_names, m.fake_ar_state, m.fake_ar_gen = names, 0, 2
     m.call(PSYMS['ar_on_gen'], count=20000000)
     expect(vis(m, 'ar_spin')[0] == 0 and vis(m, 'label_status')[0] == 0 and shown(m) == want, f'the artists arrive: the spinner goes, the rows show ({shown(m)})')

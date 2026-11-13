@@ -600,6 +600,8 @@ static void ar_load(int keep) {
     m1_show(ar.list,
             ar.count != 0 ||
                 ar.src != (const lib_src_t *)0); /* (a source's page keeps the large title when it has no rows) */
+    ls_room(ar.status, ar.spin,
+            LS_ROOM_NAV + (ar.src ? SG_TITLE_H : 0)); /* (under the title the source's page keeps) */
     m1_show(ar.status, ar.count == 0 && !(st == LS_ST_LOADING && ar.spin));
     if (!ar.count) widget_set_tr_text(ar.status, ar.src ? ls_empty_key(st, "No artists") : "Update Local Music first");
     ls_spin(ar.spin, st == LS_ST_LOADING && ar.count == 0 && ar.spin != (void *)0);

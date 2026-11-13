@@ -73,7 +73,6 @@
 #define ROW LIST_ROW_H
 #define SG_MARK_UP \
     1 /* a source row's marks sit 1 px above the grey line's box centre: that box centres the font's whole line, and the letters' own middle (cap height) is higher */
-#define SG_WIN_H 450 /* the window's height (the spinner is centred in it) */
 #define SG_W 320 /* the content's width: the list_view's (the scroll_view clips at 310) */
 #define SG_AHEAD 2 /* rows loaded beyond the view in the scroll direction */
 #if GRID_TILES < (GRID_VIEW_H / LIST_ROW_H) + 2 + 2 + 2
@@ -880,10 +879,13 @@ static unsigned sg_sig(void *rec, unsigned key, unsigned rank) {
 
 static int sg_on_gen(const void *unused);
 
-/* The one loading spinner (patch/libsrc.c ls_spin): centred in the window, a playlist's where its Play pill will be (the header's Play pill and cover are hidden while its tracks are on their way). */
+/* The one loading spinner (patch/libsrc.c ls_spin): centred in the room under the large title (the rule of ls_room, in view_grid's coordinates: the spinner is its child, 50 px under the window's top), a playlist's where its Play pill will be (the header's Play pill and cover are hidden while its tracks are on their way). */
 static void sg_spinner(int on) {
     if (!sg.spin) return;
-    if (on) widget_move(sg.spin, (SG_W - 14) / 2, sg.head ? PH_BTN_Y + (AH_BTN_H - 14) / 2 : (SG_WIN_H - 14) / 2);
+    if (on && sg.head)
+        widget_move(sg.spin, (SG_W - 14) / 2, PH_BTN_Y + (AH_BTN_H - 14) / 2);
+    else if (on)
+        widget_move(sg.spin, (SG_W - 14) / 2, SG_TITLE_H + (450 - LS_ROOM_NAV - SG_TITLE_H - 14) / 2);
     ls_spin(sg.spin, on);
 }
 

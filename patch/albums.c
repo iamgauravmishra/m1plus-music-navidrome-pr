@@ -1106,6 +1106,11 @@ static void al_empty(void) {
     if (al.src && !al.count && al.src->state)
         st = al.src->state(al.src, LS_ALBUMS, al.artist_row ? deque_at(al.artist_row, 0) : (void *)0);
     m1_show(al.view, al.src != (const lib_src_t *)0 && !al.count);
+    ls_room(al.status, al.spin,
+            LS_ROOM_NAV + (!al.src || al.count ? 0
+                           : al.head
+                               ? AL_HEAD_END - al_gone()
+                               : SG_TITLE_H)); /* (under the title, or the artist's header, the source's page keeps) */
     m1_show(al.status, !(st == LS_ST_LOADING && al.spin));
     ls_spin(al.spin, st == LS_ST_LOADING && al.spin != (void *)0);
     if (al.az_ok) m1_show(al.az.rail, 0), m1_show(al.az.bubble, 0); /* (nothing to index) */

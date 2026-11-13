@@ -2002,6 +2002,8 @@ def src_tests(ctx):
         m.call(OPEN, a0=src, a1=which, a2=m.cstr(title), count=900000000)
         expect(m.fake['states'][:1] == [(which, 0)] and vis(m, 'sg_spin')[0] == 1 and vis(m, 'label_status')[0] == 0 and vis(m, 'btn_play')[0] == 0 and vis(m, 'btn_shuffle')[0] == 0 and vis(m, 'sg_foot')[0] == 0,
                f'{title} loading: asked src->state({which}, NULL), one spinner, no pills, no footer ({m.fake["states"][:2]})')
+        mv = [c[2:] for c in m.calls if c[0] == 'widget_move' and c[1] == m.widgets['sg_spin']]
+        expect(mv[-1:] == [(153, 219)], f'{title} loading: the spinner is centred in the room under the large title, in view_grid\'s coordinates (window y 50 + 219 + 7 = 276) ({mv[-1:]})')
         m.fake['lists'][which] = src_records(m, titles); m.fake['state'] = 0; m.fake['gen'] = 2
         m.call(PSYMS['sg_on_gen'], count=900000000)
         settle(m)

@@ -2164,7 +2164,9 @@ static void pg_title(const char *key, const char *text) {
 }
 
 static void pg_empty(const char *key) {
-    widget_move(pg.status, 20, 180);
+    widget_move(pg.status, 20,
+                PG_LIST_Y +
+                    (GRID_VIEW_H - 90) / 2); /* (centred in the room under the navbar: tools/pod_ui.py room_y(90)) */
     m1_show(pg.view, 0);
     m1_show(pg.status, 1);
     widget_set_tr_text(pg.status, key);

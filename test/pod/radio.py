@@ -1043,7 +1043,7 @@ def asset_tests(ctx):
     from awtk_text import Ttf, StbText
     import pod_wrap
     st = f('label_status')
-    expect(st is not None and (st.x, st.w) == (20, 280) and st.h >= 120 and st.y + st.h // 2 == 225 and st.get('style:normal:font_size') == '18', 'the caption label: 280 px wide, 120 px tall, centred on the same line as before')
+    expect(st is not None and (st.x, st.w) == (20, 280) and st.h >= 120 and st.y + st.h // 2 == 250 and st.get('style:normal:font_size') == '18', 'the caption label: 280 px wide, 120 px tall, centred in the 400 px under the navbar')
     raw = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw')
     built = {fn[:-4]: dict(__import__('awtk_strings').load(os.path.join(raw, 'strings', fn))) for fn in sorted(os.listdir(os.path.join(raw, 'strings')))}
     font = Ttf(os.path.join(raw, 'fonts', 'default.ttf'))

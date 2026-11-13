@@ -35,6 +35,11 @@ UI_MODE = 0o744         # stock ui/*.bin mode
 UI_MTIME = 1750924035   # a stock ui/*.bin mtime (2025-06-26); fixed so added assets build deterministically
 
 
+def room_y(h, top=NAVBAR_H):
+    """The y of a block h high centred in the room under window y `top` (the navbar's bottom, or a kept large title's; patch/libsrc.c ls_room): a page's empty-state hint and its loading spinner."""
+    return top + (CLIENT_H - top - h) // 2
+
+
 def styled(w, states, prop, value):
     for st in states: w.set(f'style:{st}:{prop}', value)
 
@@ -404,9 +409,9 @@ def build_grid_page(page, toggle='list', coverflow=True, names=('albums_listview
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/albums.c / playlists.c show it while yoffset > 0
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
-    if albums or title_name:   # a source's list still loading: the one spinner, centred in the content area (patch/libsrc.c ls_spin)
-        root.children.append(hidden(wf_image((title_name or 'al_title')[:2] + '_spin', (SCREEN_W - WF_SPIN_PX) // 2, (CLIENT_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))
+    root.children.append(hidden(label('label_status', 10, room_y(30), SCREEN_W - 20, 30, '', 20, HINT_RGB)))
+    if albums or title_name:   # a source's list still loading: the one spinner, centred in the room under the navbar here and under the large title by the payload (patch/libsrc.c ls_spin)
+        root.children.append(hidden(wf_image((title_name or 'al_title')[:2] + '_spin', (SCREEN_W - WF_SPIN_PX) // 2, room_y(WF_SPIN_PX), WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))
     # The two modes' text styles (patch/albums.c reads them with widget_prepare_text_style; never shown)
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB),
                                    ('label_grid_title', GRID_ALBUM_PX, INK_RGB), ('label_grid_sub', GRID_ARTIST_PX, SUB_RGB)))
@@ -479,7 +484,7 @@ def build_podcasts_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/podcasts.c shows it while yoffset > 0 (not on the Show level, which paints a fade in the page's colour)
-    status = hidden(label('label_status', 20, 180, SCREEN_W - 40, 90, '', 18, HINT_RGB))
+    status = hidden(label('label_status', 20, room_y(90), SCREEN_W - 40, 90, '', 18, HINT_RGB))
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB)))
@@ -1098,8 +1103,8 @@ def build_artists_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/artists.c shows it while yoffset > 0 (at rest it would darken the large title)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
-    root.children.append(hidden(wf_image('ar_spin', (SCREEN_W - WF_SPIN_PX) // 2, (CLIENT_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))   # a source's list still loading (patch/libsrc.c ls_spin)
+    root.children.append(hidden(label('label_status', 10, room_y(30), SCREEN_W - 20, 30, '', 20, HINT_RGB)))
+    root.children.append(hidden(wf_image('ar_spin', (SCREEN_W - WF_SPIN_PX) // 2, room_y(WF_SPIN_PX), WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default')))   # a source's list still loading (patch/libsrc.c ls_spin)
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB),))   # the row text style (the stock srlabel_leftwhite21_style's 21 px white)
     root.children.extend(azlist_labels())
     root.children.extend(azlist_rail())
@@ -1251,12 +1256,12 @@ def build_songs_page(page):
     pills, ptext = play_header(o['PH_BTN_Y'])
     grid.children = [title, hname, sg_pill('btn_play', o['SG_PILL_X0'], o['SG_PILL_Y'], 'Play', 'sg_play', down=SG_PILL_PRESS_RGB),
                      sg_pill('btn_shuffle', o['SG_PILL_X1'], o['SG_PILL_Y'], 'Shuffle', 'sg_shuffle', down=SG_PILL_PRESS_RGB), *pills, foot,
-                     hidden(wf_image('sg_spin', (SCREEN_W - WF_SPIN_PX) // 2, (CLIENT_H - WF_SPIN_PX) // 2, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default'))]   # a source's loading spinner (the payload places, shows and turns it)
+                     hidden(wf_image('sg_spin', (SCREEN_W - WF_SPIN_PX) // 2, room_y(WF_SPIN_PX, NAVBAR_H + o['SG_TITLE_H']) - NAVBAR_H, WF_SPIN_PX, WF_SPIN_PX, 'wf_spin0', 'default'))]   # a source's loading spinner (the payload places, shows and turns it)
     root.children.append(ptext)
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/songs.c shows it while yoffset > 0 (at rest it would darken the large title)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
+    root.children.append(hidden(label('label_status', 10, room_y(30), SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB),
                                    ('label_row_dim', LIST_TITLE_PX, '#7A7A7A'), ('label_row_subdim', LIST_SUB_PX, '#7A7A7A'),   # a source's rows that cannot play
                                    ('label_grid_title', GRID_ALBUM_PX, INK_RGB), ('label_grid_sub', GRID_ARTIST_PX, SUB_RGB)))   # the last two: Recently Added's album grid
@@ -1342,7 +1347,7 @@ def build_album_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(play_text('ab_play_text'))   # the pill's text style and its translated text; the payload paints the text over the pill
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
+    root.children.append(hidden(label('label_status', 10, room_y(30), SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children += style_labels(AB_STYLES)
     root.children.extend(album_navbar(page))   # the glass controls paint and take touches over the list
     root.children.extend(view_sort_card(sort_keys=('Name',) * len(VS_SORT_KEYS), act_keys=('Download Album', 'Select'), act_glyphs=('pod_ic_vsdownload', 'pod_ic_vsselect')))   # a source's "..." card (patch/albumpage.c offers the first row alone: Download Album); hidden on the library's page
@@ -1440,7 +1445,7 @@ def build_queue_page(page):
     view.children = kids
     sv.children.append(view)
     root.children.append(lv)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
+    root.children.append(hidden(label('label_status', 10, room_y(30), SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB)))
     root.children.extend(queue_navbar(page))   # last: the glass controls paint and take touches over the list
     return root
@@ -2400,7 +2405,7 @@ def build_folders_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/folders.c shows it while yoffset > 0 (at rest it would darken the large title)
-    root.children.append(hidden(label('label_status', 10, 210, SCREEN_W - 20, 30, '', 20, HINT_RGB)))
+    root.children.append(hidden(label('label_status', 10, room_y(30), SCREEN_W - 20, 30, '', 20, HINT_RGB)))
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB),))
     root.children.append(select_bar('sg_bar', 'sg_bar_line', [('sg_add', o['SG_PILL_X0'], 'Add to Playlist', 'sg_listplus', o['SG_BAR_PILL_W']),
                                                               ('sg_del', o['SG_BAR_PILL_X1'], 'Delete', 'sg_trash', o['SG_BAR_PILL_W'])]))
@@ -2448,7 +2453,7 @@ def build_radio_page(page):
     sv.children.append(grid)
     root.children.append(lv)
     root.children.append(nav_fade(shown=False))   # patch/radiopage.c shows it while yoffset > 0 (at rest it would darken the large title)
-    status = hidden(label('label_status', 20, 165, SCREEN_W - 40, 120, '', 18, HINT_RGB))   # the captions are grey, centred on y 225; up to four lines of 280 px (the payload sets line_wrap and word_wrap)
+    status = hidden(label('label_status', 20, room_y(120), SCREEN_W - 40, 120, '', 18, HINT_RGB))   # the captions are grey, centred in the room under the navbar (room_y); up to four lines of 280 px (the payload sets line_wrap and word_wrap)
     styled(status, ('normal',), 'text_align_v', 'middle')
     root.children.append(status)
     root.children += style_labels((('label_row_title', LIST_TITLE_PX, INK_RGB), ('label_row_sub', LIST_SUB_PX, SUB_RGB),
