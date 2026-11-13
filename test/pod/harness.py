@@ -1018,6 +1018,9 @@ class Machine:
             self.calls.append(('dmrSendPlayMode', a0))
         elif name == 'mclGetOutputWay':
             ret = getattr(self, 'out_way', 0)   # 0 the jacks, 1 Bluetooth, 2 USB audio (a test sets m.out_way)
+        elif name in ('mclGetGaplessMode', 'mclGetJumpFolder', 'mclSetJumpFolder', 'mclGetGainMode', 'mclSetGainMode', 'mclGetReplayGain', 'mclSetReplayGain', 'mclGetfilter', 'mclSetFilter', 'mclGetDsdMode', 'mclSetDsdMode',
+                      'mclSetLineOut', 'save_stop_player', 'save_start_player', 'set_devicevolume'):
+            pass   # the Playback Settings page's stock calls (patch/playset.c): answered 0 and not recorded; test/pod/playset.py runs the getters for real and records the setters
         elif name == 'write_int_config':
             self.calls.append(('write_int_config', a0, self.read_cstr(a1), self.read_cstr(a2)))
             ret = getattr(self, 'config_ret', 0)   # toolsWriteConfig's: 0 done, -1 config.ini could not be opened (a test sets m.config_ret)

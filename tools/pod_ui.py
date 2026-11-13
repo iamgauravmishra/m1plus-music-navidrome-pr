@@ -2045,6 +2045,53 @@ def cards_brightness():
     return v
 
 
+VOL_NAMES = {'maxvol': ('label_vol', 'vol_slider', 100), 'bootvol': ('label_vol', 'vol_slider', 100), 'balance': ('label_balance', 'slider_balance', 20)}   # stock's widget names of the three loudness pages (label, slider) and the slider's top
+VOL_BTN_W, VOL_VALUE_PX, VOL_BTN_PX = 46, 22, 26   # the - and + buttons' width (a touch target; the card is 300 wide), the value's text size, the buttons' text size
+VOL_BTN_TEXTS = {'maxvol': ('−', '+'), 'bootvol': ('−', '+'), 'balance': ('L', 'R')}   # the buttons' texts: a step down or up; Channel Balance's step toward the left or the right (shown as they are in every language)
+
+
+def cards_volcard(card):
+    """A card of the Playback Settings loudness pages (patch/playset.c ps_vol_opened), one row high with the single piece, holding stock's own widgets by stock's names because stock's handlers and refresh are bound to
+    them and look them up by name: part 'value' the label (label_vol / label_balance, white, centred: stock's refresh writes "VOL: 80" or "L3" into it; on Max Volume and Default Volume it is hidden and insensitive, and pod_vsnum, the same look, shows the number alone), part 'slider' the buttons btn_dec / btn_add (stock's click
+    handlers) either side of the slider (vol_slider / slider_balance, 0 .. 100 or 0 .. 20: stock's value-changing handler), the Display page's slider look (pod_sl_thumb, drop_bg, drop_fg)."""
+    import pod_settings as ST
+    label_name, slider_name, top = VOL_NAMES[card.kind]
+    v = Widget('view', 0, 0, ST.LIST_W, ST.ROW_H, [('name', 'pod_vsval' if card.part == 'value' else 'pod_vsctl')])
+    for st in STATES:
+        styled(v, (st,), 'bg_color', '#00000000')
+        styled(v, (st,), 'bg_image', ST.piece_images('single')[0])
+        styled(v, (st,), 'bg_image_draw_type', 'default')
+    if card.part == 'value':
+        hidden = card.kind != 'balance'   # Max Volume, Default Volume: stock's label (it writes "VOL: 80") is kept for stock's refresh but hidden; ours (pod_vsnum) shows the number
+        for name, props in ((label_name, [('visible', 'false')] if hidden else []),) + ((('pod_vsnum', []),) if hidden else ()):
+            lab = Widget('label', ST.CM, 0, ST.CARD_W, ST.ROW_H, [('name', name), ('text', ''), ('sensitive', 'false')] + props)
+            for st in ('normal', 'disable', 'focused'):
+                styled(lab, (st,), 'font_size', str(VOL_VALUE_PX))
+                styled(lab, (st,), 'text_color', '#FFFFFF')
+                styled(lab, (st,), 'text_align_h', 'center')
+                styled(lab, (st,), 'text_align_v', 'middle')
+            v.children.append(lab)
+        return v
+    left, right = VOL_BTN_TEXTS[card.kind]
+    sx = ST.CM + 4 + VOL_BTN_W
+    for name, x, text in (('btn_dec', ST.CM + 4, left), ('btn_add', ST.CM + ST.CARD_W - 4 - VOL_BTN_W, right)):
+        b = Widget('button', x, 3, VOL_BTN_W, ST.ROW_H - 6, [('name', name), ('text', text)])
+        for st in STATES:
+            styled(b, (st,), 'bg_color', '#00000000')
+            styled(b, (st,), 'text_color', '#8A8A8E' if st == 'pressed' else '#FFFFFF')
+            styled(b, (st,), 'font_size', str(VOL_BTN_PX))
+            styled(b, (st,), 'text_align_h', 'center')
+            styled(b, (st,), 'text_align_v', 'middle')
+        v.children.append(b)
+    s = Widget('slider', sx, 1, ST.CARD_W - 8 - 2 * VOL_BTN_W, 50, [('name', slider_name), ('max', str(top)), ('step', '1'), ('slide_with_bar', 'true'), ('bar_size', '6'), ('dragger_size', '50'), ('dragger_adapt_to_icon', 'true'), ('value', '0')])
+    for st in ('normal', 'pressed', 'over', 'disable', 'focused'):
+        styled(s, (st,), 'bg_color', '#00000000'); styled(s, (st,), 'fg_color', '#00000000')
+        styled(s, (st,), 'icon', 'pod_sl_thumb'); styled(s, (st,), 'bg_image', 'drop_bg'); styled(s, (st,), 'fg_image', 'drop_fg')
+    styled(s, ('normal',), 'round_radius', '6')
+    v.children.append(s)
+    return v
+
+
 def cards_segment():
     """The band page's Peak / Low shelf / High shelf control (patch/peqband.c): a sensitive transparent view (the payload blits the container and the selected pill in its EVT_BEFORE_PAINT and takes the touch) with the three labels pod_seg_l<k> over it
     (white; the selected one is black on its pill, set by the payload), none sensitive."""
@@ -2141,6 +2188,7 @@ def build_cards_page(page):
         elif isinstance(it, pod_pages.Segment): sv.children.append(cards_segment())
         elif isinstance(it, pod_pages.HSliders): sv.children.append(cards_hsliders())
         elif isinstance(it, pod_pages.Brightness): sv.children.append(cards_brightness())
+        elif isinstance(it, pod_pages.VolCard): sv.children.append(cards_volcard(it))
         elif isinstance(it, pod_pages.Hdr): sv.children.append(cards_text(f'pod_sec{n_hdr}', ST.HDR_LABEL_Y, ST.HDR_LABEL_H, it.text, ST.HDR_PX, ST.HDR_H)); n_hdr += 1
         elif isinstance(it, pod_pages.Note):
             sv.children.append(cards_text(f'pod_note{n_note}', ST.NOTE_LABEL_Y, ST.NOTE_LABEL_H + (it.lines - 1) * ST.WRAP_LINE, it.text, ST.NOTE_PX, ST.item_h(it), it.lines > 1)); n_note += 1

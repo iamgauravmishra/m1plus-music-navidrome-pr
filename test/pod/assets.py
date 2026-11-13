@@ -179,7 +179,7 @@ def run(ctx):
     expect(mod_icons.POD_ROWS['Cover Flow'][1] == '+coverflow' and mod_icons.NAV_VIEW['pod_nav_coverflow'] == '+coverflow',
            'the custom Cover Flow glyph on the menu row and the navbar button')
     cg = mod_icons.CARD_GLYPHS
-    expect(cg['Home Screen'] == 'house' and cg['Boot to M1+ Music'] == 'power' and cg['Developer'] == 'code' and cg['All Playback Settings'] == 'headphones'
+    expect(cg['Home Screen'] == 'house' and cg['Boot to M1+ Music'] == 'power' and cg['Developer'] == 'code' and cg['Playback Settings'] == 'headphones'
            and cg['Landscape'] == 'rotate-cw-square' and cg['Wi-Fi'] == 'wifi' and cg['Bluetooth'] == 'bluetooth',
            'card rows: Home Screen house, Boot to power, Playback headphones, Developer code, Landscape rotate, Wi-Fi, Bluetooth')
     import pod_pages

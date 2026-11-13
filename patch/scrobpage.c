@@ -202,12 +202,8 @@ static int lb_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
-static int lb_on_fg(void *ctx, void *e) {
-    (void)ctx;
-    (void)e;
-    lb_watch();
-    return RET_OK;
-}
+/* Back in front (patch/m1plus.c on_page_fg, the one EVT_WINDOW_TO_FG handler of the Library and scrobble pages). */
+void lb_on_front(void) { lb_watch(); }
 
 /* A page opens (0 the Library page, 1 ListenBrainz, 2 Last.fm): the card's scrobble.ini is read again (a computer may have changed it; only here and at an Upload
  * Scrobbles tap, never from the timer or when a page comes back in front), and an account no check has confirmed yet is asked of the service: the page's own first, the
@@ -217,7 +213,6 @@ void lb_opened(void *win, int page) {
     int had, has, bad, job, lst;
     lbs.pages |= 1 << page;
     widget_on(win, EVT_DESTROY, lb_on_destroy, (void *)(long)(1 << page));
-    widget_on(win, EVT_WINDOW_TO_FG, lb_on_fg, (void *)0);
     lb_poll();
     had = scrobup_account(was, sizeof was), bad = scrobup_invalid(), job = lbs.job,
     lst = scrobup_lastfm(lwas, sizeof lwas);

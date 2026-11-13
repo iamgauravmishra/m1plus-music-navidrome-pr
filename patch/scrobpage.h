@@ -21,6 +21,7 @@ void lb_upload_tap(void);
 /* The Library page (page 0), the ListenBrainz page (1) or the Last.fm page (2) has opened: the card's scrobble.ini is read again (and an account no check has confirmed
  * is checked, with the Wi-Fi up), and a timer runs while a job is in flight and one of the pages is up. */
 void lb_opened(void *win, int page);
+void lb_on_front(void);
 
 /* patch/m1plus.c: the pages read their rows again. */
 void pod_lb_refresh(void);

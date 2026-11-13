@@ -44,7 +44,7 @@ OBJCOPY = os.path.join(LLVM, 'llvm-objcopy')
 LD = os.path.join(LLD, 'ld.lld')
 
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
-SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'display.c', 'keyspower.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
+SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'display.c', 'keyspower.c', 'playset.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'libsrc.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'net.c', 'netfile.c', 'pcnet.c', 'podcasts.c', 'pcfind.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'charging.c', 'nextalbum.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c', 'sbnet.c', 'sbparse.c', 'sbdl.c', 'sbapi.c', 'sbsrc.c', 'ndserver.c', 'ndroot.c',
            'tidalkb.c', 'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c', 'scrobble.c', 'scrobup.c', 'scrobpage.c']
 
@@ -243,6 +243,15 @@ FUNCTIONS.update({
     'mclSetPlayPos':           ('void', 'int', 0x5d42d8),
     # the Gapless setter: stores the setting byte, and for 0 with a preload open sends {mcl-closegapless} and stores -1 in the preload state (the one cancel helper of patch/shuffle.c cancel_preload: reorders, insert, Clear)
     'mclSetGaplessMode':       ('int', 'int', 0x5d28ac),
+    # Playback settings (patch/playset.c, docs/modules/playset.md): the mcl getters and setters the stock click handlers call, and the stop / restart pair the DSD mode runs on USB audio (hooked by Internet Radio, SAVE_STOP)
+    'mclGetGaplessMode':       ('int', 'void', 0x5d44b4),
+    'mclGetJumpFolder':        ('int', 'void', 0x5d4450), 'mclSetJumpFolder': ('int', 'int', 0x5d4468),
+    'mclGetGainMode':          ('int', 'void', 0x5d44cc), 'mclSetGainMode': ('int', 'int, int', 0x5d5a4c),
+    'mclGetReplayGain':        ('int', 'void', 0x5d44e4), 'mclSetReplayGain': ('int', 'int', 0x5d292c),
+    'mclGetfilter':            ('int', 'void', 0x5d452c), 'mclSetFilter': ('int', 'int', 0x5d5b64),
+    'mclGetDsdMode':           ('int', 'void', 0x5d44fc), 'mclSetDsdMode': ('int', 'int', 0x5d29d8),
+    'mclSetLineOut':           ('int', 'int', 0x5d5e98),
+    'save_stop_player':        ('int', 'void', 0x4e2304), 'save_start_player': ('int', 'int', 0x4e23e8),
 })
 # Localisation (patch/i18n.h): the stock translation. locale_info() is the app's locale, locale_info_tr(locale, key) the
 # table lookup (the key itself when absent), widget_set_tr_text(widget, key) stores the key on the widget (the window
@@ -646,6 +655,28 @@ DATA.update({
     'FOLDER_TITLE':       (0xa0533c, None),
     'FOLDER_M3U':         (0xa0483c, None),
     'FOLDER_COVER':       (0xa05a67, 'foldercover_flag'),   # byte: stock's Folder cover switch ([PLAYSET] FOLDERCOVER; patch/folders.c reads it, docs/modules/folders.md)
+    # Playback settings (patch/playset.c, docs/modules/playset.md): stock's own words behind the rows that have no mcl getter
+    'MEMORY_PLAY':        (0xa05ac4, 'memory_play'),   # int: Memory Playback, 0 off, 1 track, 2 location ([PLAYSET] MEMORYPLAY)
+    'DIGITAL_FLAG':       (0xa05ac1, 'digital_flag'),   # byte: Digital Output ([PLAYSET] DIGITALMODE)
+    'USBVOL_MODE':        (0xa05aac, 'usbvol_mode'),   # int: USB Audio Output, 0 fixed, 1 variable ([SYSSET] USBVOLMODE)
+    # the three loudness pages (docs/modules/playset.md "Loudness pages"): stock's own words, and the entries of stock's code bound to our widgets (no symbols; the entries, the bindings and every store and call are pinned, PLAYSET_PINS)
+    'MAX_VOLUME':         (0x97cb08, 'max_volume'),   # int: Max Volume, 0 .. 100 ([PLAYSET] MAXVOLUME)
+    'BOOT_VOLUME':        (0x97cb04, 'boot_volume'),   # int: Default Volume, 0 .. 100 ([PLAYSET] BOOTVOLUME)
+    'BOOT_VOLFLAG':       (0xa05ac8, 'boot_volflag'),   # byte: Volume Memory, 1 keeps the last volume at boot ([PLAYSET] BOOTVOLFLAG)
+    'BALANCE':            (0x97cafc, 'balance'),   # int: Channel Balance, 0 .. 20, centre 10 ([PLAYSET] BALANCE)
+    'HEADSET_OUTPUT':     (0xa05a10, 'headset_output'),   # int: the output selector (2 = Bluetooth), read by stock's handlers; the tests set it
+    'VOL_REFRESH':        (0x49efec, None),   # int (window): Max Volume page: label_vol and vol_slider from max_volume
+    'VOL_SLIDER':         (0x49f24c, None),   # int (window, event): its slider's EVT_VALUE_CHANGING handler
+    'VOL_DEC':            (0x49f16c, None),   # int (window): its btn_dec click handler
+    'VOL_ADD':            (0x49f0f4, None),   # int (window): its btn_add click handler
+    'BOOT_REFRESH':       (0x49d160, None),   # int (window, mode): Default Volume page: mode 1 label_vol and vol_slider from boot_volume (mode 2 shows the switch: not used)
+    'BOOT_SLIDER':        (0x49d418, None),
+    'BOOT_DEC':           (0x49d39c, None),
+    'BOOT_ADD':           (0x49d4c8, None),
+    'BAL_REFRESH':        (0x49cb8c, None),   # int (window): Channel Balance page: label_balance and slider_balance from balance
+    'BAL_SLIDER':         (0x49cd78, None),
+    'BAL_DEC':            (0x49ce4c, None),
+    'BAL_ADD':            (0x49ccd8, None),
 })
 
 
@@ -945,6 +976,10 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_LIBRARY_PAGE {pod_pages.LIBRARY_PAGE_INDEX}')
     h.append(f'#define POD_LB_PAGE {pod_pages.LB_PAGE_INDEX}')
     h.append(f'#define POD_LF_PAGE {pod_pages.LF_PAGE_INDEX}')
+    h.append(f'#define POD_PLAYSET_PAGE {pod_pages.PLAYSET_PAGE_INDEX}')
+    h.append(f'#define POD_PSMAXVOL_PAGE {pod_pages.PSMAXVOL_PAGE_INDEX}')
+    h.append(f'#define POD_PSBOOTVOL_PAGE {pod_pages.PSBOOTVOL_PAGE_INDEX}')
+    h.append(f'#define POD_PSBAL_PAGE {pod_pages.PSBAL_PAGE_INDEX}')
     h.append(f'#define POD_FILES_PAGE {pod_pages.FILES_PAGE_INDEX}')
     h.append(f'#define POD_PULLDOWN_PAGE {pod_pages.PULLDOWN_PAGE_INDEX}')
     h.append(f'#define POD_PEQ_PAGE {pod_pages.PEQ_PAGE_INDEX}')
@@ -1221,7 +1256,7 @@ def patch_demo(raw, payload, ps, demo_path):
     patch_pulldown(patched, ps, len(payload))
     check_pins(patched, RADIO_PINS)
     patch_radio(patched, ps, len(payload))
-    check_pins(patched, LOCKROW_PINS + KEYSPOWER_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + PLAYREC_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS)   # stock code the Playlists and Songs pages call: checked, not written
+    check_pins(patched, LOCKROW_PINS + KEYSPOWER_PINS + PLAYSET_PINS + PLAYLIST_PINS + SONGS_PINS + IPOD_PINS + PODCAST_PINS + SETTINGS_PINS + TIDALKB_PINS + PINYIN_PINS + JPEG_PINS + COVER_PINS + TAPE_PINS + LYRICS_PINS + SCAN_PINS + QUERY_PINS + FONT_PINS + TEXTGAMMA_PINS + BATTERY_PINS + PLAYREC_PINS + LINEOUT_PINS + SHUFFLE_PINS + NEXTALBUM_PINS + FILETIME_PINS + PICKER_PINS + FOLDER_PINS + UPDATE_PINS + TFUPDATE_PINS + LIGHT_PINS + EQ_PINS)   # stock code the Playlists and Songs pages call: checked, not written
     for at, text in ((0x74bad8, ALBUM_SQL.replace('songtable', '%s')), (0x74ba4c, 'songtable')):   # the strings getAllAlbum fills: the payload's STOCK_ALBUM_SQL is their sprintf
         want = text.encode() + b'\0'
         check(bytes(patched[fileoff(patched, at):fileoff(patched, at) + len(want)]) == want, f'{at:#x}: not the string "{text}" the album cover map reproduces')

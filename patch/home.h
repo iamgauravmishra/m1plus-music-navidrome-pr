@@ -239,6 +239,7 @@ extern int pod_home_open(int id); /* patch/m1plus.c: a stock Home destination th
 extern void pod_page_refresh(int index); /* patch/m1plus.c: the page's values are read again */
 extern int pod_open_lock(void); /* patch/m1plus.c */
 extern int pod_open_peq(void); /* patch/m1plus.c: open_page(POD_PEQ_PAGE) */
+extern int pod_open_playset(void); /* patch/m1plus.c: open_page(POD_PLAYSET_PAGE); 0 once its window is up */
 extern int pod_open_peqlib(void); /* patch/m1plus.c: open_page(POD_PEQLIB_PAGE) */
 extern int pod_open_peqpage(void); /* patch/m1plus.c: open_page(POD_PEQP_PAGE) */
 extern int pod_confirm_code(

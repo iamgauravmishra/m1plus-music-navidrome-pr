@@ -137,14 +137,35 @@ ACT_LB = 108       # value row (Settings > Library): ListenBrainz, the account's
 ACT_SCROBUP = 109  # action row (Settings > Library): Upload Scrobbles, the card's .scrobbler.log sent to ListenBrainz now (patch/scrobpage.c lb_upload_tap)
 ACT_LF = 113       # value row (Settings > Library): Last.fm, the account's user name (Not Set, Sign-in Failed); opens the Last.fm page (arg = its page index; patch/scrobpage.c lf_row_text)
 ACT_LBAUTO = 112   # switch row (Settings > Library, a card of its own under the Scrobbling card): Auto Upload, off by default; on, the log is uploaded by itself while music plays on Wi-Fi (patch/scrobble.c scrobble_auto_toggle, /mnt/data/m1plus/scrobble-auto)
+ACT_PLAYMODE = 129    # value row (Settings > Playback Settings): Play Mode, the mode as shown (List Play, Repeat Track, Shuffle, Repeat All); opens its picker page (arg = the page index; patch/playset.c ps_playmode)
+ACT_PLAYMODESET = 130 # picker row (Play Mode): choose the mode (arg = 0 .. 3 as shown, pod_set_mode; patch/playset.c ps_playmode_set)
+ACT_GAPLESS = 133     # switch row (Playback Settings): Gapless, stock's switch (mclSetGaplessMode, saved as [PLAYSET] GAPLESS; patch/playset.c ps_gapless_toggle)
+ACT_MEMPLAY = 134     # value row (Playback Settings): Memory Playback, stock's word memory_play (Off, Track, Location); opens its picker page (patch/playset.c ps_memplay)
+ACT_MEMPLAYSET = 131  # picker row (Memory Playback): choose the word (arg = 0 .. 2; patch/playset.c ps_memplay_set)
+ACT_FOLDERSKIP = 132  # switch row (Playback Settings): Folder Skip, stock's switch (mclSetJumpFolder, saved as [PLAYSET] JUMPFOLDER; patch/playset.c ps_folderskip_toggle)
+ACT_GAIN = 114        # value row (Playback Settings): Gain, stock's gain mode (Low, High); dimmed and inert while Line Out is on; opens its picker page (patch/playset.c ps_gain)
+ACT_GAINSET = 115     # picker row (Gain): choose the mode (arg = 0 low, 1 high; patch/playset.c ps_gain_set)
+ACT_REPLAYGAIN = 116  # value row (Playback Settings): ReplayGain (Off, Track, Album); opens its picker page (patch/playset.c ps_replaygain)
+ACT_RGSET = 117       # picker row (ReplayGain): choose the mode (arg = 0 .. 2; patch/playset.c ps_replaygain_set)
+ACT_FILTERSET = 118   # picker row (Digital Filter, opened by a plain link row): choose the filter (arg = 0 .. 7, stock's order; patch/playset.c ps_filter_set)
+ACT_DSD = 119         # value row (Playback Settings): DSD Output Mode (D2P, DOP, Native); opens its picker page (patch/playset.c ps_dsd)
+ACT_DSDSET = 120      # picker row (DSD Output Mode): choose the mode (arg = 0 .. 2; patch/playset.c ps_dsd_set)
+ACT_DIGITAL = 121     # switch row (Playback Settings): Digital Output, stock's switch (mclSetLineOut, saved as [PLAYSET] DIGITALMODE; patch/playset.c ps_digital_toggle)
+ACT_USBVOL = 122      # value row (Playback Settings): USB Volume, stock's usbvol_mode (Fixed, Variable); opens its picker page (patch/playset.c ps_usbvol)
+ACT_USBVOLSET = 123   # picker row (USB Volume): choose the mode (arg = 0 fixed, 1 variable; patch/playset.c ps_usbvol_set)
+ACT_FOLDERCOVER = 124 # switch row (Settings > Library): Folder Album Cover, stock's switch (the byte foldercover_flag saved as [PLAYSET] FOLDERCOVER; patch/playset.c ps_foldercover_toggle)
+ACT_MAXVOL = 125     # value row (Playback Settings): Max Volume, stock's max_volume (the number); opens its slider page (patch/playset.c ps_value_text)
+ACT_BOOTVOL = 126    # value row (Playback Settings): Default Volume, Memory when boot_volflag is 1, else boot_volume; opens its page
+ACT_BALANCE = 127    # value row (Playback Settings): Channel Balance, stock's balance as its page writes it (L3, 0, R2); opens its slider page
+ACT_BOOTMEM = 128    # switch row (the Default Volume page): Volume Memory, stock's byte boot_volflag (saved as [PLAYSET] BOOTVOLFLAG; patch/playset.c ps_bootmem_toggle)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
-SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_SCROBBLE, ACT_LBAUTO)
+SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_SCROBBLE, ACT_LBAUTO, ACT_GAPLESS, ACT_FOLDERSKIP, ACT_DIGITAL, ACT_FOLDERCOVER, ACT_BOOTMEM)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT, ACT_SCROBUP)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
@@ -214,6 +235,13 @@ class Segment:
 
 class Brightness:
     """The Display page's brightness card: a card of one row's height holding a stock slider between a small and a large sun (stock's own handlers are bound to it: patch/display.c)."""
+
+
+class VolCard:
+    """One of the three Playback Settings loudness pages' cards (patch/playset.c, docs/modules/playset.md "Loudness pages"), a card of one row's height holding stock's own widgets by stock's names: part 'value'
+    the label stock's refresh writes (label_vol, "VOL: 80"; label_balance, "L3"), part 'slider' the - and + buttons (btn_dec, btn_add) and the slider (vol_slider, slider_balance) that stock's own handlers are bound to.
+    kind: 'maxvol', 'bootvol' or 'balance'."""
+    def __init__(self, kind, part): self.kind, self.part = kind, part
 
 
 class HSliders:
@@ -302,7 +330,10 @@ KEYLOCK_PAGE_INDEX = 74
 SHUTDOWN_PAGE_INDEX = 75
 PCFIND_PAGE_INDEX = 76    # the Podcasts page's search inside one show
 LB_PAGE_INDEX = 77        # Settings > Library > ListenBrainz
-LF_PAGE_INDEX = 78        # Settings > Library > Last.fm (last)
+LF_PAGE_INDEX = 78        # Settings > Library > Last.fm
+PLAYSET_PAGE_INDEX = 79   # Settings > Playback Settings, then its seven pickers (Play Mode, Memory Playback, Gain, ReplayGain, Digital Filter, DSD Output Mode, USB Volume)
+PSMODE_PAGE_INDEX, PSMEM_PAGE_INDEX, PSGAIN_PAGE_INDEX, PSRG_PAGE_INDEX, PSFILTER_PAGE_INDEX, PSDSD_PAGE_INDEX, PSUSB_PAGE_INDEX = range(80, 87)
+PSMAXVOL_PAGE_INDEX, PSBOOTVOL_PAGE_INDEX, PSBAL_PAGE_INDEX = range(87, 90)   # ... and the three loudness pages (Max Volume, Default Volume, Channel Balance) (last)
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -426,8 +457,7 @@ SETTINGS_PAGE = Page('m1plus_settings', 'm1plus_settings_page', 'Settings', layo
     Row('Now Playing', ACT_PAGE, NPSET_PAGE_INDEX),
     Hdr('Playback'),
     Row('EQ', ACT_PEQ, PEQ_PAGE_INDEX),
-    Row('Continue Playing', ACT_NEXTALBUM, NEXTALBUM_PAGE_INDEX),
-    Row('All Playback Settings', ACT_HOME, HOME_PLAYSET),
+    Row('Playback Settings', ACT_PAGE, PLAYSET_PAGE_INDEX),
     Hdr('System'),
     Row('Display', ACT_PAGE, DISPLAY_PAGE_INDEX),
     Row('Buttons & Power', ACT_PAGE, KEYSPOWER_PAGE_INDEX),
@@ -643,6 +673,8 @@ LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Index Rail', ACT_AZRAIL),
     Row('Section Headers', ACT_AZHEAD),
     Note('Songs, Artists, Albums and Radio lists'),
+    Hdr('Folders'),
+    Row('Folder Album Cover', ACT_FOLDERCOVER),
     Hdr('Cover Flow'),
     Row('Landscape', ACT_LANDSCAPE),
     Row('Volume Buttons', ACT_VOLKEYS),
@@ -836,6 +868,47 @@ KEYLOCK_PAGE = Page('m1plus_keylock', 'm1plus_keylock_page', 'Button Lock', layo
     Note('Only effective when the screen is off'),
 ])
 SHUTDOWN_PAGE = Page('m1plus_shutdown', 'm1plus_shutdown_page', 'Auto-Shutdown', layout=[Row(v, ACT_SHUTDOWNSET, i) for i, v in enumerate(SHUTDOWN_VALUES)])
+# Settings > Playback Settings (patch/playset.c, docs/modules/playset.md): stock's All Playback Settings list as three cards, every state stock's own. Playback holds Play Mode (a value row and its picker), Gapless and Folder Skip
+# (stock's switches), Memory Playback (a value row and its picker) and Continue Playing (ours, patch/nextalbum.c); Volume holds Gain and ReplayGain (a value row and a picker each); Output holds Digital Filter (a link row: its eight names
+# do not fit a value), DSD Output Mode and USB Volume (value rows and pickers) and Digital Output (stock's switch); Volume also holds Max Volume, Default Volume and Channel Balance (value rows opening the three loudness pages below).
+PLAYMODE_VALUES = ('List Play', 'Repeat Track', 'Shuffle', 'Repeat All')   # the mode as shown (patch/shuffle.c pod_play_mode): stock's 0 and 1, our Shuffle request (stock's own mode 2 never runs) and stock's 3
+MEMPLAY_VALUES = ('Off', 'Track', 'Location')       # stock's memory_play 0 .. 2
+GAIN_VALUES = ('Low', 'High')                       # stock's gain mode 0, 1
+REPLAYGAIN_VALUES = ('Off', 'Track', 'Album')       # stock's replaygain 0 .. 2 (stock's English for Track is "Audio")
+FILTER_VALUES = ('Minimum Phase', 'Linear Fast Apodizing', 'Linear Fast', 'Linear Fast Low Ripple', 'Linear Slow', 'Minimum Fast', 'Minimum Slow', 'Minimum Low Dispersion')   # stock's filters 0 .. 7, shortened (docs/modules/playset.md)
+DSD_VALUES = ('D2P', 'DOP', 'Native')               # stock's dsd mode 0 .. 2
+USBVOL_VALUES = ('Fixed', 'Variable')               # stock's usbvol_mode 0, 1 (Volume Fixed, Volume Variable)
+MAXVOL_VALUES, BOOTVOL_VALUES, BALANCE_VALUES = ('100',), ('Memory', '100'), ('L10', 'R10')   # the loudness rows' longest texts (patch/playset.c ps_value_text: the numbers and L3 / R2 are the same in every language; Memory is a key)
+PLAYSET_PAGE = Page('m1plus_playset', 'm1plus_playset_page', 'Playback', layout=[
+    Row('Play Mode', ACT_PLAYMODE, PSMODE_PAGE_INDEX),
+    Row('Gapless', ACT_GAPLESS),
+    Row('Resume', ACT_MEMPLAY, PSMEM_PAGE_INDEX),
+    Row('Folder Skip', ACT_FOLDERSKIP),
+    Row('Continue Playing', ACT_NEXTALBUM, NEXTALBUM_PAGE_INDEX),
+    Hdr('Volume'),
+    Row('Gain', ACT_GAIN, PSGAIN_PAGE_INDEX),
+    Row('Max Volume', ACT_MAXVOL, PSMAXVOL_PAGE_INDEX),
+    Row('Default Volume', ACT_BOOTVOL, PSBOOTVOL_PAGE_INDEX),
+    Row('Channel Balance', ACT_BALANCE, PSBAL_PAGE_INDEX),
+    Row('ReplayGain', ACT_REPLAYGAIN, PSRG_PAGE_INDEX),
+    Hdr('Output'),
+    Row('Digital Filter', ACT_PAGE, PSFILTER_PAGE_INDEX),
+    Row('DSD Output Mode', ACT_DSD, PSDSD_PAGE_INDEX),
+    Row('USB Volume', ACT_USBVOL, PSUSB_PAGE_INDEX),
+    Row('Digital Output', ACT_DIGITAL),
+])
+PSMODE_PAGE = Page('m1plus_psmode', 'm1plus_psmode_page', 'Play Mode', layout=[Row(v, ACT_PLAYMODESET, i) for i, v in enumerate(PLAYMODE_VALUES)])
+PSMEM_PAGE = Page('m1plus_psmem', 'm1plus_psmem_page', 'Resume', layout=[Row(v, ACT_MEMPLAYSET, i) for i, v in enumerate(MEMPLAY_VALUES)])
+PSGAIN_PAGE = Page('m1plus_psgain', 'm1plus_psgain_page', 'Gain', layout=[Row(v, ACT_GAINSET, i) for i, v in enumerate(GAIN_VALUES)])
+PSRG_PAGE = Page('m1plus_psrg', 'm1plus_psrg_page', 'ReplayGain', layout=[Row(v, ACT_RGSET, i) for i, v in enumerate(REPLAYGAIN_VALUES)])
+PSFILTER_PAGE = Page('m1plus_psfilter', 'm1plus_psfilter_page', 'Digital Filter', layout=[Row(v, ACT_FILTERSET, i) for i, v in enumerate(FILTER_VALUES)])
+PSDSD_PAGE = Page('m1plus_psdsd', 'm1plus_psdsd_page', 'DSD Output Mode', layout=[Row(v, ACT_DSDSET, i) for i, v in enumerate(DSD_VALUES)])
+PSUSB_PAGE = Page('m1plus_psusb', 'm1plus_psusb_page', 'USB Volume', layout=[Row(v, ACT_USBVOLSET, i) for i, v in enumerate(USBVOL_VALUES)])
+# The three loudness pages: stock's own widgets by stock's names, stock's own handlers bound to them (patch/playset.c ps_vol_opened). Max Volume and Channel Balance: the value card (stock's label) over the control card (- , slider, +;
+# Channel Balance's buttons say L and R: a step toward the left or the right). Default Volume: the Volume Memory switch, then the same two cards, dimmed and inert while the switch is on (stock hides its slider view).
+PSMAXVOL_PAGE = Page('m1plus_psmaxvol', 'm1plus_psmaxvol_page', 'Max Volume', layout=[VolCard('maxvol', 'value'), GAP, VolCard('maxvol', 'slider')])
+PSBOOTVOL_PAGE = Page('m1plus_psbootvol', 'm1plus_psbootvol_page', 'Default Volume', layout=[Row('Volume Memory', ACT_BOOTMEM), GAP, VolCard('bootvol', 'value'), GAP, VolCard('bootvol', 'slider')])
+PSBAL_PAGE = Page('m1plus_psbal', 'm1plus_psbal_page', 'Channel Balance', layout=[VolCard('balance', 'value'), GAP, VolCard('balance', 'slider')])
 NEXTALBUM_PAGE = Page('m1plus_nextalbum', 'm1plus_nextalbum_page', 'Continue Playing', layout=[Row('Off', ACT_NASET, 0), Row('Next Albums', ACT_NASET, 1),
                                                                                         Note('Plays the next album in the order of Albums, the artist or Cover Flow', lines=2)])
 
@@ -984,7 +1057,7 @@ LF_PAGE = Page('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm', layout=[
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE, LB_PAGE, LF_PAGE]
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE, LB_PAGE, LF_PAGE, PLAYSET_PAGE, PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -999,6 +1072,6 @@ assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] 
 assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
 assert PAGES[NEXTALBUM_PAGE_INDEX] is NEXTALBUM_PAGE and NEXTALBUM_PAGE_INDEX == PAGES.index(NDLOGIN_PAGE) - 1
 assert PAGES[NDLOGIN_PAGE_INDEX] is NDLOGIN_PAGE and PAGES[NDSERVER_PAGE_INDEX] is NDSERVER_PAGE and PAGES[NDROOT_PAGE_INDEX] is NDROOT_PAGE
-assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 7
-assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 4 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 3 and PAGES[LB_PAGE_INDEX] is LB_PAGE and LB_PAGE_INDEX == len(PAGES) - 2 and PAGES[LF_PAGE_INDEX] is LF_PAGE and LF_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 18
+assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 15 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 14 and PAGES[LB_PAGE_INDEX] is LB_PAGE and LB_PAGE_INDEX == len(PAGES) - 13 and PAGES[LF_PAGE_INDEX] is LF_PAGE and LF_PAGE_INDEX == len(PAGES) - 12 and PAGES[PLAYSET_PAGE_INDEX] is PLAYSET_PAGE and PAGES[PSMODE_PAGE_INDEX:PSBAL_PAGE_INDEX + 1] == [PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE] and PLAYSET_PAGE_INDEX == LF_PAGE_INDEX + 1 and PSBAL_PAGE_INDEX == len(PAGES) - 1
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

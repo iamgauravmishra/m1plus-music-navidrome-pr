@@ -105,8 +105,8 @@ def entry_tests(ctx):
            and [(r.label, r.action, r.arg) for r in page.rows[:24]] == [(r.label, r.action, r.arg) for r in P.ITEMS],
            'Extras and the menu have a row for every item (same labels and actions), so an item opens the same way from either')
     homes = [r.arg for r in P.ITEMS if r.action in (P.ACT_HOME, P.ACT_LIST) or (r.action == P.ACT_ARTISTS and r.arg)] + [r.arg for r in P.SETTINGS_PAGE.rows if r.action == P.ACT_HOME]
-    expect(len(set(homes)) == len(homes) and len(homes) + 6 == 18,
-           'no tile is twice (Albums, id 5, Artists, id 6, Songs, id 3, Folders, id 4, and Playlists, id 14, are the payload pages; HiFi, id 0, is left out)')
+    expect(len(set(homes)) == len(homes) and len(homes) + 6 == 17,
+           'no tile is twice (Albums, id 5, Artists, id 6, Songs, id 3, Folders, id 4, and Playlists, id 14, are the payload pages; HiFi, id 0, is left out; Settings > Playback Settings, id 16, is our own page now)')
     m = Machine()
     m.widgets = {n: 0x30000000 + i for i, n in enumerate(['btn_return', 'btn_backtoplayer', 'btn_settings'] + [f'pod_row{i}' for i in range(len(ex.rows))])}
     m.call(on_row, a0=rows0 + 12 * ex_i)
@@ -609,12 +609,12 @@ def settings_tests(ctx):
         return m
 
     # 15. Settings (cards): the stock Wi-Fi and Bluetooth pages, our pages, Playback (EQ, Continue Playing, the stock list), System (Display, Accent, Keyboards, About, the stock list), Developer
-    expect([r.label for r in S.rows] == ['Wi-Fi', 'Bluetooth', 'Home Screen', 'Library', 'Now Playing', 'EQ', 'Continue Playing', 'All Playback Settings',
+    expect([r.label for r in S.rows] == ['Wi-Fi', 'Bluetooth', 'Home Screen', 'Library', 'Now Playing', 'EQ', 'Playback Settings',
                                          'Display', 'Buttons & Power', 'Appearance', 'Keyboards', 'Battery', 'About', 'All System Settings', 'Developer'],
-           'the Settings page lists Wi-Fi, Bluetooth, Home Screen, Library, Now Playing, EQ, Continue Playing, All Playback Settings, Display, Appearance, Keyboards, Battery, About, All System Settings, Developer')
-    pb = next(r for r in S.rows if r.label == 'All Playback Settings'); ss = next(r for r in S.rows if r.label == 'All System Settings')
-    expect((pb.action, pb.arg) == (P.ACT_HOME, P.HOME_PLAYSET) and (ss.action, ss.arg) == (P.ACT_HOME, P.HOME_SYSSET),
-           'All Playback Settings opens the stock Play settings list, All System Settings the stock one')
+           'the Settings page lists Wi-Fi, Bluetooth, Home Screen, Library, Now Playing, EQ, Playback Settings, Display, Appearance, Keyboards, Battery, About, All System Settings, Developer')
+    pb = next(r for r in S.rows if r.label == 'Playback Settings'); ss = next(r for r in S.rows if r.label == 'All System Settings')
+    expect((pb.action, pb.arg) == (P.ACT_PAGE, P.PLAYSET_PAGE_INDEX) and (ss.action, ss.arg) == (P.ACT_HOME, P.HOME_SYSSET),
+           'Playback Settings opens our page, All System Settings the stock list')
     expect([r.label for r in P.HOMESET_PAGE.rows][-3:] == ['Main Menu', 'Extras', 'Regenerate Daily Mix'] and P.HOMESET_PAGE.title == 'Home Screen', 'Home Screen ends with Main Menu, Extras and Regenerate Daily Mix')
     ex_r, cu_r = len(P.ITEMS), P.SETTINGS_ID
     expect(P.MENU.rows[cu_r].label == 'Settings' and (P.MENU.rows[cu_r].action, P.MENU.rows[cu_r].arg) == (P.ACT_PAGE, P.SETTINGS_PAGE_INDEX)
@@ -1052,9 +1052,9 @@ def library_tests(ctx, on_row):
     vk_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_VOLKEYS)
     vsw, VK = f'pod_switch{vk_i}', '/mnt/data/m1plus/coverflow-volume-keys'
     sw = f'pod_switch{land_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Rebuild Artist Photos', P.ACT_AREBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Volume Buttons', P.ACT_VOLKEYS), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION), ('Scrobbling', P.ACT_SCROBBLE), ('ListenBrainz', P.ACT_LB), ('Last.fm', P.ACT_LF), ('Upload Scrobbles', P.ACT_SCROBUP), ('Auto Upload', P.ACT_LBAUTO)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Rebuild Artist Photos', P.ACT_AREBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Folder Album Cover', P.ACT_FOLDERCOVER), ('Landscape', P.ACT_LANDSCAPE), ('Volume Buttons', P.ACT_VOLKEYS), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION), ('Scrobbling', P.ACT_SCROBBLE), ('ListenBrainz', P.ACT_LB), ('Last.fm', P.ACT_LF), ('Upload Scrobbles', P.ACT_SCROBUP), ('Auto Upload', P.ACT_LBAUTO)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and P.row_kind(C.rows[0]) == 'action',
-           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, Rebuild Artist Photos, then the List Navigation switches (Index Rail, Section Headers), Landscape and Volume Buttons (switches, the second with its note) under Cover Flow, Podcast Discover (switch) above Podcast Region (a value, its picker), and the Scrobbling card: Scrobbling (switch), ListenBrainz and Last.fm (values, their pages) and Upload Scrobbles (an action), then Auto Upload (a switch) in a card of its own')
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, Rebuild Artist Photos, then the List Navigation switches (Index Rail, Section Headers), Folder Album Cover (a switch) under Folders, Landscape and Volume Buttons (switches, the second with its note) under Cover Flow, Podcast Discover (switch) above Podcast Region (a value, its picker), and the Scrobbling card: Scrobbling (switch), ListenBrainz and Last.fm (values, their pages) and Upload Scrobbles (an action), then Auto Upload (a switch) in a card of its own')
 
     def open_lib(land=None, language=None, vk=None):
         m = Machine()

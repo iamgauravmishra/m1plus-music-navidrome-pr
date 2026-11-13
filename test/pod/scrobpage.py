@@ -121,17 +121,17 @@ def pages_tests(ctx):
     """The rows, the ids, the pages and the built assets."""
     expect = ctx.expect
     L, B, F = P.LIBRARY_PAGE, P.LB_PAGE, P.LF_PAGE
-    expect((P.ACT_LB, P.ACT_SCROBUP, P.ACT_LBAUTO, P.ACT_LF) == (108, 109, 112, 113) and max(P._ACTS) == 113 and 110 not in P._ACTS and 111 not in P._ACTS and not hasattr(P, 'ACT_LBTOKEN') and not hasattr(P, 'ACT_LBOUT')
+    expect((P.ACT_LB, P.ACT_SCROBUP, P.ACT_LBAUTO, P.ACT_LF) == (108, 109, 112, 113) and max(P._ACTS) == 134 and 110 not in P._ACTS and 111 not in P._ACTS and not hasattr(P, 'ACT_LBTOKEN') and not hasattr(P, 'ACT_LBOUT')
            and (P.INFO_LBACCT, P.INFO_LFACCT) == (P.INFO_DUR + 3, P.INFO_DUR + 4) == (66, 67),
            'the actions 108, 109, 112 and 113 (110 was the Token row, 111 Sign Out: gone, their ids not reused); the Account rows are INFO_DUR + 3 and + 4')
-    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F and (P.LB_PAGE_INDEX, P.LF_PAGE_INDEX) == (77, 78) and P.LF_PAGE_INDEX == len(P.PAGES) - 1
+    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F and (P.LB_PAGE_INDEX, P.LF_PAGE_INDEX) == (77, 78) and P.LF_PAGE_INDEX == len(P.PAGES) - 12
            and (B.key, B.name, B.title) == ('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz') and (F.key, F.name, F.title) == ('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm'), 'the ListenBrainz page is page 77, the Last.fm page 78, the last')
     lay = [x.label if isinstance(x, P.Row) else x.text if isinstance(x, P.Note) else x for x in L.layout]
     expect(lay[-8:] == ['Search words are sent to Apple.', 'Scrobbling', 'ListenBrainz', 'Last.fm', 'Upload Scrobbles', 'Saved to .scrobbler.log on the card.', 'Auto Upload', P.LB_AUTO_NOTE],
            f'the Scrobbling card: the switch, the two accounts, Upload Scrobbles, the note; then Auto Upload in a card of its own with its note ({lay[-8:]})')
     expect([(r.label, r.action, r.arg, P.row_kind(r)) for r in L.rows[-5:]] == [('Scrobbling', P.ACT_SCROBBLE, 0, 'switch'), ('ListenBrainz', P.ACT_LB, P.LB_PAGE_INDEX, 'value'), ('Last.fm', P.ACT_LF, P.LF_PAGE_INDEX, 'value'),
                                                                                 ('Upload Scrobbles', P.ACT_SCROBUP, 0, 'action'), ('Auto Upload', P.ACT_LBAUTO, 0, 'switch')]
-           and LIB_ROWS == 14, 'a switch, two value rows opening their pages, an action row, a switch; fourteen rows on the Library page')
+           and LIB_ROWS == 15, 'a switch, two value rows opening their pages, an action row, a switch; fifteen rows on the Library page')
     for G, info, note, lines in ((B, P.INFO_LBACCT, P.LB_NOTE, 3), (F, P.INFO_LFACCT, P.LF_NOTE, 5)):
         expect([(r.label, r.action, r.arg, P.row_kind(r)) for r in G.rows] == [('Account', P.ACT_INFO, info, 'info')] and [type(x) for x in G.layout] == [P.Row, P.Note]
                and G.layout[1].text == note and G.layout[1].lines == lines and G.wrap_notes() == 1 and ST.pieces(G.layout) == ['single'],

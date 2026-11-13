@@ -139,6 +139,56 @@ int kp_standby_toggle(void);
 int kp_shutdown(void); /* Auto-Shutdown, stock's word 0 .. 4 */
 int kp_shutdown_set(int v);
 
+/* patch/playset.c: Settings > Playback Settings. A getter answers the shown state, a setter 0 or -1 (refused), a toggle the new state. */
+enum {
+    PS_CTL_MODE,
+    PS_CTL_MEM,
+    PS_CTL_GAIN,
+    PS_CTL_RG,
+    PS_CTL_DSD,
+    PS_CTL_USB,
+    PS_CTL_MAXVOL,
+    PS_CTL_BOOTVOL,
+    PS_CTL_BAL,
+    PS_CTLS
+}; /* the value rows, by ps_value_key */
+int ps_playmode(void);
+int ps_playmode_set(int v);
+int ps_gapless(void);
+int ps_gapless_toggle(void);
+int ps_memplay(void);
+int ps_memplay_set(int v);
+int ps_folderskip(void);
+int ps_folderskip_toggle(void);
+int ps_gain_locked(void); /* the Line Out byte: stock greys Gain and ignores its click */
+int ps_gain(void);
+int ps_gain_set(int v);
+int ps_replaygain(void);
+int ps_replaygain_set(int v);
+int ps_filter(void);
+int ps_filter_set(int v);
+int ps_dsd(void);
+int ps_dsd_set(int v);
+int ps_usbvol(void);
+int ps_usbvol_set(int v);
+int ps_digital(void);
+int ps_digital_toggle(void);
+int ps_foldercover(void); /* Settings > Library */
+int ps_foldercover_toggle(void);
+const char *ps_value_key(int ctl);
+int ps_value_text(int ctl, char *buf,
+                  int n); /* 1: buf holds the text (a number, L3), 0: the row shows ps_value_key's key */
+enum {
+    PS_VOL_MAX,
+    PS_VOL_BOOT,
+    PS_VOL_BAL,
+    PS_VOLS
+}; /* the loudness pages: stock's own handlers bound to our widgets */
+void ps_vol_opened(void *win, int which);
+void ps_vol_refresh(void *win, int which);
+int ps_bootmem(void); /* Volume Memory */
+int ps_bootmem_toggle(void);
+
 /* patch/onlineart.c */
 int onlineart_open(void);
 int onlineart_open_artist(const char *name);
