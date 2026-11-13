@@ -14,6 +14,7 @@ SAME_AS_ENGLISH |= {'%d MB', '%d.%d GB', '%d GB'}
 SAME_AS_ENGLISH |= {'Filter', 'Pause'}    # German writes Filter as English does; French and German write Pause the same
 SAME_AS_ENGLISH |= {'A–Z', 'Z–A'}    # the alphabet range in Latin-script and CJK tables (Thai and Cyrillic have their own)
 SAME_AS_ENGLISH |= {'Format', 'Type'}    # French, German and Polish write Format as English does; French writes Type the same
+SAME_AS_ENGLISH |= {'Scrobbling'}    # Last.fm's word, kept in French, German, Spanish, Italian and Polish
 SAME_AS_ENGLISH |= {'Genre', 'Screenshot', 'Collections', 'Cover', 'Streaming'}    # French and German write Genre the same; German and Italian say Screenshot; French writes Collections the same; German says Cover
 SAME_AS_ENGLISH |= {'Orange', 'Champagne', 'Neutral'}    # colour names: Orange in French and German, Champagne in French and Italian, Neutral in German
 SAME_AS_ENGLISH |= {'Radio', 'LIVE', 'Live', '%d stations'}    # Radio in French, German, Spanish, Italian and Polish; LIVE and Live in German and Italian; "stations" in French
@@ -41,6 +42,7 @@ SAME_AS_ENGLISH |= {'NetEase'}    # the service's name outside Chinese (Find Art
 SAME_AS_ENGLISH |= {'Photos'}    # the Cache page's Artist Photos count: Photos in French
 SAME_AS_ENGLISH |= {'Codec', 'Bitrate', 'Source'}    # Station Info: Codec in French, German and Italian, Bitrate in German and Italian, Source in French
 
+SAME_AS_ENGLISH |= {'ListenBrainz', 'Last.fm', 'Account'}    # the services' names; Account in Italian
 SAME_AS_ENGLISH |= {'%d dB', 'Pop', 'Rock', 'Dance', 'Blues', 'Jazz'}    # the 10-Band EQ: the unit; the genre names that most languages write as English
 
 

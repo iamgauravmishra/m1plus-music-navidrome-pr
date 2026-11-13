@@ -41,6 +41,7 @@
 #include "palette.h"
 #include "libsrc.h"
 #include "songops.h"
+#include "scrobble.h"
 
 #define P(w, off) (*(void **)((char *)(w) + (off)))
 
@@ -5140,6 +5141,7 @@ static int pg_tick(const void *timer) {
         return RET_OK;
     }
     pc_note(cc_playing());
+    scrobble_note(cc_playing()); /* music playing under the page (patch/scrobble.c) */
     if (m1_screen_lit() && !pg.load_timer && pg_load_pending())
         pg_kick(); /* the screen is back on: the covers go on (the loader does nothing in the dark) */
     if (pg.dlg && m1_screen_lit())

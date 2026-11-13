@@ -46,7 +46,7 @@ LD = os.path.join(LLD, 'ld.lld')
 # compiled in this order, linked with --gc-sections (docs/architecture.md)
 SOURCES = ['m1plus.c', 'common.c', 'filetime.c', 'menu.c', 'covercache.c', 'artistphoto.c', 'durations.c', 'coverflow.c', 'albums.c', 'artists.c', 'shuffle.c', 'nowplaying.c', 'bigcover.c', 'lockscreen.c', 'display.c', 'keyspower.c', 'minibar.c', 'grid.c', 'recent.c', 'dailymix.c', 'homecover.c', 'covlist.c', 'setfiles.c', 'rows.c', 'shot.c', 'home.c', 'fontregion.c', 'textgamma.c',
            'scroll.c', 'playmore.c', 'pulldown.c', 'playlists.c', 'azlist.c', 'songops.c', 'libsrc.c', 'rowmenu.c', 'songs.c', 'albumpage.c', 'queuepage.c', 'upnext.c', 'ipod.c', 'ipod_cf.c', 'ipod_theme.c', 'ipod_render.c', 'pcmodel.c', 'pcfeed.c', 'pcjson.c', 'pcopml.c', 'pcpng.c', 'pccover.c', 'pcwrap.c', 'pcnotes.c', 'pcdetail.c', 'upver.c', 'net.c', 'netfile.c', 'pcnet.c', 'podcasts.c', 'pcfind.c', 'radio.c', 'radiopage.c', 'radionp.c', 'radioinfo.c', 'songinfo.c', 'tape.c', 'palette.c', 'vinyl.c', 'onlineart.c', 'update.c', 'relnotes.c', 'keyboard.c', 'search.c', 'battery.c', 'charging.c', 'nextalbum.c', 'lineout.c', 'lyrics.c', 'picker.c', 'folders.c', 'timezones.c', 'pcregion.c', 'viewsort.c', 'wifictl.c', 'wifipage.c', 'sbnet.c', 'sbparse.c', 'sbdl.c', 'sbapi.c', 'sbsrc.c', 'ndserver.c', 'ndroot.c',
-           'tidalkb.c', 'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c']
+           'tidalkb.c', 'peq.c', 'peq_ui.c', 'peqpage.c', 'peqlib.c', 'autoeq.c', 'tenband.c', 'peqband.c', 'peqout.c', 'scrobble.c', 'scrobup.c', 'scrobpage.c']
 
 # Navidrome data layer (patch/sbapi.c): kept by the linker until the pages that call it exist; the integration drops names as callers appear
 ND_KEEP = ['sba_free_tracks', 'sba_free_albums', 'sba_free_artists', 'sba_free_playlists', 'sba_user', 'sba_conf_url_set', 'sba_conf_user_set', 'sba_conf_password_set', 'sba_conf_clear', 'sba_cancel', 'sba_sync_due', 'sba_sync', 'sba_fetch_album', 'sba_fetch_artist', 'sba_fetch_playlist', 'sba_fetch_songs', 'sba_search', 'sba_star', 'sba_cover', 'sba_cover_path', 'sba_cover_have', 'sba_cover_get', 'sba_track_cover', 'sba_rec_cover', 'sba_albums', 'sba_artists', 'sba_playlists', 'sba_starred_tracks', 'sba_album_tracks', 'sba_artist_albums', 'sba_playlist_tracks', 'sba_songs', 'sba_songs_more', 'sba_search_tracks', 'sba_search_albums', 'sba_search_artists', 'sba_songs_cached', 'sba_stream_url', 'sba_track_filename', 'sba_is_dsd', 'sba_now_cover', 'sba_rec_track', 'sba_queue_note', 'sba_net_open']
@@ -540,6 +540,10 @@ DATA = {
 }
 LIBC = {
     'atoi': ('int', 'const char *'), 'access': ('int', 'const char *, int'),
+    # why an open failed (patch/scrobup.c su_window: only ENOENT is "no log")
+    '__errno_location': ('int *', 'void'),
+    # Last.fm's request signature (patch/scrobup.c su_lf_call): libcrypto's MD5, which demo imports itself (toolsMd5String); the context is an MD5_CTX (92 bytes)
+    'MD5_Init': ('int', 'void *'), 'MD5_Update': ('int', 'void *, const void *, unsigned'), 'MD5_Final': ('int', 'unsigned char *, void *'),
     # the Daily Mix's day number (patch/dailymix.c dm_today): the wall clock and its local calendar fields (struct tm: seconds, minutes, hours, mday, mon, year first)
     'time': ('long', 'long *'), 'localtime': ('const int *', 'const long *'),
     # Home (patch/home.c): the marker, the setting and the opt-in log
@@ -938,6 +942,9 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_CACHE_PAGE {pod_pages.CACHE_PAGE_INDEX}')
     h.append(f'#define POD_DISPLAY_PAGE {pod_pages.DISPLAY_PAGE_INDEX}')
     h.append(f'#define POD_KEYSPOWER_PAGE {pod_pages.KEYSPOWER_PAGE_INDEX}')
+    h.append(f'#define POD_LIBRARY_PAGE {pod_pages.LIBRARY_PAGE_INDEX}')
+    h.append(f'#define POD_LB_PAGE {pod_pages.LB_PAGE_INDEX}')
+    h.append(f'#define POD_LF_PAGE {pod_pages.LF_PAGE_INDEX}')
     h.append(f'#define POD_FILES_PAGE {pod_pages.FILES_PAGE_INDEX}')
     h.append(f'#define POD_PULLDOWN_PAGE {pod_pages.PULLDOWN_PAGE_INDEX}')
     h.append(f'#define POD_PEQ_PAGE {pod_pages.PEQ_PAGE_INDEX}')

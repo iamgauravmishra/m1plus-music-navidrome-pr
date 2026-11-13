@@ -179,4 +179,56 @@ page). The eye button in the header shows hidden files.
 **Search** opens the same library search as the Songs page's Search button. It is hidden from
 the main menu by default.
 
+**Scrobbling** (off by default; turn it on in **Settings → Library → Scrobbling**): every song you listen to
+(half of it, or 4 minutes) is added to `.scrobbler.log` at the root of the card. Upload it to Last.fm or ListenBrainz from a computer with any
+`.scrobbler.log` uploader, or send it to ListenBrainz and Last.fm from the player (below). Songs played only while a stock Shanling screen is open may be missed; see [details](modules/scrobble.md).
+
+**ListenBrainz and Last.fm**: the player can send the log to your ListenBrainz account, your Last.fm account, or both, over Wi-Fi.
+You sign in with one plain text file on the card; nothing is typed on the player.
+
+1. On a computer, make a plain text file named `scrobble.ini` at the root of the card. Put in the section of each service you use:
+
+   ```
+   [LISTENBRAINZ]
+   TOKEN=0f8fad5b-d9cb-469f-a165-70867728950e
+
+   [LASTFM]
+   USER=your-user-name
+   PASSWORD=your-password
+   API_KEY=0123456789abcdef0123456789abcdef
+   API_SECRET=fedcba9876543210fedcba9876543210
+   ```
+
+   - **ListenBrainz**: sign in at listenbrainz.org, open your settings and copy the **User token** (36 letters, digits and dashes) after `TOKEN=`.
+   - **Last.fm**: your user name and password, and an API key and secret of your own: create an API account at last.fm/api
+     (any name will do) and copy the two values it shows. All four lines are needed.
+
+   One value a line, nothing else on the line, no quotes. Capitals, spaces around `=`, Windows line ends and comment lines
+   starting with `;` or `#` are all fine; keep the file small (under 4 KB) and saved as plain text (UTF-8).
+2. Put the card back and open **Settings → Library**. No restart is needed: the player reads the file whenever that page opens
+   and before every upload. With Wi-Fi connected the accounts are checked at once, and the **ListenBrainz** and **Last.fm** rows
+   show your user names. "Not Set" means the player found no complete account in the file; "Invalid Token" (ListenBrainz) or
+   "Sign-in Failed" (Last.fm) means the service refused it: correct the file. Each row opens a page with the account's state and a
+   reminder of what goes in the file.
+3. Tap **Upload Scrobbles** whenever you want to send the log. It goes to every service that is set up. It needs Wi-Fi, and the
+   card must not be in use by a computer over USB. A message tells how many listens were sent. The Scrobbling switch does not
+   have to be on for this.
+4. Or turn on **Auto Upload** (under Upload Scrobbles, off by default) and the player sends the log by itself: while music plays
+   and Wi-Fi is connected, about ten minutes after a new listen was logged, so an album goes up in one or two uploads. It works in
+   the background and shows no message; it never switches Wi-Fi on, and without a connection the listens simply wait for the next
+   time you play music on Wi-Fi. It needs an account and the Scrobbling switch on (only songs logged since the player was switched
+   on start it; older ones in the log go along). A service that refuses its account is left out until you correct the file. After
+   an upload that failed the player waits half an hour before it tries again. Upload Scrobbles still works at any time; while an
+   automatic upload runs it answers "Already uploading".
+
+The file is the only place the player keeps your sign-in, so it travels with the card, and anyone who has the card can read it.
+To sign out, delete the service's lines (or the whole file) on a computer. The player never shows the token or the password and
+changes only one thing in the file: it adds a `USER` line under `[LISTENBRAINZ]` with your user name once ListenBrainz has
+confirmed the token.
+
+Listens that were sent leave `.scrobbler.log` and are kept in `.scrobbler.log.sent` on the card. With two services a listen
+leaves the log once both have answered for it; if one of them cannot be reached the listens wait and go to both again next time
+(neither counts a listen twice). A listen every service refuses for good is moved to `.scrobbler.log.rejected`, where you can
+look at it. If an upload fails, what was not sent stays in the log for the next try.
+
 For a missing feature, enable it through **Settings → Home Screen → Main Menu**, or find it under Extras.

@@ -893,7 +893,7 @@ def region_row_tests(ctx, on_row, rows_s):
     rg_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_REGION)
     layout = [type(x).__name__ + (':' + x.label if isinstance(x, P.Row) else ':' + x.text if hasattr(x, 'text') else '') for x in C.layout]
     expect(C.rows[rg_i].label == 'Podcast Region' and C.rows[rg_i].arg == P.REGION_PAGE_INDEX and P.row_kind(C.rows[rg_i]) == 'value' and P.ACT_REGION in P.VALUE_ACTIONS and P.ACT_REGIONSET in P.CHECK_ACTIONS
-           and layout[-4:] == ['Hdr:Podcasts', 'Row:Podcast Discover', 'Row:Podcast Region', 'Note:Search words are sent to Apple.'], f'the Library page ends with a Podcasts header, the Podcast Discover switch row, the Podcast Region value row and the note ({layout[-4:]})')
+           and layout[-11:-7] == ['Hdr:Podcasts', 'Row:Podcast Discover', 'Row:Podcast Region', 'Note:Search words are sent to Apple.'], f'the Library page has a Podcasts header, the Podcast Discover switch row, the Podcast Region value row and the note, before the Scrobbling card (four rows and a note) and the Auto Upload card (a row and a note) ({layout[-11:-7]})')
     ds_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_PCSEARCH)
     expect(ds_i == rg_i - 1 and C.rows[ds_i].label == 'Podcast Discover' and P.ACT_PCSEARCH == 34 and P.ACT_PCSEARCH in P.SWITCH_ACTIONS and P.row_kind(C.rows[ds_i]) == 'switch' and (P.ACT_REGION, P.ACT_REGIONSET) == (55, 56)
            and P.SETTING_FILES.index('podcast-online-search') + 1 == P.SETTING_FILES.index('podcast-region') and 'podcast-online-search' not in ' '.join(P.RETIRED_FILES)
@@ -1052,9 +1052,9 @@ def library_tests(ctx, on_row):
     vk_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_VOLKEYS)
     vsw, VK = f'pod_switch{vk_i}', '/mnt/data/m1plus/coverflow-volume-keys'
     sw = f'pod_switch{land_i}'
-    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Rebuild Artist Photos', P.ACT_AREBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Volume Buttons', P.ACT_VOLKEYS), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION)]
+    expect([(r.label, r.action) for r in C.rows] == [('Update Library', P.ACT_HOME), ('Rebuild Covers', P.ACT_REBUILD), ('Rebuild Artist Photos', P.ACT_AREBUILD), ('Index Rail', P.ACT_AZRAIL), ('Section Headers', P.ACT_AZHEAD), ('Landscape', P.ACT_LANDSCAPE), ('Volume Buttons', P.ACT_VOLKEYS), ('Podcast Discover', P.ACT_PCSEARCH), ('Podcast Region', P.ACT_REGION), ('Scrobbling', P.ACT_SCROBBLE), ('ListenBrainz', P.ACT_LB), ('Last.fm', P.ACT_LF), ('Upload Scrobbles', P.ACT_SCROBUP), ('Auto Upload', P.ACT_LBAUTO)]
            and C.title == 'Library' and C.rows[0].arg == P.HOME_UPDATE and P.row_kind(C.rows[0]) == 'action',
-           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, Rebuild Artist Photos, then the List Navigation switches (Index Rail, Section Headers), Landscape and Volume Buttons (switches, the second with its note) under Cover Flow, and Podcast Discover (switch) above Podcast Region (a value, its picker)')
+           'the Library page: one card of Update Library (the stock page, no chevron), Rebuild Covers, Rebuild Artist Photos, then the List Navigation switches (Index Rail, Section Headers), Landscape and Volume Buttons (switches, the second with its note) under Cover Flow, Podcast Discover (switch) above Podcast Region (a value, its picker), and the Scrobbling card: Scrobbling (switch), ListenBrainz and Last.fm (values, their pages) and Upload Scrobbles (an action), then Auto Upload (a switch) in a card of its own')
 
     def open_lib(land=None, language=None, vk=None):
         m = Machine()
@@ -1184,7 +1184,9 @@ def library_tests(ctx, on_row):
     path = os.path.join(WORK, 'rootfs', 'release/assets/default/raw/ui', C.key + '.bin')
     tree = awtk_ui.parse(open(path, 'rb').read())
     reg_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_REGION)
-    expect({n.name for n in tree.walk() if n.name.startswith('pod_value')} == {f'pod_value{reg_i}'}, 'the Library page has one value label: the Podcast Region row')
+    lb_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LB)
+    lf_i = next(i for i, r in enumerate(C.rows) if r.action == P.ACT_LF)
+    expect({n.name for n in tree.walk() if n.name.startswith('pod_value')} == {f'pod_value{reg_i}', f'pod_value{lb_i}', f'pod_value{lf_i}'}, 'the Library page has three value labels: the Podcast Region row, the ListenBrainz row and the Last.fm row')
     expect(tree.find(f'pod_switch{land_i}') is not None and tree.find(f'pod_switch{land_i}').get('sensitive') == 'false'
            and not [c for c in tree.find(f'pod_row{land_i}').children if c.name.startswith('pod_value')], 'the Landscape row: its switch image, no value')
     node_tree = asset_tree(path)

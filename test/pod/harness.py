@@ -6,7 +6,7 @@ Modelled on q2-pod's test/patch.py.
 Requires unicorn (venv) and a workdir patched by tools/pod.py (its podbuild/manifest.json).
 test/patch.py calls init(WORKDIR) first, then loads the feature modules, which star-import this one.
 """
-import functools, importlib.util, json, math, os, re, struct, sys, unicodedata
+import functools, hashlib, importlib.util, json, math, os, re, struct, sys, unicodedata
 from unicorn import Uc, UC_ARCH_MIPS, UC_MODE_MIPS32, UC_MODE_LITTLE_ENDIAN, UC_HOOK_CODE, UC_HOOK_BLOCK, UC_HOOK_INTR
 from unicorn.mips_const import (UC_MIPS_REG_A0, UC_MIPS_REG_A1, UC_MIPS_REG_A2, UC_MIPS_REG_A3,
                                 UC_MIPS_REG_V0, UC_MIPS_REG_SP, UC_MIPS_REG_RA, UC_MIPS_REG_T9, UC_MIPS_REG_PC, UC_MIPS_REG_GP, UC_MIPS_REG_F0, UC_MIPS_REG_F12, UC_MIPS_REG_F14,
@@ -380,6 +380,10 @@ class Machine:
     def word(self, a): return struct.unpack('<I', self.u.mem_read(a, 4))[0]
     def s32(self, a): return struct.unpack('<i', self.u.mem_read(a, 4))[0]
     def setword(self, a, v): self.u.mem_write(a, struct.pack('<I', v & 0xffffffff))
+    def set_errno(self, v):
+        """libc's errno (the int __errno_location points at): set by a failed open (2 no such file, 5 an injected failure)."""
+        if not getattr(self, 'errno_p', 0): self.errno_p = self.alloc(4); self.setword(self.errno_p, 0)
+        if v is not None: self.setword(self.errno_p, v)
 
     def paint_event(self):
         """A zeroed 0x40 byte event whose paint canvas is the machine's own canvas; returns its address."""
@@ -1021,6 +1025,9 @@ class Machine:
             ret = self.seed % a0 if a0 else 0
         elif name == 'time_now_ms':
             ret = self.clock; u.reg_write(UC_MIPS_REG_A3, 0)
+        elif name == 'get_playtimeandlength':   # (the machines that play something set pt; the default is the player without a time)
+            pos, ln, r = self.pt; self.setword(a0, pos); self.setword(a1, ln); ret = r
+            self.calls.append(('get_playtimeandlength',))
         elif name == 'toolsGetAlbumCover':
             self.cover_size = (a2, a3)   # the thumbnail's requested size
             self.calls.append(('toolsGetAlbumCover', self.read_cstr(a0), self.read_cstr(a1)))
@@ -1232,7 +1239,7 @@ class Machine:
         elif name == 'open':
             p, fl = self.fsname(self.read_cstr(a0)), a1
             self.calls.append(('open', p, fl))
-            if ('open', p) in self.fail: ret = -1
+            if ('open', p) in self.fail: ret = -1; self.set_errno(5)   # (EIO: an injected failure is never "no such file")
             elif p == '/dev/fb0':
                 if self.fb: ret = self.next_fd; self.fds[ret] = [p, fl, 0]; self.next_fd += 1
                 else: ret = -1
@@ -1241,7 +1248,15 @@ class Machine:
             elif p in self.fs or fl & 0x100:
                 if fl & 0x200 or p not in self.fs: self.fs[p] = b''
                 ret = self.next_fd; self.fds[ret] = [p, fl, 0]; self.next_fd += 1
-            else: ret = -1
+            else: ret = -1; self.set_errno(2)   # ENOENT
+        elif name == '__errno_location':
+            self.set_errno(None); ret = self.errno_p
+        elif name == 'MD5_Init':   # libcrypto's MD5 (patch/scrobup.c: Last.fm's api_sig): the context is the caller's, its state kept here by address
+            self.__dict__.setdefault('md5', {})[a0] = hashlib.md5(); ret = 1
+        elif name == 'MD5_Update':
+            self.md5[a0].update(bytes(self.u.mem_read(a1, a2))); ret = 1
+        elif name == 'MD5_Final':
+            self.u.mem_write(a0, self.md5.pop(a1).digest()); ret = 1
         elif name == 'read':
             p, _, pos = self.fds[a0]
             data = self.fs.get(p, b'')[pos:pos + a2]
@@ -1439,6 +1454,7 @@ class Machine:
     wall = 1800000000        # time(): the wall clock, seconds (2027-01-15 08:00 UTC); tz: seconds localtime adds
     tz = 0
     clock = 1                # time_now_ms
+    pt = (0, 0, 0)           # get_playtimeandlength: position, length, result (0: no time)
     calloc_fail = False
     calloc_fail_size = 0           # a calloc of exactly this many bytes is refused (one allocation, not all)
     played = None            # (queue records, index) handed to playing_page

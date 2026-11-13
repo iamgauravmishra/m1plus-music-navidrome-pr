@@ -151,7 +151,8 @@ def draw_row(s, im, d, row, y, values, switches, shown, ink=lambda c: c, img=Non
         elif c.name == 'pod_hair':
             d.rectangle((c.x, y + c.y, c.x + c.w - 1, y + c.y), fill=ink(rgb(style(c, 'bg_color'))))
     sub = next((c for c in row.children if c.name.startswith('pod_sub')), None)   # a two line row (the Presets page's files): the name on the first line, the grey line under it
-    s.text(im, label.x, y + (label.y + label.h / 2 if sub else row.h / 2), s.clip(s.shown(label), 21, lab_w), 21, ink((255, 255, 255)))
+    own = values.get(label.name + '.color') or style(label, 'text_color')   # a label with a colour of its own (the red Sign Out; a page's state may grey it as the payload does)
+    s.text(im, label.x, y + (label.y + label.h / 2 if sub else row.h / 2), s.clip(s.shown(label), 21, lab_w), 21, ink(rgb(own) if own else (255, 255, 255)))
     if sub: s.text(im, sub.x, y + sub.y + sub.h / 2, s.clip(s.shown(sub), int(style(sub, 'font_size', 18)), sub.w), int(style(sub, 'font_size', 18)), ink(rgb(style(sub, 'text_color', '#AAAAAA'))))
 
 
@@ -363,6 +364,7 @@ def main():
            ('Settings, whole list (red = screen bottom)', draw_page(s, 'm1plus_settings', full=True)),
            ('Settings > Home Screen', draw_page(s, 'm1plus_homeset')),
            ('Settings > Library', draw_page(s, 'm1plus_library')),
+           ('Settings > Library, whole list', draw_page(s, 'm1plus_library', full=True)),
            ('Settings > Now Playing', draw_page(s, 'm1plus_npset')),
            ('Settings > Now Playing > Theme', draw_page(s, 'm1plus_tapetheme')),
            ('Settings > Developer', draw_page(s, 'm1plus_developer')),

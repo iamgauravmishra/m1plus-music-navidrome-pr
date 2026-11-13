@@ -121,6 +121,7 @@ ACT_LOCKINFO = 87   # link row (Settings > Lock Screen): Custom Wallpaper, the i
 ACT_NEXTALBUM = 90  # value row (Settings > Playback): Continue Playing, Off (the default) or Next Albums; opens its picker page (arg = the page index; patch/nextalbum.c na_setting). Next Albums plays the next album of the list an album was opened from when its queue ends (/mnt/data/m1plus/playback-next-album)
 ACT_NASET = 91      # picker row (Continue Playing): choose the mode (arg = 0 Off, 1 Next Albums; 2 Auto Mix is planned); a check shows on the chosen row (patch/nextalbum.c na_set)
 ACT_LOCKTIME = 86   # switch row (Settings > Lock Screen): Show Time, stock's lock screen clock switch, the byte screensaver_timeshow saved as [SYSSET] SSAVERTIMESHOW (patch/lockscreen.c lk_time_toggle)
+ACT_SCROBBLE = 96   # switch row (Settings > Library): the scrobble log, off by default; on, listens go to /mnt/mmc/.scrobbler.log (patch/scrobble.c scrobble_toggle, /mnt/data/m1plus/scrobbling)
 ACT_LIGHT = 97      # value row (Settings > System > Display): Screen Timeout, stock's backlight time (Never, 15s, 30s, 1min, 5min: the word lighttime_index saved as [SYSSET] LIGHTTIME); opens its picker page (arg = the page index; patch/display.c disp_light)
 ACT_LIGHTSET = 98   # picker row (Screen Timeout): choose the time (arg = stock's index, 0 Never .. 4 5min); a check shows on the chosen row (patch/display.c disp_light_set)
 ACT_LED = 99        # value row (Settings > System > Display): LED Light, stock's lamp mode (Off, Green, Blue: the byte atmosphereled_mode saved as [SYSSET] ATMOSPHERELEDMODE); opens its picker page (arg = the page index; patch/display.c disp_led)
@@ -132,14 +133,18 @@ ACT_TAPWAKE = 104     # switch row (Buttons & Power): Tap to Wake, stock's switc
 ACT_STANDBY = 105     # switch row (Buttons & Power): Auto-Standby, stock's switch (the byte standbyflag saved as [SYSSET] STANDBYMODE; turning it on turns Auto-Shutdown off; patch/keyspower.c kp_standby_toggle)
 ACT_SHUTDOWN = 106    # value row (Buttons & Power): Auto-Shutdown, stock's savepowermode (Off, 1min, 3min, 5min, 10min saved as [SYSSET] SAVEPOWERMODE; turning it on turns Auto-Standby off); opens its picker page (arg = the page index; patch/keyspower.c kp_shutdown)
 ACT_SHUTDOWNSET = 107 # picker row (Auto-Shutdown): choose the word (arg = stock's savepowermode, 0 off .. 4 10min); a check shows on the chosen row (patch/keyspower.c kp_shutdown_set)
+ACT_LB = 108       # value row (Settings > Library): ListenBrainz, the account's user name (Not Set, Invalid Token, or nothing until a check); opens the ListenBrainz page (arg = its page index; patch/scrobpage.c lb_row_text)
+ACT_SCROBUP = 109  # action row (Settings > Library): Upload Scrobbles, the card's .scrobbler.log sent to ListenBrainz now (patch/scrobpage.c lb_upload_tap)
+ACT_LF = 113       # value row (Settings > Library): Last.fm, the account's user name (Not Set, Sign-in Failed); opens the Last.fm page (arg = its page index; patch/scrobpage.c lf_row_text)
+ACT_LBAUTO = 112   # switch row (Settings > Library, a card of its own under the Scrobbling card): Auto Upload, off by default; on, the log is uploaded by itself while music plays on Wi-Fi (patch/scrobble.c scrobble_auto_toggle, /mnt/data/m1plus/scrobble-auto)
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
-SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW)
+SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_SCROBBLE, ACT_LBAUTO)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
-ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off'}   # what the asset's value label says before the payload sets it
+ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT, ACT_SCROBUP)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
+VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
@@ -175,7 +180,7 @@ def row_kind(row):
     if row.action == ACT_PEQ_PREAMP: return 'preamp'
     if row.action in (ACT_PEQ_BAND,): return 'band'
     if row.action == ACT_PEQ_LIB: return 'lib'
-    if row.action == ACT_PEQ_DELETE: return 'delete'
+    if row.action in (ACT_PEQ_DELETE,): return 'delete'
     if row.action in (ACT_PEQ_TRESET, ACT_PEQ_RENAME, ACT_PEQ_TSAVE): return 'plain'
     if row.action in WIDE_VALUE_ACTIONS: return 'wvalue'
     if row.action in VALUE_ACTIONS or (row.action == ACT_STOCK and STOCK_PAGES[row.arg][1]): return 'value'
@@ -295,7 +300,9 @@ LED_PAGE_INDEX = 72       # ... and its LED Light picker
 KEYSPOWER_PAGE_INDEX = 73 # Settings > System > Buttons & Power, then its Button Lock and Auto-Shutdown pickers
 KEYLOCK_PAGE_INDEX = 74
 SHUTDOWN_PAGE_INDEX = 75
-PCFIND_PAGE_INDEX = 76    # the Podcasts page's search inside one show (last)
+PCFIND_PAGE_INDEX = 76    # the Podcasts page's search inside one show
+LB_PAGE_INDEX = 77        # Settings > Library > ListenBrainz
+LF_PAGE_INDEX = 78        # Settings > Library > Last.fm (last)
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -453,8 +460,10 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/homecover.md "Cache page"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 47  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 49  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 INFO_APHOTOS, INFO_ANONE = INFO_DUR + 1, INFO_DUR + 2   # patch/m1plus.c: the Artist Photos card's counts (homecover_stat 7, 8)
+INFO_LBACCT = INFO_DUR + 3   # patch/m1plus.c: the ListenBrainz page's Account row (patch/scrobpage.c lb_account_text)
+INFO_LFACCT = INFO_DUR + 4   # ... and the Last.fm page's
 CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
@@ -483,7 +492,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
 SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'coverflow-volume-keys', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'nowplaying-idle', 'pod-appearance',
                  'appearance-accent', 'appearance-background', 'lockscreen-layout', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
-                 'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'playback-next-album', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'artists-rebuild', 'wifi-networks')
+                 'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'playback-next-album', 'scrobbling', 'scrobble-auto', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'artists-rebuild', 'wifi-networks')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
 # The files older builds left behind (patch/setfiles.c sf_retired, the same order; each with its .tmp sibling). Unsupported Files counts and lists them and
 # Delete Unsupported Files removes them. A renamed setting's old name goes here, never a guard file or a setting above (tests: unsupported_tests).
@@ -493,7 +502,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 45      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 47      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 34   # after COVLIST (33)
@@ -623,7 +632,9 @@ EXTRAS_PAGE = Page('m1plus_extras', 'm1plus_extras_page', 'Extras', rows=[Row(r.
 EXTRASCFG_PAGE = Page('m1plus_extrascfg', 'm1plus_extrascfg_page', 'Extras', kind='extrascfg')
 
 # Settings > Library: one card of Update Library (the stock page, as the Update Library item), Rebuild Covers (the stock confirm dialog, then Home's cover build extracts every
-# cover again), then the List Navigation card (Index Rail and Section Headers, the A-Z lists of patch/azlist.c), Cover Flow's Landscape switch (the album order is the Albums "..." card's).
+# cover again), then the List Navigation card (Index Rail and Section Headers, the A-Z lists of patch/azlist.c), Cover Flow's Landscape switch (the album order is the Albums "..." card's),
+# Podcast Discover and Podcast Region, and the Scrobbling card: the switch (patch/scrobble.c), the ListenBrainz account row and Upload Scrobbles (patch/scrobpage.c).
+LB_AUTO_NOTE = 'Uploads on Wi-Fi while music plays.'
 LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Rebuild Covers', ACT_REBUILD),
@@ -640,6 +651,13 @@ LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Podcast Discover', ACT_PCSEARCH),
     Row('Podcast Region', ACT_REGION, REGION_PAGE_INDEX),
     Note('Search words are sent to Apple.'),
+    Row('Scrobbling', ACT_SCROBBLE),   # a card of its own (after a note): the listens to the card's .scrobbler.log (patch/scrobble.c), off by default
+    Row('ListenBrainz', ACT_LB, LB_PAGE_INDEX),   # the account: its user name; opens the ListenBrainz page
+    Row('Last.fm', ACT_LF, LF_PAGE_INDEX),   # the same for Last.fm
+    Row('Upload Scrobbles', ACT_SCROBUP),   # sends the log now, to every service that is set up (patch/scrobpage.c)
+    Note('Saved to .scrobbler.log on the card.'),
+    Row('Auto Upload', ACT_LBAUTO),   # a card of its own: the automatic upload, for both services (patch/scrobble.c)
+    Note(LB_AUTO_NOTE),
 ])
 # The album page (patch/albumpage.c, docs/modules/album-page.md): an album's tracks under the glass controls; opened by cc_open_album, never from a menu row.
 ALBUM_PAGE = Page('m1plus_album', 'm1plus_album_page', 'Album', kind='album')
@@ -948,11 +966,25 @@ NDSERVER_PAGE.layout = [Row('URL', ACT_NDVALUE, 0), Row('Username', ACT_NDVALUE,
 # The Navidrome Sign In page (patch/ndserver.c nl_open, tools/pod_ndserver.py build_login): the Server page's three login rows with our keyboard embedded, as the Join Wi-Fi Network page.
 NDLOGIN_PAGE = Page('m1plus_ndlogin', 'm1plus_ndlogin_page', 'Sign In', kind='ndlogin')
 
+# Settings > Library > ListenBrainz (patch/scrobpage.c, docs/modules/scrobble.md "Settings"): one card of one row, Account (Not Set, or the user name the service gave; no tap), and the note under it (the token is set in the card's scrobble.ini, never here;
+# there is no Sign Out: the user takes the token out of the file). The Auto Upload switch is on the Library page (both services share it).
+LB_NOTE = 'Put your token from listenbrainz.org in scrobble.ini on the card.'
+LB_PAGE = Page('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz', layout=[
+    Row('Account', ACT_INFO, INFO_LBACCT),
+    Note(LB_NOTE, lines=3),
+])
+# Settings > Library > Last.fm: the same page for the [LASTFM] section (Account: Not Set, Checking…, the user name, Sign-in Failed).
+LF_NOTE = 'Put USER, PASSWORD, API_KEY and API_SECRET under [LASTFM] in scrobble.ini on the card. Get an API key at last.fm/api.'
+LF_PAGE = Page('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm', layout=[
+    Row('Account', ACT_INFO, INFO_LFACCT),
+    Note(LF_NOTE, lines=5),
+])
+
 # PAGES[0] is the entry page.
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE]
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE, LB_PAGE, LF_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -967,6 +999,6 @@ assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] 
 assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
 assert PAGES[NEXTALBUM_PAGE_INDEX] is NEXTALBUM_PAGE and NEXTALBUM_PAGE_INDEX == PAGES.index(NDLOGIN_PAGE) - 1
 assert PAGES[NDLOGIN_PAGE_INDEX] is NDLOGIN_PAGE and PAGES[NDSERVER_PAGE_INDEX] is NDSERVER_PAGE and PAGES[NDROOT_PAGE_INDEX] is NDROOT_PAGE
-assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 5
-assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 2 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 7
+assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 4 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 3 and PAGES[LB_PAGE_INDEX] is LB_PAGE and LB_PAGE_INDEX == len(PAGES) - 2 and PAGES[LF_PAGE_INDEX] is LF_PAGE and LF_PAGE_INDEX == len(PAGES) - 1
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

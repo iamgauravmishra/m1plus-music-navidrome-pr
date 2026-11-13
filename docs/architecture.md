@@ -52,6 +52,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Software Update](modules/update.md) | Settings > System > About > Software Update: the newest GitHub release downloaded to the card, then stock's TF card update (a pinned call); version rules, checks, page, popup |
 | [Mini player](modules/minibar.md) | Home overlay, controls, blur and timer |
 | [Recently Played](modules/recent.md) | History file, covers and shelf layout |
+| [Scrobbling](modules/scrobble.md) | Offline .scrobbler.log of listens; the upload to ListenBrainz and Last.fm (manual, and automatic from the poll while music plays), the accounts (the card's scrobble.ini only, written on a computer: no entry and no sign-out on the device, nothing on flash) and settings (Library > ListenBrainz, Last.fm, Upload Scrobbles, Auto Upload) |
 | [Daily Mix](modules/dailymix.md) | Selection job, stored mix, card and page |
 | [Home cover build](modules/homecover.md) | Background cover cache build and its progress line |
 | [Podcasts](modules/podcasts.md) | Local episodes, feeds, covers, resume and speed |

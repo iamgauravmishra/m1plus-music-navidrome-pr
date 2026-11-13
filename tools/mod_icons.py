@@ -143,13 +143,13 @@ CARD_GLYPHS = {'Wi-Fi': 'wifi', 'Bluetooth': 'bluetooth', 'Home Screen': 'house'
                'Keyboards': '+keyboard', 'About': 'info', 'All System Settings': 'settings', 'Developer': 'code', 'Main Menu': 'list-checks', 'Extras': 'ellipsis',
                'Recent Albums': 'history', 'Daily Mix': 'shuffle', 'Regenerate Daily Mix': 'refresh-cw', 'Update Library': 'refresh-cw',
                'Landscape': 'rotate-cw-square', 'Volume Buttons': 'volume-2', 'Rebuild Covers': 'image-up', 'Rebuild Artist Photos': 'mic-vocal', 'Idle Display': 'timer', 'Theme': '+cassette-tape', 'Record': '+turntable', 'Base': 'palette', 'Boot to M1+ Music': 'power', 'Open Shanling Home': '@shanling', 'Equalizer': 'sliders-vertical',
-               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Download from AutoEq': 'download', 'Podcast Discover': 'compass', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging', 'Battery': 'battery-full', 'Charge Limit': 'battery-medium',
+               'Screenshot': 'camera', 'Clear Cover Cache': 'trash', 'Clear Track Durations': 'trash', 'Delete Unsupported Files': 'trash', 'Reset All Settings': 'rotate-ccw', 'Cache': 'hard-drive','Settings Files': 'file-cog', 'Download from AutoEq': 'download', 'Podcast Discover': 'compass', 'Scrobbling': 'list-music', 'ListenBrainz': '+musicbrainz:filled', 'Upload Scrobbles': 'upload', 'Last.fm': '+lastdotfm:filled', 'Auto Upload': 'clock', 'English': 'languages', 'Chinese (Pinyin)': 'languages', 'Battery Percentage': 'battery-charging', 'Battery': 'battery-full', 'Charge Limit': 'battery-medium',
                'Index Rail': 'list', 'Section Headers': 'list-start', 'Continue Playing': 'skip-forward'}
 
 
 def card_name(g):
     """The image of a card row's glyph: pod_ci_<glyph>."""
-    return 'pod_ci_' + g.lstrip('+@').replace('-', '_')
+    return 'pod_ci_' + g.lstrip('+@').split(':')[0].replace('-', '_')
 
 
 # A card is drawn by its rows (the stock list_view layouter stacks the scroll_view's children and ignores their y, so a card cannot be a view of its own: tools/pod_settings.py): the background of
@@ -481,7 +481,8 @@ def glyph(g, px, ctx, rgb=WHITE):
     (pull-down ring, no-cover tile); 'solid' filled shapes, 1.5 px absolute at <= 16 px, 2 px above; 'small' 1.5 px
     absolute at <= 16 px, 2 px above."""
     n = gname(g)
-    if ctx == 'solid': im = render(n, px, 'outline', 1.5 * 24 / px if px <= 16 else 2, True)
+    if is_custom(g) and is_filled(g): im = render(n, px, 'filled')      # a filled mark (the Last.fm logo): no stroke in any context
+    elif ctx == 'solid': im = render(n, px, 'outline', 1.5 * 24 / px if px <= 16 else 2, True)
     elif ctx == 'small': im = render(n, px, 'outline', 1.5 * 24 / px if px <= 16 else 2)
     elif ctx == 'disc': im = render(n, px, 'outline', DISC_SW)
     elif ctx == 'bare': im = render(n, px, 'outline', BARE_SW * 24 / px)

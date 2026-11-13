@@ -685,3 +685,68 @@ int pj_lrc_each(const char *json, unsigned n, unsigned cap, char *a, char *b,
     }
     return count;
 }
+
+int pj_member(const char *json, unsigned n, const char *want, char *dst, unsigned cap) {
+    return pj_span(json, n, want, dst, cap, (const char **)0, (unsigned *)0);
+}
+
+int pj_next(const char *json, unsigned n, unsigned *at, const char **val, unsigned *len) {
+    pj_t p;
+    p.s = (const unsigned char *)json + *at, p.e = (const unsigned char *)json + n;
+    if (*at >= n) return 0;
+    if (!*at) {
+        pj_ws(&p);
+        if (p.s >= p.e || *p.s != '[') return 0;
+        ++p.s;
+    }
+    pj_ws(&p);
+    if (p.s < p.e && *p.s == ',') ++p.s;
+    pj_ws(&p);
+    if (p.s >= p.e || *p.s == ']') return 0;
+    *val = (const char *)p.s;
+    if (!pj_skip(&p)) return 0;
+    *len = (unsigned)((const char *)p.s - *val);
+    *at = (unsigned)(p.s - (const unsigned char *)json);
+    return 1;
+}
+
+int pj_span(const char *json, unsigned n, const char *want, char *dst, unsigned cap, const char **val, unsigned *len) {
+    pj_t p;
+    int got = PJ_M_NONE;
+    char none[1];
+    p.s = (const unsigned char *)json, p.e = p.s + n;
+    if (!dst) dst = none, cap = 1;
+    if (!cap) return PJ_M_NONE;
+    dst[0] = 0;
+    pj_ws(&p);
+    if (p.s >= p.e || *p.s != '{') return PJ_M_NONE;
+    ++p.s;
+    for (;;) {
+        char key[16];
+        const unsigned char *v;
+        unsigned c;
+        pj_ws(&p);
+        if (p.s >= p.e) return PJ_M_NONE;
+        c = *p.s;
+        if (c == '}') return got;
+        if (c == ',') {
+            ++p.s;
+            continue;
+        }
+        if (c != '"' || !pj_key(&p, key, sizeof key)) return PJ_M_NONE;
+        v = p.s;
+        if (got != PJ_M_NONE || !pj_is(want, key)) {
+            if (!pj_skip(&p)) return PJ_M_NONE;
+        } else if (*v == '"') {
+            if (!pj_val(&p, dst, cap, (int *)0)) return PJ_M_NONE;
+            got = PJ_M_STRING;
+        } else {
+            if (!pj_skip(&p)) return PJ_M_NONE;
+            got = p.s - v == 4 && v[0] == 't' && v[1] == 'r' && v[2] == 'u' && v[3] == 'e' ? PJ_M_TRUE
+                  : p.s - v == 5 && v[0] == 'f' && v[1] == 'a' && v[2] == 'l' && v[3] == 's' && v[4] == 'e'
+                      ? PJ_M_FALSE
+                      : PJ_M_OTHER;
+        }
+        if (got != PJ_M_NONE && val && v) *val = (const char *)v, *len = (unsigned)(p.s - v), val = (const char **)0;
+    }
+}

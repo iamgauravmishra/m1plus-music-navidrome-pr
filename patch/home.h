@@ -123,6 +123,12 @@
 #define WIFINET_FILE \
     "/mnt/data/m1plus/wifi-networks" /* the saved networks a stock 2.9 supplicant cannot read (WPA3, Enhanced Open, Enterprise): network={} blocks the Wi-Fi page writes (patch/wifipage.c) and /usr/bin/wifi_connect.sh adds to the copy of the configuration only the newer supplicant reads */
 #define WIFINET_TMP "/mnt/data/m1plus/wifi-networks.tmp"
+#define SCROBBLE_FILE \
+    "/mnt/data/m1plus/scrobbling" /* the scrobble log: "1" = on, anything else or missing = off (Settings > Library; patch/scrobble.c) */
+#define SCROBBLE_TMP "/mnt/data/m1plus/scrobbling.tmp"
+#define SCROBBLE_AUTO_FILE \
+    "/mnt/data/m1plus/scrobble-auto" /* Settings > Library > Auto Upload: "1" = on, anything else or missing = off (patch/scrobble.c sa_*) */
+#define SCROBBLE_AUTO_TMP "/mnt/data/m1plus/scrobble-auto.tmp"
 #define MIX_DIR \
     CARD_DIR \
     "/daily-mix" /* the Daily Mix's own folder inside the card folder (CARD_DIR, patch/covercache.h); made by the writer */
@@ -207,7 +213,7 @@ extern void homecover_stat(
     int idx, char *buf,
     unsigned n); /* a value of that page: 0 Albums, 1 Covers, 2 No art, 3 Missing, 4 Old files, 5 Size, 6 Status */
 extern void setfiles_open(void); /* the Settings Files page is opening: read the files once (patch/setfiles.c) */
-extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..24 the rows (patch/setfiles.c) */
+extern void setfiles_stat(int idx, char *buf, unsigned n); /* a row's text as read: 0..28 the rows (patch/setfiles.c) */
 extern int setfiles_present(int idx); /* the row's file was there at its last read: tappable (patch/setfiles.c) */
 extern int setfiles_delete(int idx); /* unlinks a setting file, reads its row again; 0 when gone (patch/setfiles.c) */
 extern int

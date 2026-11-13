@@ -536,6 +536,14 @@ TEXT = dict([
     _t('Search words are sent to Apple.', '搜索词会发送给 Apple。', '搜尋詞會傳送給 Apple。', '検索語は Apple に送信されます。', '검색어는 Apple로 전송됩니다.', 'Les mots recherchés sont envoyés à Apple.',
        'Suchbegriffe werden an Apple gesendet.', 'Los términos se envían a Apple.', 'Le parole cercate vanno ad Apple.', 'คำค้นหาจะถูกส่งไปยัง Apple', 'Szukane słowa trafiają do Apple.',
        'Слова запроса отправляются в Apple.', 'Слова запиту надсилаються до Apple.'),
+    # Settings > Library > the scrobble log's switch and its note (patch/scrobble.c); Last.fm's word is kept where the language uses it as is
+    _t('Scrobbling', '听歌记录', '聽歌記錄', 'Scrobble', '스크로블', 'Scrobbling', 'Scrobbling',
+       'Scrobbling', 'Scrobbling', 'Scrobble', 'Scrobbling', 'Скробблинг', 'Скроблінг'),
+    _t('Saved to .scrobbler.log on the card.', '保存到卡上的 .scrobbler.log。', '儲存到卡上的 .scrobbler.log。',
+       'カードの .scrobbler.log に保存', '카드의 .scrobbler.log에 저장', 'Dans .scrobbler.log sur la carte.',
+       'In .scrobbler.log auf der Karte.', 'En .scrobbler.log en la tarjeta.', 'In .scrobbler.log sulla scheda.',
+       'บันทึกใน .scrobbler.log บนการ์ด', 'W .scrobbler.log na karcie.', 'В .scrobbler.log на карте.',
+       'У .scrobbler.log на картці.'),
     # Battery Percentage (patch/battery.c, docs/modules/battery.md): Settings > System > Battery
     _t('Battery Percentage', '电量百分比', '電量百分比', 'バッテリー残量', '배터리 잔량', 'Pourcentage', 'Akkustand',
        'Porcentaje', 'Percentuale', 'เปอร์เซ็นต์แบต', 'Poziom baterii', 'Процент заряда', 'Відсоток заряду'),
@@ -1527,7 +1535,7 @@ TEXT.update([
     _t('%dh ago', '%d小时前', '%d小時前', '%d時間前', '%d시간 전', 'il y a %d h', 'vor %d Std.', 'hace %d h', '%d h fa', '%d ชั่วโมงที่แล้ว', '%d godz. temu', '%d ч назад', '%d год тому'),
     _t('%dd ago', '%d天前', '%d天前', '%d日前', '%d일 전', 'il y a %d j', 'vor %d T.', 'hace %d d', '%d g fa', '%d วันที่แล้ว', '%d dn. temu', '%d дн. назад', '%d дн. тому'),
 ])
-DATE_KEYS = _MONTH_KEYS + (', %d', '%dm ago', '%dh ago', '%dd ago', 'Refreshing %d/%d…', 'Exported %d show', 'Exported %d shows', 'Band %d', 'Updating library… %d/%d', 'Loading covers… %d/%d', 'Loading artist images… %d/%d')   # keys with a %d that do not start with it (the tables test, test/pod/i18n.py)
+DATE_KEYS = _MONTH_KEYS + (', %d', '%dm ago', '%dh ago', '%dd ago', 'Refreshing %d/%d…', 'Exported %d show', 'Exported %d shows', 'Band %d', 'Updating library… %d/%d', 'Loading covers… %d/%d', 'Loading artist images… %d/%d', 'Scrobbles sent: %d', 'Card error, %d sent', 'Upload failed, %d sent')   # keys with a %d that do not start with it (the tables test, test/pod/i18n.py)
 # The Navidrome Server page (patch/ndserver.c, tools/pod_ndserver.py): the row labels (the keyboard's titles and placeholders too), the two confirmations and the toasts. "Navidrome" stays as it is.
 TEXT.update([
     _t('Server', '服务器', '伺服器', 'サーバー', '서버', 'Serveur', 'Server', 'Servidor', 'Server', 'เซิร์ฟเวอร์', 'Serwer', 'Сервер', 'Сервер'),
@@ -1587,6 +1595,66 @@ TEXT.update([
        'Navidrome, Gonic, Airsonic et autres serveurs Subsonic', 'Navidrome, Gonic, Airsonic und andere Subsonic-Server', 'Navidrome, Gonic, Airsonic y otros servidores Subsonic', 'Navidrome, Gonic, Airsonic e altri server Subsonic',
        'Navidrome, Gonic, Airsonic และเซิร์ฟเวอร์ Subsonic อื่นๆ', 'Navidrome, Gonic, Airsonic i inne serwery Subsonic', 'Navidrome, Gonic, Airsonic и другие серверы Subsonic', 'Navidrome, Gonic, Airsonic та інші сервери Subsonic'),
     _t('Add Server', '添加服务器', '新增伺服器', 'サーバーを追加', '서버 추가', 'Ajouter un serveur', 'Server hinzufügen', 'Añadir servidor', 'Aggiungi server', 'เพิ่มเซิร์ฟเวอร์', 'Dodaj serwer', 'Добавить сервер', 'Додати сервер'),
+])
+# The ListenBrainz settings (patch/scrobpage.c, docs/modules/scrobble.md "Settings"): the Library page's rows, the ListenBrainz and Last.fm pages and the toasts.
+# "ListenBrainz" and the file name scrobble.ini stay as they are.
+TEXT['ListenBrainz'] = {loc: 'ListenBrainz' for loc in LOCALES}
+TEXT['Last.fm'] = {loc: 'Last.fm' for loc in LOCALES}
+TEXT.update([
+    _t('Upload Scrobbles', '上传听歌记录', '上載聽歌記錄', 'Scrobble を送信', '스크로블 업로드', 'Envoyer les scrobbles', 'Scrobbles hochladen', 'Subir scrobbles', 'Carica scrobble', 'อัปโหลด Scrobble',
+       'Wyślij scrobble', 'Отправить скробблы', 'Надіслати скробли'),
+    _t('Account', '账户', '帳戶', 'アカウント', '계정', 'Compte', 'Konto', 'Cuenta', 'Account', 'บัญชี', 'Konto', 'Аккаунт', 'Акаунт'),
+    _t('Not Set', '未设置', '未設定', '未設定', '설정 안 됨', 'Non défini', 'Nicht festgelegt', 'Sin definir', 'Non impostato', 'ไม่ได้ตั้งค่า', 'Nie ustawiono', 'Не задан', 'Не задано'),
+    _t('Invalid Token', '令牌无效', '權杖無效', '無効なトークン', '잘못된 토큰', 'Jeton non valide', 'Token ungültig', 'Token no válido', 'Token non valido', 'โทเค็นไม่ถูกต้อง',
+       'Nieprawidłowy token', 'Неверный токен', 'Недійсний токен'),
+    _t('Already uploading', '正在上传', '正在上載', 'すでに送信中です', '이미 업로드 중', 'Envoi déjà en cours', 'Upload läuft bereits', 'Ya se está subiendo', 'Caricamento già in corso', 'กำลังอัปโหลดอยู่แล้ว',
+       'Wysyłanie już trwa', 'Отправка уже идёт', 'Надсилання вже триває'),
+    _t('Set up an account first', '请先设置账户', '請先設定帳戶', '先にアカウントを設定', '먼저 계정을 설정', 'Configurez d’abord un compte', 'Erst ein Konto einrichten',
+       'Configura una cuenta primero', 'Configura prima un account', 'ตั้งค่าบัญชีก่อน', 'Najpierw skonfiguruj konto', 'Сначала настройте аккаунт', 'Спершу налаштуйте акаунт'),
+    _t('Sign-in Failed', '登录失败', '登入失敗', 'サインイン失敗', '로그인 실패', 'Échec de la connexion', 'Anmeldung fehlgeschlagen', 'Error de inicio de sesión', 'Accesso non riuscito', 'เข้าสู่ระบบไม่สำเร็จ',
+       'Logowanie nieudane', 'Ошибка входа', 'Помилка входу'),
+    # (the note of the Last.fm page: the four keys of the file's [LASTFM] section; the key names, the section, the file name and last.fm/api stay as they are)
+    _t('Put USER, PASSWORD, API_KEY and API_SECRET under [LASTFM] in scrobble.ini on the card. Get an API key at last.fm/api.',
+       '在存储卡上的 scrobble.ini 的 [LASTFM] 下写入 USER、PASSWORD、API_KEY 和 API_SECRET。API 密钥可在 last.fm/api 申请。',
+       '在記憶卡上的 scrobble.ini 的 [LASTFM] 下寫入 USER、PASSWORD、API_KEY 和 API_SECRET。API 金鑰可在 last.fm/api 申請。',
+       'カードの scrobble.ini の [LASTFM] に USER、PASSWORD、API_KEY、API_SECRET を書き込んでください。API キーは last.fm/api で取得できます。',
+       '카드의 scrobble.ini에서 [LASTFM] 아래에 USER, PASSWORD, API_KEY, API_SECRET을 넣으세요. API 키는 last.fm/api에서 받습니다.',
+       'Placez USER, PASSWORD, API_KEY et API_SECRET sous [LASTFM] dans scrobble.ini sur la carte. Clé API sur last.fm/api.',
+       'USER, PASSWORD, API_KEY und API_SECRET unter [LASTFM] in scrobble.ini auf der Karte eintragen. API-Schlüssel: last.fm/api.',
+       'Pon USER, PASSWORD, API_KEY y API_SECRET bajo [LASTFM] en scrobble.ini en la tarjeta. Clave de API en last.fm/api.',
+       'Metti USER, PASSWORD, API_KEY e API_SECRET sotto [LASTFM] in scrobble.ini sulla scheda. Chiave API su last.fm/api.',
+       'ใส่ USER, PASSWORD, API_KEY และ API_SECRET ใต้ [LASTFM] ใน scrobble.ini บนการ์ด ขอคีย์ API ได้ที่ last.fm/api',
+       'Umieść USER, PASSWORD, API_KEY i API_SECRET pod [LASTFM] w scrobble.ini na karcie. Klucz API: last.fm/api.',
+       'Запишите USER, PASSWORD, API_KEY и API_SECRET в [LASTFM] в scrobble.ini на карте. Ключ API: last.fm/api.',
+       'Запишіть USER, PASSWORD, API_KEY і API_SECRET у [LASTFM] у scrobble.ini на картці. Ключ API: last.fm/api.'),
+    _t('Not available in USB mode', 'USB 模式下不可用', 'USB 模式下無法使用', 'USB モードでは使用できません', 'USB 모드에서는 사용할 수 없음', 'Indisponible en mode USB', 'Im USB-Modus nicht verfügbar',
+       'No disponible en modo USB', 'Non disponibile in modalità USB', 'ใช้ไม่ได้ในโหมด USB', 'Niedostępne w trybie USB', 'Недоступно в режиме USB', 'Недоступно в режимі USB'),
+    _t('Uploading scrobbles', '正在上传听歌记录', '正在上載聽歌記錄', 'Scrobble を送信中', '스크로블 업로드 중', 'Envoi des scrobbles', 'Scrobbles werden hochgeladen', 'Subiendo scrobbles', 'Carico gli scrobble',
+       'กำลังอัปโหลด Scrobble', 'Wysyłanie scrobbli', 'Отправка скробблов', 'Надсилання скроблів'),
+    _t('Scrobbles sent: %d', '已上传听歌记录：%d', '已上載聽歌記錄：%d', '送信した Scrobble：%d', '보낸 스크로블: %d', 'Scrobbles envoyés : %d', 'Gesendete Scrobbles: %d', 'Scrobbles enviados: %d',
+       'Scrobble inviati: %d', 'ส่ง Scrobble แล้ว: %d', 'Wysłane scrobble: %d', 'Отправлено скробблов: %d', 'Надіслано скроблів: %d'),
+    _t('Nothing to upload', '没有可上传的记录', '沒有可上載的記錄', '送信するものはありません', '업로드할 항목 없음', 'Rien à envoyer', 'Nichts hochzuladen', 'Nada que subir', 'Niente da caricare',
+       'ไม่มีอะไรให้อัปโหลด', 'Nie ma nic do wysłania', 'Нечего отправлять', 'Нічого надсилати'),
+    _t('%d sent, %d rejected', '已上传 %d，被拒绝 %d', '已上載 %d，被拒絕 %d', '送信 %d、拒否 %d', '보냄 %d, 거부됨 %d', '%d envoyés, %d refusés', '%d gesendet, %d abgelehnt', '%d enviados, %d rechazados',
+       '%d inviati, %d rifiutati', 'ส่งแล้ว %d, ถูกปฏิเสธ %d', 'Wysłano %d, odrzucono %d', 'Отправлено %d, отклонено %d', 'Надіслано %d, відхилено %d'),
+    _t('Card error, %d sent', '存储卡错误，已上传 %d', '記憶卡錯誤，已上載 %d', 'カードエラー、送信 %d', '카드 오류, 보냄 %d', 'Erreur de carte, %d envoyés', 'Kartenfehler, %d gesendet', 'Error de tarjeta, %d enviados',
+       'Errore della scheda, %d inviati', 'การ์ดผิดพลาด ส่งแล้ว %d', 'Błąd karty, wysłano %d', 'Ошибка карты, отправлено %d', 'Помилка картки, надіслано %d'),
+    _t('Upload failed, %d sent', '上传失败，已上传 %d', '上載失敗，已上載 %d', '送信に失敗、送信 %d', '업로드 실패, 보냄 %d', 'Échec de l’envoi, %d envoyés', 'Upload fehlgeschlagen, %d gesendet',
+       'Error al subir, %d enviados', 'Caricamento non riuscito, %d inviati', 'อัปโหลดไม่สำเร็จ ส่งแล้ว %d', 'Wysyłanie nieudane, wysłano %d', 'Сбой отправки, отправлено %d', 'Помилка надсилання, надіслано %d'),
+    # the Library page's Auto Upload card (patch/scrobble.c, the automatic upload): the switch and its one-line note
+    _t('Auto Upload', '自动上传', '自動上載', '自動送信', '자동 업로드', 'Envoi automatique', 'Auto-Upload', 'Subida automática', 'Invio automatico', 'อัปโหลดอัตโนมัติ',
+       'Autowysyłanie', 'Автоотправка', 'Автонадсилання'),
+    _t('Uploads on Wi-Fi while music plays.', '播放音乐时通过 Wi-Fi 上传。', '播放音樂時透過 Wi-Fi 上載。', '再生中に Wi-Fi で送信します。', '음악 재생 중 Wi-Fi로 업로드합니다.', 'Envoi en Wi-Fi pendant la lecture.',
+       'Lädt per WLAN hoch, während Musik läuft.', 'Sube por Wi-Fi mientras suena la música.', 'Carica in Wi-Fi durante la riproduzione.', 'อัปโหลดผ่าน Wi-Fi ขณะเล่นเพลง',
+       'Wysyła przez Wi-Fi podczas odtwarzania.', 'Отправка по Wi-Fi во время музыки.', 'Надсилання через Wi-Fi під час музики.'),
+    # (the note under the Account card: the token lives in scrobble.ini on the card, written on a computer; machine translations, unreviewed)
+    _t('Put your token from listenbrainz.org in scrobble.ini on the card.', '将 listenbrainz.org 上的令牌写入存储卡上的 scrobble.ini。',
+       '將 listenbrainz.org 上的權杖寫入記憶卡上的 scrobble.ini。', 'listenbrainz.org のトークンをカードの scrobble.ini に書き込んでください。',
+       'listenbrainz.org의 토큰을 카드의 scrobble.ini에 넣으세요.', 'Placez votre jeton de listenbrainz.org dans scrobble.ini sur la carte.',
+       'Token von listenbrainz.org in scrobble.ini auf der Karte eintragen.', 'Pon tu token de listenbrainz.org en scrobble.ini en la tarjeta.',
+       'Metti il token di listenbrainz.org in scrobble.ini sulla scheda.', 'ใส่โทเค็นจาก listenbrainz.org ไว้ใน scrobble.ini บนการ์ด',
+       'Umieść token z listenbrainz.org w scrobble.ini na karcie.', 'Запишите токен с listenbrainz.org в scrobble.ini на карте.',
+       'Запишіть токен із listenbrainz.org у scrobble.ini на картці.'),
 ])
 DPAGE_KEYS = ('Updated today', 'Updated yesterday', 'Updated %s', 'Play', 'Songs you love and some to rediscover, made fresh every day.')   # the Daily Mix page's keys
 DAILY_KEYS =('Made for You', 'Daily Mix', 'Regenerate Daily Mix', '%s and more', '%s, %s')     # the card's keys (tools/pod_dailymix.py TEXT)

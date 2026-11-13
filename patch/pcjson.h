@@ -80,3 +80,23 @@ typedef struct {
  * records passed to fn, or -1 when the answer is not an object or an array. An object cut short by the end of the text is not passed. */
 int pj_lrc_each(const char *json, unsigned n, unsigned cap, char *a, char *b,
                 int (*fn)(void *, const pj_lrc_t *, const char *), void *ctx);
+
+#define PJ_M_NONE 0 /* no such member, or the text is not one whole object */
+#define PJ_M_STRING 1 /* a string: decoded into dst */
+#define PJ_M_TRUE 2
+#define PJ_M_FALSE 3
+#define PJ_M_OTHER 4 /* a number, null, an object or an array */
+
+/* The member called want (under 15 bytes) of the top-level object of the n bytes at json (ListenBrainz's validate-token answer): one PJ_M_* kind, a string's text decoded into dst
+ * (cap bytes with the NUL, cut on a character boundary; "" for every other kind). The first member of that name counts. The object must be whole: a text that ends before its closing
+ * brace, or is not an object, has no member. Never reads outside json[0, n) or writes outside dst[0, cap). */
+int pj_member(const char *json, unsigned n, const char *want, char *dst, unsigned cap);
+
+/* pj_member that also gives the member's own text (Last.fm's answers nest: session.key, scrobbles.scrobble[i].ignoredMessage.code): *val the value's first byte inside json and *len its
+ * length (a string with its quotes, an object or an array with its brackets, a number's digits), so that it can be read again as an object (pj_member, pj_span) or an array (pj_next).
+ * dst may be NULL (a string is then not decoded), val may be NULL. *val and *len are set only when a kind other than PJ_M_NONE is returned. */
+int pj_span(const char *json, unsigned n, const char *want, char *dst, unsigned cap, const char **val, unsigned *len);
+
+/* The elements of the array that is the n bytes at json, one a call: *at is 0 before the first and is moved on; 1 with *val / *len the element's text, 0 at the array's end, when the
+ * text is no array, or when it ends inside an element. */
+int pj_next(const char *json, unsigned n, unsigned *at, const char **val, unsigned *len);
