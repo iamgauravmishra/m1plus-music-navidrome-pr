@@ -542,9 +542,6 @@ TEXT = dict([
        'Top 25 programas en %s', 'Top 25 programmi in %s', 'รายการยอดนิยม 25 อันดับใน %s', 'Top 25 programów: %s', 'Топ-25 шоу: %s', 'Топ-25 шоу: %s'),
     _t('Top 25 Episodes in %s', '%s 热门单集前 25', '%s 熱門單集前 25', '%sの人気エピソードトップ25', '%s 인기 에피소드 TOP 25', 'Top 25 des épisodes : %s', 'Top 25 Folgen in %s',
        'Top 25 episodios en %s', 'Top 25 episodi in %s', 'ตอนยอดนิยม 25 อันดับใน %s', 'Top 25 odcinków: %s', 'Топ-25 выпусков: %s', 'Топ-25 випусків: %s'),
-    _t('Search words are sent to Apple.', '搜索词会发送给 Apple。', '搜尋詞會傳送給 Apple。', '検索語は Apple に送信されます。', '검색어는 Apple로 전송됩니다.', 'Les mots recherchés sont envoyés à Apple.',
-       'Suchbegriffe werden an Apple gesendet.', 'Los términos se envían a Apple.', 'Le parole cercate vanno ad Apple.', 'คำค้นหาจะถูกส่งไปยัง Apple', 'Szukane słowa trafiają do Apple.',
-       'Слова запроса отправляются в Apple.', 'Слова запиту надсилаються до Apple.'),
     # Settings > Library > the scrobble log's switch and its note (patch/scrobble.c); Last.fm's word is kept where the language uses it as is
     _t('Scrobbling', '听歌记录', '聽歌記錄', 'Scrobble', '스크로블', 'Scrobbling', 'Scrobbling',
        'Scrobbling', 'Scrobbling', 'Scrobble', 'Scrobbling', 'Скробблинг', 'Скроблінг'),
@@ -553,6 +550,15 @@ TEXT = dict([
        'In .scrobbler.log auf der Karte.', 'En .scrobbler.log en la tarjeta.', 'In .scrobbler.log sulla scheda.',
        'บันทึกใน .scrobbler.log บนการ์ด', 'W .scrobbler.log na karcie.', 'В .scrobbler.log на карте.',
        'У .scrobbler.log на картці.'),
+    _t('Podcast Directory', '播客目录', '播客目錄', 'ディレクトリ', '디렉터리', 'Annuaire', 'Verzeichnis',
+       'Directorio', 'Directory', 'ไดเรกทอรี', 'Katalog', 'Каталог', 'Каталог'),   # (the row has no glyph and its value needs the room: the short word under the Podcasts header)
+    _t('Directory', '目录', '目錄', 'ディレクトリ', '디렉터리', 'Annuaire', 'Verzeichnis',
+       'Directorio', 'Directory', 'ไดเรกทอรี', 'Katalog', 'Каталог', 'Каталог'),   # (the row's label: it shares the room with the name of the directory)
+    _t('Search Podcast Index', '搜索 Podcast Index', '搜尋 Podcast Index', 'Podcast Index を検索', 'Podcast Index 검색', 'Chercher sur Podcast Index', 'Podcast Index durchsuchen',
+       'Buscar en Podcast Index', 'Cerca su Podcast Index', 'ค้นหา Podcast Index', 'Szukaj w Podcast Index', 'Поиск в Podcast Index', 'Пошук у Podcast Index'),
+    _t('Search words go to the chosen directory.', '搜索词会发送给所选目录。', '搜尋詞會傳送給所選目錄。', '検索語は選択したディレクトリに送信されます。', '검색어는 선택한 디렉터리로 전송됩니다.',
+       'Les mots recherchés vont à l\'annuaire choisi.', 'Suchbegriffe gehen an das gewählte Verzeichnis.', 'Los términos van al directorio elegido.', 'Le parole cercate vanno alla directory scelta.',
+       'คำค้นหาจะถูกส่งไปยังไดเรกทอรีที่เลือก', 'Szukane słowa trafiają do wybranego katalogu.', 'Слова запроса отправляются в выбранный каталог.', 'Слова запиту надсилаються до вибраного каталогу.'),
     # Battery Percentage (patch/battery.c, docs/modules/battery.md): Settings > System > Battery
     _t('Battery Percentage', '电量百分比', '電量百分比', 'バッテリー残量', '배터리 잔량', 'Pourcentage', 'Akkustand',
        'Porcentaje', 'Percentuale', 'เปอร์เซ็นต์แบต', 'Poziom baterii', 'Процент заряда', 'Відсоток заряду'),
@@ -1000,6 +1006,7 @@ TEXT = dict([
     _t('Search', '搜索', '搜尋', '検索', '검색', 'Chercher', 'Suchen',
        'Buscar', 'Cerca', 'ค้นหา', 'Szukaj', 'Поиск', 'Пошук'),
     _t('Apple Podcasts', *['Apple Podcasts'] * 12),
+    _t('Podcast Index', *['Podcast Index'] * 12),
     _t('Discover', '发现', '探索', '見つける', '탐색', 'Découvrir', 'Entdecken',
        'Descubrir', 'Scopri', 'ค้นพบ', 'Odkrywaj', 'Обзор', 'Огляд'),   # the Podcasts page's row that opens the Discover charts, and the level's title
     _t('Search Apple Podcasts', '搜索 Apple Podcasts', '搜尋 Apple Podcasts', 'Apple Podcasts を検索', 'Apple Podcasts 검색', 'Chercher sur Apple Podcasts', 'Apple Podcasts durchsuchen',

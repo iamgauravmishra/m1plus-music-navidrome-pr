@@ -1385,8 +1385,11 @@ int pn_search(const char *term) {
     pn_search_dir();
     pn_search_clean();
     pn.surl[0] = 0;
-    if (!pn_cat(pn.surl, sizeof pn.surl, PN_SEARCH_URL) || !pn_cat(pn.surl, sizeof pn.surl, pcregion_code()) ||
-        !pn_cat(pn.surl, sizeof pn.surl, "&term=") || !pn_urlenc(pn.surl, sizeof pn.surl, term))
+    if (pcdir_index()) { /* Podcast Index instead of the store: no country */
+        if (!pn_cat(pn.surl, sizeof pn.surl, PN_INDEX_SEARCH_URL) || !pn_urlenc(pn.surl, sizeof pn.surl, term))
+            return PN_MEM;
+    } else if (!pn_cat(pn.surl, sizeof pn.surl, PN_SEARCH_URL) || !pn_cat(pn.surl, sizeof pn.surl, pcregion_code()) ||
+               !pn_cat(pn.surl, sizeof pn.surl, "&term=") || !pn_urlenc(pn.surl, sizeof pn.surl, term))
         return PN_MEM;
     pn.scode = PN_OK;
     pn.sstate = PN_S_QUERY;
@@ -2254,7 +2257,9 @@ static void *pn_pmain(void *arg) {
         pj_result_t *r = calloc(1, sizeof *r);
         unsigned got = 0;
         url[0] = 0;
-        pn_cat(url, sizeof url, PN_LOOKUP_URL);
+        pn_cat(url, sizeof url,
+               !pn.pcc[0] && pcdir_index() ? PN_INDEX_LOOKUP_URL
+                                           : PN_LOOKUP_URL); /* (a chart row: the store, whatever the choice) */
         pn_cat(url, sizeof url, pn.pid);
         if (pn.pcc
                 [0]) { /* a chart row: the store the chart is of (a show of another store has no record in this one's) */

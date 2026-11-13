@@ -123,6 +123,9 @@
 #define PCSEARCH_FILE \
     "/mnt/data/m1plus/podcast-online-search" /* Podcast Discover: "0" = off, anything else or missing = on (Settings > Library > Podcasts; patch/podcasts.c) */
 #define PCSEARCH_TMP "/mnt/data/m1plus/podcast-online-search.tmp"
+#define PCDIR_FILE \
+    "/mnt/data/m1plus/podcast-directory" /* Podcast Directory: "1" = Podcast Index, anything else or missing = Apple Podcasts (Settings > Library > Podcasts; patch/podcasts.c) */
+#define PCDIR_TMP "/mnt/data/m1plus/podcast-directory.tmp"
 #define WIFINET_FILE \
     "/mnt/data/m1plus/wifi-networks" /* the saved networks a stock 2.9 supplicant cannot read (WPA3, Enhanced Open, Enterprise): network={} blocks the Wi-Fi page writes (patch/wifipage.c) and /usr/bin/wifi_connect.sh adds to the copy of the configuration only the newer supplicant reads */
 #define WIFINET_TMP "/mnt/data/m1plus/wifi-networks.tmp"
@@ -283,6 +286,12 @@ extern int kb_zh_toggle(void); /* flip it, saved atomically; the new state, or -
 extern int pcsearch_setting(
     void); /* patch/podcasts.c: Settings > Library > Podcasts > Podcast Discover: 1 on (the default), 0 off */
 extern int pcsearch_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */
+extern int pcdir_setting(
+    void); /* patch/podcasts.c: Settings > Library > Podcasts > Podcast Directory: PCDIR_APPLE (the default) or PCDIR_INDEX */
+extern int
+pcdir_set(int dir); /* choose one, saved atomically; the choice, or -1 when it is not one or could not be saved */
+#define PCDIR_APPLE 0
+#define PCDIR_INDEX 1
 extern int battpct_setting(
     void); /* patch/battery.c: Settings > System > Battery > Battery Percentage: 1 on, 0 off (the default) */
 extern int battpct_toggle(void); /* flip it, saved atomically; the new state, or -1 when it could not be saved */

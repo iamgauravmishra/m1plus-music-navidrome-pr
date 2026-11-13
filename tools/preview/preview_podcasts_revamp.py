@@ -602,7 +602,7 @@ def search_sheet(s, shows, workdir, path):
               ('After Subscribe: the real Show page in place\n(pills, "...", sheets; Back = the results)', show_frame(s, prev, 0)[0]),
               ('A result that is a show already: its real page\n(cells with pills, "..."), no Subscribed', show_frame(s, mini, 0)[0]),
               ('The search field, with and without the clear\nbutton, the magnifier unmoved; clear button zoomed', field_panel(s, shows)),
-              ('Settings > Library > Podcasts: Podcast Region', libf)]
+              ('Settings > Library > Podcasts: Podcast Directory and Region', libf)]
     assemble(frames, 4, path)
 
 

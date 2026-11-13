@@ -153,6 +153,12 @@ unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
  * writes the record they read. The store's country is the Podcast Region (patch/pcregion.h): the search puts pcregion_code() after PN_SEARCH_URL's "country=", then "&term=". */
 #define PN_SEARCH_URL "https://itunes.apple.com/search?media=podcast&entity=podcast&limit=25&country="
 #define PN_LOOKUP_URL "https://itunes.apple.com/lookup?id="
+/* Podcast Index's answers of the same shape and with the same parser (no key, no country; it refuses a request whose User-Agent does not name the application, which every request of ours does: patch/net.c NET_AGENT).
+ * Used instead of the store's, never besides it, while Settings > Library > Podcasts > Podcast Directory says Podcast Index (pcdir_index, patch/podcasts.c): the search, and the lookup of a result's or a link's id. Discover's
+ * charts and a chart row's lookup stay the store's whatever it says. */
+#define PN_INDEX_SEARCH_URL "https://api.podcastindex.org/search?limit=25&term="
+#define PN_INDEX_LOOKUP_URL "https://api.podcastindex.org/lookup?entity=podcast&id="
+int pcdir_index(void); /* patch/podcasts.c: 1 when the chosen directory is Podcast Index */
 #define PN_JSON_CAP 98304u /* a search or lookup answer over 96 KB is cut there (25 results are about 44 KB) */
 #define PN_THUMB_CAP 262144u /* a result's artwork (about 5 KB) over this is refused */
 #define PN_SEARCH_DIR \

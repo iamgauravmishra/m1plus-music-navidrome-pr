@@ -324,6 +324,9 @@ static struct {
     char sq[KB_MAX_LONG + 1], sp_url[PC_URL], sp_art[PJ_ART], sp_id[16], sp_eid[16], sp_text[KB_MAX_LONG + 1];
     /* aqh: pc_hash of the text the Apple answer is of (0: none); sfok: the page has the field's widgets (without them it has no search). */
     unsigned aqh;
+    /* rown: 0, or 1 + pcdir_index() of the last TERM search (never an address or a link): the directory the held rows, or their state (Searching, No results, an error), are of; ldir: the choice the level's title and hint were
+     * set for. Settings > Library > Podcasts > Directory may change while the level is away or behind: pg_srch_dir_sync keeps the rows the chosen directory's or none. */
+    int rown, ldir;
     int sfok,
         searchon; /* searchon: sfok and Podcast Discover is on in Settings (read when the page opens and each time it is back in front) */
     /* Discover (docs/modules/podcasts.md "Discover"): find: the navbar's magnifier (opens the search level); dtab: the chart shown, 0 Shows or 1 Episodes; dn: its rows; dpend: a chart job waits to start (the downloads pause first);
@@ -337,6 +340,18 @@ static struct {
 
 /* Settings > Library > Podcasts > Podcast Discover: "0" = off, anything else or no file = on (the default). Read when the Podcasts page opens and each time it is back in front. */
 int pcsearch_setting(void) { return set_read(PCSEARCH_FILE, '1') != '0'; }
+
+/* Settings > Library > Podcasts > Podcast Directory: where the search and the lookup of a show's id go. "1" = Podcast Index, anything else or no file = Apple Podcasts (the default). Read when a search or a lookup starts
+ * (patch/pcnet.c). Discover's charts are Apple's whatever it says. */
+int pcdir_setting(void) { return set_read(PCDIR_FILE, '0') == '1' ? PCDIR_INDEX : PCDIR_APPLE; }
+
+int pcdir_index(void) { return pcdir_setting() == PCDIR_INDEX; }
+
+int pcdir_set(int dir) {
+    if (dir != PCDIR_APPLE && dir != PCDIR_INDEX) return -1;
+    if (home_write_atomic(PCDIR_FILE, PCDIR_TMP, dir == PCDIR_INDEX ? "1\n" : "0\n") != 0) return -1;
+    return dir;
+}
 
 int pcsearch_toggle(void) {
     int next = !pcsearch_setting();
@@ -3057,8 +3072,38 @@ static void pg_srch_apply(void) {
 
 static void pg_srch_submit(const char *text);
 
+/* The title and the field's hint of the level say the chosen directory (Podcast Index, or Apple Podcasts). Called after pg_nav has sized the title (az_fit cuts to the width). */
+static void pg_srch_labels(void) {
+    pg.ldir = pcdir_index();
+    if (pg.sf_hint) widget_set_tr_text(pg.sf_hint, pg.ldir ? "Search Podcast Index" : "Search Apple Podcasts");
+    pg_title((const char *)0, TR(pg.ldir ? "Podcast Index" : "Apple Podcasts"));
+}
+
+/* The one invariant of the level: the rows shown (the held answer of pn_search_*, and the state that goes with it: Searching, No results, an error) are the chosen directory's, or there are none. When they are of
+ * another one (pg.rown) they go: a term search that is queued is dropped, one that runs is told to stop (a feed fetch or an id lookup is never touched), the state is reset so that the level shows the empty
+ * state, and pn_search_clean removes the pictures when no search worker can be writing them (else the next pn_search does, and nothing reads the rows meanwhile: pg.srn is 0 with the state idle). aqh is reset
+ * only for a term (the text of an address stays the one the level was entered with: Back never fetches it again). 1 when they went; asking the chosen directory for the field's term is the caller's. */
+static int pg_srch_dir_sync(void) {
+    char id[16];
+    if (!pg.rown || pg.rown - 1 == pcdir_index()) return 0;
+    if (pg.spend == SP_SEARCH) pg.spend = SP_NONE;
+    if (pn_search_state() == PN_S_QUERY || pn_search_state() == PN_S_THUMBS)
+        pn_cancel(
+            PN_K_PODCASTS); /* (a search worker is the one job that can be running here: the level cancels what it starts) */
+    else
+        pn_search_clean();
+    pg.sstate = SS_IDLE;
+    pg.scode = PN_OK;
+    pg.rown = 0;
+    pg.srn = 0;
+    if (pn_classify(pg.sq, id, sizeof id) == 0) pg.aqh = 0;
+    return 1;
+}
+
 /* The level: the field (its text and hint), the answer so far. fresh: the page is entered from the Shows level; the text kept from last time is searched again when it is not the one the answer is of, and with nothing typed the keyboard opens at once. */
 static void pg_load_search(int fresh) {
+    int dropped;
+    char idbuf[16];
     if (!pg.searchon) { /* (Podcast Discover went off in Settings while a preview was open: Back lands on the Shows level) */
         pg_load_shows(1);
         return;
@@ -3073,19 +3118,19 @@ static void pg_load_search(int fresh) {
     pg.level = L_SRCH;
     pg.from_search = pg.pv_disc = 0;
     pg.gen = pn_gen(), pg.dgen = pn_dl_gen();
+    dropped = pg_srch_dir_sync();
     pg_nav();
     m1_show(pg.view, 1);
-    if (pg.sf_hint) widget_set_tr_text(pg.sf_hint, "Search Apple Podcasts");
     pg_srch_rows_reset();
     pg.sgen = pn_search_gen();
     pg_nav();
-    if (fresh && pg.sq[0] && pc_hash(pg.sq) != pg.aqh) {
+    if (pg.sq[0] && pc_hash(pg.sq) != pg.aqh && (fresh || (dropped && pn_classify(pg.sq, idbuf, sizeof idbuf) == 0))) {
         pg_copy(pg.sp_text, sizeof pg.sp_text, pg.sq);
         pg_srch_submit(pg.sp_text);
     } else
         pg_srch_apply();
     widget_set_prop_int(pg.sv, "yoffset", 0);
-    pg_title((const char *)0, TR("Apple Podcasts")); /* after pg_nav has sized the title (az_fit cuts to the width) */
+    pg_srch_labels(); /* after pg_nav has sized the title */
     pg_collapse();
     pg_title_show();
     pg_fade();
@@ -3183,6 +3228,7 @@ static void pg_srch_submit(const char *text) {
     if (kind == 1 && pg_open_subscribed(text))
         return; /* a typed address of a show that is subscribed already: its real page, nothing fetched */
     if (kind == 0) {
+        pg.rown = 1 + pcdir_index(); /* (the rows to come are this directory's) */
         pg.spend = SP_SEARCH;
         pg.sstate = SS_WAIT;
         pg.scode = PN_OK;
@@ -3231,7 +3277,9 @@ static void pg_srch_pending(void) {
 
 static void pg_srch_edit(void) {
     if (pg.level != L_SRCH || pg.dlg) return;
-    keyboard_open(TR("Apple Podcasts"), TR("Search Apple Podcasts"), pg.sq, pg_srch_done, pg_srch_cancel, KB_LONG);
+    keyboard_open(TR(pcdir_index() ? "Podcast Index" : "Apple Podcasts"),
+                  TR(pcdir_index() ? "Search Podcast Index" : "Search Apple Podcasts"), pg.sq, pg_srch_done,
+                  pg_srch_cancel, KB_LONG);
 }
 
 /* The preview that is ready is opened, or its failure shown (the 1 s tick of the search and Discover levels). */
@@ -3282,6 +3330,7 @@ static int pg_open_subscribed(const char *feed) {
 static void pg_srch_clear(void) {
     pg.sq[0] = 0;
     pg.aqh = 0;
+    pg.rown = 0;
     pg.spend = SP_NONE;
     pg.loading = 0;
     pg.sstate = SS_IDLE;
@@ -5257,6 +5306,18 @@ static int pg_on_fg(void *ctx, void *e) {
         pg_srch_leave();
         pg.dpend = 0;
         pg_load_shows(1);
+    }
+    if (pg.level == L_SRCH &&
+        pg.searchon) { /* the directory may have been chosen meanwhile: the rows are the chosen one's or none, the title and the hint follow */
+        char idb[16];
+        int dropped = pg_srch_dir_sync();
+        if (dropped) pg_srch_rows_reset();
+        if (pg.ldir != pcdir_index() || dropped) pg_srch_labels(), pg_title_show();
+        if (dropped && pg.sq[0] && pn_classify(pg.sq, idb, sizeof idb) == 0) {
+            pg_copy(pg.sp_text, sizeof pg.sp_text, pg.sq);
+            pg_srch_submit(pg.sp_text);
+        } else if (dropped)
+            pg_srch_apply();
     }
     pg_srch_pending();
     if (pg.level == L_DISC && !pg.loading)

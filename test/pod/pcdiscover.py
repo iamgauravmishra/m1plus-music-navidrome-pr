@@ -980,7 +980,7 @@ def width_tests(ctx):
         for key in ('Shows', 'Episodes'):
             w = font.width(tr(key), 18)
             expect(w <= O_['DC_SEG_W'] // 2 - 2 * O_['SEG_PAD'] - 8, f'{loc}: the label "{tr(key)}" ({w} px) fits its half of the control')
-        expect(all(tr(k) for k in ('Podcast Region', 'Automatic', 'Search words are sent to Apple.', 'Podcasts')) and '%s' in tr('Top 25 Shows in %s') and '%s' in tr('Top 25 Episodes in %s'), f'{loc}: the strings have a text, the line\'s keep their %s')
+        expect(all(tr(k) for k in ('Podcast Region', 'Automatic', 'Search words go to the chosen directory.', 'Podcasts')) and '%s' in tr('Top 25 Shows in %s') and '%s' in tr('Top 25 Episodes in %s'), f'{loc}: the strings have a text, the line\'s keep their %s')
     print('  widest Discover line (px, max %d):' % (320 - 2 * O_['PP_LINE_X']), max(worst))
 
 
