@@ -190,6 +190,19 @@ worker writes -- a queue row, or a cancel that got neither its line nor the rewr
 thread cannot be made no worker runs, so a cancel is applied where it was asked and an add is refused. Cancel all (Sign Out) cannot fail that way: its message is one fixed struct
 (`sbd.all`), not an allocated one; asked again while that is still in the box, the messages posted after it are made void (op 0) instead, which is the same as a second one behind them.
 
+Tests: `sbdl/control_tests` and `sbdl/order_tests` (the cases by name), and two sweeps for the interleavings nobody thought of (`sweep_runner`, as `pcdl/sweep_tests` does for the
+episode queue). Two tracks are asked for, the first transfer of one breaks in the middle (a timeout: the `.part` stays, the worker stops and the queue waits), then the page resumes.
+The run's steps are the worker's card calls (open, write, rename, unlink, statfs, fsync, the folder scan) and the transfer-info calls, 115 of them; the box's spin lock is held
+over no call, so each is a place where the UI thread can run. `sbdl/sweep_tests` does add, cancel, cancel all, Delete and their sequences at every step (about 710 runs),
+`sbdl/sweep_pair_tests` one action at a step and one at the next step, and at pairs of every 6th step (about 490 runs; every pair would be some 20,000). Only the ends are checked.
+At the stop: the box is empty, no worker runs, and `dlq.idx` (the last line of a track counts) holds the tracks that wait in memory. After the resume: nothing waits in memory or on
+the card, a file is whole and has its manifest row or is not there, a `.part` is a start of its file and not beside it, the track asked for last is downloaded, one deleted when it was
+downloaded is gone, no add was refused. A track whose last action is a cancel (or a Delete, or a cancel all) does not wait at the stop, and from the cancel on it has at most the one
+request of a track already taken up and one transfer-info call, the one that takes the cancel and stops the transfer (a cancel made at a call is taken by that call), and a track with such a call is not downloaded: so a cancel
+that did nothing fails the sweep at every step up to the last transfer-info call of the track's last transfer (a resume would
+otherwise download the track and hide it). A pair's failure counts even when the run never reached the second step. Not covered: a Delete while the worker holds the file lock `mf` (the UI thread waits there; the emulation has one thread), `sba_dl_resume`
+as an action (it does nothing while a worker runs), and a failing card.
+
 **The queue is on the card.** Memory holds only a slot a track (id, state, failure code); an add appends the track's whole row to `dlq.idx` (one `O_APPEND` write, no sync: a lost
 line is a download asked for again) and the worker reads it back when the slot's turn comes (`sbd_q_row`). The first use of the download layer reads `dlq.idx` (`sbd_q_load`, after
 the manifest; the one read of the file that may be the UI thread's, under the file lock `mf` that all the file work on `dl.idx` and `dlq.idx` takes): every row whose track is not
