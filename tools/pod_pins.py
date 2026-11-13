@@ -621,6 +621,13 @@ LYRICS_PINS = (   # (address, stock word, what it proves): the stock lyric rows 
     (0x6667a8, 0x10c00008, 'widget_update_style: beqz on the need_update_style bit: nothing to do once the style is resolved'),
     (0x676bb8, 0x24020002, 'window_base_on_event, EVT_WINDOW_WILL_OPEN: v0 = 2 (WINDOW_STAGE_CREATED) ...'), (0x676bc8, 0xae220094, '... stored as the window\'s stage'),
     (0x676bd4, 0x0411beff, 'window_base_on_event, EVT_WINDOW_WILL_OPEN: bal widget_update_style_recursive (every widget\'s style resolved, after the window theme is loaded): from stage 2 a measure is in the asked style'),
+    # the idle lyrics page (patch/idlelyrics.c, docs/modules/idlelyrics.md) reads Now Playing's scroll_lrc rows while another window covers it: stock keeps rebuilding them
+    (0x53cf68, 0x8c900024, 'Now Playing\'s 500 ms timer callback 0x53cf48 (player_timer_start 0x53c210): lw s0, 0x24(a0): the window it was registered with'), (0x53cf6c, 0x1200006e, 'the callback: beqz s0, end: only a callback without its window does nothing; no test of the top window before the next call'),
+    (0x53cffc, 0x0411faad, 'the callback: bal show_player_face (0x53bab4) with a1 = 0 on every tick, before the Cover mode / playing_page test (0x53d008..) that only guards the idle countdown'),
+    (0x53bb68, 0x92a20000, 'show_player_face: lbu autochange_refresh (0xa05a62; set by the main loop\'s song change 0x4ce8f8)'), (0x53bb6c, 0x14400006, 'show_player_face: a set autochange_refresh takes the full refresh'),
+    (0x53bb74, 0x92820000, 'show_player_face: lbu force_refreshflag (0xa05a63)'), (0x53bb78, 0x104000e0, 'show_player_face: neither flag set: the light path, no row rebuild'),
+    (0x53bed0, 0x0411f8db, 'show_player_face: bal 0x53a240, the lyric row builder, in the full refresh'), (0x53bee0, 0xa2800000, 'show_player_face: sb zero force_refreshflag after the refresh'), (0x53bee4, 0xa2a00000, 'show_player_face: sb zero autochange_refresh after the refresh'),
+    (0x53a260, 0x24a51c3c, 'the row builder 0x53a240: a1 = "scroll_lrc", looked up recursively in the window it is given (the second lookup is "label_lyricmsg")'),
 )
 QUERY_PINS = (   # (address, stock word, what it proves): the first word after the prologue the trampolines resume at (the frame), and the sqlite3_exec calls that run the SQL
     (0x5ee788, 0x27bdff28, 'toolsQueryDbTable: addiu sp, sp, -0xd8 (the trampoline resumes here)'), (0x5ee7fc, 0x0320f809, 'toolsQueryDbTable: jalr sqlite3_exec(db, sql=a1, cb=a2)'),

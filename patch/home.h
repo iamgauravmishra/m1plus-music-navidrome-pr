@@ -61,6 +61,9 @@
 #define IDLE_FILE \
     "/mnt/data/m1plus/nowplaying-idle" /* where Now Playing's timed view goes: "1" Cassette, "2" Vinyl (each with an optional newline), anything else or missing = Album Cover (the default; docs/modules/bigcover.md "Idle view") */
 #define IDLE_TMP "/mnt/data/m1plus/nowplaying-idle.tmp"
+#define LYRSIZE_FILE \
+    "/mnt/data/m1plus/nowplaying-lyrics-size" /* the lyrics page's text size: "0" Small (22 px), "1" Medium (26), "2" Large (30; also a missing or invalid file); docs/modules/lyrics.md "Text size" */
+#define LYRSIZE_TMP "/mnt/data/m1plus/nowplaying-lyrics-size.tmp"
 #define VINYLREC_FILE \
     "/mnt/data/m1plus/vinyl-record" /* Vinyl Mode's record colour: "1" Cover (with an optional newline), anything else or missing = Black (the default) */
 #define VINYLREC_TMP "/mnt/data/m1plus/vinyl-record.tmp"

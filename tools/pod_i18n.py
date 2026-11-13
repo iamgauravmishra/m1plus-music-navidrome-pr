@@ -194,6 +194,15 @@ TEXT = dict([
        'Vinilo', 'Vinile', 'แผ่นเสียง', 'Winyl', 'Винил', 'Вініл'),
     _t('Shown after 10 seconds on Now Playing.', '在正在播放界面停留10秒后显示。', '在正在播放畫面停留10秒後顯示。', '再生画面で10秒後に表示されます。', '지금 재생 화면에서 10초 후 표시됩니다.', "Affichée après 10 s sur Lecture en cours.", 'Nach 10 Sekunden auf „Jetzt läuft“.',
        'Se muestra tras 10 s en Reproduciendo.', 'Mostrata dopo 10 secondi in Riproduzione.', 'แสดงหลัง 10 วินาทีในหน้ากำลังเล่น', 'Pokazywane po 10 s na ekranie odtwarzania.', 'Через 10 с на экране «Сейчас играет».', 'Через 10 секунд на екрані «Зараз грає».'),
+    # Settings > Now Playing > Lyrics Text Size (patch/lyrics.c, docs/modules/lyrics.md "Text size"); machine translations, unreviewed
+    _t('Lyrics Text Size', '歌词字号', '歌詞字級', '歌詞の文字サイズ', '가사 글자 크기', 'Taille du texte', 'Songtext-Größe',
+       'Tamaño texto', 'Dimensione testo', 'ขนาดเนื้อเพลง', 'Rozmiar tekstu', 'Текст песен', 'Текст пісень'),
+    _t('Small', '小', '小', '小', '작게', 'Petite', 'Klein',
+       'Pequeño', 'Piccolo', 'เล็ก', 'Mały', 'Мелкий', 'Малий'),
+    _t('Medium', '中', '中', '中', '보통', 'Moyenne', 'Mittel',
+       'Medio', 'Medio', 'กลาง', 'Średni', 'Средний', 'Середній'),
+    _t('Large', '大', '大', '大', '크게', 'Grande', 'Groß',
+       'Grande', 'Grande', 'ใหญ่', 'Duży', 'Крупный', 'Великий'),
     # The Wi-Fi page (patch/wifipage.c, docs/modules/wifi.md): the group headers, Other..., the toasts and the Bluetooth question
     _t("Enterprise isn't supported yet", '暂不支持企业级网络', '暫不支援企業級網路', 'エンタープライズは未対応です', '엔터프라이즈는 아직 지원되지 않음', 'Entreprise : pas encore pris en charge', 'Enterprise wird noch nicht unterstützt',
        'Empresarial aún no es compatible', 'Enterprise non ancora supportato', 'ยังไม่รองรับเครือข่ายองค์กร', 'Enterprise nie jest jeszcze obsługiwane', 'Корпоративные сети пока не поддерживаются', 'Корпоративні мережі ще не підтримуються'),

@@ -61,6 +61,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Virtual iPod](modules/ipod.md) | Touch wheel, navigation and playback |
 | [iPod Cover Flow](modules/ipod-coverflow.md) | Embedded carousel and album navigation |
 | [Cassette Mode](modules/tape.md) | Landscape rendering, themes and timer |
+| [Idle lyrics page](modules/idlelyrics.md) | Header and lyrics page over Now Playing; the lyrics engine's second view |
 | [Vinyl Mode](modules/vinyl.md) | Portrait turntable page: turning cover label, tonearm, keys |
 | [Parametric EQ](modules/peq.md) | hciplayer's equalizer replaced, APO / AutoEQ presets, the Equalizer page |
 | [Menu](modules/menu.md) | Home/normal instances, Extras and customization |

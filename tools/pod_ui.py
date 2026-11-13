@@ -1539,6 +1539,29 @@ def build_tape_page(page):
     return root
 
 
+# The idle lyrics page (patch/idlelyrics.c, docs/modules/idlelyrics.md; the numbers are patch/offsets.inc IL_*): a fullscreen window (320 x 480, no status bar) in the Now Playing tone (the payload sets
+# its colour) with the cover tint and the lyrics scrim over it (np_tint_idle, np_scrim_idle: insensitive images), then il_view, the touch target over the whole window (transparent; the payload paints the
+# rounded cover in its own EVT_AFTER_PAINT), the title and the artist (hscroll_labels that end in an ellipsis and never scroll, as the mini bar's), il_lyrics (the engine's box: a scroll_view of the
+# lyrics, LY_W x IL_BOX_H) and the hint (20 px #AAAAAA, hidden and insensitive until the track has no lyrics). The window takes Now Playing's theme (styles/playing_page.bin) for the lyric label styles
+# the engine names (np_lyric_style[_m|_s], np_lyric_cjk_style[_m|_s]). label_title (hidden) is the page's name for the i18n and asset tests.
+def build_idlelyrics_page(page):
+    o = OFFSETS
+    root = Widget('window', 0, 0, 0, 0, [('name', page.name), ('theme', 'playing_page'), ('fullscreen', 'true')])
+    styled(root, ('normal', 'disable', 'focused'), 'bg_color', '#202020')
+    tint = Widget('image', 0, 0, o['IL_W'], o['IL_H'], [('name', 'img_il_tint'), ('image', 'np_tint_idle'), ('draw_type', 'default'), ('sensitive', 'false')])
+    scrim = Widget('image', 0, 0, o['IL_W'], o['IL_H'], [('name', 'img_il_scrim'), ('image', 'np_scrim_idle'), ('draw_type', 'default'), ('sensitive', 'false')])
+    view = Widget('view', 0, 0, o['IL_W'], o['IL_H'], [('name', 'il_view')])
+    for st in ('normal', 'disable', 'focused'): styled(view, (st,), 'bg_color', '#00000000')
+    title = scroll_text('il_title', o['IL_TEXT_X'], o['IL_TITLE_Y'], o['IL_TEXT_W'], o['IL_TITLE_H'], MB_TITLE_PX, MB_TITLE_RGB, 'left')
+    artist = scroll_text('il_artist', o['IL_TEXT_X'], o['IL_ARTIST_Y'], o['IL_TEXT_W'], o['IL_ARTIST_H'], MB_ARTIST_PX, MB_ARTIST_RGB, 'left')
+    box = Widget('scroll_view', o['IL_BOX_X'], o['IL_BOX_Y'], o['LY_W'], o['IL_BOX_H'], [('name', 'il_lyrics'), ('floating', 'false')])
+    for st in ('normal', 'disable', 'focused'): styled(box, (st,), 'bg_color', '#00000000')
+    hint = hidden(scroll_text('il_hint', o['IL_BOX_X'], o['IL_BOX_Y'], o['LY_W'], o['IL_BOX_H'], o['IL_HINT_PX'], SUB_RGB, 'center', 'No Lyrics Found'))
+    root.children = [tint, scrim, view, title, artist, box, hint,
+                     hidden(Widget('label', 36, 14, 200, 22, [('name', 'label_title'), ('style', 'navbar_label_white'), pod_i18n.text_prop(page.title)]))]
+    return root
+
+
 # The Vinyl page (patch/vinyl.c, docs/modules/vinyl.md): a fullscreen window (320 x 480, portrait), one view over the whole window (vinyl_view: the touch target, painted by the
 # payload in its own EVT_AFTER_PAINT) and the text over it as insensitive hscroll_labels that never scroll (cut with an ellipsis; tools/vinyl_art.py TEXT): the title and its twin one
 # pixel right (the weight of the mock's title), the artist, the times, the status line. label_title (hidden) is the page's name for the i18n and asset tests.
@@ -2995,6 +3018,8 @@ def build_page(page):
         return build_ipod_page(page)
     if page.kind == 'tape':
         return build_tape_page(page)
+    if page.kind == 'idlelyrics':
+        return build_idlelyrics_page(page)
     if page.kind == 'vinyl':
         return build_vinyl_page(page)
     if page.kind == 'onlineart':

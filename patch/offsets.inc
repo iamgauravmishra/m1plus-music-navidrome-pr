@@ -529,6 +529,29 @@
 #define LY_DELAY_MS 50
 #define LY_SNAP_LINES 4
 #define LY_OFF_MAX 976
+/* The idle lyrics page (patch/idlelyrics.c, docs/modules/idlelyrics.md; tools/pod_ui.py build_idlelyrics_page reads these): a fullscreen 320 x 480 window (no status bar). Header IL_HEAD_H high: the cover IL_ART px at
+ * (IL_ART_X, IL_ART_Y) with IL_ART_R px corners (the mini bar's mb_art_* machinery at another size), the title (17 px) and the artist (16 px) IL_TEXT_W wide from IL_TEXT_X, centred on the cover
+ * with the mini bar's 21 px line pitch. The lyrics view np-lyrics-like: IL_BOX_X, IL_BOX_Y, LY_W x IL_BOX_H (the engine's anchor is 0.35 of it, ly_retarget); the hint IL_HINT_PX px
+ * when there are no lyrics. IL_TICK_MS: the page timer; IL_FIRST_MS: its first tick. */
+#define IL_W 320
+#define IL_H 480
+#define IL_HEAD_H 88
+#define IL_ART 48
+#define IL_ART_R 7
+#define IL_ART_X 28
+#define IL_ART_Y 28
+#define IL_TEXT_X 88
+#define IL_TEXT_W 204
+#define IL_TITLE_Y 31
+#define IL_TITLE_H 22
+#define IL_ARTIST_Y 53
+#define IL_ARTIST_H 20
+#define IL_BOX_X 28
+#define IL_BOX_Y 96
+#define IL_BOX_H 372
+#define IL_HINT_PX 20
+#define IL_TICK_MS 500
+#define IL_FIRST_MS 50
 #define LY_IDLE_MS 3000
 #define LY_TAP_PX 10
 #define LY_COAST_MS 200

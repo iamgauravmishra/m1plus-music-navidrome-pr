@@ -45,13 +45,20 @@ const char *
 np_cover_file(int *busy); /* demo's cover file of the playing track, NULL for none; busy while demo makes it */
 unsigned np_file_key(const char *path); /* a hash of the picture file, 0 if unreadable */
 void np_relight(void);
+void *np_window(void); /* Now Playing's window, 0 when it has none (patch/idlelyrics.c) */
+unsigned np_idle_color(void); /* the window's colour (a color_t word) after the cover's tone is looked at again */
+
+/* patch/idlelyrics.c */
+int idlelyrics_open_idle(
+    void); /* Now Playing's idle timer: 0 once the page is up (or already open), -1 when it could not open (nothing left of it) */
+int idlelyrics_up(void); /* 1 while the page is open */
 
 /* patch/queuepage.c */
 int queue_open(void); /* our Queue page; 0 once it is open, else the stock drawer should open */
 
 /* patch/bigcover.c */
 int idle_choice(
-    void); /* Idle Display: 0 Off (stock's Cover mode byte off), 1 Album Cover, 2 Cassette, 3 Vinyl; read live */
+    void); /* Idle Display: 0 Off (stock's Cover mode byte off), 1 Album Cover, 2 Cassette, 3 Vinyl, 4 Lyrics; read live */
 int idle_set(
     int choice); /* choose it, saved (the byte through stock's save, the destination atomically); the choice or -1 */
 

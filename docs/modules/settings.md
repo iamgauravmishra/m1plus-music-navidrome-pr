@@ -49,7 +49,7 @@ The design is `tools/preview/preview_settings.py` (it draws the built tree's own
 
 **Library > Podcasts** has Podcast Discover (a switch, on by default; off hides the Podcasts Discover row and the search level) and Podcast Region (a picker of Automatic and the 34 storefronts, with the note "Search words are sent to Apple."). Details and the settings rows are in [podcasts](podcasts.md#settings-rows).
 
-**Now Playing**: under the Cassette Mode header, **Theme** (value Normal / Chrome / Metal / Auto, opens the picker `m1plus_tapetheme` with four check rows and the note "Applies the next time Cassette Mode opens."). `tape_theme` reads it when the Tape page opens. Value labels use translation keys, not fixed English text. The last card, after Cassette Mode and Vinyl Mode, is **Idle Display** (a value row: Off, Album Cover, Cassette or Vinyl, read live from stock's Cover mode byte and `nowplaying-idle`; it opens the picker `m1plus_idleview` with the note "Shown after 10 seconds on Now Playing."; [bigcover](bigcover.md) "Idle view").
+**Now Playing**: under the Cassette Mode header, **Theme** (value Normal / Chrome / Metal / Auto, opens the picker `m1plus_tapetheme` with four check rows and the note "Applies the next time Cassette Mode opens."). `tape_theme` reads it when the Tape page opens. Value labels use translation keys, not fixed English text. After Cassette Mode and Vinyl Mode comes a card with one value row, **Lyrics Text Size** (`ACT_LYRSIZE` 115, glyph `mic-vocal`: Small, Medium or Large, read from `nowplaying-lyrics-size`; it opens the picker `m1plus_lyrsize`, `ACT_LYRSIZESET` 116, three check rows, `ly_size` / `ly_size_set` in `patch/lyrics.c`; [lyrics](lyrics.md) "Text size"). The last card is **Idle Display** (a value row: Off, Album Cover, Cassette, Vinyl or Lyrics, read live from stock's Cover mode byte and `nowplaying-idle`; it opens the picker `m1plus_idleview` (five check rows) with the note "Shown after 10 seconds on Now Playing."; [bigcover](bigcover.md) "Idle view").
 
 ## Persisted choices
 
@@ -81,7 +81,8 @@ Feature settings live in their own folder, `/mnt/data/m1plus/` (`SET_DIR`, patch
 | `home-recent-albums` | Recent Albums | `0` off; missing/other on |
 | `keyboard-pinyin` | Chinese (Pinyin) keyboard | `1` on; missing/other off ([keyboard](keyboard.md)) |
 | `lockscreen-layout` | Lock Screen > Player Style | `1` Mini Player; missing/other Large Cover (the default); applies the next time the lock screen opens ([lockscreen](lockscreen.md)) |
-| `nowplaying-idle` | Idle Display | `1` Cassette, `2` Vinyl; missing/other Album Cover. Off is stock's Cover mode byte, not this file ([bigcover](bigcover.md) "Idle view") |
+| `nowplaying-idle` | Idle Display | `1` Cassette, `2` Vinyl, `3` Lyrics; missing/other Album Cover. Off is stock's Cover mode byte, not this file ([bigcover](bigcover.md) "Idle view") |
+| `nowplaying-lyrics-size` | Lyrics Text Size | `0` Small (22 px), `1` Medium (26), `2` Large (30); missing/other Large (the default) ([lyrics](lyrics.md) "Text size") |
 | `playback-eq` | Equalizer curve | the `M1PEQ02` record ([peq](peq.md)); missing/invalid: 10-Band EQ, Flat, Auto. The switch is stock's `[PLAYSET] EQFLAG`. Per output ([peq](peq.md#per-output-eq-patchpeqoutc-patchpeqouth)): `playback-eq-headphones`, `-lineout`, `-usb` (the same record) and `playback-eq-output` (the owner and each output's switch) |
 | `playback-next-album` | Continue Playing | `1` Next Albums; missing/other Off (the default); `2` reserved for Auto Mix ([nextalbum](nextalbum.md)) |
 | `playback-shuffle` | Shuffle (the payload's flag; stock's mode is never 2) | `1` on; missing/other off ([shuffle](shuffle.md)) |

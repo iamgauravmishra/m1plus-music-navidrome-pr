@@ -121,10 +121,10 @@ def pages_tests(ctx):
     """The rows, the ids, the pages and the built assets."""
     expect = ctx.expect
     L, B, F = P.LIBRARY_PAGE, P.LB_PAGE, P.LF_PAGE
-    expect((P.ACT_LB, P.ACT_SCROBUP, P.ACT_LBAUTO, P.ACT_LF) == (108, 109, 112, 113) and max(P._ACTS) == 134 and 110 not in P._ACTS and 111 not in P._ACTS and not hasattr(P, 'ACT_LBTOKEN') and not hasattr(P, 'ACT_LBOUT')
-           and (P.INFO_LBACCT, P.INFO_LFACCT) == (P.INFO_DUR + 3, P.INFO_DUR + 4) == (66, 67),
+    expect((P.ACT_LB, P.ACT_SCROBUP, P.ACT_LBAUTO, P.ACT_LF) == (108, 109, 112, 113) and max(P._ACTS) == 136 and 110 not in P._ACTS and 111 not in P._ACTS and not hasattr(P, 'ACT_LBTOKEN') and not hasattr(P, 'ACT_LBOUT')
+           and (P.INFO_LBACCT, P.INFO_LFACCT) == (P.INFO_DUR + 3, P.INFO_DUR + 4) == (67, 68),
            'the actions 108, 109, 112 and 113 (110 was the Token row, 111 Sign Out: gone, their ids not reused); the Account rows are INFO_DUR + 3 and + 4')
-    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F and (P.LB_PAGE_INDEX, P.LF_PAGE_INDEX) == (77, 78) and P.LF_PAGE_INDEX == len(P.PAGES) - 12
+    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F and (P.LB_PAGE_INDEX, P.LF_PAGE_INDEX) == (77, 78) and P.LF_PAGE_INDEX == len(P.PAGES) - 14
            and (B.key, B.name, B.title) == ('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz') and (F.key, F.name, F.title) == ('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm'), 'the ListenBrainz page is page 77, the Last.fm page 78, the last')
     lay = [x.label if isinstance(x, P.Row) else x.text if isinstance(x, P.Note) else x for x in L.layout]
     expect(lay[-8:] == ['Search words are sent to Apple.', 'Scrobbling', 'ListenBrainz', 'Last.fm', 'Upload Scrobbles', 'Saved to .scrobbler.log on the card.', 'Auto Upload', P.LB_AUTO_NOTE],
@@ -549,7 +549,7 @@ def auto_tests(ctx):
     row = next(r for r in P.FILES_PAGE.rows if r.label == 'scrobble-auto')
     expect(S.index('scrobble-auto') == S.index('scrobbling') + 1 and AUTO_FILE == '/mnt/data/m1plus/' + S[idx - 5] and row.action == P.ACT_SFDEL and row.arg == P.INFO_SF + idx,
            'the Settings Files row scrobble-auto follows scrobbling (the account has no row: it is on the card) and is the file\'s name')
-    expect(len(S) == 42 and P.INFO_SFOLD - P.INFO_SF == 47 and P.INFO_DUR == 63, '42 setting files: INFO_SFOLD = INFO_SF + 47, INFO_DUR 63')
+    expect(len(S) == 43 and P.INFO_SFOLD - P.INFO_SF == 48 and P.INFO_DUR == 64, '43 setting files: INFO_SFOLD = INFO_SF + 48, INFO_DUR 64')
 
     def stat(m):
         buf = m.alloc(24)

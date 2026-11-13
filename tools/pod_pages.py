@@ -113,8 +113,10 @@ ACT_NDVALUE = 94  # value row of the Navidrome Server page (patch/ndserver.c, to
 ACT_NDACT = 95    # action row of the Navidrome Server page: Sync Now, Sign Out (no accessory, no glyph)
 ACT_CHGLIM = 80     # value row (Settings > System > Battery): Charge Limit, the saved limit ("80%" .. "100%"); opens its picker page (arg = the page index; patch/charging.c chg_limit)
 ACT_CHGLIMSET = 81  # picker row (Charge Limit): choose the limit (arg = 80, 85, 90, 95 or 100, no limit); a check shows on the chosen row (patch/charging.c chg_set)
-ACT_IDLE = 82       # value row (Settings > Now Playing > Idle Display): where Now Playing goes after ten seconds, Off, Album Cover, Cassette or Vinyl (the payload shows stock's Cover mode byte and the saved destination); opens its picker page (arg = the page index; patch/bigcover.c idle_choice)
-ACT_IDLESET = 83    # picker row (Idle Display): choose Off (arg 0), Album Cover (1), Cassette (2) or Vinyl (3); a check shows on the chosen row (patch/bigcover.c idle_set)
+ACT_IDLE = 82       # value row (Settings > Now Playing > Idle Display): where Now Playing goes after ten seconds, Off, Album Cover, Cassette, Vinyl or Lyrics (the payload shows stock's Cover mode byte and the saved destination); opens its picker page (arg = the page index; patch/bigcover.c idle_choice)
+ACT_LYRSIZE = 135   # value row (Settings > Now Playing > Lyrics Text Size): Small, Medium or Large (the saved file nowplaying-lyrics-size); opens its picker page (arg = the page index; patch/lyrics.c ly_size)
+ACT_LYRSIZESET = 136 # picker row (Lyrics Text Size): choose Small (arg 0), Medium (1) or Large (2); a check shows on the chosen row (patch/lyrics.c ly_size_set)
+ACT_IDLESET = 83    # picker row (Idle Display): choose Off (arg 0), Album Cover (1), Cassette (2), Vinyl (3) or Lyrics (4); a check shows on the chosen row (patch/bigcover.c idle_set)
 ACT_LOCKWP = 84     # link row (Settings > Lock Screen): Wallpaper, our own picker page (patch/lockscreen.c lkwp_open).
 ACT_LOCKSTYLE = 85  # value row (Settings > Lock Screen): Player Style, the saved layout (Large Cover / Mini Player); opens its picker page (arg = the page index; patch/lockscreen.c lk_layout)
 ACT_LOCKINFO = 87   # link row (Settings > Lock Screen): Custom Wallpaper, the instructions on a Release Notes page of our own (patch/relnotes.c lockinfo_open)
@@ -162,10 +164,10 @@ _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_SCROBBLE, ACT_LBAUTO, ACT_GAPLESS, ACT_FOLDERSKIP, ACT_DIGITAL, ACT_FOLDERCOVER, ACT_BOOTMEM)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
-CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
+VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_LYRSIZE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_LYRSIZESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT, ACT_SCROBUP)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_LYRSIZE: 'Large', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
@@ -334,6 +336,7 @@ LF_PAGE_INDEX = 78        # Settings > Library > Last.fm
 PLAYSET_PAGE_INDEX = 79   # Settings > Playback Settings, then its seven pickers (Play Mode, Memory Playback, Gain, ReplayGain, Digital Filter, DSD Output Mode, USB Volume)
 PSMODE_PAGE_INDEX, PSMEM_PAGE_INDEX, PSGAIN_PAGE_INDEX, PSRG_PAGE_INDEX, PSFILTER_PAGE_INDEX, PSDSD_PAGE_INDEX, PSUSB_PAGE_INDEX = range(80, 87)
 PSMAXVOL_PAGE_INDEX, PSBOOTVOL_PAGE_INDEX, PSBAL_PAGE_INDEX = range(87, 90)   # ... and the three loudness pages (Max Volume, Default Volume, Channel Balance) (last)
+LYRSIZE_PAGE_INDEX = 90   # the Lyrics Text Size picker (after the Playback Settings pages)
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -490,7 +493,7 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
 # Settings > Developer > Cache (patch/homecover.c, docs/modules/homecover.md "Cache page"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
-INFO_DUR = INFO_CC_STATUS + 49  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
+INFO_DUR = INFO_CC_STATUS + 50  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
 INFO_APHOTOS, INFO_ANONE = INFO_DUR + 1, INFO_DUR + 2   # patch/m1plus.c: the Artist Photos card's counts (homecover_stat 7, 8)
 INFO_LBACCT = INFO_DUR + 3   # patch/m1plus.c: the ListenBrainz page's Account row (patch/scrobpage.c lb_account_text)
 INFO_LFACCT = INFO_DUR + 4   # ... and the Last.fm page's
@@ -520,7 +523,7 @@ COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='
 
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
 # Only the setting files (ACT_SFDEL) are tappable, while present: a tap deletes the file after a confirm. The guard files and the folder stay ACT_INFO (never deleted).
-SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'coverflow-volume-keys', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'nowplaying-idle', 'pod-appearance',
+SETTING_FILES = ('albums-view', 'albums-sort', 'artists-sort', 'genres-sort', 'composers-sort', 'songs-sort-rev', 'folders-sort', 'playlists-sort', 'playlists-view', 'recently-added-view', 'coverflow-landscape', 'coverflow-volume-keys', 'cassette-theme', 'vinyl-record', 'vinyl-base', 'nowplaying-idle', 'nowplaying-lyrics-size', 'pod-appearance',
                  'appearance-accent', 'appearance-background', 'lockscreen-layout', 'appearance-index-rail', 'appearance-headers', 'home-recent-albums', 'home-daily-mix', 'home-menu', 'pulldown-tiles', 'keyboard-pinyin', 'podcast-online-search', 'podcast-region',
                  'battery-percentage', 'battery-charge-limit', 'playback-shuffle', 'playback-eq', 'playback-next-album', 'scrobbling', 'scrobble-auto', 'search-history', 'radio-view', 'radio-recent', 'covers-rebuild', 'artists-rebuild', 'wifi-networks')
 GUARD_FILES = ('m1plus-start', 'm1plus-run', 'm1plus-bad', 'm1plus-off')
@@ -532,7 +535,7 @@ RETIRED_FILES = ('/mnt/data/m1plus-albums', '/mnt/data/m1plus-playlists', '/mnt/
                  '/mnt/data/m1plus-battpct', '/mnt/data/m1plus-pod-theme', '/mnt/data/m1plus-mix', '/mnt/data/m1plus-mix.art', '/mnt/data/m1plus/recently-played')
 FOLDER_LABEL = 'm1plus/'
 INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k reads setfiles_stat(k): 4 guard files, the folder, the settings
-INFO_SFOLD = INFO_SF + 47      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
+INFO_SFOLD = INFO_SF + 48      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
 FILES_PAGE_INDEX = 34   # after COVLIST (33)
@@ -714,6 +717,9 @@ SONGINFO = Page('m1plus_songinfo', 'm1plus_songinfo_page', 'Get Info', kind='son
 # The Tape page (patch/tape.c): a fullscreen window drawn landscape; the payload paints the cassette and takes the touches (opened from Now Playing's More dialog, not from a menu row).
 TAPE = Page('m1plus_tape', 'm1plus_tape_page', 'Cassette Mode', kind='tape')
 
+# The idle lyrics page (patch/idlelyrics.c, docs/modules/idlelyrics.md): a normal window over Now Playing, a header and the lyrics; opened by the Idle Display, not from a menu row.
+IDLELYRICS_PAGE = Page('m1plus_idlelyrics', 'm1plus_idlelyrics_page', 'Lyrics', kind='idlelyrics')
+
 # The Vinyl page (patch/vinyl.c): a fullscreen turntable Now Playing page (portrait); the payload paints the record and takes the touches, the text is the page's labels
 # (opened from Now Playing's More dialog, not from a menu row).
 VINYL = Page('m1plus_vinyl', 'm1plus_vinyl_page', 'Vinyl Mode', kind='vinyl')
@@ -740,19 +746,29 @@ NPSET_PAGE = Page('m1plus_npset', 'm1plus_npset_page', 'Now Playing', layout=[
     Row('Record', ACT_VREC, RECORD_PAGE_INDEX),
     Row('Base', ACT_VTHEME, VTHEME_PAGE_INDEX),
     GAP,
+    Row('Lyrics Text Size', ACT_LYRSIZE, LYRSIZE_PAGE_INDEX),
+    GAP,
     Row('Idle Display', ACT_IDLE, IDLE_PAGE_INDEX),
     Note('Shown after 10 seconds on Now Playing.'),
 ])
 # Settings > Now Playing > Idle Display: the picker (a check on the chosen row). Off is stock's Cover mode switch off (the byte 0xa05aa5, [SYSSET] COVERMODE); the others turn it on and say where the
-# timed view goes (patch/bigcover.c idle_set; the destination is /mnt/data/m1plus/nowplaying-idle: "0\n" Album Cover, "1\n" Cassette, "2\n" Vinyl).
+# timed view goes (patch/bigcover.c idle_set; the destination is /mnt/data/m1plus/nowplaying-idle: "0\n" Album Cover, "1\n" Cassette, "2\n" Vinyl, "3\n" Lyrics).
 IDLE_PAGE = Page('m1plus_idleview', 'm1plus_idleview_page', 'Idle Display', layout=[
     Row('Off', ACT_IDLESET, 0),
     Row('Album Cover', ACT_IDLESET, 1),
     Row('Cassette', ACT_IDLESET, 2),
     Row('Vinyl', ACT_IDLESET, 3),
+    Row('Lyrics', ACT_IDLESET, 4),
     Note('Shown after 10 seconds on Now Playing.'),
 ])
-IDLE_VALUES = ('Off', 'Album Cover', 'Cassette', 'Vinyl')   # the value the Idle Display row shows, in the order of the picker's rows
+# Settings > Now Playing > Lyrics Text Size: the picker (a check on the chosen row); the choice is /mnt/data/m1plus/nowplaying-lyrics-size ("0\n" Small 22 px, "1\n" Medium 26 px, "2\n" Large 30 px, the default).
+LYRSIZE_PAGE = Page('m1plus_lyrsize', 'm1plus_lyrsize_page', 'Lyrics Text Size', layout=[
+    Row('Small', ACT_LYRSIZESET, 0),
+    Row('Medium', ACT_LYRSIZESET, 1),
+    Row('Large', ACT_LYRSIZESET, 2),
+])
+LYRSIZE_VALUES = ('Small', 'Medium', 'Large')   # the value the Lyrics Text Size row shows, in the order of the picker's rows
+IDLE_VALUES = ('Off', 'Album Cover', 'Cassette', 'Vinyl', 'Lyrics')   # the value the Idle Display row shows, in the order of the picker's rows
 # Settings > Now Playing > Theme: the picker (a check on the chosen row).
 THEME_PAGE = Page('m1plus_tapetheme', 'm1plus_tapetheme_page', 'Cassette Theme', layout=[
     Row('Normal', ACT_THEMESET, 0),
@@ -1057,7 +1073,7 @@ LF_PAGE = Page('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm', layout=[
 PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
          EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
          RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE, LB_PAGE, LF_PAGE, PLAYSET_PAGE, PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE]
+         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE, LB_PAGE, LF_PAGE, PLAYSET_PAGE, PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE, LYRSIZE_PAGE, IDLELYRICS_PAGE]
 assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
 assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
 assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
@@ -1072,6 +1088,6 @@ assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] 
 assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
 assert PAGES[NEXTALBUM_PAGE_INDEX] is NEXTALBUM_PAGE and NEXTALBUM_PAGE_INDEX == PAGES.index(NDLOGIN_PAGE) - 1
 assert PAGES[NDLOGIN_PAGE_INDEX] is NDLOGIN_PAGE and PAGES[NDSERVER_PAGE_INDEX] is NDSERVER_PAGE and PAGES[NDROOT_PAGE_INDEX] is NDROOT_PAGE
-assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 18
-assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 15 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 14 and PAGES[LB_PAGE_INDEX] is LB_PAGE and LB_PAGE_INDEX == len(PAGES) - 13 and PAGES[LF_PAGE_INDEX] is LF_PAGE and LF_PAGE_INDEX == len(PAGES) - 12 and PAGES[PLAYSET_PAGE_INDEX] is PLAYSET_PAGE and PAGES[PSMODE_PAGE_INDEX:PSBAL_PAGE_INDEX + 1] == [PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE] and PLAYSET_PAGE_INDEX == LF_PAGE_INDEX + 1 and PSBAL_PAGE_INDEX == len(PAGES) - 1
+assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 20
+assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 17 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 16 and PAGES[LB_PAGE_INDEX] is LB_PAGE and LB_PAGE_INDEX == len(PAGES) - 15 and PAGES[LF_PAGE_INDEX] is LF_PAGE and LF_PAGE_INDEX == len(PAGES) - 14 and PAGES[PLAYSET_PAGE_INDEX] is PLAYSET_PAGE and PAGES[PSMODE_PAGE_INDEX:PSBAL_PAGE_INDEX + 1] == [PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE] and PLAYSET_PAGE_INDEX == LF_PAGE_INDEX + 1 and PSBAL_PAGE_INDEX == len(PAGES) - 3 and PAGES[LYRSIZE_PAGE_INDEX] is LYRSIZE_PAGE and LYRSIZE_PAGE_INDEX == len(PAGES) - 2
 assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE

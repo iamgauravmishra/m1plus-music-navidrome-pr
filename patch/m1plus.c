@@ -80,7 +80,7 @@ enum {
     ACT_CHGLIMSET = 81, /* the Charge Limit picker's rows (arg = the limit, 80 .. 100) */
     ACT_IDLE =
         82, /* Settings > Now Playing > Idle Display: a value row (Off, Album Cover, Cassette, Vinyl) opening its picker */
-    ACT_IDLESET = 83, /* the picker's rows (arg 0 Off, 1 Album Cover, 2 Cassette, 3 Vinyl) */
+    ACT_IDLESET = 83, /* the picker's rows (arg 0 Off, 1 Album Cover, 2 Cassette, 3 Vinyl, 4 Lyrics) */
     ACT_LOCKWP = 84, /* Settings > Lock Screen > Wallpaper: our picker page (patch/lockscreen.c lkwp_open) */
     ACT_LOCKSTYLE =
         85, /* Settings > Lock Screen > Player Style: a value row (Large Cover / Mini Player) opening its picker */
@@ -101,6 +101,9 @@ enum {
     ACT_TAPWAKE = 104, /* Buttons & Power: Tap to Wake, a switch row, stock's own byte */
     ACT_STANDBY = 105, /* Buttons & Power: Auto-Standby, a switch row, stock's own switch */
     ACT_SHUTDOWN = 106, /* Buttons & Power: Auto-Shutdown, a value row opening its picker */
+    ACT_LYRSIZE =
+        135, /* Settings > Now Playing > Lyrics Text Size: a value row (Small, Medium, Large) opening its picker */
+    ACT_LYRSIZESET = 136, /* the picker's rows (arg 0 Small, 1 Medium, 2 Large) */
     ACT_SHUTDOWNSET =
         107, /* the Auto-Shutdown picker's rows (arg = stock's word: 0 off, 1 .. 4 = 1, 3, 5, 10 minutes) */
     ACT_PLAYMODE = 129, /* Settings > Playback Settings: Play Mode, a value row opening its picker */
@@ -172,8 +175,8 @@ enum {
     INFO_CAP,
     INFO_FREE,
     INFO_CC, /* the Cache page's seven Covers values start here: homecover_stat(kind - INFO_CC) */
-    INFO_SF = INFO_CC + 7, /* the Settings Files page's 47 values: setfiles_stat(kind - INFO_SF) */
-    INFO_SFOLD = INFO_SF + 47, /* the Unsupported Files count (setfiles_old_count), above those rows */
+    INFO_SF = INFO_CC + 7, /* the Settings Files page's 48 values: setfiles_stat(kind - INFO_SF) */
+    INFO_SFOLD = INFO_SF + 48, /* the Unsupported Files count (setfiles_old_count), above those rows */
     INFO_DUR = INFO_SFOLD + 1, /* the Cache page's Measured Tracks: dur_stat (patch/durations.c) */
     INFO_APHOTOS = INFO_DUR +
         1, /* the Cache page's Artist Photos card: the photos, and the artists with none (homecover_stat 7, 8) */
@@ -196,6 +199,7 @@ enum {
     VK_CHGLIM,
     VK_LOCKSTYLE,
     VK_IDLE,
+    VK_LYRSIZE,
     VK_NA,
     VK_LIGHT,
     VK_LED,
@@ -242,6 +246,7 @@ static const char HOME_NAMES[18][3] = {"0", "1",  "2",  "3",  "4",  "5",  "6",  
 #include "albums.h"
 #include "artists.h"
 #include "entries.h"
+#include "lyrics.h"
 #include "peqlib.h"
 #include "peqpage.h"
 #include "playlists.h"
@@ -437,6 +442,7 @@ static const struct pick_def {
     {ACT_CHGLIM, VK_CHGLIM, ACT_CHGLIMSET, chg_limit, chg_set},
     {ACT_LOCKSTYLE, VK_LOCKSTYLE, ACT_LOCKSET, lk_layout, lk_layout_set},
     {ACT_IDLE, VK_IDLE, ACT_IDLESET, idle_choice, idle_set},
+    {ACT_LYRSIZE, VK_LYRSIZE, ACT_LYRSIZESET, ly_size, ly_size_set},
     {ACT_NEXTALBUM, VK_NA, ACT_NASET, na_setting, na_set},
     {ACT_LIGHT, VK_LIGHT, ACT_LIGHTSET, disp_light, disp_light_set},
     {ACT_LED, VK_LED, ACT_LEDSET, disp_led, disp_led_set},
@@ -668,7 +674,8 @@ static void bind_switch(void *win, unsigned i, const struct pod_row *row) {
 
 /* The values (tr keys of the stock tables where the value is stock's own, so they follow Settings > Language): Wi-Fi and Bluetooth On / Off (the flags the status bar reads), the EQ (Off, or the preset's name from stock's own lookup), the album order and the
  * cassette theme (ours). */
-static const char *const idle_key[4] = {"Off", "Album Cover", "Cassette", "Vinyl"};
+static const char *const idle_key[5] = {"Off", "Album Cover", "Cassette", "Vinyl", "Lyrics"};
+static const char *const lyrsize_key[3] = {"Small", "Medium", "Large"};
 static const char *const tape_theme_key[4] = {"Normal", "Chrome", "Metal", "Auto"};
 static const char *const record_key[VN_RECS] = {"Black", "Cover"};
 static const char *const vtheme_key[VN_THEMES] = {"Graphite", "Snow"};
@@ -690,6 +697,8 @@ static void value_text(void *label, int kind) {
         key = tape_theme_key[tape_theme()];
     else if (kind == VK_IDLE)
         key = idle_key[idle_choice()];
+    else if (kind == VK_LYRSIZE)
+        key = lyrsize_key[ly_size()];
     else if (kind == VK_RECORD)
         key = record_key[vinyl_record()];
     else if (kind == VK_VTHEME)
