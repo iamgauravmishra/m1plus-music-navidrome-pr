@@ -26,6 +26,12 @@ def font():
     return _FONT[0]
 
 
+def hint_w(m, text):
+    """The width patch/podcasts.c pg_paint_hint centres a hint's line by: its characters' advances (m1_text_w of each, as the wrap measures them) in the dim 20 px style."""
+    px = (m.px or {}).get(m.widgets['label_ps_cdim'], 16)
+    return sum(font().width(c, px) for c in text)
+
+
 class SM(PCN.NM):
     """The page machine with the real font's widths for widget_measure_text (by the style label's size), and rmdir."""
     px = None
@@ -473,8 +479,13 @@ def latest_tests(ctx):
     # a started newest episode: still the white play pill; a show with no episode has no pill
     m = shown(entries=[])
     expect(not texts_of(m, 'label_ps_latest') and not texts_of(m, 'label_ps_latestw'), 'a show with no episode has no pill')
-    expect(m.props.get((m.view, 'visible')) == 1 and 'No episodes yet' in PCP.hint(m),
+    bottom = max(0, m.props[(m.sv, 'virtual_h')] - 400)
+    expect(m.props.get((m.view, 'visible')) == 1 and 'No episodes yet' in PCP.hint(m, bottom),
            'the hint is painted under its header, in the content (the header stays: its sheet has Refresh Feed and Unsubscribe)')
+    got = PCP.drawn(m, bottom, 'label_ps_cdim')
+    HL = pod_show.hint_layout(PCP.hdr(m), [hint_w(m, t.rstrip()) for t, _ in got])
+    expect(len(got) > 1 and [(r[0], r[1] + bottom) for _, r in got] == HL['lines'] and m.props[(m.sv, 'virtual_h')] == HL['h'] and all(abs(2 * r[0] + hint_w(m, t.rstrip()) - 320) <= 1 for t, r in got),
+           f'its wrapped lines are centred as a block in the room under the header, each line centred across the page ({got}, {HL})')
     expect(PCP.hdr(m) == pod_show.header(font(), SHOW_TITLE, SHOW_DESC, 'Technology', 'All-In Podcast', False)['h'], 'the header has no pill then')
 
 

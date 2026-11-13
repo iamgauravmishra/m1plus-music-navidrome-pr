@@ -431,14 +431,20 @@ static int pg_more_on(void) {
 }
 /* The top of the See All row: under the last cell, or under the hint of a Filter that leaves no row. */
 static int pg_more_y(void) { return pg_top() + (pg_shown() ? pg_shown() * pg_cell_h() : PG_HINT_H); }
+/* The bottom of the hint's room (content y; tools/pod_show.py hint_layout): the view's bottom where the header leaves more than the four lines' room, else that room's; with the See All row under the hint
+ * always that room's. The hint's lines are centred as a block between pg_hint_y and this. */
+static int pg_hint_bottom(void) {
+    int b = pg_hint_y() + PG_HINT_H;
+    return pg_more_on() || b > GRID_VIEW_H ? b : GRID_VIEW_H;
+}
 static int pg_content(void) {
     if (pg.det && pg.pd) return pg.pd->h; /* (the episode page) */
     if (pg.level == L_SHOWS) return pg.home_h;
     if (pg_hint())
-        return pg_hint_y() + PG_HINT_H +
+        return pg_hint_bottom() +
                (pg_more_on()
                     ? PS_MORE_H
-                    : 0); /* (an empty page: its header and the hint, no taller, so it only scrolls when they don't fit; a Filter that leaves no row keeps the See All row) */
+                    : 0); /* (an empty page: its header and the hint's room, never taller than the view unless they don't fit, so it only scrolls then; a Filter that leaves no row keeps the See All row) */
     if (pg.level == L_SRCH) return PQ_TOP + pg.srn * PC_ROW_H + (pg.srn ? PQ_BOTTOM : 0);
     if (pg.level == L_DISC) return DC_TOP + pg.dn * PC_ROW_H + (pg.dn ? DC_BOTTOM : 0);
     if (pg.level == L_DLS) return pg_dh() + (pg.select && pg.nrows ? SG_BAR_H : 0);
@@ -1769,21 +1775,29 @@ static void pg_paint_dls(void *canvas) {
     }
 }
 
-/* The empty page's hint: grey, wrapped to the margins (pg_hint), under the header. */
+/* The empty page's hint: grey, wrapped to the margins (pg_hint), its lines centred as a block in the room under the header (pg_hint_y .. pg_hint_bottom) and each line centred across the page
+ * (tools/pod_show.py hint_layout is the model). A busy line (Loading…, Searching…) has the See All row's spinner before its first line, the two centred as one group. */
 static void pg_paint_hint(void *canvas, int off) {
     const char *key = pg_hint_text();
     unsigned t[160];
+    unsigned short adv[160];
     pw_line_t ln[4];
-    int n, k, nl, sx = 0;
+    int n, k, i, nl, len, w, x, y, sx;
     if (!key) return;
-    if (pg_hint_busy() && grid_spin_draw(canvas, &pg.hg, PP_LINE_X,
-                                         pg_hint_y() + 8 + (PS_TITLE_PITCH - PS_SPIN_PX) / 2 - off, GRID_VIEW_H))
-        sx = PS_SPIN_PX + PS_SPIN_GAP; /* (Loading…, Searching…: the See All row's spinner, the text after it) */
+    sx = pg_hint_busy() && pg.hg.spin[0] ? PS_SPIN_PX + PS_SPIN_GAP : 0;
     n = pg_wide(t, 160, key);
     nl = pg_lines(pg.st[ST_CDIM], t, n, PG_W - 2 * PP_LINE_X - sx, 4, ln); /* (the episode cells' dim 20 px grey) */
-    for (k = 0; k < nl; ++k)
-        pg_paint_text_at(canvas, pg.st[ST_CDIM], t + ln[k].start, ln[k].len, PP_LINE_X + sx,
-                         pg_hint_y() + 8 + k * PS_TITLE_PITCH - off, PG_W - 2 * PP_LINE_X - sx, PS_TITLE_PITCH);
+    y = pg_hint_y() + (pg_hint_bottom() - pg_hint_y() - nl * PS_TITLE_PITCH) / 2 - off;
+    for (k = 0; k < nl; ++k, y += PS_TITLE_PITCH) {
+        const unsigned *s = t + ln[k].start;
+        for (len = ln[k].len; len > 0 && s[len - 1] == ' '; --len) {
+        } /* (the space a line was broken after has no part in its width) */
+        pg_adv(pg.st[ST_CDIM], s, len, adv);
+        for (i = w = 0; i < len; ++i) w += adv[i];
+        x = (PG_W - sx - w) / 2 + sx;
+        if (!k && sx) grid_spin_draw(canvas, &pg.hg, x - sx, y + (PS_TITLE_PITCH - PS_SPIN_PX) / 2, GRID_VIEW_H);
+        pg_paint_text_at(canvas, pg.st[ST_CDIM], s, len, x, y, PG_W - PP_LINE_X - x, PS_TITLE_PITCH);
+    }
 }
 
 /* The grey line under the large title: the chart's name and the storefront it is of ("Top 25 Shows in United States": the Downloads storage line's place and style). The storefront is the one the answer is of (a fall back
@@ -4902,7 +4916,7 @@ static int pg_spin_busy(void) {
              ((pn_arch_state() == PN_AR_RUNNING && pn_arch_hash() == pg.shows[pg.sel].hash) || pg.apend)));
 }
 static int pg_spin_tick(const void *timer) {
-    int y;
+    int y, h;
     (void)timer;
     if (!pg_spin_busy()) {
         pg.spin_t = 0;
@@ -4912,7 +4926,9 @@ static int pg_spin_tick(const void *timer) {
     if (!m1_screen_lit()) return RET_REPEAT;
     ++pg.hg.spin_n;
     y = (pg_hint_busy() ? pg_hint_y() : pg_more_y()) - pg_off();
-    if (y < GRID_VIEW_H && y + PS_MORE_H > 0) pg_redraw();
+    h = pg_hint_busy() ? pg_hint_bottom() - pg_hint_y()
+                       : PS_MORE_H; /* (the busy line is somewhere in the hint's room) */
+    if (y < GRID_VIEW_H && y + h > 0) pg_redraw();
     return RET_REPEAT;
 }
 static void pg_spin_arm(void) {
