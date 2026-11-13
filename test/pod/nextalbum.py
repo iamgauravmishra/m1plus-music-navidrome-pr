@@ -277,8 +277,8 @@ def row_tests(ctx):
     i = labels.index('Continue Playing')
     expect(labels[i - 1:i + 2] == ['Folder Skip', 'Continue Playing', 'Gain'] and 'Play Next Album' not in labels,
            'the Playback card of Playback Settings: Play Mode, Gapless, Memory Playback, Folder Skip, Continue Playing')
-    expect((P.ACT_NEXTALBUM, P.ACT_NASET) == (90, 91) and S.rows[i].action == 90 and S.rows[i].arg == P.NEXTALBUM_PAGE_INDEX == 66 and 90 in P.VALUE_ACTIONS and 90 not in P.SWITCH_ACTIONS
-           and P.row_kind(S.rows[i]) == 'value' and P.VALUE_INIT[90] == 'Off', 'ACT_NEXTALBUM 90, a value row opening page 66; ACT_NASET 91')
+    expect((P.ACT_NEXTALBUM, P.ACT_NASET) == (90, 91) and S.rows[i].action == 90 and S.rows[i].arg == P.NEXTALBUM_PAGE_INDEX and P.PAGES[P.NEXTALBUM_PAGE_INDEX] is P.NEXTALBUM_PAGE and 90 in P.VALUE_ACTIONS and 90 not in P.SWITCH_ACTIONS
+           and P.row_kind(S.rows[i]) == 'value' and P.VALUE_INIT[90] == 'Off', 'ACT_NEXTALBUM 90, a value row opening the Continue Playing picker; ACT_NASET 91')
     expect(P.PAGES[P.NEXTALBUM_PAGE_INDEX] is N and N.title == 'Continue Playing' and [(r.label, r.action, r.arg) for r in N.rows] == [('Off', 91, DEFS['NA_OFF']), ('Next Albums', 91, DEFS['NA_ALBUMS'])]
            and all(P.row_kind(r) == 'check' for r in N.rows) and 91 in P.CHECK_ACTIONS and N.layout[-1].text.startswith('Plays the next album'), 'the picker: Off, Next Albums, a check each, the hint under them')
     expect(P.SETTING_FILES.index('playback-next-album') == P.SETTING_FILES.index('playback-eq') + 1 and FILE == '/mnt/data/m1plus/playback-next-album', 'the setting file follows playback-eq in Settings Files')

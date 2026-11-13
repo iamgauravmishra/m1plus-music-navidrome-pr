@@ -124,8 +124,8 @@ def pages_tests(ctx):
     expect((P.ACT_LB, P.ACT_SCROBUP, P.ACT_LBAUTO, P.ACT_LF) == (108, 109, 112, 113) and max(P._ACTS) == 136 and 110 not in P._ACTS and 111 not in P._ACTS and not hasattr(P, 'ACT_LBTOKEN') and not hasattr(P, 'ACT_LBOUT')
            and (P.INFO_LBACCT, P.INFO_LFACCT) == (P.INFO_DUR + 3, P.INFO_DUR + 4) == (67, 68),
            'the actions 108, 109, 112 and 113 (110 was the Token row, 111 Sign Out: gone, their ids not reused); the Account rows are INFO_DUR + 3 and + 4')
-    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F and (P.LB_PAGE_INDEX, P.LF_PAGE_INDEX) == (77, 78) and P.LF_PAGE_INDEX == len(P.PAGES) - 14
-           and (B.key, B.name, B.title) == ('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz') and (F.key, F.name, F.title) == ('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm'), 'the ListenBrainz page is page 77, the Last.fm page 78, the last')
+    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F
+           and (B.key, B.name, B.title) == ('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz') and (F.key, F.name, F.title) == ('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm'), 'the ListenBrainz and Last.fm pages are in the page table under their keys')
     lay = [x.label if isinstance(x, P.Row) else x.text if isinstance(x, P.Note) else x for x in L.layout]
     expect(lay[-8:] == ['Search words are sent to Apple.', 'Scrobbling', 'ListenBrainz', 'Last.fm', 'Upload Scrobbles', 'Saved to .scrobbler.log on the card.', 'Auto Upload', P.LB_AUTO_NOTE],
            f'the Scrobbling card: the switch, the two accounts, Upload Scrobbles, the note; then Auto Upload in a card of its own with its note ({lay[-8:]})')

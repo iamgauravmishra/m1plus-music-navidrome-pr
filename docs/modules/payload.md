@@ -144,7 +144,7 @@ file exists, or the page fails to open, tail into `stock_home_click_trampoline` 
 behaviour). Otherwise `window_open` the entry page, bind `btn_return` -> `navigator_back`,
 `btn_backtoplayer` -> `on_backtoplayer_onclick` and each `pod_rowN` to its action, return 0.
 
-`tools/pod_pages.py` defines `PAGES`, `ITEMS` and actions once. `pod_ui.py` builds their assets;
+`tools/pod_pages.py` defines `PAGES`, `ITEMS` and actions once. A page's number is its place in `PAGE_ORDER`, the one table of page keys in the order of the C `POD_PAGES`; every `<NAME>_PAGE_INDEX` constant is `page_index('<key>')`, and `PAGES` is built from the table. Adding a page: build it with `Page('m1plus_<key>', ...)` and list its key in `PAGE_ORDER`; a key with no page, a page missing from the table and a key used twice stop the import. A `POD_<NAME>_PAGE` macro for C is one more name in the loop in `tools/pod.py gen_stock_h`. Tests name pages (`P.PAGES[P.X_PAGE_INDEX] is P.X_PAGE`), never numbers. Nothing keeps a page number between boots (`open_page` takes a compile-time index; settings files hold ids and values only), but append new pages at the end unless there is a reason not to: every row that opens a page and every `POD_*_PAGE` follows the table, so a mid-table insert moves later numbers but is rebuilt consistently. `pod_ui.py` builds their assets;
 `pod.py` emits the C tables into `stock.h`. The dispatcher in `patch/m1plus.c` binds actions
 and falls back to stock when a destination cannot open. See [menu layout](menu.md) and
 [settings](settings.md) for persisted state and navigation.

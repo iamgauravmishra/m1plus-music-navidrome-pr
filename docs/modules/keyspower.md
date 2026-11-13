@@ -166,7 +166,7 @@ Never both on holds after every operation from every state stock can be in.
 ## The page
 
 Settings > System, the row after Display (`Row('Buttons & Power', ACT_PAGE, KEYSPOWER_PAGE_INDEX)`, glyph `power`). `m1plus_keyspower`
-(page index 73), three cards:
+(`KEYSPOWER_PAGE`), three cards:
 
 | Card | Row | Kind | Action |
 |---|---|---|---|

@@ -606,8 +606,8 @@ Under the card's note, a card of one row: the **Auto Upload** switch (`ACT_LBAUT
 services; it works with or without an account, starts nothing and says nothing at the tap) and
 its note "Uploads on Wi-Fi while music plays." ([Automatic upload](#automatic-upload)).
 
-**The ListenBrainz page** (`m1plus_listenbrainz`, page 77) and **the Last.fm page**
-(`m1plus_lastfm`, page 78): one card of one row and a note, no glyphs. They show the account and
+**The ListenBrainz page** (`m1plus_listenbrainz`) and **the Last.fm page**
+(`m1plus_lastfm`): one card of one row and a note, no glyphs. They show the account and
 set nothing of it: sign-in is the card's `scrobble.ini` alone ([the account's file](#the-accounts-file)),
 and so is signing out (`ACT_LBTOKEN` 110 and `ACT_LBOUT` 111 are gone, their ids not reused).
 

@@ -227,15 +227,16 @@ def settings_tests(ctx):
     V, PS, LIB = P.SETTINGS_PAGE, P.PLAYSET_PAGE, P.LIBRARY_PAGE
     labels = [r.label for r in V.rows]
     pi = labels.index('Playback Settings')
-    expect(V.rows[pi].action == P.ACT_PAGE and V.rows[pi].arg == P.PLAYSET_PAGE_INDEX == 79 and P.row_kind(V.rows[pi]) == 'link' and labels[pi - 1] == 'EQ' and labels[pi + 1] == 'Display'
+    expect(V.rows[pi].action == P.ACT_PAGE and V.rows[pi].arg == P.PLAYSET_PAGE_INDEX and P.PAGES[P.PLAYSET_PAGE_INDEX] is P.PLAYSET_PAGE and P.row_kind(V.rows[pi]) == 'link' and labels[pi - 1] == 'EQ' and labels[pi + 1] == 'Display'
            and 'Continue Playing' not in labels and 'All Playback Settings' not in labels and not any(r.action == P.ACT_HOME and r.arg == P.HOME_PLAYSET for r in V.rows),
            'Settings > Playback Settings: after EQ, opens our page; Continue Playing moved onto it; the row no longer opens stock\'s list')
     pickers = (P.PSMODE_PAGE, P.PSMEM_PAGE, P.PSGAIN_PAGE, P.PSRG_PAGE, P.PSFILTER_PAGE, P.PSDSD_PAGE, P.PSUSB_PAGE)
-    expect(P.PAGES[P.PLAYSET_PAGE_INDEX] is PS and P.PAGES[80:87] == list(pickers) and P.PAGES[87:90] == [P.PSMAXVOL_PAGE, P.PSBOOTVOL_PAGE, P.PSBAL_PAGE] and P.PCFIND_PAGE_INDEX == 76 and PS.key == 'm1plus_playset' and PS.title == 'Playback'
-           and [p.key for p in pickers] == ['m1plus_psmode', 'm1plus_psmem', 'm1plus_psgain', 'm1plus_psrg', 'm1plus_psfilter', 'm1plus_psdsd', 'm1plus_psusb'], 'the page and its seven pickers: pages 79 .. 86, the three loudness pages 87 .. 89')
-    expect([(r.label, r.action, r.arg) for r in PS.rows] == [('Play Mode', P.ACT_PLAYMODE, 80), ('Gapless', P.ACT_GAPLESS, 0), ('Resume', P.ACT_MEMPLAY, 81), ('Folder Skip', P.ACT_FOLDERSKIP, 0),
-                                                           ('Continue Playing', P.ACT_NEXTALBUM, P.NEXTALBUM_PAGE_INDEX), ('Gain', P.ACT_GAIN, 82), ('Max Volume', P.ACT_MAXVOL, 87), ('Default Volume', P.ACT_BOOTVOL, 88), ('Channel Balance', P.ACT_BALANCE, 89),
-                                                           ('ReplayGain', P.ACT_REPLAYGAIN, 83), ('Digital Filter', P.ACT_PAGE, 84), ('DSD Output Mode', P.ACT_DSD, 85), ('USB Volume', P.ACT_USBVOL, 86), ('Digital Output', P.ACT_DIGITAL, 0)]
+    expect(P.PAGES[P.PLAYSET_PAGE_INDEX] is PS and all(P.PAGES[i_] is p_ for i_, p_ in zip((P.PSMODE_PAGE_INDEX, P.PSMEM_PAGE_INDEX, P.PSGAIN_PAGE_INDEX, P.PSRG_PAGE_INDEX, P.PSFILTER_PAGE_INDEX, P.PSDSD_PAGE_INDEX, P.PSUSB_PAGE_INDEX), pickers))
+           and all(P.PAGES[i_] is p_ for i_, p_ in ((P.PSMAXVOL_PAGE_INDEX, P.PSMAXVOL_PAGE), (P.PSBOOTVOL_PAGE_INDEX, P.PSBOOTVOL_PAGE), (P.PSBAL_PAGE_INDEX, P.PSBAL_PAGE))) and PS.key == 'm1plus_playset' and PS.title == 'Playback'
+           and [p.key for p in pickers] == ['m1plus_psmode', 'm1plus_psmem', 'm1plus_psgain', 'm1plus_psrg', 'm1plus_psfilter', 'm1plus_psdsd', 'm1plus_psusb'], 'the page, its seven pickers and the three loudness pages are in the page table at their indexes')
+    expect([(r.label, r.action, r.arg) for r in PS.rows] == [('Play Mode', P.ACT_PLAYMODE, P.PSMODE_PAGE_INDEX), ('Gapless', P.ACT_GAPLESS, 0), ('Resume', P.ACT_MEMPLAY, P.PSMEM_PAGE_INDEX), ('Folder Skip', P.ACT_FOLDERSKIP, 0),
+                                                           ('Continue Playing', P.ACT_NEXTALBUM, P.NEXTALBUM_PAGE_INDEX), ('Gain', P.ACT_GAIN, P.PSGAIN_PAGE_INDEX), ('Max Volume', P.ACT_MAXVOL, P.PSMAXVOL_PAGE_INDEX), ('Default Volume', P.ACT_BOOTVOL, P.PSBOOTVOL_PAGE_INDEX), ('Channel Balance', P.ACT_BALANCE, P.PSBAL_PAGE_INDEX),
+                                                           ('ReplayGain', P.ACT_REPLAYGAIN, P.PSRG_PAGE_INDEX), ('Digital Filter', P.ACT_PAGE, P.PSFILTER_PAGE_INDEX), ('DSD Output Mode', P.ACT_DSD, P.PSDSD_PAGE_INDEX), ('USB Volume', P.ACT_USBVOL, P.PSUSB_PAGE_INDEX), ('Digital Output', P.ACT_DIGITAL, 0)]
            and [P.row_kind(r) for r in PS.rows] == ['value', 'switch', 'value', 'switch', 'value', 'value', 'value', 'value', 'value', 'value', 'link', 'value', 'value', 'switch'], 'the page\'s rows and their kinds')
     pl = [x.text if isinstance(x, P.Hdr) else x.label for x in PS.layout]
     expect(pl == ['Play Mode', 'Gapless', 'Resume', 'Folder Skip', 'Continue Playing', 'Volume', 'Gain', 'Max Volume', 'Default Volume', 'Channel Balance', 'ReplayGain', 'Output', 'Digital Filter', 'DSD Output Mode', 'USB Volume', 'Digital Output'],
@@ -288,33 +289,33 @@ def settings_tests(ctx):
     def sw_images(m, i): return [c[2] for c in m.calls if c[0] == 'image_base_set_image' and c[1] == m.widgets[f'pod_switch{i}']]
     # the pickers: the check follows the state, a tap saves as stock's choice does and the checks follow
     for mem in range(3):
-        m = page(81, 3, mem=mem)
+        m = page(pod_pages.PSMEM_PAGE_INDEX, 3, mem=mem)
         expect(('window_open', 'm1plus_psmem') in m.calls and checks(m, 3) == [int(i == mem) for i in range(3)] and not seen(m), f'Memory Playback {mem}: the picker\'s check {checks(m, 3)}, nothing written')
-    m = page(81, 3, mem=2)
+    m = page(pod_pages.PSMEM_PAGE_INDEX, 3, mem=2)
     m.click('pod_row0')
     expect(m.word(MEM) == 0 and seen(m) == [('write_int_config', 0, 'PLAYSET', 'MEMORYPLAY')] and checks(m, 3) == [1, 0, 0], 'a tap on Off: the word, the save, the check follows')
     m.calls = []; m.click('pod_row0')
     expect(not seen(m), 'a tap on the chosen row writes nothing')
     for rg in range(3):
-        m = page(83, 3, replay=rg)
+        m = page(pod_pages.PSRG_PAGE_INDEX, 3, replay=rg)
         expect(checks(m, 3) == [int(i == rg) for i in range(3)], f'ReplayGain {rg}: the check')
-    m = page(83, 3, replay=0); m.click('pod_row2')
+    m = page(pod_pages.PSRG_PAGE_INDEX, 3, replay=0); m.click('pod_row2')
     expect(seen(m) == [('mclSetReplayGain', 2), ('write_int_config', 2, 'PLAYSET', 'REPLAYGAIN')] and checks(m, 3) == [0, 0, 1], 'ReplayGain Album: stock\'s set, then the save')
     for f in (0, 3, 7):
-        m = page(84, 8, filt=f)
+        m = page(pod_pages.PSFILTER_PAGE_INDEX, 8, filt=f)
         expect(checks(m, 8) == [int(i == f) for i in range(8)], f'Digital Filter {f}: the check')
-    m = page(84, 8, filt=3); m.click('pod_row7')
+    m = page(pod_pages.PSFILTER_PAGE_INDEX, 8, filt=3); m.click('pod_row7')
     expect(seen(m) == [('mclSetFilter', 7), ('write_int_config', 7, 'PLAYSET', 'FILTER')] and checks(m, 8) == [0] * 7 + [1], 'Digital Filter: mclSetFilter, then the save')
-    m = page(85, 3, dsd=0, way=2); m.click('pod_row1')
+    m = page(pod_pages.PSDSD_PAGE_INDEX, 3, dsd=0, way=2); m.click('pod_row1')
     expect(seen(m) == [('write_int_config', 1, 'SYSSET', 'DSDMODE'), ('save_stop_player',), ('mclSetDsdMode', 1), ('save_start_player', 0)] and checks(m, 3) == [0, 1, 0], 'DSD DOP on USB audio: stop, set, restart')
-    m = page(86, 2, usbvol=1, volume=50); m.click('pod_row0')
+    m = page(pod_pages.PSUSB_PAGE_INDEX, 2, usbvol=1, volume=50); m.click('pod_row0')
     expect(seen(m) == [('set_devicevolume', 50), ('write_int_config', 0, 'SYSSET', 'USBVOLMODE')] and checks(m, 2) == [1, 0], 'USB Volume Fixed: set_devicevolume, the save')
     for mode in (0, 1, 3):
-        m = page(80, 4); m.mode = mode; m.calls = []; m.fire(O['EVT_WINDOW_TO_FG'])
+        m = page(pod_pages.PSMODE_PAGE_INDEX, 4); m.mode = mode; m.calls = []; m.fire(O['EVT_WINDOW_TO_FG'])
         expect(checks(m, 4)[mode] == 1 and sum(checks(m, 4)) == 1, f'Play Mode {mode}: the check follows the mode shown')
-    m = page(80, 4); m.mode = 3; m.click('pod_row0')
+    m = page(pod_pages.PSMODE_PAGE_INDEX, 4); m.mode = 3; m.click('pod_row0')
     expect(('write_int_config', 0, 'PLAYSET', 'PLAYMODE') in seen(m) and checks(m, 4) == [1, 0, 0, 0], 'a tap on List Play: through pod_set_mode, the check follows')
-    gm = page(82, 2, gain=1)
+    gm = page(pod_pages.PSGAIN_PAGE_INDEX, 2, gain=1)
     expect(checks(gm, 2) == [0, 1], 'Gain High: the picker\'s check')
     gm.click('pod_row0')
     expect(seen(gm) == [('write_int_config', 0, 'PLAYSET', 'GAIN'), ('mclSetGainMode', 0, 1)] and checks(gm, 2) == [1, 0], 'a tap on Low: the save, mclSetGainMode(0, 1), the check follows')
@@ -394,7 +395,7 @@ def page(index, nrows, kinds=('pod_check', 'pod_label'), **state):
 EVT_CHANGING, EVT_CLICK_ = 0x11d, 0x10c
 STRCPY, SLIDER_SET, SET_ENABLE = 0x743570, 0x6316dc, 0x669320   # leaves of stock's refresh (the PLT stub of strcpy, slider_set_value, widget_set_enable)
 H = {n: D[n][0] for n in ('VOL_REFRESH', 'VOL_SLIDER', 'VOL_DEC', 'VOL_ADD', 'BOOT_REFRESH', 'BOOT_SLIDER', 'BOOT_DEC', 'BOOT_ADD', 'BAL_REFRESH', 'BAL_SLIDER', 'BAL_DEC', 'BAL_ADD')}
-PAGE_OF = {'max': 87, 'boot': 88, 'bal': 89}
+PAGE_OF = {'max': pod_pages.PSMAXVOL_PAGE_INDEX, 'boot': pod_pages.PSBOOTVOL_PAGE_INDEX, 'bal': pod_pages.PSBAL_PAGE_INDEX}
 WIDGETS = {'max': ('label_vol', 'vol_slider'), 'boot': ('label_vol', 'vol_slider'), 'bal': ('label_balance', 'slider_balance')}
 SWITCH_STOCK = 0x49d328   # stock's Volume Memory click (the window in a0)
 

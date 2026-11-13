@@ -24,7 +24,7 @@ glyph (`drop_wifi`, `bt`, `keylock`, `eq`, `lowgain`, `po`, `playset`, `sysset`)
 
 ## Tiles: hide, show and reorder (`patch/pulldown.c`)
 
-Settings > System > Appearance > **Control Center** (iOS's name and translations; a link row in its own card on the Appearance page, `m1plus_appearance` `PAGES[40]`, under the Background and Accent card; our page `m1plus_pulldown`, `PAGES[41]`) edits the eight tiles of the stock pull-down
+Settings > System > Appearance > **Control Center** (iOS's name and translations; a link row in its own card on the Appearance page, `m1plus_appearance`, under the Background and Accent card; our page `m1plus_pulldown`) edits the eight tiles of the stock pull-down
 (`view_switchs`). It is the Main Menu page's twin ([menu](menu.md) "Main Menu"): one row per tile with a switch and, on every shown row but the first, an up arrow
 (both pictures, insensitive); the row takes every tap and decides by where it landed (the arrow's rectangle moves the tile one place up, elsewhere it shows or
 hides it; a tile shown joins the end). Shown tiles come first in order, hidden ones after them in stock order. Each change is saved at once and atomically; a

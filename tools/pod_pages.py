@@ -260,8 +260,117 @@ REGION = 'region'   # in the 10-Band editor's layout: a box (REGION_H high) betw
 GAP = 'gap'   # in a cards page's layout: the space between two cards that have no header or note between them
 
 
+PAGE_ORDER = [   # every page, in the order of its number: this table alone decides the numbers (PAGES[0] is the entry page)
+    'm1plus_menu',
+    'm1plus_cover',
+    'm1plus_artists',
+    'm1plus_shuffle',
+    'm1plus_settings',
+    'm1plus_extras',
+    'm1plus_albums',
+    'm1plus_mainmenu',
+    'm1plus_library',
+    'm1plus_homeset',
+    'm1plus_playlists',
+    'm1plus_songs',
+    'm1plus_dailymix',
+    'm1plus_extrascfg',
+    'm1plus_developer',
+    'm1plus_ipod',
+    'm1plus_podcasts',
+    'm1plus_tape',
+    'm1plus_npset',
+    'm1plus_keyboard',
+    'm1plus_keyboards',
+    'm1plus_tapetheme',
+    'm1plus_about',
+    'm1plus_search',
+    'm1plus_album',
+    'm1plus_vinyl',
+    'm1plus_folders',
+    'm1plus_queue',
+    'm1plus_vinylrec',
+    'm1plus_vinyl_white',
+    'm1plus_vinyltheme',
+    'm1plus_onlineart',
+    'm1plus_cache',
+    'm1plus_covlist',
+    'm1plus_files',
+    'm1plus_update',
+    'm1plus_relnotes',
+    'm1plus_background',
+    'm1plus_accent',
+    'm1plus_appearance',
+    'm1plus_pulldown',
+    'm1plus_radio',
+    'm1plus_radionp',
+    'm1plus_radioinfo',
+    'm1plus_songinfo',
+    'm1plus_podcastregion',
+    'm1plus_wifi',
+    'm1plus_wifiinfo',
+    'm1plus_wifipass',
+    'm1plus_wifiother',
+    'm1plus_wifisec',
+    'm1plus_peq',
+    'm1plus_peqpage',
+    'm1plus_peqlib',
+    'm1plus_tenband',
+    'm1plus_tencurve',
+    'm1plus_tenpreamp',
+    'm1plus_autoeq',
+    'm1plus_peqband',
+    'm1plus_battery',
+    'm1plus_chargelimit',
+    'm1plus_idleview',
+    'm1plus_lockscreen',
+    'm1plus_lockwall',
+    'm1plus_lockstyle',
+    'm1plus_lockinfo',
+    'm1plus_nextalbum',
+    'm1plus_ndlogin',
+    'm1plus_ndserver',
+    'm1plus_ndroot',
+    'm1plus_display',
+    'm1plus_lighttime',
+    'm1plus_ledlight',
+    'm1plus_keyspower',
+    'm1plus_keylock',
+    'm1plus_shutdown',
+    'm1plus_pcfind',
+    'm1plus_listenbrainz',
+    'm1plus_lastfm',
+    'm1plus_playset',
+    'm1plus_psmode',
+    'm1plus_psmem',
+    'm1plus_psgain',
+    'm1plus_psrg',
+    'm1plus_psfilter',
+    'm1plus_psdsd',
+    'm1plus_psusb',
+    'm1plus_psmaxvol',
+    'm1plus_psbootvol',
+    'm1plus_psbal',
+    'm1plus_lyrsize',
+    'm1plus_idlelyrics',
+]
+_PAGE_NUMBER = {k: i for i, k in enumerate(PAGE_ORDER)}
+assert len(_PAGE_NUMBER) == len(PAGE_ORDER), 'PAGE_ORDER lists a page key twice: ' + ', '.join(sorted({k for k in PAGE_ORDER if PAGE_ORDER.count(k) > 1}))
+
+
+def page_index(key):
+    """The page's number, its place in PAGE_ORDER (and so in PAGES and in the C POD_PAGES table)."""
+    if key not in _PAGE_NUMBER: raise KeyError(f'page_index({key!r}): no such page key in PAGE_ORDER')
+    return _PAGE_NUMBER[key]
+
+
+_REGISTRY = {}   # page key -> Page, filled by Page() as the pages below are built
+
+
 class Page:
     def __init__(self, key, name, title, rows=(), kind='rows', layout=None):
+        if key in _REGISTRY: raise ValueError(f'two pages share the key {key!r}')
+        _REGISTRY[key] = self
         self.key = key          # asset basename under ui/ (ui/<key>.bin) and window resource name
         self.name = name        # root widget name property
         self.title = title      # navbar title text
@@ -285,58 +394,66 @@ class Page:
 # rest, as the saved list in /mnt/data/m1plus/home-menu says. Shuffle opens the Shuffle page, Artists the payload's
 # Artists list, Settings the Settings page (cards: Wi-Fi, Bluetooth, the M1+ Music pages, Playback, System,
 # Developer). Settings is hidden from the menu by default like Shuffle; it then shows on the Extras page (Tools), where it can never be turned off.
-SHUFFLE_PAGE_INDEX = 3   # its index in PAGES
-SETTINGS_PAGE_INDEX = 4
-EXTRAS_PAGE_INDEX = 5
-MENUCFG_PAGE_INDEX = 7
-LIBRARY_PAGE_INDEX = 8
-NPSET_PAGE_INDEX = 18
-KEYBOARDS_PAGE_INDEX = 20
-HOMESET_PAGE_INDEX = 9
-EXTRASCFG_PAGE_INDEX = 13
-DEVELOPER_PAGE_INDEX = 14
-THEME_PAGE_INDEX = 21
-ABOUT_PAGE_INDEX = 22
-RECORD_PAGE_INDEX = 28
-VINYL_WHITE_INDEX = 29
-VTHEME_PAGE_INDEX = 30
-BG_PAGE_INDEX = 37   # after UPDATE
-ACCENT_PAGE_INDEX = 38  # after BG_PAGE
-APPEARANCE_PAGE_INDEX = 39  # after ACCENT_PAGE
-PULLDOWN_PAGE_INDEX = 40   # before the Radio pages
-REGION_PAGE_INDEX = 45   # after the Radio pages and Get Info
-PEQ_PAGE_INDEX = 51        # after the Wi-Fi pages
-PEQP_PAGE_INDEX = 52       # after PEQ_PAGE
-PEQLIB_PAGE_INDEX = 53     # the Presets page
-TENBAND_PAGE_INDEX = 54    # the 10-Band editor, then its Curve and Preamp pages
-TENCURVE_PAGE_INDEX = 55
-TENPREAMP_PAGE_INDEX = 56
-AUTOEQ_PAGE_INDEX = 57
-PEQBAND_PAGE_INDEX = 58   # the band page
-BATTERY_PAGE_INDEX = 59   # Settings > System > Battery, then its Charge Limit picker
-CHGLIMIT_PAGE_INDEX = 60
-IDLE_PAGE_INDEX = 61      # the Idle Display picker
-LOCK_PAGE_INDEX = 62      # the Lock Screen picker
-LOCKWALL_PAGE_INDEX = 63  # the Lock Screen's Wallpaper picker
-LOCKSTYLE_PAGE_INDEX = 64 # the Lock Screen's Player Style picker
-LOCKINFO_PAGE_INDEX = 65  # the Lock Screen's Custom Wallpaper instructions
-NEXTALBUM_PAGE_INDEX = 66   # Settings > Playback > Continue Playing picker: the Navidrome pages follow
-NDLOGIN_PAGE_INDEX = 67  # the Navidrome Sign In page
-NDSERVER_PAGE_INDEX = 68 # the Navidrome Server page
-NDROOT_PAGE_INDEX = 69   # the Navidrome root
-DISPLAY_PAGE_INDEX = 70   # Settings > System > Display, then its Screen Timeout picker
-LIGHTTIME_PAGE_INDEX = 71
-LED_PAGE_INDEX = 72       # ... and its LED Light picker
-KEYSPOWER_PAGE_INDEX = 73 # Settings > System > Buttons & Power, then its Button Lock and Auto-Shutdown pickers
-KEYLOCK_PAGE_INDEX = 74
-SHUTDOWN_PAGE_INDEX = 75
-PCFIND_PAGE_INDEX = 76    # the Podcasts page's search inside one show
-LB_PAGE_INDEX = 77        # Settings > Library > ListenBrainz
-LF_PAGE_INDEX = 78        # Settings > Library > Last.fm
-PLAYSET_PAGE_INDEX = 79   # Settings > Playback Settings, then its seven pickers (Play Mode, Memory Playback, Gain, ReplayGain, Digital Filter, DSD Output Mode, USB Volume)
-PSMODE_PAGE_INDEX, PSMEM_PAGE_INDEX, PSGAIN_PAGE_INDEX, PSRG_PAGE_INDEX, PSFILTER_PAGE_INDEX, PSDSD_PAGE_INDEX, PSUSB_PAGE_INDEX = range(80, 87)
-PSMAXVOL_PAGE_INDEX, PSBOOTVOL_PAGE_INDEX, PSBAL_PAGE_INDEX = range(87, 90)   # ... and the three loudness pages (Max Volume, Default Volume, Channel Balance) (last)
-LYRSIZE_PAGE_INDEX = 90   # the Lyrics Text Size picker (after the Playback Settings pages)
+SHUFFLE_PAGE_INDEX = page_index('m1plus_shuffle')
+SETTINGS_PAGE_INDEX = page_index('m1plus_settings')
+EXTRAS_PAGE_INDEX = page_index('m1plus_extras')
+MENUCFG_PAGE_INDEX = page_index('m1plus_mainmenu')
+LIBRARY_PAGE_INDEX = page_index('m1plus_library')
+NPSET_PAGE_INDEX = page_index('m1plus_npset')
+KEYBOARDS_PAGE_INDEX = page_index('m1plus_keyboards')
+HOMESET_PAGE_INDEX = page_index('m1plus_homeset')
+EXTRASCFG_PAGE_INDEX = page_index('m1plus_extrascfg')
+DEVELOPER_PAGE_INDEX = page_index('m1plus_developer')
+THEME_PAGE_INDEX = page_index('m1plus_tapetheme')
+ABOUT_PAGE_INDEX = page_index('m1plus_about')
+RECORD_PAGE_INDEX = page_index('m1plus_vinylrec')
+VINYL_WHITE_INDEX = page_index('m1plus_vinyl_white')
+VTHEME_PAGE_INDEX = page_index('m1plus_vinyltheme')
+BG_PAGE_INDEX = page_index('m1plus_background')
+ACCENT_PAGE_INDEX = page_index('m1plus_accent')
+APPEARANCE_PAGE_INDEX = page_index('m1plus_appearance')
+PULLDOWN_PAGE_INDEX = page_index('m1plus_pulldown')
+REGION_PAGE_INDEX = page_index('m1plus_podcastregion')
+PEQ_PAGE_INDEX = page_index('m1plus_peq')   # after the Wi-Fi pages
+PEQP_PAGE_INDEX = page_index('m1plus_peqpage')
+PEQLIB_PAGE_INDEX = page_index('m1plus_peqlib')
+TENBAND_PAGE_INDEX = page_index('m1plus_tenband')   # the 10-Band editor, then its Curve and Preamp pages
+TENCURVE_PAGE_INDEX = page_index('m1plus_tencurve')
+TENPREAMP_PAGE_INDEX = page_index('m1plus_tenpreamp')
+AUTOEQ_PAGE_INDEX = page_index('m1plus_autoeq')
+PEQBAND_PAGE_INDEX = page_index('m1plus_peqband')   # the band page
+BATTERY_PAGE_INDEX = page_index('m1plus_battery')   # Settings > System > Battery, then its Charge Limit picker
+CHGLIMIT_PAGE_INDEX = page_index('m1plus_chargelimit')
+IDLE_PAGE_INDEX = page_index('m1plus_idleview')   # the Idle Display picker
+LOCK_PAGE_INDEX = page_index('m1plus_lockscreen')   # the Lock Screen picker
+LOCKWALL_PAGE_INDEX = page_index('m1plus_lockwall')   # the Lock Screen's Wallpaper picker
+LOCKSTYLE_PAGE_INDEX = page_index('m1plus_lockstyle')   # the Lock Screen's Player Style picker
+LOCKINFO_PAGE_INDEX = page_index('m1plus_lockinfo')   # the Lock Screen's Custom Wallpaper instructions
+NEXTALBUM_PAGE_INDEX = page_index('m1plus_nextalbum')   # Settings > Playback > Continue Playing picker: the Navidrome pages follow
+NDLOGIN_PAGE_INDEX = page_index('m1plus_ndlogin')   # the Navidrome Sign In page
+NDSERVER_PAGE_INDEX = page_index('m1plus_ndserver')   # the Navidrome Server page
+NDROOT_PAGE_INDEX = page_index('m1plus_ndroot')   # the Navidrome root
+DISPLAY_PAGE_INDEX = page_index('m1plus_display')   # Settings > System > Display, then its Screen Timeout picker
+LIGHTTIME_PAGE_INDEX = page_index('m1plus_lighttime')
+LED_PAGE_INDEX = page_index('m1plus_ledlight')
+KEYSPOWER_PAGE_INDEX = page_index('m1plus_keyspower')   # Settings > System > Buttons & Power, then its Button Lock and Auto-Shutdown pickers
+KEYLOCK_PAGE_INDEX = page_index('m1plus_keylock')
+SHUTDOWN_PAGE_INDEX = page_index('m1plus_shutdown')
+PCFIND_PAGE_INDEX = page_index('m1plus_pcfind')   # the Podcasts page's search inside one show
+LB_PAGE_INDEX = page_index('m1plus_listenbrainz')   # Settings > Library > ListenBrainz
+LF_PAGE_INDEX = page_index('m1plus_lastfm')   # Settings > Library > Last.fm
+PLAYSET_PAGE_INDEX = page_index('m1plus_playset')   # Settings > Playback Settings, then its seven pickers (Play Mode, Memory Playback, Gain, ReplayGain, Digital Filter, DSD Output Mode, USB Volume)
+PSMODE_PAGE_INDEX = page_index('m1plus_psmode')
+PSMEM_PAGE_INDEX = page_index('m1plus_psmem')
+PSGAIN_PAGE_INDEX = page_index('m1plus_psgain')
+PSRG_PAGE_INDEX = page_index('m1plus_psrg')
+PSFILTER_PAGE_INDEX = page_index('m1plus_psfilter')
+PSDSD_PAGE_INDEX = page_index('m1plus_psdsd')
+PSUSB_PAGE_INDEX = page_index('m1plus_psusb')
+PSMAXVOL_PAGE_INDEX = page_index('m1plus_psmaxvol')   # ... and the three loudness pages (Max Volume, Default Volume, Channel Balance)
+PSBOOTVOL_PAGE_INDEX = page_index('m1plus_psbootvol')
+PSBAL_PAGE_INDEX = page_index('m1plus_psbal')
+LYRSIZE_PAGE_INDEX = page_index('m1plus_lyrsize')   # the Lyrics Text Size picker
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
     Row('Cover Flow', ACT_COVER),
@@ -497,7 +614,7 @@ INFO_DUR = INFO_CC_STATUS + 50  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asse
 INFO_APHOTOS, INFO_ANONE = INFO_DUR + 1, INFO_DUR + 2   # patch/m1plus.c: the Artist Photos card's counts (homecover_stat 7, 8)
 INFO_LBACCT = INFO_DUR + 3   # patch/m1plus.c: the ListenBrainz page's Account row (patch/scrobpage.c lb_account_text)
 INFO_LFACCT = INFO_DUR + 4   # ... and the Last.fm page's
-CACHE_PAGE_INDEX = 32   # after ONLINEART (31)
+CACHE_PAGE_INDEX = page_index('m1plus_cache')
 CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Hdr('Covers'),
     Row('Albums', ACT_INFO, INFO_CC_ALBUMS),
@@ -538,7 +655,7 @@ INFO_SF = INFO_CC_STATUS + 1   # patch/m1plus.c INFO_SF = INFO_CC + 7; row k rea
 INFO_SFOLD = INFO_SF + 48      # patch/m1plus.c: the Unsupported Files count (setfiles_old_count), above the setting rows
 assert len(GUARD_FILES) + 1 + len(SETTING_FILES) <= INFO_SFOLD - INFO_SF, 'the Settings Files rows reach INFO_SFOLD: raise it here and in patch/m1plus.c'
 assert INFO_DUR == INFO_SFOLD + 1, 'INFO_DUR must follow INFO_SFOLD (patch/m1plus.c)'
-FILES_PAGE_INDEX = 34   # after COVLIST (33)
+FILES_PAGE_INDEX = page_index('m1plus_files')
 FILES_PAGE = Page('m1plus_files', 'm1plus_files_page', 'Settings Files', layout=(
     [Row(f, ACT_INFO, INFO_SF + k) for k, f in enumerate(GUARD_FILES)] + [GAP, Row(FOLDER_LABEL, ACT_INFO, INFO_SF + 4)]
     + [Row(f, ACT_SFDEL, INFO_SF + 5 + k) for k, f in enumerate(SETTING_FILES)]
@@ -961,7 +1078,6 @@ WIFISEC_PAGE = Page('m1plus_wifisec', 'm1plus_wifisec_page', 'Security', kind='w
 # The search inside one show (patch/pcfind.c, docs/modules/podcasts.md "Search inside a show"): the Search page's field and keyboard over a list of one show's episodes; opened by the Show page's search button, no menu row.
 PCFIND_PAGE = Page('m1plus_pcfind', 'm1plus_pcfind_page', 'Search Episodes', kind='pcfind')
 
-# PAGES[0] is the entry page.
 # Settings > Playback > EQ (patch/peq_ui.c, docs/modules/peq.md): stock's Equalizer switch, the 10-Band EQ (our ten-band curve; its curve's name in grey before the check) and a row per APO / AutoEQ preset in
 # /mnt/mmc/EQ, the one that plays checked. A cards page whose rows the payload binds itself (so kind 'peq', no exported rows): the switch in a card of its own, then a card of 10-Band EQ and
 # one row per preset (the asset has PQ_ROWS, named and shown by the payload, which also sets each shown row's card piece: peq_items(n) is what it shows), or, with no preset, 10-Band EQ
@@ -1069,25 +1185,8 @@ LF_PAGE = Page('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm', layout=[
     Note(LF_NOTE, lines=5),
 ])
 
-# PAGES[0] is the entry page.
-PAGES = [MENU, COVER, ARTISTS, SHUFFLE_PAGE, SETTINGS_PAGE, EXTRAS_PAGE, ALBUMS, MENUCFG_PAGE, LIBRARY_PAGE, HOMESET_PAGE, PLAYLISTS, SONGS, DAILYMIX,
-         EXTRASCFG_PAGE, DEVELOPER_PAGE, IPOD, PODCASTS, TAPE, NPSET_PAGE, KEYBOARD, KEYBOARDS_PAGE, THEME_PAGE, ABOUT_PAGE, SEARCH, ALBUM_PAGE, VINYL, FOLDERS, QUEUE_PAGE,
-         RECORD_PAGE, VINYL_WHITE, VTHEME_PAGE, ONLINEART, CACHE_PAGE, COVLIST, FILES_PAGE, UPDATE, RELNOTES, BG_PAGE, ACCENT_PAGE, APPEARANCE_PAGE, PULLDOWN_PAGE, RADIO, RADIONP, RADIOINFO, SONGINFO, REGION_PAGE, WIFI_PAGE, WIFIINFO_PAGE, WIFIPASS_PAGE, WIFIOTHER_PAGE, WIFISEC_PAGE,
-         PEQ_PAGE, PEQP_PAGE, PEQLIB_PAGE, TENBAND_PAGE, TENCURVE_PAGE, TENPREAMP_PAGE, AUTOEQ_PAGE, PEQBAND_PAGE, BATTERY_PAGE, CHGLIMIT_PAGE, IDLE_PAGE, LOCK_PAGE, LOCKWALL_PAGE, LOCKSTYLE_PAGE, LOCKINFO_PAGE, NEXTALBUM_PAGE, NDLOGIN_PAGE, NDSERVER_PAGE, NDROOT_PAGE, DISPLAY_PAGE, LIGHTTIME_PAGE, LED_PAGE, KEYSPOWER_PAGE, KEYLOCK_PAGE, SHUTDOWN_PAGE, PCFIND_PAGE, LB_PAGE, LF_PAGE, PLAYSET_PAGE, PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE, LYRSIZE_PAGE, IDLELYRICS_PAGE]
-assert PAGES[KEYBOARDS_PAGE_INDEX] is KEYBOARDS_PAGE
-assert PAGES[NPSET_PAGE_INDEX] is NPSET_PAGE
-assert PAGES[SHUFFLE_PAGE_INDEX] is SHUFFLE_PAGE and PAGES[SETTINGS_PAGE_INDEX] is SETTINGS_PAGE
-assert PAGES[EXTRASCFG_PAGE_INDEX] is EXTRASCFG_PAGE and PAGES[DEVELOPER_PAGE_INDEX] is DEVELOPER_PAGE
-assert PAGES[EXTRAS_PAGE_INDEX] is EXTRAS_PAGE and PAGES[MENUCFG_PAGE_INDEX] is MENUCFG_PAGE
-assert PAGES[LIBRARY_PAGE_INDEX] is LIBRARY_PAGE and PAGES[HOMESET_PAGE_INDEX] is HOMESET_PAGE
-assert PAGES[ABOUT_PAGE_INDEX] is ABOUT_PAGE and PAGES[RECORD_PAGE_INDEX] is RECORD_PAGE and PAGES[BG_PAGE_INDEX] is BG_PAGE and PAGES[ACCENT_PAGE_INDEX] is ACCENT_PAGE and PAGES[APPEARANCE_PAGE_INDEX] is APPEARANCE_PAGE and PAGES[PEQ_PAGE_INDEX] is PEQ_PAGE and PAGES[PEQP_PAGE_INDEX] is PEQP_PAGE and PAGES[PEQLIB_PAGE_INDEX] is PEQLIB_PAGE
-assert PAGES[TENBAND_PAGE_INDEX] is TENBAND_PAGE and PAGES[TENCURVE_PAGE_INDEX] is TENCURVE_PAGE and PAGES[TENPREAMP_PAGE_INDEX] is TENPREAMP_PAGE and PAGES[AUTOEQ_PAGE_INDEX] is AUTOEQ_PAGE and PAGES[PEQBAND_PAGE_INDEX] is PEQBAND_PAGE
-assert PAGES[VINYL_WHITE_INDEX] is VINYL_WHITE and PAGES[VTHEME_PAGE_INDEX] is VTHEME_PAGE and PAGES[CACHE_PAGE_INDEX] is CACHE_PAGE and PAGES[FILES_PAGE_INDEX] is FILES_PAGE
-assert PAGES[PULLDOWN_PAGE_INDEX] is PULLDOWN_PAGE and PAGES[REGION_PAGE_INDEX] is REGION_PAGE
-assert PAGES[BATTERY_PAGE_INDEX] is BATTERY_PAGE and PAGES[CHGLIMIT_PAGE_INDEX] is CHGLIMIT_PAGE and PAGES[LOCK_PAGE_INDEX] is LOCK_PAGE and PAGES[LOCKWALL_PAGE_INDEX] is LOCKWALL_PAGE and PAGES[LOCKSTYLE_PAGE_INDEX] is LOCKSTYLE_PAGE and PAGES[LOCKINFO_PAGE_INDEX] is LOCKINFO_PAGE 
-assert PAGES[IDLE_PAGE_INDEX] is IDLE_PAGE
-assert PAGES[NEXTALBUM_PAGE_INDEX] is NEXTALBUM_PAGE and NEXTALBUM_PAGE_INDEX == PAGES.index(NDLOGIN_PAGE) - 1
-assert PAGES[NDLOGIN_PAGE_INDEX] is NDLOGIN_PAGE and PAGES[NDSERVER_PAGE_INDEX] is NDSERVER_PAGE and PAGES[NDROOT_PAGE_INDEX] is NDROOT_PAGE
-assert PAGES[DISPLAY_PAGE_INDEX] is DISPLAY_PAGE and PAGES[LIGHTTIME_PAGE_INDEX] is LIGHTTIME_PAGE and PAGES[LED_PAGE_INDEX] is LED_PAGE and LED_PAGE_INDEX == len(PAGES) - 20
-assert PAGES[KEYSPOWER_PAGE_INDEX] is KEYSPOWER_PAGE and PAGES[KEYLOCK_PAGE_INDEX] is KEYLOCK_PAGE and PAGES[SHUTDOWN_PAGE_INDEX] is SHUTDOWN_PAGE and SHUTDOWN_PAGE_INDEX == len(PAGES) - 17 and PAGES[PCFIND_PAGE_INDEX] is PCFIND_PAGE and PCFIND_PAGE_INDEX == len(PAGES) - 16 and PAGES[LB_PAGE_INDEX] is LB_PAGE and LB_PAGE_INDEX == len(PAGES) - 15 and PAGES[LF_PAGE_INDEX] is LF_PAGE and LF_PAGE_INDEX == len(PAGES) - 14 and PAGES[PLAYSET_PAGE_INDEX] is PLAYSET_PAGE and PAGES[PSMODE_PAGE_INDEX:PSBAL_PAGE_INDEX + 1] == [PSMODE_PAGE, PSMEM_PAGE, PSGAIN_PAGE, PSRG_PAGE, PSFILTER_PAGE, PSDSD_PAGE, PSUSB_PAGE, PSMAXVOL_PAGE, PSBOOTVOL_PAGE, PSBAL_PAGE] and PLAYSET_PAGE_INDEX == LF_PAGE_INDEX + 1 and PSBAL_PAGE_INDEX == len(PAGES) - 3 and PAGES[LYRSIZE_PAGE_INDEX] is LYRSIZE_PAGE and LYRSIZE_PAGE_INDEX == len(PAGES) - 2
-assert PAGES[THEME_PAGE_INDEX] is THEME_PAGE
+# PAGES[0] is the entry page. The order is PAGE_ORDER's; a key with no page, or a page missing from PAGE_ORDER, stops the import.
+_missing = [k for k in PAGE_ORDER if k not in _REGISTRY]
+_unordered = [k for k in _REGISTRY if k not in _PAGE_NUMBER]
+if _missing or _unordered: raise ValueError(f'PAGE_ORDER and the Page objects differ: no Page for {_missing}, not in PAGE_ORDER: {_unordered}')
+PAGES = [_REGISTRY[k] for k in PAGE_ORDER]
