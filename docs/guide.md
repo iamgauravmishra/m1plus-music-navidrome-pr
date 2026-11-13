@@ -111,6 +111,7 @@ Cancel during the countdown if needed. Pictures are saved in the card's `screens
 
 **Settings → Playback → EQ** opens the Equalizer. Its switch turns the EQ on or off; off, playback
 is unchanged. The EQ works at every sample rate and on every output; DSD plays without it.
+While the switch is on, the status bar shows **EQ** after the volume.
 
 Headphones, Line Out and a USB DAC each keep their own EQ (on or off, and what plays), and it
 switches by itself when the output changes. The grey line under the switch names the output you
