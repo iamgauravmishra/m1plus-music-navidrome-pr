@@ -564,7 +564,7 @@ TEXT = dict([
     _t('Resumes a little below the limit', '略低于上限时恢复充电', '略低於上限時恢復充電', '上限を少し下回ると再開', '한도보다 조금 낮아지면 재개',
        'Reprend un peu sous la limite', 'Lädt knapp unter dem Limit weiter', 'Se reanuda algo por debajo del límite', 'Riprende poco sotto il limite',
        'ชาร์จต่อเมื่อต่ำกว่าขีดจำกัดเล็กน้อย', 'Wznawia nieco poniżej limitu', 'Возобновится чуть ниже предела', 'Відновиться трохи нижче межі'),
-    # Settings > System > Display (patch/display.c, docs/modules/settings.md "Display"): our page's rows and the pickers' rows that are new. Our own short labels: stock's English for the backlight time is
+    # Settings > System > Display (patch/display.c, docs/modules/display.md): our page's rows and the pickers' rows that are new. Our own short labels: stock's English for the backlight time is
     # "Screen Off" with the choice "Off", its LED row is "Atmosphere Lamp Settings", and its Follow Screen is English in every table but the Chinese ones. The other four backlight choices (15s .. 5min) are
     # stock's plain texts, the same in every language (BRANDS). (Lock Screen, Off and Orange are above.)
     _t('Follow Screen', '跟随屏幕', '跟隨螢幕', '画面に連動', '화면과 연동', 'Suivre l’écran', 'Bildschirm folgen',

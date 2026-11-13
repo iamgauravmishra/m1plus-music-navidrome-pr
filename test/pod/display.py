@@ -1,4 +1,4 @@
-"""Settings > System > Display (patch/display.c, docs/modules/settings.md "Display"): our page in place of stock's Display list and its four pages. The brightness card (stock's own slider
+"""Settings > System > Display (patch/display.c, docs/modules/display.md): our page in place of stock's Display list and its four pages. The brightness card (stock's own slider
 handlers bound to our slider), Screen Timeout (stock's backlight time), LED Light and Follow Screen (stock's lamp mode and switch): each state is stock's and is written the way stock's
 own page writes it, which the tests check by running stock's handlers under the emulator on the same state."""
 import os

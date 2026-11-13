@@ -59,6 +59,30 @@ the first visible album. It moves the tick to the new view and writes the choice
 - **Scoped artist page.** The same page and one shared order (`albums-sort`, direction included): the artist's albums follow it (the All Songs row stays last). One artist has one artist name, so the card has no **Artist** row: `vs_bind(..., sorts)` takes the set of sort rows offered (`VS_ALL_SORTS & ~(1 << CC_SORT_ARTIST)` here), hides the others (`vs_item1`; hidden and insensitive, the widget names stay in the asset), packs the rest from the top in `vs_fit` and sets the card's `bg_image` to the glass of its row count. A **library artist's page** (`al_can_find`: not a composer's, not a source's, not Unknown Artist's) offers the action slot (slot 6, the Search row's widgets) as **Find Artist Photo**: `al_open` gives `vs_label6` that text and `vs_glyph6` the image `pod_ic_vsphoto` (Lucide `image`), so the card is Find Artist Photo, the hairline, Grid, List, Title, Recently Added, Year: six 50 px rows, 300 px, `vs_glass6`. The row closes the card and calls `onlineart_open_artist(name)` ([onlineart](onlineart.md) "Artist photos"); `al.finding` is set while that page is up and `al_on_fg` then compares `ap_epoch()` with the value kept when the row was tapped: a picked photo switches the header in place (`al_recheck_done`: the circle appears, or the replaced picture is decoded again). A composer's page and a source's artist page have no action row: five rows, 250 px, `vs_glass5`, no hairline above Grid. A row still reports its own number to the page (Recently Added is 2, Year 3). When the saved order is Artist the page shows the albums in Title order (the stock list; reversed when the saved Artist is reversed) and ticks Title (`cc_scoped_sort`); a row of this card writes `albums-sort`, so it changes the library Albums page too. A tap on that ticked Title row reverses the shown direction and saves Title (`0` / `a`). The artist-scoped Cover Flow reads the same order (`load_artist`: `cf.order`, Artist as Title), so switching grid / list and Cover Flow keeps the album sequence; its cache keys stay by stock row (`cf.keys[cf.order[i]]`, as `al.keys[order[a]]` here, also in `cc_build_near_step`). The library page keeps all four sorts. The page's large title is the artist's name (296 px, ellipsis) and the small title the same name cut to the 110 px before Cover Flow (`az_fit`).
 - **Year** needs year tags: `songtable.year` is the file's tag (`taglib_tag_year`), read per song; an untagged album sorts last.
 
+## Album order and initial selection
+
+`cc_album_order` (`patch/covercache.c`, the order of `cc_sort_mode`, the card's `albums-sort`, all four rows and
+their reversed forms, "Order and direction" above) keeps the stock deque unchanged and builds `order[]`, an array of
+stock row numbers, by a heapsort (`cc_heapsort`; access through the stock rows, no callback into the payload).
+
+- **Title:** the album titles by the name order described in [artists](artists.md); ties keep the stock position.
+- **Artist:** the album row's artist, then its title, each by the same name order; ties keep the stock position.
+  Unknown Album (ID -1) goes last.
+
+Recently Added and Year rank by song creation time and by year tag (tie rules in "Order and direction" above).
+
+Per-artist Cover Flow reads the same order with Artist read as Title (`cc_scoped_sort`, "Scoped artist page" above; `load_artist`
+in `patch/coverflow.c`), so the artist's shelf and the artist's grid list the albums alike. Its cache keys stay by stock row.
+
+Cost: 4000 albums sort in 30.8 M payload instructions (two keys per row; stock's own in-memory sort of the same list, which
+runs first, is over 10x that: `docs/modules/artists.md` "Cost against stock's sort").
+
+At open, `find_playing` (`patch/coverflow.c`) checks `cc_playing` (`patch/covercache.c`: `mclGetPlayPos` and the play
+queue at `PLAY_QUEUE`, bounded by `deque_size`). It matches the album by `cc_album_key` (FNV of artist/title), then by
+title ignoring ASCII case, for compilations. Selection priority is the playing album, then the saved centre album key
+(`POSITION_FILE`, `coverflow-position` on the card, kept only by the main Cover Flow: an artist's shelf does not read or write
+it), then the first album. This is a one-time lookup, not polling.
+
 ## Covers and painting
 
 The shared grid supplies tile records, rounded artwork, ellipsis fitting, painting and hit

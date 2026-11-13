@@ -184,7 +184,7 @@ everything runs from the page's own widgets, one timer and one worker thread. Al
   Home's cover build does it (`docs/modules/homecover.md`, `docs/modules/settings.md`) with `CC_REBUILD`. The worker's `CC_REBUILD` mode
   is unchanged: it extracts each album again to `.tmp` and `rename`s it over the cache file, so an old picture is replaced atomically and
   a "no art" marker is replaced by the picture an album gained; an album that now yields no art keeps what it has (the old picture, or
-  its marker: nothing is written or removed). Cover Flow's open builds only the missing covers (`CC_MISSING`). Settings > Developer > Clear Cover Cache deletes the cache files (`docs/modules/settings.md`); Cover Flow's `album` file is kept.
+  its marker: nothing is written or removed). Cover Flow's open builds only the missing covers (`CC_MISSING`). Settings > Developer > Clear Cover Cache deletes every file in the covers folder (`docs/modules/homecover.md` "Clear Cover Cache"); Cover Flow's position file `/mnt/mmc/.m1plus/coverflow-position` is outside that folder and is kept.
 - **One worker at a time**, app-wide: the Albums page builds missing covers in the background (`docs/modules/albums.md`) with the
   same set, and so does the Home page (`docs/modules/homecover.md`: a progress line at its top, stopped when Home leaves the front); its Cover Flow button stops its own build before opening this page, and a page that finds the set taken starts nothing.
 - **Not ported from q2-pod:** Sort and Refresh cards, the rated scope, A-Z jump, the album split by

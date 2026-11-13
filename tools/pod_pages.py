@@ -450,7 +450,7 @@ ABOUT_PAGE = Page('m1plus_about', 'm1plus_about_page', 'About', layout=[
     Row('Available', ACT_INFO, INFO_FREE),
 ])
 
-# Settings > Developer > Cache (patch/homecover.c, docs/modules/settings.md "Cache"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
+# Settings > Developer > Cache (patch/homecover.c, docs/modules/homecover.md "Cache page"): the Covers card holds the cache folder's counts (INFO_CC_*: homecover_stat reads each, an ellipsis until counted), the build's Status and Clear Cover Cache;
 # the Track Durations card holds Measured Tracks (INFO_DUR: dur_stat, patch/durations.c) and Clear Track Durations.
 INFO_CC_ALBUMS, INFO_CC_COVERS, INFO_CC_NOART, INFO_CC_MISSING, INFO_CC_OLD, INFO_CC_SIZE, INFO_CC_STATUS = range(8, 15)   # (patch/m1plus.c INFO_CC = 8 + the index homecover_stat takes)
 INFO_DUR = INFO_CC_STATUS + 47  # patch/m1plus.c INFO_DUR = INFO_SFOLD + 1 (asserted below the Settings Files kinds)
@@ -476,7 +476,7 @@ CACHE_PAGE = Page('m1plus_cache', 'm1plus_cache_page', 'Cache', layout=[
     Row('Clear Track Durations', ACT_CLEARDUR),
 ])
 
-# The plain list behind the Cache page's No art / Missing rows (patch/covlist.c, docs/modules/settings.md "Cache"): the Albums page's asset without its toggle and Cover Flow button, the title set by the payload.
+# The plain list behind the Cache page's No art / Missing rows (patch/covlist.c, docs/modules/homecover.md "Cache page"): the Albums page's asset without its toggle and Cover Flow button, the title set by the payload.
 COVLIST = Page('m1plus_covlist', 'm1plus_covlist_page', 'Missing Covers', kind='covlist')
 
 # Settings > Developer > Tools > Settings Files (patch/setfiles.c, docs/modules/settings.md "Settings Files"): the payload's own files as read when the page opens. The labels are the file names (identifiers, not translated).
@@ -784,7 +784,7 @@ BATTERY_PAGE = Page('m1plus_battery', 'm1plus_battery_page', 'Battery', layout=[
 CHGLIMIT_PAGE = Page('m1plus_chargelimit', 'm1plus_chargelimit_page', 'Charge Limit', layout=[Row(f'{p}%', ACT_CHGLIMSET, p) for p in CHGLIMIT_VALUES] + [Note('Resumes a little below the limit')])
 
 # Settings > Playback > Continue Playing (patch/nextalbum.c, docs/modules/nextalbum.md): Off or Next Albums, a check on the chosen one; Auto Mix is planned as a third (file value '2').
-# Settings > System > Display (patch/display.c, docs/modules/settings.md "Display"): our page in place of stock's systemset/display_page list and its four pages. A brightness card (a slider, stock's own handlers);
+# Settings > System > Display (patch/display.c, docs/modules/display.md): our page in place of stock's systemset/display_page list and its four pages. A brightness card (a slider, stock's own handlers);
 # Screen Timeout, stock's backlight time (a value row and its picker: stock's five choices in stock's order, the index is stock's), and Lock Screen (LOCK_PAGE) in a card; LED Light (a value row and its picker: stock's lamp mode,
 # off or one of its two colours) and Follow Screen (stock's switch) in a card. Every state is stock's own.
 LIGHTTIME_VALUES = ('Never', '15s', '30s', '1min', '5min')   # stock's systemset/lighttime_page rows: its first is the key powerm_lighton, the others are these plain texts in every language

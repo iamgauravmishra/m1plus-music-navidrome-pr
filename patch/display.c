@@ -1,4 +1,4 @@
-/* M1+ Music Settings > System > Display (docs/modules/settings.md "Display"): the state behind our Display page's Screen Timeout row and its picker.
+/* M1+ Music Settings > System > Display (docs/modules/display.md): the state behind our Display page's Screen Timeout row and its picker.
  *
  * The state is stock's own: the word backlighttime_mode (LIGHT_MODE), an index 0 .. 4 (never, 15 s, 30 s, 1 min, 5 min), loaded from [SYSSET] LIGHTTIME by config_init (anything else becomes 0)
  * and shown by stock's systemset/lighttime_page, which stays reachable through All System Settings and reads the same word. Nothing of ours is saved.

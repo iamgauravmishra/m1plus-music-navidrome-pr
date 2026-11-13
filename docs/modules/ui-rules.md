@@ -36,3 +36,12 @@
 - **Track rows** on the album page use the list title size (`LIST_TITLE_PX` 21) for the number and the title.
 - **Bottom sheets** (the track rows' menu, the Podcasts and Radio sheets, Now Playing's More sheet's own rows): 50 px rows, a 24 px glyph at x 14, the 18 px label from x 48, the scrim `PL_DIM`. The Albums "..." sort card (the same 50 px rows) and the Playlists menu (20 px glyphs) are floating cards, not sheets.
 - **Segmented control.** One painter, `m1_segmented` (`patch/common.c`; constants `SEG_*`, model `tools/pod_show.py segmented`): a fully rounded track (#1C1C1E), the selected segment a fully rounded thumb (#D1D1D6, black label) floating 3 px inside it on every side, the other labels white, a short hairline (#3A3A3C, half the track high) between two unselected segments, none beside the thumb. Neutral (no accent). First user: the Podcasts Discover level's Shows | Episodes ([podcasts](podcasts.md) "Discover").
+
+## Confirm dialog
+
+Our yes/no questions (Settings' Rebuild Covers, Rebuild Artist Photos, Clear Cover Cache, Reset All Settings and the rest) use the
+stock `dialog/confirminfo_dialog`, opened through `navigator_to_with_context`. The context is `{kind, ms, text[0x200], text2[0x200]}`;
+text starts at +8. Kind 5 gives wrapped 20 px text in a 260 × 80 box at y 25. Kind 1 scrolls one line and must not be used for a
+long message. Evidence: `dialog_confirminfo_dialog_init` `0x472cec`, branch `0x472e1c`; stock equalizer reset `on_eqreset_onclick`
+`0x49dd6c` uses the same dialog. Only `CONFIRM_YES` (`0xa`, `btn_enter`) acts; No or a failed dialog does nothing. The kind-5
+appearance still needs device confirmation.

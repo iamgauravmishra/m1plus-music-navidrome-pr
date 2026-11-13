@@ -82,7 +82,7 @@ LOCKSCREEN_PINS = (   # (address, stock word, what it proves)
     (0x4ab9e8, 0x0320f809, 'show time handler: jalr write_int_config(new, "SYSSET", "SSAVERTIMESHOW")'), (0x4ab9ec, 0xa2240000, 'show time handler: sb a0, (s1) in the delay slot: the byte first, then the save'),
     (0x4e6190, 0x24c6877c, 'config_init: toolsReadConfig(.., "SYSSET", "SSAVERTIMESHOW")'), (0x4e61ac, 0x2c430002, 'config_init: sltiu v1, v0, 2'), (0x4e61b0, 0x0003100a, 'config_init: movz v0, zero, v1: above 1 is 0'),
     (0x4e61b8, 0x8f83b000, 'config_init: lw v1, GOT screensaver_timeshow'),
-    # Screen Timeout (Settings > Display, patch/display.c disp_light_set; docs/modules/settings.md "Display"): stock's systemset/lighttime_page. Each of its five rows has a click handler
+    # Screen Timeout (Settings > Display, patch/display.c disp_light_set; docs/modules/display.md): stock's systemset/lighttime_page. Each of its five rows has a click handler
     # (0x4a8708 row 1 = index 0 .. 0x4a8578 row 5 = index 4) that does nothing when the index is the word backlighttime_mode already, else calls the shared 0x4a8410 (the row images, then the word
     # stored in the delay-slot position before write_int_config(index, "SYSSET", "LIGHTTIME")) and then reset_poweroptions_timer(0, 0, 1), which sets the screen's countdown from the new word.
     (0x4a84b8, 0x8f82afb8, 'backlight time 0x4a8410: lw v0, GOT backlighttime_mode (0xa05a7c)'), (0x4a84bc, 0x8c520000, 'backlight time: lw s2, (v0): the current index'),
