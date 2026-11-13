@@ -189,7 +189,7 @@ def asset_tests(ctx):
     rh = O['PM_ROW_H']
     expect((card.x, card.y, card.w, card.h) == (0, 450 - 7 * rh, 320, 7 * rh) and card.get('style:normal:bg_image') == 'pc_sheet7' and card.get('visible') == 'false',
            'the card is the seven-row sheet at the bottom of the window (the payload sets its size and picture)')
-    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 15, 'fifteen rows (Filter last): the show sheet\'s five, the episode sheet\'s five (Save Episode), the Shows level\'s Import from Card and Subscriptions, the Subscriptions level\'s Export OPML (Select is the show sheet\'s, relabelled)')
+    expect([c.name for c in card.children] == [f'pg_sh_{r}' for r in PCP.SHEET_ROWS] and len(PCP.SHEET_ROWS) == 19, 'nineteen rows (Filter, then the In Progress row\'s four last): the show sheet\'s five, the episode sheet\'s five (Save Episode), the Shows level\'s Import from Card and Subscriptions, the Subscriptions level\'s Export OPML (Select is the show sheet\'s, relabelled), the Downloaded page\'s Pause, Resume, Retry and Cancel Download')
     for r, icon, label, value, red in pod_ui.PS_SHEET_ROWS:
         row = tree.find(f'pg_sh_{r}')
         ic, tx, hr = tree.find(f'pg_sh_{r}_ic'), tree.find(f'pg_sh_{r}_tx'), tree.find(f'pg_sh_{r}_hr')

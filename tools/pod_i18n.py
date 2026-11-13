@@ -829,7 +829,9 @@ TEXT = dict([
     _t('Mark as Played', '标为已播放', '標為已播放', '再生済みにする', '재생함으로 표시', 'Marquer comme lu', 'Als gehört markieren', 'Marcar como reproducido', 'Segna come riprodotto', 'ทำเครื่องหมายว่าเล่นแล้ว', 'Oznacz jako odtworzone', 'Отметить как прослушанное', 'Позначити як прослухане'),
     _t('Mark as Unplayed', '标为未播放', '標為未播放', '未再生にする', '재생 안 함으로 표시', 'Marquer comme non lu', 'Als ungehört markieren', 'Marcar como no reproducido', 'Segna come non riprodotto', 'ทำเครื่องหมายว่ายังไม่เล่น', 'Oznacz jako nieodtworzone', 'Отметить как непрослушанное', 'Позначити як непрослухане'),
     _t('Retry', '重试', '重試', '再試行', '다시 시도', 'Réessayer', 'Erneut', 'Reintentar', 'Riprova', 'ลองใหม่', 'Ponów', 'Повторить', 'Повторити'),
-    # the episode page (patch/pcdetail.c, docs/modules/podcasts.md "The episode page"): the hint of an episode with no description
+    _t('Pause', '暂停', '暫停', '一時停止', '일시 중지', 'Pause', 'Pause', 'Pausar', 'Pausa', 'หยุดชั่วคราว', 'Wstrzymaj', 'Приостановить', 'Призупинити'),   # an In Progress row's sheet (patch/podcasts.c SH_IP)
+    _t('Resume', '继续', '繼續', '再開', '재개', 'Reprendre', 'Fortsetzen', 'Reanudar', 'Riprendi', 'ดำเนินการต่อ', 'Wznów', 'Возобновить', 'Відновити'),
+    # the episode page (patch/pcdetail.c, docs/modules/podcasts.md "The episodepage"): the hint of an episode with no description
     _t('No description', '没有简介', '沒有簡介', '説明はありません', '설명 없음', 'Aucune description', 'Keine Beschreibung', 'Sin descripción', 'Nessuna descrizione', 'ไม่มีคำอธิบาย', 'Brak opisu', 'Нет описания', 'Немає опису'),
     _t('%dm', '%d分钟', '%d分鐘', '%d分', '%d분', '%d min', '%d Min.', '%d min', '%d min', '%d นาที', '%d min', '%d мин', '%d хв'),   # the pill's length: short, no "left"
     _t('%dm left', '剩余%d分钟', '剩餘%d分鐘', '残り%d分', '%d분 남음', 'Reste %d min', 'Noch %d Min.', 'Quedan %d min', '%d min rimasti', 'เหลือ %d นาที', 'Zostało %d min', 'Ещё %d мин', 'Ще %d хв'),

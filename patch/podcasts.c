@@ -39,6 +39,7 @@
 #include "pcregion.h"
 #include "pcwrap.h"
 #include "palette.h"
+#include "libsrc.h"
 #include "songops.h"
 
 #define P(w, off) (*(void **)((char *)(w) + (off)))
@@ -56,7 +57,7 @@
 #define PG_TEXT_MAX 232 /* wide chars of a cell's description (at most PC_DESC_CUT bytes) and room for the ellipsis */
 #define PG_TITLE_MAX 100 /* wide chars of a title (95 bytes at most) */
 #define PG_PILL_MAX 48 /* wide chars of a pill's label */
-#define PG_SHEET_ROWS 15 /* the sheets' fixed rows (tools/pod_ui.py PS_SHEET_ROWS) */
+#define PG_SHEET_ROWS 19 /* the sheets' fixed rows (tools/pod_ui.py PS_SHEET_ROWS) */
 #define PG_AWAKE_MS 1000 /* the downloads' timer */
 
 enum {
@@ -156,7 +157,11 @@ enum {
     SR_EXPORT,
     SR_SAVE,
     SR_ORDER,
-    SR_FILTER
+    SR_FILTER,
+    SR_PAUSE,
+    SR_RESUME,
+    SR_RETRY,
+    SR_CANCEL
 }; /* the sheets' rows, tools/pod_ui.py PS_SHEET_ROWS */
 enum {
     PG_F_ALL = 0,
@@ -164,7 +169,7 @@ enum {
     PG_F_LOCAL = 2,
     PG_F_N = 3
 }; /* the Show page's Filter (the sheet's row cycles them) */
-enum { SH_NONE = 0, SH_SHOW = 1, SH_CELL = 2, SH_HOME = 3, SH_SUBS = 4, SH_DLS = 5 };
+enum { SH_NONE = 0, SH_SHOW = 1, SH_CELL = 2, SH_HOME = 3, SH_SUBS = 4, SH_DLS = 5, SH_IP = 6 };
 enum {
     ST_NAME = 0,
     ST_SEC,
@@ -204,6 +209,8 @@ static struct {
         *sh_vl
             [4]; /* the sheets (widgets of the asset): scrim, card, and per row the button, its label, its hairline; the value labels of Playback Speed, Refresh Feed, Episode Order and Filter */
     int sheet, sh_ep; /* SH_NONE / SH_SHOW / SH_CELL / SH_HOME; the episode of a cell's sheet */
+    unsigned
+        sh_key; /* SH_IP: the download key of the In Progress row the sheet is of (rows move under an open sheet) */
     char root[PC_FILE + 20];
     pc_show_t *shows;
     int nshows; /* every folder the model found (shows with files, subscriptions without), the most recently updated first */
@@ -576,15 +583,21 @@ static void pg_dl_progress(char *out, unsigned size, unsigned got, unsigned tota
     pg_cat(out, size, num);
 }
 
-/* The state line of an episode that is not on the card, when it has one: Waiting, Downloading 42%, Failed: <why>, or Paused (a .part from before). 0 when it is a plain remote episode (its date line). */
+/* The state line of an In Progress row: "42%" ("12 MB" when the length is unknown) while it runs (the download ring is before it: no "Downloading"), Waiting, Failed: <why>, or Paused (a .part from before). */
 static int pg_dl_line(unsigned key, int part, char *out, unsigned size) {
     int code = 0, st;
     unsigned got = 0, total = 0;
     out[0] = 0;
     st = key ? pn_dl_state(key, &code, &got, &total) : PN_DL_NONE;
-    if (st == PN_DL_ACTIVE)
-        pg_dl_progress(out, size, got, total);
-    else if (st == PN_DL_WAIT)
+    if (st == PN_DL_ACTIVE) {
+        char num[24];
+        if (total) {
+            unsigned pct = (got >> 10) * 100 / ((total >> 10) ? (total >> 10) : 1);
+            pc_fmt(num, sizeof num, "%d%", pct > 100 ? 100 : pct);
+        } else
+            pc_fmt(num, sizeof num, TR("%d MB"), got >> 20);
+        pg_cat(out, size, num);
+    } else if (st == PN_DL_WAIT)
         pg_cat(out, size, TR("Waiting"));
     else if (st == PN_DL_FAILED) {
         pg_cat(out, size, TR("Failed"));
@@ -602,6 +615,20 @@ static int pg_lines(void *st, unsigned *s, int n, int room, int maxl, pw_line_t 
 /* The Downloads level's rows: display row a lives in slot ord[a] (the slot is its tile's key, so rows coming and going do not make the tiles lose their covers). On the Subscriptions page the order is the identity. */
 static struct pg_dl *pg_row(int a) { return &pg.dls[pg.ord[a]]; }
 static int pg_is_dld(int a) { return !pg.subs && a >= pg.nip; } /* a Downloaded row (the others are In Progress) */
+static int pg_is_ip(int a) { return !pg.subs && a >= 0 && a < pg.nip; } /* an In Progress row: it has a "..." */
+
+/* The download ring of In Progress row a, as libsrc's rows have it (ls_marks_draw): running or queued; 0 for the others (failed, paused). Read from the worker at paint, so a step of progress moves it. */
+static int pg_ip_ring(int a, ls_row_t *lr) {
+    unsigned got = 0, total = 0;
+    int code, st;
+    if (!pg_is_ip(a)) return 0;
+    st = pn_dl_state(pg_row(a)->key, &code, &got, &total);
+    if (st != PN_DL_ACTIVE && st != PN_DL_WAIT) return 0;
+    memset(lr, 0, sizeof *lr);
+    lr->dl = st == PN_DL_ACTIVE ? LS_DL_ACTIVE : LS_DL_WAIT;
+    lr->pct = total ? (int)((got >> 10) * 100 / ((total >> 10) ? (total >> 10) : 1)) : -1;
+    return 1;
+}
 
 /* A size in KB as the pages say it: "48 MB", from a GB "1.4 GB" (one decimal, the language's mark), from 10 GB "18 GB". */
 static void pg_kb_text(char *out, unsigned size, unsigned kb) {
@@ -1755,15 +1782,24 @@ static void pg_paint_dls(void *canvas) {
         widget_prepare_text_style(pass ? pg.st_sub : pg.st_title, canvas);
         for (r = r0; r <= r1; ++r) {
             int x = LIST_TEXT_X + shift, w = LIST_TEXT_W - shift;
+            ls_row_t lr;
+            if (pg_is_ip(r) && !pg.select) w = LIST_TEXT_W_CHEV; /* (the "..." is on the right) */
             if (pass && pg_played_row(r)) x += PS_BADGE_CHECK_W, w -= PS_BADGE_CHECK_W;
+            if (pass && pg_ip_ring(r, &lr)) x += ls_marks_w(&lr) + LS_MK_GAP, w -= ls_marks_w(&lr) + LS_MK_GAP;
             grid_text(canvas, pg_tile(r), pass, x, pg_dy(r) - off + (pass ? LIST_SUB_Y : LIST_TITLE_Y), w,
                       pass ? LIST_SUB_H : LIST_TITLE_H, GRID_VIEW_H);
         }
     }
     for (r = r0; r <= r1; ++r) {
         int y = pg_dy(r) - off;
+        ls_row_t lr;
         if (pg_played_row(r))
             pg_glyph(canvas, PA_CHECK, LIST_TEXT_X + shift - 1, y + LIST_SUB_Y + LIST_SUB_H / 2 - PA_G_PX / 2);
+        if (pg_ip_ring(r, &lr))
+            ls_marks_draw(canvas, pg.win, &lr, LIST_TEXT_X + shift, y + LIST_SUB_Y + LIST_SUB_H / 2, GRID_VIEW_H);
+        if (pg_is_ip(r) && !pg.select)
+            pg_sprite(canvas, 0, PA_DOTS_Y, PA_DOTS_PX, PA_DOTS_PX, PS_DOTS_CX - PA_DOTS_PX / 2,
+                      y + (PC_ROW_H - 1) / 2 - PA_DOTS_PX / 2);
         if (pg.select) pg_mark(canvas, r, LIST_ART_X + (SG_SEL_COL - 6 - SG_MARK) / 2, y + (PC_ROW_H - SG_MARK) / 2);
     }
 }
@@ -4211,7 +4247,12 @@ static int pg_hit(void *e, int *part) {
         }
         return row;
     }
-    return pg_dhit(pt[1]); /* (the Downloads level and the Subscriptions page) */
+    y = pg_dhit(pt[1]); /* (the Downloads level and the Subscriptions page) */
+    if (y >= 0 && !pg.select && pg_is_ip(y) && pt[0] >= PS_DOTS_CX - PS_DOTS_HIT / 2 &&
+        pt[0] < PS_DOTS_CX + PS_DOTS_HIT / 2 && pt[1] - pg_dy(y) >= (PC_ROW_H - 1) / 2 - PS_DOTS_HIT / 2 &&
+        pt[1] - pg_dy(y) < (PC_ROW_H - 1) / 2 + PS_DOTS_HIT / 2)
+        *part = PH_DOTS; /* an In Progress row's "...": a PS_DOTS_HIT square around it */
+    return y;
 }
 
 static int pg_on_down(void *ctx, void *e) {
@@ -4226,8 +4267,9 @@ static int pg_on_down(void *ctx, void *e) {
     if (a >= 0 && !pg.select &&
         (pg.level == L_SHOWS
              ? part == PH_DLROW || part == PH_SUBROW || part == PH_SAVROW || part == PH_SRCHROW || part == PH_ALLROW
-         : pg.level == L_SRCH || pg.level == L_DISC ? part == PH_BODY
-                                                    : pg.level != L_EPS || part == PH_BODY || part == PH_MORE))
+         : pg.level == L_SRCH || pg.level == L_DISC || pg.level == L_DLS
+             ? part == PH_BODY
+             : pg.level != L_EPS || part == PH_BODY || part == PH_MORE))
         grid_set_press(
             &pg.press, pg.level == L_DLS ? pg.ord[a] + 1 : a + 1,
             pg.sv); /* (the Shows level presses only its Library rows; the Downloads level's tiles are keyed by slot) */
@@ -4248,6 +4290,15 @@ static void pg_dl_toggle(const char *dir, const char *file) {
         if (r != PN_OK) pod_toast(pg_dl_word(r));
         pg_awake_arm();
     }
+}
+
+/* A download taken away: it leaves the queue (or is told to stop), its .part goes (and the file `path` too when whole), its failure is forgotten. `path` is the episode's file name, with room for ".part" after it. */
+static void pg_dl_discard(unsigned key, char *path, unsigned size, int whole) {
+    pn_dl_drop(key); /* a running one writes nothing more and leaves no .part */
+    if (whole) unlink(path);
+    pg_cat(path, size, ".part");
+    unlink(path);
+    pn_dl_clear(key);
 }
 
 /* A tap on a Downloaded row: the episode's page (the Show level's, as a tap on a cell's body opens it; its pill plays). The page remembers where the Downloads page was: Back returns there (pg_dls_back). A file that has gone
@@ -4315,7 +4366,12 @@ static void pg_dls_back(void) {
 
 /* A tap on a row of the Downloads level: an In Progress row does what it does on the Show level (a running or waiting one is paused, a paused one resumes, a failed one is tried again); a Downloaded row opens the
  * episode's page; on the Subscriptions page a tap opens the show. */
-static void pg_dls_tap(int a) {
+static void pg_sheet_open(int kind, int ep);
+static void pg_dls_tap(int a, int part) {
+    if (part == PH_DOTS && pg_is_ip(a)) {
+        pg_sheet_open(SH_IP, a);
+        return;
+    }
     if (pg.subs) {
         pg.subs_off = pg_off();
         pg.from_subs = 1;
@@ -4366,11 +4422,7 @@ static int pg_on_delete(void *ctx, void *e) {
             ++kept;
             continue;
         }
-        pn_dl_drop(key); /* a waiting one leaves the queue, the running one stops and leaves no .part */
-        if (dld || pg.level == L_EPS) unlink(path);
-        pg_cat(path, sizeof path, ".part");
-        unlink(path);
-        pn_dl_clear(key);
+        pg_dl_discard(key, path, sizeof path, dld || pg.level == L_EPS); /* (a waiting one leaves the queue) */
         if (hash) pc_mark(hash, 0);
         gone[i] = 1;
     }
@@ -4439,9 +4491,9 @@ static const char *const pg_speed_name[PC_SPEEDS] = {"1\xc3\x97", "1.25\xc3\x97"
  * which each sheet shows the ones that apply, placed from the card's top, the card as high as its rows over the window's bottom edge. The show's "..." opens the show's: Playback Speed (a tap cycles
  * and the sheet stays), Refresh Feed, Select Episodes, Mark All as Played, Unsubscribe. A cell's "..." opens that episode's: Download or Remove Download, Mark as Played or Unplayed.
  */
-static const char *const pg_row_id[PG_SHEET_ROWS] = {"speed",     "refresh", "select", "markall", "unsub",
-                                                     "dl",        "rm",      "mark",   "unmark",  "import",
-                                                     "delplayed", "export",  "save",   "order",   "filter"};
+static const char *const pg_row_id[PG_SHEET_ROWS] = {
+    "speed",     "refresh", "select", "markall", "unsub",  "dl",      "rm",       "mark",    "unmark",  "import",
+    "delplayed", "export",  "save",   "order",   "filter", "dlpause", "dlresume", "dlretry", "dlcancel"};
 
 static void pg_sheet_close(void) {
     if (!pg.sheet) return;
@@ -4530,14 +4582,26 @@ static void pg_sheet_open(int kind, int ep) {
     unsigned pos, len;
     char text[96];
     if (!pg.sh_card || pg.sheet ||
-        (kind == SH_HOME   ? pg.level != L_SHOWS
-         : kind == SH_SUBS ? pg.level != L_DLS || !pg.subs
-         : kind == SH_DLS  ? pg.level != L_DLS || pg.subs || pg.saved
-                           : pg.level != L_EPS) ||
+        (kind == SH_HOME                   ? pg.level != L_SHOWS
+         : kind == SH_SUBS                 ? pg.level != L_DLS || !pg.subs
+         : kind == SH_DLS || kind == SH_IP ? pg.level != L_DLS || pg.subs || pg.saved
+                                           : pg.level != L_EPS) ||
         pg.dlg || pg.select || pg.preview)
         return;
     pg.sheet = kind, pg.sh_ep = ep;
-    if (kind == SH_HOME) {
+    if (kind == SH_IP) {
+        /* An In Progress row's sheet: Pause (running or waiting), Resume (paused) or Retry (failed), then Cancel Download. */
+        unsigned got, total;
+        int code;
+        if (!pg_is_ip(ep)) {
+            pg.sheet = SH_NONE;
+            return;
+        }
+        pg.sh_key = pg_row(ep)->key;
+        k = pn_dl_state(pg.sh_key, &code, &got, &total);
+        rows[n++] = k == PN_DL_ACTIVE || k == PN_DL_WAIT ? SR_PAUSE : k == PN_DL_FAILED ? SR_RETRY : SR_RESUME;
+        rows[n++] = SR_CANCEL;
+    } else if (kind == SH_HOME) {
         /* Refresh All while a show has a feed (the value: the newest refresh of any show), then Import from Card while the card has a subscriptions.txt or an OPML file (the Subscriptions page is a Library row of the Shows page).
          * Add Show is not a row: the search is behind Discover's magnifier. */
         if (pg.has_line) {
@@ -4682,11 +4746,7 @@ static void pg_remove(int ep) {
     }
     key = pn_dl_key(pg.shows[pg.sel].dir, e->file);
     hash = e->state == PC_LOCAL ? e->hash : 0;
-    pn_dl_drop(key);
-    unlink(path);
-    pg_cat(path, sizeof path, ".part");
-    unlink(path);
-    pn_dl_clear(key);
+    pg_dl_discard(key, path, sizeof path, 1);
     if (hash) pc_mark(hash, 0);
     pc_flush();
     pg_reload_eps();
@@ -4796,6 +4856,26 @@ static int pg_on_sheet_scrim(void *ctx, void *e) {
     return RET_OK;
 }
 
+/* A row of an In Progress row's sheet (the row is found again by its key: the rows may have moved under the sheet). Pause stops a running or waiting download (its .part stays), Resume and Retry queue it; each does nothing when the
+ * download is no longer in the state the row was for. Cancel Download is what the select mode's Delete does to the row: the download leaves the queue, its .part goes, its failure is forgotten; no confirm. */
+static void pg_ip_sheet_act(int id) {
+    unsigned got, total;
+    int i, code, st, run;
+    char path[PC_FILE * 3 + 24];
+    for (i = 0; i < pg.nip && pg_row(i)->key != pg.sh_key; ++i) {
+    }
+    if (i >= pg.nip) return;
+    st = pn_dl_state(pg.sh_key, &code, &got, &total);
+    run = st == PN_DL_ACTIVE || st == PN_DL_WAIT;
+    if (id == SR_CANCEL) {
+        if (pg_join(path, sizeof path - 6, pg_row(i)->dir, pg_row(i)->file))
+            pg_dl_discard(pg.sh_key, path, sizeof path, 0);
+        pg_ip_remove(i);
+    } else if (run == (id == SR_PAUSE))
+        pg_dl_toggle(pg_row(i)->dir, pg_row(i)->file);
+    pg_dls_sync();
+}
+
 static int pg_on_sheet_row(void *ctx, void *e) {
     int id = (int)(unsigned)ctx - 1, ep = pg.sh_ep;
     unsigned hash;
@@ -4830,6 +4910,12 @@ static int pg_on_sheet_row(void *ctx, void *e) {
         break;
     case SR_EXPORT:
         if (pg.level == L_DLS && pg.subs) pg_export();
+        break;
+    case SR_PAUSE:
+    case SR_RESUME:
+    case SR_RETRY:
+    case SR_CANCEL:
+        pg_ip_sheet_act(id);
         break;
     case SR_SELECT:
         pg_select(1);
@@ -4995,7 +5081,7 @@ static int pg_on_up(void *ctx, void *e) {
         if (a > 0 && same == a - 1) pg_toggle_pick(same); /* a tap marks and unmarks; a drag marks nothing */
     } else if (same == a - 1 && part2 == part) {
         if (pg.level == L_DLS)
-            pg_dls_tap(same);
+            pg_dls_tap(same, part);
         else if (pg.level == L_SRCH)
             pg_srch_tap(same, part2);
         else if (pg.level == L_DISC)
