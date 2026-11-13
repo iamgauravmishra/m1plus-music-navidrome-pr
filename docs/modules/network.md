@@ -101,6 +101,27 @@ The threads, the job slot, the download queues and each page's Cancel are the ca
   the card. Neither holds a queue, a thread or a page's state.
 - The episode queue's life cycle is one state table in `patch/pcnet.c` ([podcasts](podcasts.md)
   "Downloads"); Subsonic's queue and the radio keep their own.
+- The two download queues stay two models, on purpose (decided 2026-11-13). Episodes: slots in a
+  state table under one mutex, changed by the pages and the thread. Subsonic: slots the worker
+  alone changes, the pages post ordered messages (`patch/m1job.h`; [subsonic](subsonic.md) "The
+  queue is the worker's"). Each is held by a sweep of its own (`pcdl/sweep_tests`;
+  `sbdl/sweep_tests`, `sbdl/sweep_pair_tests`), and one model for both would change nothing a
+  user sees. Moving Subsonic's queue to a state table is not planned: it would bring back the
+  races the message box rules out. Moving the episode queue to the message box is worth it only
+  when one of these holds:
+  1. a race in the episode queue turns up, on the device or in a review, that
+     `pcdl/sweep_tests` did not catch;
+  2. the episode queue gets a new page action (cancel all, reorder, a queue kept over a
+     restart): each new event means going through every interleaving of the table again, a
+     message does not.
+- The code that fetches one resumable file is still two copies (`pn_dl_attempt` in
+  `patch/pcnet.c`, `sbn_download` in `patch/sbnet.c`) over the shared rules of
+  `patch/netfile.c`. One layer for both waits until the resume rules have to change or the
+  copies get hard to keep alike. The differences have to be listed before that, not merged
+  silently: the stall limit is one, and `sbn_download` drops the `.part` when the connection
+  is reset (curl 56), while a timeout or a short body keeps it.
+- The radio has no download queue (two one-request threads over `net_perform`), so there is
+  nothing to move.
 - There is no event bus, no broadcast to subscribers and no scheduler over the sources, on
   purpose: the pages read status records on their own timers, as before.
 
