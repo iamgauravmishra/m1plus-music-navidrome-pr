@@ -735,6 +735,14 @@ def loudpages_tests(ctx):
                and (lab.get('visible') == 'false') == (num is not None), f'{key}: stock\'s label is kept hidden (and insensitive) beside our number label on Max Volume and Default Volume; Channel Balance shows stock\'s')
         expect(lab.type == 'label' and lab.get('sensitive') == 'false' and dec.type == 'button' and add.type == 'button' and dec.get('text') == texts[0] and add.get('text') == texts[1] and dec.w >= 44 and add.w >= 44
                and dec.x < s.x and s.x + s.w <= add.x, f'{key}: the label is shown, the buttons ({texts[0]} / {texts[1]}) are touch-sized and sit either side of the slider')
+        expect(all(b.get(f'style:{st}:border_width') == '0' and b.get(f'style:{st}:border_color') == '#00000000' and b.get(f'style:{st}:bg_color') == '#00000000' for b in (dec, add) for st in ('normal', 'pressed', 'over', 'focused', 'disable', 'selected')),
+               f'{key}: the buttons draw no border and no fill in any state (the theme\'s default button style would draw a square one)')
+        ctl = t.find('pod_vsctl').children
+        for b, dn in ((dec, 'pod_vsdisc_dec'), (add, 'pod_vsdisc_add')):
+            d = t.find(dn)
+            expect(d is not None and d.type == 'view' and d.get('sensitive') == 'false' and d.w == d.h == 36 and d.get('style:normal:round_radius') == '18' and d.get('style:normal:bg_color') == '#FFFFFF14' and d.get('style:normal:border_width') == '0'
+                   and 2 * d.x + d.w == 2 * b.x + b.w and 2 * d.y + d.h == 2 * b.y + b.h and ctl.index(d) < ctl.index(b), f'{key}: {dn} is a faint round disc centred under the button, insensitive and drawn before it')
+        expect(s.x - (t.find('pod_vsdisc_dec').x + 36) == t.find('pod_vsdisc_add').x - (s.x + s.w) == 13, f'{key}: the bar\'s ends stand 13 px clear of the discs, the same on both sides')
         expect(t.find('pod_vsval') is not None and t.find('pod_vsctl') is not None and t.find('pod_vsval').find(label) is lab and (num is None or t.find('pod_vsval').find('pod_vsnum') is num) and t.find('pod_vsctl').find(slider) is s, f'{key}: the value card holds the label, the control card the slider')
     for loc in pod_i18n.LOCALES:
         expect(all(pod_i18n.TEXT[k][pod_i18n.table_for(loc)] for k in ('Max Volume', 'Default Volume', 'Channel Balance', 'Volume Memory', 'Memory')), f'the loudness texts have a translation in {loc}')

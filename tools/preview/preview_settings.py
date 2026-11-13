@@ -134,6 +134,10 @@ def draw_volcard(s, im, c, y, img, ink, text, value, dim=False):
         if t.type == 'label': s.text(layer, t.x + t.w / 2, y + t.y + t.h / 2, text, px, ink(rgb(style(t, 'text_color'))), anchor='m')
         elif t.type == 'button': s.text(layer, t.x + t.w / 2, y + t.y + t.h / 2, t.get('text'), px, ink(rgb(style(t, 'text_color'))), anchor='m')
         elif t.type == 'slider': draw_slider(layer, t, y, img, value)
+        elif t.type == 'view':   # a button's disc: its fill, round (drawn at 4x and reduced for the edge)
+            disc = Image.new('RGBA', (t.w * 4, t.h * 4), (0, 0, 0, 0)); fill = style(t, 'bg_color').lstrip('#')
+            ImageDraw.Draw(disc).ellipse((0, 0, t.w * 4 - 1, t.h * 4 - 1), fill=ink(rgb(fill)) + (int(fill[6:8], 16),))
+            layer.alpha_composite(disc.resize((t.w, t.h), Image.LANCZOS), (t.x, y + t.y))
     if dim: layer.putalpha(layer.getchannel('A').point(lambda a: a * 153 // 255))
     im.alpha_composite(layer)
 

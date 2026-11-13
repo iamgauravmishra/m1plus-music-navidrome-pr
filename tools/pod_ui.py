@@ -2069,7 +2069,8 @@ def cards_brightness():
 
 
 VOL_NAMES = {'maxvol': ('label_vol', 'vol_slider', 100), 'bootvol': ('label_vol', 'vol_slider', 100), 'balance': ('label_balance', 'slider_balance', 20)}   # stock's widget names of the three loudness pages (label, slider) and the slider's top
-VOL_BTN_W, VOL_VALUE_PX, VOL_BTN_PX = 46, 22, 26   # the - and + buttons' width (a touch target; the card is 300 wide), the value's text size, the buttons' text size
+VOL_BTN_W, VOL_VALUE_PX, VOL_BTN_PX = 46, 22, 24   # the - and + buttons' width (a touch target; the card is 300 wide), the value's text size, the buttons' text size
+VOL_DISC, VOL_DISC_FILL, VOL_GAP = 36, '#FFFFFF14', 8   # the round disc drawn under each button's text (its diameter, 8 % white) and the space between a button and the slider's end, so the bar's ends stand 13 px clear of the discs
 VOL_BTN_TEXTS = {'maxvol': ('−', '+'), 'bootvol': ('−', '+'), 'balance': ('L', 'R')}   # the buttons' texts: a step down or up; Channel Balance's step toward the left or the right (shown as they are in every language)
 
 
@@ -2096,17 +2097,23 @@ def cards_volcard(card):
             v.children.append(lab)
         return v
     left, right = VOL_BTN_TEXTS[card.kind]
-    sx = ST.CM + 4 + VOL_BTN_W
+    sx = ST.CM + 4 + VOL_BTN_W + VOL_GAP
     for name, x, text in (('btn_dec', ST.CM + 4, left), ('btn_add', ST.CM + ST.CARD_W - 4 - VOL_BTN_W, right)):
+        disc = Widget('view', x + (VOL_BTN_W - VOL_DISC) // 2, (ST.ROW_H - VOL_DISC) // 2, VOL_DISC, VOL_DISC, [('name', name.replace('btn', 'pod_vsdisc')), ('sensitive', 'false')])   # the faint disc under the button's text; the button over it stays the touch target
+        for st in STATES:
+            styled(disc, (st,), 'bg_color', VOL_DISC_FILL); styled(disc, (st,), 'round_radius', str(VOL_DISC // 2))
+            styled(disc, (st,), 'border_width', '0'); styled(disc, (st,), 'border_color', '#00000000')
+        v.children.append(disc)
         b = Widget('button', x, 3, VOL_BTN_W, ST.ROW_H - 6, [('name', name), ('text', text)])
         for st in STATES:
             styled(b, (st,), 'bg_color', '#00000000')
+            styled(b, (st,), 'border_width', '0'); styled(b, (st,), 'border_color', '#00000000')   # the theme's default button style draws a square border when the widget's own style names none
             styled(b, (st,), 'text_color', '#8A8A8E' if st == 'pressed' else '#FFFFFF')
             styled(b, (st,), 'font_size', str(VOL_BTN_PX))
             styled(b, (st,), 'text_align_h', 'center')
             styled(b, (st,), 'text_align_v', 'middle')
         v.children.append(b)
-    s = Widget('slider', sx, 1, ST.CARD_W - 8 - 2 * VOL_BTN_W, 50, [('name', slider_name), ('max', str(top)), ('step', '1'), ('slide_with_bar', 'true'), ('bar_size', '6'), ('dragger_size', '50'), ('dragger_adapt_to_icon', 'true'), ('value', '0')])
+    s = Widget('slider', sx, 1, ST.CARD_W - 8 - 2 * (VOL_BTN_W + VOL_GAP), 50, [('name', slider_name), ('max', str(top)), ('step', '1'), ('slide_with_bar', 'true'), ('bar_size', '6'), ('dragger_size', '50'), ('dragger_adapt_to_icon', 'true'), ('value', '0')])
     for st in ('normal', 'pressed', 'over', 'disable', 'focused'):
         styled(s, (st,), 'bg_color', '#00000000'); styled(s, (st,), 'fg_color', '#00000000')
         styled(s, (st,), 'icon', 'pod_sl_thumb'); styled(s, (st,), 'bg_image', 'drop_bg'); styled(s, (st,), 'fg_image', 'drop_fg')
