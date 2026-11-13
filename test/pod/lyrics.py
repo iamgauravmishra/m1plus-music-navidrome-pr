@@ -1132,6 +1132,17 @@ def size_tests(ctx):
     expect(all(mn.LYR_GAPS[sf] == gap and mn.LYR_SIZES[sf] == (px, lh - px) for px, lh, gap, sf in SIZES.values()), 'the preview and style tables (LYR_SIZES, LYR_GAPS) are the payload\'s sizes')
     expect(ok and SIZES[2][:3] == (O['LY_FONT'], O['LY_LINE_H'], O['LY_GAP']) and all(1.1 <= lh / px <= 1.15 for px, lh, *_ in SIZES.values()),
            'Small 22 / 25, Medium 26 / 29, Large 30 / 34 px (font / row pitch), left aligned, white; the bold style names lyrics.ttf (the Small one names no font, like the CJK style), the other the default font; Large is the original style')
+    # stock's label paint draws a row of a wrapped label only while y + the font is at most the content area's bottom (0x62eb4c), from the top margin on: the last row of an n-row label
+    # (n x the pitch high) is drawn when margin_top + margin_bottom <= spacer (device report: at Medium and Small, spacer 3 under the default 2 + 2, every wrapped line lost its last row)
+    def drawn(st, px, lh, rows):
+        mt, mb = (st.get(k) if st.get(k) is not None else st.get('margin') if st.get('margin') is not None else 2 for k in ('margin_top', 'margin_bottom'))
+        y, n = mt, 0
+        while n < rows and y + px <= rows * lh - mb: y, n = y + lh, n + 1
+        return n
+    lost = [(n + sf, st, r) for px, lh, gap, sf in SIZES.values() for n in (BOLD, CJKF) for st in mn.BTN_STATES for r in range(2, MAXR + 1) if drawn(ls[(n + sf, st)], px, lh, r) != r]
+    side = {ls[k].get(m) for k in ls for m in ('margin', 'margin_left', 'margin_right')}
+    expect(not lost and side == {None} and all(ls[(n, st)].get('margin_top') is None and ls[(n, st)].get('margin_bottom') is None for n in (BOLD, CJKF) for st in mn.BTN_STATES),
+           f'at every size stock paints all 2..{MAXR} rows of a wrapped label inside its height (margin_top + margin_bottom <= spacer: Medium and Small set 1 + 1); the side margins stay the default (the {FIT} px content width) and Large sets none ({lost[:3]})')
     expect(all(AMIN <= anchor(r, lh, gap) and anchor(r, lh, gap) + r * lh <= VIEW_H - AROOM for px, lh, gap, _ in SIZES.values() for r in range(1, MAXR + 1)),
            f'at every size {MAXR} rows from their anchor end inside the view ({[[anchor(r, lh, gap) for r in range(1, MAXR + 1)] for _, lh, gap, _ in SIZES.values()]})')
 
