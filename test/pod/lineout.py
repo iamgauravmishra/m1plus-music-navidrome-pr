@@ -219,8 +219,8 @@ def run(ctx):
         left = bar.find('view_bar_left'); kids = [c.name for c in left.children]; e = bar.find(EQ); vol = bar.find('label_volume')
         expect(e is not None and e.type == 'label' and e.get('visible') == 'false' and e.get('sensitive') == 'false' and e.get('text') == 'EQ' and statusbar.EQ_WIDGET == EQ
                and kids.index(EQ) == kids.index(PILL) + 1 and kids[-1] == DEFS['EQ_DIGITAL'] and sum(c.name == EQ for c in bar.walk()) == 1
-               and all(e.get(f'style:{st}:{k}') == vol.get(f'style:{st}:{k}') for st in statusbar.STATES for k in ('text_color', 'text_align_v')) and e.get('style:normal:font_size') == str(statusbar.EQ_PX) == '12',
-               f'{what}: {EQ} is one hidden, insensitive label after the pill, before the digital-out glyph, white like the volume number, at 12 px, the Line Out text size ({kids})')
-        expect(e.w >= StbText(font, statusbar.EQ_PX).layout('EQ')[1], f'{what}: the box holds "EQ" at 12 px ({e.w})')
+               and all(e.get(f'style:{st}:{k}') == vol.get(f'style:{st}:{k}') for st in statusbar.STATES for k in ('text_color', 'text_align_v')) and e.get('style:normal:font_size') == str(statusbar.EQ_PX) == '16',
+               f'{what}: {EQ} is one hidden, insensitive label after the pill, before the digital-out glyph, white like the volume number, at 16 px like the volume number ({kids})')
+        expect(e.w >= StbText(font, statusbar.EQ_PX).layout('EQ')[1], f'{what}: the box holds "EQ" at 16 px ({e.w})')
         end = statusbar.EDGE + sum(c.w + statusbar.GAP for c in left.children if c.name not in (PILL, DEFS['EQ_DIGITAL'])) - statusbar.GAP
         expect(end + 3 <= clock_start, f'{what}: play state, volume and the mark end at x {end}, 3 px clear of the clock\'s ink ({clock_start})')

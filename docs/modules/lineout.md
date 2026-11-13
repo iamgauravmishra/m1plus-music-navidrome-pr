@@ -26,7 +26,7 @@ pull-down's bar copy shows it too. It follows the switch, not the sound: DSD pla
 
 **Implementation.** No new hook: `lo_set_text` calls `lo_eq` after `peqout_sync` (which can turn the switch for a new output). It looks up `pod_eq` among `label_volume`'s siblings and sets it visible and sensitive together when the byte is
 set, the kill switch is absent and stock's digital-out glyph `img_digital` is hidden; only on a change. A bar without `pod_eq` is left as it is. Cost per tick per bar: one or two lookups in the small group.
-The widget is added by `tools/statusbar.py` `apply` to both copies: a `label` with the text `EQ` in `label_volume`'s white at 12 px, the Line Out pill's text size (14 px wide, the text's width), hidden and insensitive, right after `pod_lo` in `view_bar_left`.
+The widget is added by `tools/statusbar.py` `apply` to both copies: a `label` with the text `EQ` in `label_volume`'s white at 16 px, the volume number's size (19 px wide, the text's width), hidden and insensitive, right after `pod_lo` in `view_bar_left`.
 
 **Placement.** Left group: play state, volume glyph, volume number, the mark end at x 100, clear of the 12 h clock's ink at 116 (`test/pod/lineout.py`). With the digital-out glyph as well the group would end at 126, over the clock,
 so the mark gives way to the glyph. Stock sets the glyph later in the same tick, so the mark follows it one tick late.
