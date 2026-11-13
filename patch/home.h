@@ -133,7 +133,7 @@
     "/mnt/data/m1plus/scrobbling" /* the scrobble log: "1" = on, anything else or missing = off (Settings > Library; patch/scrobble.c) */
 #define SCROBBLE_TMP "/mnt/data/m1plus/scrobbling.tmp"
 #define SCROBBLE_AUTO_FILE \
-    "/mnt/data/m1plus/scrobble-auto" /* Settings > Library > Auto Upload: "1" = on, anything else or missing = off (patch/scrobble.c sa_*) */
+    "/mnt/data/m1plus/scrobble-auto" /* Settings > Library > Scrobbling > Auto Upload: "1" = on, anything else or missing = off (patch/scrobble.c sa_*) */
 #define SCROBBLE_AUTO_TMP "/mnt/data/m1plus/scrobble-auto.tmp"
 #define MIX_DIR \
     CARD_DIR \

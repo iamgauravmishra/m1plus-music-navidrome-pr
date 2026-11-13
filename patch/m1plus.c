@@ -138,11 +138,14 @@ enum {
     ACT_SCROBBLE =
         96, /* Settings > Library > Scrobbling: a switch row, off by default (patch/scrobble.c scrobble_toggle) */
     ACT_LB =
-        108, /* Settings > Library > ListenBrainz: a value row (the account's user name) opening the ListenBrainz page */
-    ACT_SCROBUP = 109, /* Settings > Library > Upload Scrobbles: an action row (patch/scrobpage.c lb_upload_tap) */
+        108, /* Settings > Library > Scrobbling > ListenBrainz: a value row (the account's user name) opening the ListenBrainz page */
+    ACT_SCROBUP =
+        109, /* Settings > Library > Scrobbling > Upload Scrobbles: an action row (patch/scrobpage.c lb_upload_tap) */
     ACT_LBAUTO =
-        112, /* Settings > Library > Auto Upload: a switch row, off by default (patch/scrobble.c scrobble_auto_toggle) */
-    ACT_LF = 113 /* Settings > Library > Last.fm: a value row (the account's user name) opening the Last.fm page */
+        112, /* Settings > Library > Scrobbling > Auto Upload: a switch row, off by default (patch/scrobble.c scrobble_auto_toggle) */
+    ACT_LF =
+        113, /* Settings > Library > Scrobbling > Last.fm: a value row (the account's user name) opening the Last.fm page */
+    ACT_SCROBPAGE = 139 /* Settings > Library > Scrobbling: a value row (On or Off) opening the Scrobbling page */
 };
 
 struct pod_row {
@@ -208,8 +211,9 @@ enum {
     VK_LED,
     VK_KEYLOCK,
     VK_SHUTDOWN,
-    VK_LB, /* the Library page's ListenBrainz row */
+    VK_LB, /* the Scrobbling page's ListenBrainz row */
     VK_LF, /* ... and its Last.fm row */
+    VK_SCROB, /* the Library page's Scrobbling row: On or Off, as the switch on the Scrobbling page */
     VK_PSMODE, /* the Playback Settings value rows, in the order of entries.h PS_CTL_* (value_text asks ps_value_key) */
     VK_PSMEM,
     VK_PSGAIN,
@@ -455,6 +459,7 @@ static const struct pick_def {
     {ACT_SHUTDOWN, VK_SHUTDOWN, ACT_SHUTDOWNSET, kp_shutdown, kp_shutdown_set},
     {ACT_LB, VK_LB, 0, (int (*)(void))0, (int (*)(int))0},
     {ACT_LF, VK_LF, 0, (int (*)(void))0, (int (*)(int))0},
+    {ACT_SCROBPAGE, VK_SCROB, 0, (int (*)(void))0, (int (*)(int))0},
     {ACT_PLAYMODE, VK_PSMODE, ACT_PLAYMODESET, ps_playmode, ps_playmode_set},
     {ACT_MEMPLAY, VK_PSMEM, ACT_MEMPLAYSET, ps_memplay, ps_memplay_set},
     {ACT_GAIN, VK_PSGAIN, ACT_GAINSET, ps_gain, ps_gain_set},
@@ -755,6 +760,8 @@ static void value_text(void *label, int kind) {
             return;
         }
         key = off[0];
+    } else if (kind == VK_SCROB) {
+        key = scrobble_setting() ? "On" : "Off";
     } else if (kind == VK_LB ||
                kind == VK_LF) { /* a scrobble account (patch/scrobpage.c): already translated, or a user name */
         if (kind == VK_LB)
@@ -938,9 +945,9 @@ void pod_page_refresh(int index) {
     if (index >= 0 && index < POD_PAGE_COUNT && pod_fg[index]) page_refresh(pod_fg[index], &POD_PAGES[index]);
 }
 
-/* The Library page and the two account pages read the accounts' rows again (patch/scrobpage.c: the file changed, or a check ended). */
+/* The Scrobbling page and the two account pages read the accounts' rows again (patch/scrobpage.c: the file changed, or a check ended). */
 void pod_lb_refresh(void) {
-    pod_page_refresh(POD_LIBRARY_PAGE);
+    pod_page_refresh(POD_SCROBBLING_PAGE);
     pod_page_refresh(POD_LB_PAGE);
     pod_page_refresh(POD_LF_PAGE);
 }
@@ -966,7 +973,7 @@ static int on_page_fg(void *ctx, void *e) {
     long i = (long)ctx;
     (void)e;
     if (pod_fg[i]) page_refresh(pod_fg[i], &POD_PAGES[i]);
-    if (i == POD_LIBRARY_PAGE || i == POD_LB_PAGE || i == POD_LF_PAGE)
+    if (i == POD_SCROBBLING_PAGE || i == POD_LB_PAGE || i == POD_LF_PAGE)
         lb_on_front(); /* the scrobble.ini watch (patch/scrobpage.c) */
     return RET_OK;
 }
@@ -1022,7 +1029,7 @@ static int open_page(int index, int as_home) {
     }
     if (index >= POD_PSMAXVOL_PAGE && index <= POD_PSBAL_PAGE)
         refresh = 1; /* the loudness pages follow stock's words when they are back in front */
-    if (index == POD_LIBRARY_PAGE || index == POD_LB_PAGE || index == POD_LF_PAGE)
+    if (index == POD_SCROBBLING_PAGE || index == POD_LB_PAGE || index == POD_LF_PAGE)
         refresh = 1; /* back in front: the page's rows and the scrobble.ini watch (on_page_fg) */
     if (refresh) { /* the state the page shows, now and each time it is back in front */
         pod_fg[index] = win;
@@ -1062,7 +1069,7 @@ static int open_page(int index, int as_home) {
         peqband_opened(win);
     else if (index == POD_DISPLAY_PAGE)
         disp_opened(win); /* the brightness card: stock's slider handlers */
-    else if (index == POD_LIBRARY_PAGE || index == POD_LB_PAGE || index == POD_LF_PAGE)
+    else if (index == POD_SCROBBLING_PAGE || index == POD_LB_PAGE || index == POD_LF_PAGE)
         lb_opened(
             win,
             index == POD_LB_PAGE ? 1

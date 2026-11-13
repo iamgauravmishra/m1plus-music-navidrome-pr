@@ -1,5 +1,5 @@
-/* The scrobble upload settings (docs/modules/scrobble.md "Settings"): the Library page's ListenBrainz, Last.fm and Upload Scrobbles rows and the two account pages (one Account row each).
- * All are Settings cards pages of patch/m1plus.c (tools/pod_pages.py LIBRARY_PAGE, LB_PAGE, LF_PAGE), which binds the rows and asks this file for their texts and their taps; the upload and the
+/* The scrobble upload settings (docs/modules/scrobble.md "Settings"): the Scrobbling page's ListenBrainz, Last.fm and Upload Scrobbles rows and the two account pages (one Account row each).
+ * All are Settings cards pages of patch/m1plus.c (tools/pod_pages.py SCROBBLING_PAGE, LB_PAGE, LF_PAGE), which binds the rows and asks this file for their texts and their taps; the upload and the
  * accounts are patch/scrobup.c's (one worker thread, an upload or a check). The accounts are the card's scrobble.ini, written on a computer: nothing here sets or removes one.
  *
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
@@ -25,7 +25,7 @@
 
 static struct {
     unsigned timer, ticks;
-    int pages; /* bit 0: the Library page is up, bit 1: the ListenBrainz page, bit 2: the Last.fm page */
+    int pages; /* bit 0: the Scrobbling page is up, bit 1: the ListenBrainz page, bit 2: the Last.fm page */
     int job; /* the job this file started and has not polled the result of: 0 none, else 1 + SCROBUP_UPLOAD / SCROBUP_CHECK / SCROBUP_LFCHECK */
     int done, kind, res, sent, rej,
         auth; /* a result that was polled and is not shown yet (auth: scrobup_auth, the services that refused) */
@@ -202,10 +202,10 @@ static int lb_on_destroy(void *ctx, void *e) {
     return RET_OK;
 }
 
-/* Back in front (patch/m1plus.c on_page_fg, the one EVT_WINDOW_TO_FG handler of the Library and scrobble pages). */
+/* Back in front (patch/m1plus.c on_page_fg, the one EVT_WINDOW_TO_FG handler of the scrobble pages). */
 void lb_on_front(void) { lb_watch(); }
 
-/* A page opens (0 the Library page, 1 ListenBrainz, 2 Last.fm): the card's scrobble.ini is read again (a computer may have changed it; only here and at an Upload
+/* A page opens (0 the Scrobbling page, 1 ListenBrainz, 2 Last.fm): the card's scrobble.ini is read again (a computer may have changed it; only here and at an Upload
  * Scrobbles tap, never from the timer or when a page comes back in front), and an account no check has confirmed yet is asked of the service: the page's own first, the
  * other one when that needs no check (lb_show asks Last.fm after a ListenBrainz check). */
 void lb_opened(void *win, int page) {

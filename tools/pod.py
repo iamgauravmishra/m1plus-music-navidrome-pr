@@ -965,7 +965,7 @@ def gen_stock_h(out, demo_path):
     h.append(f'#define POD_ENTRY_ID {pod_pages.HOME_ENTRY}')
     h.append('#define POD_ENTRY_PAGE 0')
     h.append('#define POD_MENU_PAGE 0')
-    for macro in ('SETTINGS', 'EXTRAS', 'MENUCFG', 'EXTRASCFG', 'DEVELOPER', 'CACHE', 'DISPLAY', 'KEYSPOWER', 'LIBRARY', 'LB', 'LF', 'PLAYSET', 'PSMAXVOL', 'PSBOOTVOL', 'PSBAL', 'FILES', 'PULLDOWN', 'PEQ', 'LOCK', 'PEQP', 'PEQLIB', 'TENBAND', 'TENCURVE', 'TENPREAMP', 'PEQBAND'):   # the pages patch/m1plus.c opens by number: POD_<macro>_PAGE is pod_pages.<macro>_PAGE_INDEX, a place in pod_pages.PAGE_ORDER
+    for macro in ('SETTINGS', 'EXTRAS', 'MENUCFG', 'EXTRASCFG', 'DEVELOPER', 'CACHE', 'DISPLAY', 'KEYSPOWER', 'LIBRARY', 'LB', 'LF', 'SCROBBLING', 'PLAYSET', 'PSMAXVOL', 'PSBOOTVOL', 'PSBAL', 'FILES', 'PULLDOWN', 'PEQ', 'LOCK', 'PEQP', 'PEQLIB', 'TENBAND', 'TENCURVE', 'TENPREAMP', 'PEQBAND'):   # the pages patch/m1plus.c opens by number: POD_<macro>_PAGE is pod_pages.<macro>_PAGE_INDEX, a place in pod_pages.PAGE_ORDER
         h.append(f'#define POD_{macro}_PAGE {getattr(pod_pages, macro + "_PAGE_INDEX")}')
     (out / 'pages.h').write_text('\n'.join(h) + '\n')
     return slots

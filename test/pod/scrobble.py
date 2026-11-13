@@ -211,11 +211,11 @@ def hook_tests(ctx):
 
 
 def setting_tests(ctx):
-    """Settings > Library > Scrobbling: off by default; while off nothing is asked or written; the switch saved atomically; read once."""
+    """Settings > Library > Scrobbling > Scrobbling: off by default; while off nothing is asked or written; the switch saved atomically; read once."""
     expect = ctx.expect
-    sw = pod_pages.LIBRARY_PAGE.rows
+    sw = pod_pages.SCROBBLING_PAGE.rows
     expect([(r.label, r.action) for r in sw if r.action == pod_pages.ACT_SCROBBLE] == [('Scrobbling', pod_pages.ACT_SCROBBLE)] and pod_pages.ACT_SCROBBLE in pod_pages.SWITCH_ACTIONS,
-           'a switch row on Settings > Library')
+           'a switch row on Settings > Library > Scrobbling')
     m = machine(on=False); r = song(m)
     expect(m.call(PSYMS['scrobble_setting'], count=200000) == 0, 'no setting file: off')
     m.calls = []; note(m, r, 0, 300); play(m, r, 1, 200, 300, 10)
@@ -309,11 +309,11 @@ def auto_setting(m): return SU.call(m, PSYMS['scrobble_auto_setting'], count=200
 
 
 def auto_setting_tests(ctx):
-    """Settings > Library > ListenBrainz > Auto Upload: off by default, saved atomically, read once, a flip seen by the next look."""
+    """Settings > Library > Scrobbling > Auto Upload: off by default, saved atomically, read once, a flip seen by the next look."""
     expect = ctx.expect
     P = pod_pages
     expect((EVAL, WAIT, RETRY) == (60, 600, 1800), 'a look at the conditions once a minute, the first waiting listen ten minutes old, half an hour after a failure')
-    expect([(r.label, r.action, P.row_kind(r)) for r in P.LIBRARY_PAGE.rows if r.action == P.ACT_LBAUTO] == [('Auto Upload', P.ACT_LBAUTO, 'switch')] and P.ACT_LBAUTO in P.SWITCH_ACTIONS, 'a switch row on the ListenBrainz page')
+    expect([(r.label, r.action, P.row_kind(r)) for r in P.SCROBBLING_PAGE.rows if r.action == P.ACT_LBAUTO] == [('Auto Upload', P.ACT_LBAUTO, 'switch')] and P.ACT_LBAUTO in P.SWITCH_ACTIONS, 'a switch row on the Scrobbling page')
     m = auto_machine(auto=False)
     expect(auto_setting(m) == 0, 'no setting file: off')
     expect(auto_toggle(m) == 1 and m.fs.get(AUTO_FILE) == b'1\n' and ('rename', AUTO_FILE + '.tmp', AUTO_FILE) in m.log and auto_setting(m) == 1, 'the switch: on, saved atomically as "1"')

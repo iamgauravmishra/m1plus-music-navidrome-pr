@@ -184,7 +184,7 @@ page). The eye button in the header shows hidden files.
 **Search** opens the same library search as the Songs page's Search button. It is hidden from
 the main menu by default.
 
-**Scrobbling** (off by default; turn it on in **Settings → Library → Scrobbling**): every song you listen to
+**Scrobbling** (off by default; turn it on in **Settings → Library → Scrobbling**, whose page holds all the scrobbling settings; the row on the Library page says On or Off): every song you listen to
 (half of it, or 4 minutes) is added to `.scrobbler.log` at the root of the card. Upload it to Last.fm or ListenBrainz from a computer with any
 `.scrobbler.log` uploader, or send it to ListenBrainz and Last.fm from the player (below). Songs played only while a stock Shanling screen is open may be missed; see [details](modules/scrobble.md).
 
@@ -210,15 +210,15 @@ You sign in with one plain text file on the card; nothing is typed on the player
 
    One value a line, nothing else on the line, no quotes. Capitals, spaces around `=`, Windows line ends and comment lines
    starting with `;` or `#` are all fine; keep the file small (under 4 KB) and saved as plain text (UTF-8).
-2. Put the card back and open **Settings → Library**. No restart is needed: the player reads the file whenever that page opens
+2. Put the card back and open **Settings → Library → Scrobbling**. No restart is needed: the player reads the file whenever that page opens
    and before every upload. With Wi-Fi connected the accounts are checked at once, and the **ListenBrainz** and **Last.fm** rows
    show your user names. "Not Set" means the player found no complete account in the file; "Invalid Token" (ListenBrainz) or
    "Sign-in Failed" (Last.fm) means the service refused it: correct the file. Each row opens a page with the account's state and a
    reminder of what goes in the file.
 3. Tap **Upload Scrobbles** whenever you want to send the log. It goes to every service that is set up. It needs Wi-Fi, and the
    card must not be in use by a computer over USB. A message tells how many listens were sent. The Scrobbling switch does not
-   have to be on for this.
-4. Or turn on **Auto Upload** (under Upload Scrobbles, off by default) and the player sends the log by itself: while music plays
+   have to be on for this: with it off, the account rows, Auto Upload and Upload Scrobbles still work, so a log already on the card can be sent.
+4. Or turn on **Auto Upload** (above Upload Scrobbles, off by default) and the player sends the log by itself: while music plays
    and Wi-Fi is connected, about ten minutes after a new listen was logged, so an album goes up in one or two uploads. It works in
    the background and shows no message; it never switches Wi-Fi on, and without a connection the listens simply wait for the next
    time you play music on Wi-Fi. It needs an account and the Scrobbling switch on (only songs logged since the player was switched

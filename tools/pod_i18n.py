@@ -1729,7 +1729,7 @@ TEXT.update([
        'Errore della scheda, %d inviati', 'การ์ดผิดพลาด ส่งแล้ว %d', 'Błąd karty, wysłano %d', 'Ошибка карты, отправлено %d', 'Помилка картки, надіслано %d'),
     _t('Upload failed, %d sent', '上传失败，已上传 %d', '上載失敗，已上載 %d', '送信に失敗、送信 %d', '업로드 실패, 보냄 %d', 'Échec de l’envoi, %d envoyés', 'Upload fehlgeschlagen, %d gesendet',
        'Error al subir, %d enviados', 'Caricamento non riuscito, %d inviati', 'อัปโหลดไม่สำเร็จ ส่งแล้ว %d', 'Wysyłanie nieudane, wysłano %d', 'Сбой отправки, отправлено %d', 'Помилка надсилання, надіслано %d'),
-    # the Library page's Auto Upload card (patch/scrobble.c, the automatic upload): the switch and its one-line note
+    # the Scrobbling page's Auto Upload row (patch/scrobble.c, the automatic upload): the switch and its one-line note
     _t('Auto Upload', '自动上传', '自動上載', '自動送信', '자동 업로드', 'Envoi automatique', 'Auto-Upload', 'Subida automática', 'Invio automatico', 'อัปโหลดอัตโนมัติ',
        'Autowysyłanie', 'Автоотправка', 'Автонадсилання'),
     _t('Uploads on Wi-Fi while music plays.', '播放音乐时通过 Wi-Fi 上传。', '播放音樂時透過 Wi-Fi 上載。', '再生中に Wi-Fi で送信します。', '음악 재생 중 Wi-Fi로 업로드합니다.', 'Envoi en Wi-Fi pendant la lecture.',

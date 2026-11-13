@@ -1,4 +1,4 @@
-"""The ListenBrainz settings (patch/scrobpage.c, docs/modules/scrobble.md "Settings"): the Library page's ListenBrainz and Upload Scrobbles rows and the ListenBrainz page (Account,
+"""The ListenBrainz settings (patch/scrobpage.c, docs/modules/scrobble.md "Settings"): the Scrobbling page's (Settings > Library > Scrobbling) ListenBrainz and Upload Scrobbles rows and the ListenBrainz page (Account,
 Sign Out), on the compiled payload under Unicorn with the upload and the account of patch/scrobup.c under them (the thread's routine run by the test, libcurl the scripted service).
 
 Proved: the rows, ids, page and built assets; the values (Not Set, the user name, Invalid Token, Checking…, nothing for a token no check confirmed); no token entry on the device (the
@@ -16,8 +16,8 @@ SU = sibling('scrobup')   # noqa: F821
 UI = os.path.join(WORK, 'rootfs', 'release', 'assets', 'default', 'raw', 'ui')   # noqa: F821
 EVT_DESTROY, EVT_CLICK, EVT_FG = O['EVT_DESTROY'], O['EVT_CLICK'], O['EVT_WINDOW_TO_FG']   # noqa: F821
 TOKEN, INI, LOG = SU.TOKEN, SU.INI, SU.LOG
-LIB_ROWS = len(P.LIBRARY_PAGE.rows)
-R_LB, R_LF, R_UP, R_AUTO = LIB_ROWS - 4, LIB_ROWS - 3, LIB_ROWS - 2, LIB_ROWS - 1   # the Library page's ListenBrainz, Last.fm, Upload Scrobbles and Auto Upload rows
+LIB_ROWS = len(P.SCROBBLING_PAGE.rows)
+R_SW, R_LB, R_LF, R_AUTO, R_UP = range(5)   # the Scrobbling page's switch, ListenBrainz, Last.fm, Auto Upload and Upload Scrobbles rows
 R_ACCT = 0   # the one row of the ListenBrainz page and of the Last.fm page
 TICK_MS = 500
 TOASTS = ('Already uploading', 'Set up an account first', 'Not available in USB mode', 'Connect to Wi-Fi first',
@@ -33,9 +33,9 @@ def machine(token=TOKEN, name=None, log=None, answers=None, raw=None, wifi=4):
     pod_row0..2 are bound by the page that opened last, the Library page's two rows have numbers of their own)."""
     m = SU.machine(log=log, token=token, name=name, raw=raw, answers=answers)
     m.wifi = wifi
-    for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_{k}{i}' for i in range(LIB_ROWS) for k in ('row', 'label', 'value', 'switch')] + [f'pod_note{i}_t' for i in range(5)]:
+    for n in ['btn_return', 'btn_backtoplayer'] + [f'pod_{k}{i}' for i in range(len(P.LIBRARY_PAGE.rows)) for k in ('row', 'label', 'value', 'switch')] + [f'pod_note{i}_t' for i in range(5)]:
         Machine.widget(m, n)   # noqa: F821
-    m.windows.update({'m1plus_library': m.alloc(0x100), 'm1plus_listenbrainz': m.alloc(0x100), 'm1plus_lastfm': m.alloc(0x100)})
+    m.windows.update({'m1plus_library': m.alloc(0x100), 'm1plus_scrobbling': m.alloc(0x100), 'm1plus_listenbrainz': m.alloc(0x100), 'm1plus_lastfm': m.alloc(0x100)})
     m.job = None
     return m
 
@@ -57,7 +57,7 @@ def open_page(m, page):
 
 def library(**kw):
     m = machine(**kw)
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     return m
 
 
@@ -120,38 +120,52 @@ def log_text(n): return SU.HEADER + ''.join(SU.line(i) for i in range(n))
 def pages_tests(ctx):
     """The rows, the ids, the pages and the built assets."""
     expect = ctx.expect
-    L, B, F = P.LIBRARY_PAGE, P.LB_PAGE, P.LF_PAGE
-    expect((P.ACT_LB, P.ACT_SCROBUP, P.ACT_LBAUTO, P.ACT_LF) == (108, 109, 112, 113) and max(P._ACTS) == 138 and 110 not in P._ACTS and 111 not in P._ACTS and not hasattr(P, 'ACT_LBTOKEN') and not hasattr(P, 'ACT_LBOUT')
+    L, S, B, F = P.LIBRARY_PAGE, P.SCROBBLING_PAGE, P.LB_PAGE, P.LF_PAGE
+    expect((P.ACT_LB, P.ACT_SCROBUP, P.ACT_LBAUTO, P.ACT_LF, P.ACT_SCROBPAGE) == (108, 109, 112, 113, 139) and max(P._ACTS) == 139 and 110 not in P._ACTS and 111 not in P._ACTS and not hasattr(P, 'ACT_LBTOKEN') and not hasattr(P, 'ACT_LBOUT')
            and (P.INFO_LBACCT, P.INFO_LFACCT) == (P.INFO_DUR + 3, P.INFO_DUR + 4) == (68, 69),
-           'the actions 108, 109, 112 and 113 (110 was the Token row, 111 Sign Out: gone, their ids not reused); the Account rows are INFO_DUR + 3 and + 4')
-    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F
-           and (B.key, B.name, B.title) == ('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz') and (F.key, F.name, F.title) == ('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm'), 'the ListenBrainz and Last.fm pages are in the page table under their keys')
+           'the actions 108, 109, 112, 113 and 139 (110 was the Token row, 111 Sign Out: gone, their ids not reused); the Account rows are INFO_DUR + 3 and + 4')
+    expect(P.PAGES[P.LB_PAGE_INDEX] is B and P.PAGES[P.LF_PAGE_INDEX] is F and P.PAGES[P.SCROBBLING_PAGE_INDEX] is S
+           and (B.key, B.name, B.title) == ('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz') and (F.key, F.name, F.title) == ('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm')
+           and (S.key, S.name, S.title) == ('m1plus_scrobbling', 'm1plus_scrobbling_page', 'Scrobbling'), 'the Scrobbling, ListenBrainz and Last.fm pages are in the page table under their keys')
     lay = [x.label if isinstance(x, P.Row) else x.text if isinstance(x, P.Note) else x for x in L.layout]
-    expect(lay[-8:] == ['Search words go to the chosen directory.', 'Scrobbling', 'ListenBrainz', 'Last.fm', 'Upload Scrobbles', 'Saved to .scrobbler.log on the card.', 'Auto Upload', P.LB_AUTO_NOTE],
-           f'the Scrobbling card: the switch, the two accounts, Upload Scrobbles, the note; then Auto Upload in a card of its own with its note ({lay[-8:]})')
-    expect([(r.label, r.action, r.arg, P.row_kind(r)) for r in L.rows[-5:]] == [('Scrobbling', P.ACT_SCROBBLE, 0, 'switch'), ('ListenBrainz', P.ACT_LB, P.LB_PAGE_INDEX, 'value'), ('Last.fm', P.ACT_LF, P.LF_PAGE_INDEX, 'value'),
-                                                                                ('Upload Scrobbles', P.ACT_SCROBUP, 0, 'action'), ('Auto Upload', P.ACT_LBAUTO, 0, 'switch')]
-           and LIB_ROWS == 16, 'a switch, two value rows opening their pages, an action row, a switch; sixteen rows on the Library page')
+    expect(lay[-2:] == ['Search words go to the chosen directory.', 'Scrobbling'],
+           f'the Library page ends with one Scrobbling row after the Podcasts note ({lay[-2:]})')
+    expect([(r.label, r.action, r.arg, P.row_kind(r)) for r in L.rows[-1:]] == [('Scrobbling', P.ACT_SCROBPAGE, P.SCROBBLING_PAGE_INDEX, 'value')] and P.ACT_SCROBPAGE in P.VALUE_ACTIONS and P.VALUE_INIT[P.ACT_SCROBPAGE] == 'Off'
+           and not {P.ACT_SCROBBLE, P.ACT_LB, P.ACT_LF, P.ACT_LBAUTO, P.ACT_SCROBUP} & {r.action for r in L.rows} and len(L.rows) == 12 and ST.pieces(L.layout)[-1] == 'single',
+           'a value row (Off at rest) opening the Scrobbling page, in a card of its own; no account, upload or switch rows left on the Library page')
+    slay = [x.label if isinstance(x, P.Row) else x.text if isinstance(x, P.Note) else x for x in S.layout]
+    expect(slay == ['Scrobbling', 'Saved to .scrobbler.log on the card.', 'ListenBrainz', 'Last.fm', P.GAP, 'Auto Upload', 'Upload Scrobbles', P.LB_AUTO_NOTE] and ST.pieces(S.layout) == ['single', 'top', 'bot', 'top', 'bot'],
+           f'the Scrobbling page: the switch and its note, the two accounts, Auto Upload and Upload Scrobbles with their note ({slay})')
+    expect([(r.label, r.action, r.arg, P.row_kind(r)) for r in S.rows] == [('Scrobbling', P.ACT_SCROBBLE, 0, 'switch'), ('ListenBrainz', P.ACT_LB, P.LB_PAGE_INDEX, 'value'), ('Last.fm', P.ACT_LF, P.LF_PAGE_INDEX, 'value'),
+                                                                           ('Auto Upload', P.ACT_LBAUTO, 0, 'switch'), ('Upload Scrobbles', P.ACT_SCROBUP, 0, 'action')] and LIB_ROWS == 5,
+           'a switch, two value rows opening their pages, a switch, an action row; five rows')
     for G, info, note, lines in ((B, P.INFO_LBACCT, P.LB_NOTE, 3), (F, P.INFO_LFACCT, P.LF_NOTE, 5)):
         expect([(r.label, r.action, r.arg, P.row_kind(r)) for r in G.rows] == [('Account', P.ACT_INFO, info, 'info')] and [type(x) for x in G.layout] == [P.Row, P.Note]
                and G.layout[1].text == note and G.layout[1].lines == lines and G.wrap_notes() == 1 and ST.pieces(G.layout) == ['single'],
                f'the {G.title} page: one card of one row, Account (no Token row, no Sign Out: the account is the card\'s file), and the wrapping note under it')
-    expect(P.LB_AUTO_NOTE == 'Uploads on Wi-Fi while music plays.' and P.ACT_LBAUTO in P.SWITCH_ACTIONS and ST.pieces(L.layout)[-5:] == ['top', 'mid', 'mid', 'bot', 'single'],
-           f'a card of four rows and the single-row card of the switch ({ST.pieces(L.layout)[-5:]})')
-    expect([mod_icons.CARD_GLYPHS[k] for k in ('ListenBrainz', 'Last.fm', 'Upload Scrobbles', 'Auto Upload')] == ['+musicbrainz:filled', '+lastdotfm:filled', 'upload', 'clock'], 'the glyphs: the MusicBrainz and Last.fm marks (filled, one colour), upload and clock')
+    expect(P.LB_AUTO_NOTE == 'Uploads on Wi-Fi while music plays.' and P.ACT_LBAUTO in P.SWITCH_ACTIONS and P.ACT_SCROBBLE in P.SWITCH_ACTIONS, 'both switches are switch rows')
+    expect([mod_icons.CARD_GLYPHS[k] for k in ('Scrobbling', 'ListenBrainz', 'Last.fm', 'Upload Scrobbles', 'Auto Upload')] == ['list-music', '+musicbrainz:filled', '+lastdotfm:filled', 'upload', 'clock'], 'the glyphs: list-music, the MusicBrainz and Last.fm marks (filled, one colour), upload and clock')
     lt = awtk_ui.parse(open(os.path.join(UI, L.key + '.bin'), 'rb').read())
-    r_lb, r_lf, r_up, r_au = (lt.find(f'pod_row{i}') for i in (R_LB, R_LF, R_UP, R_AUTO))
+    r_sc = lt.find(f'pod_row{len(L.rows) - 1}')
+    expect(r_sc.find('pod_icon').get('image') == 'pod_ci_list_music' and r_sc.find('pod_chevron') is not None and r_sc.find(f'pod_value{len(L.rows) - 1}').get('tr_text') == 'Off'
+           and r_sc.find(f'pod_label{len(L.rows) - 1}').get('tr_text') == 'Scrobbling' and r_sc.find(f'pod_switch{len(L.rows) - 1}') is None,
+           'the Library asset: the Scrobbling row has its glyph, a value (Off at rest) and the chevron, no switch')
+    st = awtk_ui.parse(open(os.path.join(UI, S.key + '.bin'), 'rb').read())
+    r_sw, r_lb, r_lf, r_au, r_up = (st.find(f'pod_row{i}') for i in range(5))
+    expect(r_sw.find('pod_icon').get('image') == 'pod_ci_list_music' and r_sw.find(f'pod_switch{R_SW}') is not None and r_sw.find('pod_chevron') is None and r_sw.find(f'pod_label{R_SW}').get('tr_text') == 'Scrobbling',
+           'the Scrobbling switch: its glyph and the switch, no chevron')
     for r, i, label, glyph in ((r_lb, R_LB, 'ListenBrainz', 'musicbrainz'), (r_lf, R_LF, 'Last.fm', 'lastdotfm')):
         expect(r.find('pod_icon').get('image') == 'pod_ci_' + glyph and r.find('pod_chevron') is not None and r.find(f'pod_value{i}').get('tr_text') == 'Not Set'
-               and r.find(f'pod_label{i}').get('tr_text') == label, f'the Library asset: the {label} row has its glyph, a value (Not Set at rest) and the chevron')
+               and r.find(f'pod_label{i}').get('tr_text') == label, f'the Scrobbling asset: the {label} row has its glyph, a value (Not Set at rest) and the chevron')
     expect(r_up.find('pod_icon').get('image') == 'pod_ci_upload' and r_up.find('pod_chevron') is None and r_up.find(f'pod_value{R_UP}') is None and r_up.find(f'pod_label{R_UP}').get('tr_text') == 'Upload Scrobbles',
            'the Upload Scrobbles row has its glyph and no accessory')
     expect(r_au.find('pod_icon').get('image') == 'pod_ci_clock' and r_au.find(f'pod_switch{R_AUTO}') is not None and r_au.find('pod_chevron') is None and r_au.find(f'pod_value{R_AUTO}') is None
            and r_au.find(f'pod_label{R_AUTO}').get('tr_text') == 'Auto Upload', 'Auto Upload: its glyph and the switch, no value, no chevron')
-    expect({r.h for r in (r_lb, r_lf, r_up, r_au)} == {ST.ROW_H} and r_up.y - r_lf.y == r_lf.y - r_lb.y == ST.ROW_H == r_lb.y - lt.find(f'pod_row{R_LB - 1}').y and r_au.y - r_up.y > ST.ROW_H,
-           'the four rows are one card, a row apart; the switch is a card of its own under the note')
-    notes = [w.get('tr_text') for w in lt.walk() if w.name.startswith('pod_note') and w.name.endswith('_t')]
-    expect(notes[-2:] == ['Saved to .scrobbler.log on the card.', P.LB_AUTO_NOTE], f'the two notes ({notes[-2:]})')
+    expect({r.h for r in (r_lb, r_lf, r_up, r_au)} == {ST.ROW_H} and r_lf.y - r_lb.y == r_up.y - r_au.y == ST.ROW_H and r_au.y - r_lf.y > ST.ROW_H and r_lb.y - r_sw.y > ST.ROW_H,
+           'the account rows are one card and Auto Upload with Upload Scrobbles another, a row apart; the switch is a card of its own above')
+    notes = [w.get('tr_text') for w in st.walk() if w.name.startswith('pod_note') and w.name.endswith('_t')]
+    expect(notes == ['Saved to .scrobbler.log on the card.', P.LB_AUTO_NOTE], f'the two notes ({notes})')
+    expect(all(r.get('sensitive') != 'false' for r in (r_sw, r_lb, r_lf, r_au, r_up)), 'no row of the page is dimmed in the asset (a log already on the card can be uploaded with Scrobbling off)')
     for G, note, lines in ((B, P.LB_NOTE, 3), (F, P.LF_NOTE, 5)):
         bt = awtk_ui.parse(open(os.path.join(UI, G.key + '.bin'), 'rb').read())
         row = bt.find('pod_row0')
@@ -224,8 +238,8 @@ def value_tests(ctx):
     work(m); tick(m)
     expect((value(m, R_LB), value(m, R_ACCT)) == ('Invalid Token', 'Invalid Token') and token_file(m) == ini(TOKEN + 'x') and invalid(m) == 1 and not toasts(m),
            f'a refused token: Invalid Token on both pages, the token kept, no toast ({value(m, R_LB)!r}, {value(m, R_ACCT)!r}, {token_file(m)!r})')
-    event(m, 'm1plus_listenbrainz', EVT_DESTROY); event(m, 'm1plus_library', EVT_DESTROY)
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    event(m, 'm1plus_listenbrainz', EVT_DESTROY); event(m, 'm1plus_scrobbling', EVT_DESTROY)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     expect(value(m, R_LB) == 'Invalid Token' and INI in m.fs and m.thread is None, 'it is still Invalid Token when the page opens again (this boot)')
     m.site.answers = [SU.answer('rob')]
     open_page(m, P.LB_PAGE)
@@ -261,20 +275,20 @@ def open_tests(ctx):
         m = opener(token=None)
         expect(not toasts(m, m.opened) and getattr(m, 'job', None) is None and not [c for c in m.opened if c[0] == 'timer_add'] and INI not in m.fs, f'{what}, no file: nothing, and none is made')
         m = opener(name='rob'); m.card_mounted = False
-        event(m, 'm1plus_listenbrainz' if what.startswith('the ListenBrainz') else 'm1plus_library', EVT_DESTROY)
-        m.opened = open_page(m, P.LB_PAGE if what.startswith('the ListenBrainz') else P.LIBRARY_PAGE)
+        event(m, 'm1plus_listenbrainz' if what.startswith('the ListenBrainz') else 'm1plus_scrobbling', EVT_DESTROY)
+        m.opened = open_page(m, P.LB_PAGE if what.startswith('the ListenBrainz') else P.SCROBBLING_PAGE)
         expect(account_name(m) is None and not [c for c in m.opened if c[0] == 'open' and c[1].startswith('/mnt/mmc')], f'{what}, no card: Not Set, nothing under the mount point is opened')
     # the rows follow what the file holds when the page opens
     m = library(raw=pc, wifi=-1)
     expect(value(m, R_LB) == '' and lbs(m, 'pages') == 1, 'a token without a name: the Library row is empty')
-    event(m, 'm1plus_library', EVT_DESTROY)
+    event(m, 'm1plus_scrobbling', EVT_DESTROY)
     m.fs[INI] = SU.ini('typed-on-a-pc', 'bob').encode()
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     expect(value(m, R_LB) == 'bob' and not m.site.reqs, 'the file changed on a computer while the page was closed: the row shows it when the page opens, no reboot')
     m.fs[INI] = SU.ini('changed-again', 'eve').encode()
     m.calls = []; n = len(m.log)
     for _ in range(3): tick(m)
-    event(m, 'm1plus_library', EVT_FG)
+    event(m, 'm1plus_scrobbling', EVT_FG)
     run(m, PSYMS['pod_lb_refresh'])   # noqa: F821
     expect(not [c for c in m.log[n:] if c[0] in ('open', 'statfs') and c[1].startswith('/mnt/mmc')] and value(m, R_LB) == 'bob', 'the card is not read from the timer, when the page comes back in front, or by a refresh of the rows')
     m.opened = open_page(m, P.LB_PAGE)
@@ -298,6 +312,44 @@ def open_tests(ctx):
     event(m, 'm1plus_listenbrainz', EVT_DESTROY)
     m.opened = open_page(m, P.LB_PAGE); work(m); tick(m)
     expect(value(m, R_ACCT) == 'rob' and len(m.site.reqs) == 2, 'the next page that opens asks again')
+
+
+def library_tests(ctx):
+    """The Library page's one Scrobbling row: On or Off as the switch on the Scrobbling page, a tap opens that page, and the value is right when the page is in front again."""
+    expect = ctx.expect
+    R = len(P.LIBRARY_PAGE.rows) - 1
+    m = machine(name='rob', log=log_text(2))
+    m.opened = open_page(m, P.LIBRARY_PAGE)
+    expect(value(m, R) == 'Off' and not [c for c in m.opened if c[0] == 'timer_add'] and lbs(m, 'pages') == 0 and not m.site.reqs and getattr(m, 'job', None) is None,
+           'the Library page: Off at rest; it starts no timer and no check (the accounts are the Scrobbling page\'s)')
+    calls = click(m, R)
+    expect(('window_open', P.SCROBBLING_PAGE.key) in calls, 'a tap on the row opens the Scrobbling page')
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
+    expect(lbs(m, 'pages') == 1 and value(m, R_LB) == 'rob', 'the Scrobbling page registers with the scrobble timer logic and shows the account')
+    click(m, R_SW)   # (the switch is bound to the page's row 0)
+    expect(m.fs.get('/mnt/data/m1plus/scrobbling') == b'1\n', 'the page\'s switch saves the setting')
+    event(m, 'm1plus_scrobbling', EVT_DESTROY)
+    event(m, 'm1plus_library', EVT_FG)
+    expect(value(m, R) == 'On', f'back on the Library page: the row says On ({value(m, R)!r})')
+    click(m, R)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
+    click(m, R_SW)
+    event(m, 'm1plus_scrobbling', EVT_DESTROY)
+    event(m, 'm1plus_library', EVT_FG)
+    expect(value(m, R) == 'Off' and m.fs.get('/mnt/data/m1plus/scrobbling') == b'0\n', 'and Off again after the switch is turned off')
+    # Scrobbling off: the rows below stay active
+    m = machine(name='rob', log=log_text(2)); m.opened = open_page(m, P.SCROBBLING_PAGE)
+    expect(all(sens(m, i) == 1 for i in (R_LB, R_LF, R_AUTO, R_UP)), 'with Scrobbling off the account rows, Auto Upload and Upload Scrobbles are not dimmed')
+    expect(start_upload(m) == ['Uploading scrobbles'], 'and Upload Scrobbles still uploads the log')
+
+
+def front_tests(ctx):
+    """Back in front, the Scrobbling page watches scrobble.ini like the account pages (lb_on_front): the timer is set again for a job that ended while the page was covered."""
+    expect = ctx.expect
+    m = library(name='rob', log=log_text(3))
+    start_upload(m)
+    event(m, 'm1plus_scrobbling', EVT_FG)
+    expect(lbs(m, 'timer') != 0 and lbs(m, 'job') != 0, 'the foreground event of the Scrobbling page keeps the watch on its job')
 
 
 def account_name(m):
@@ -391,7 +443,7 @@ def owner_tests(ctx):
     m = machine(name='rob', log=log_text(3))
     expect(SU.start(m, SU.AUTO) == 1, 'an automatic upload runs')
     foreign = m.thread
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     expect([(c[1], c[2]) for c in m.opened if c[0] == 'timer_add'] == [(PSYMS['lb_tick'], TICK_MS)] and lbs(m, 'job') == 0 and SU.busy(m) == 1, 'a page that opens while it runs watches it (the timer), and does not own it')   # noqa: F821
     expect(start_upload(m) == ['Already uploading'] and m.thread is None, 'Upload Scrobbles then: Already uploading')
     m.log = []
@@ -419,7 +471,7 @@ def owner_tests(ctx):
     m = machine(name='rob', log=log_text(3))
     SU.start(m, SU.AUTO); foreign = m.thread
     SU.call(m, foreign[0], a0=foreign[1], count=1 << 40)
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     expect(SU.busy(m) == 0 and not toasts(m, m.opened) and not [c for c in m.opened if c[0] == 'timer_add'] and lbs(m, 'done') == 0, 'a page that opens after it ended collects it: no toast, no timer')
     # a token the automatic upload found refused: Invalid Token on the rows, still no toast
     m = lbpage(name='rob', log=log_text(3), answers=[{'code': 401}])
@@ -497,18 +549,18 @@ def owner_tests(ctx):
     start_upload(m)
     event(m, 'm1plus_listenbrainz', EVT_DESTROY)
     expect(not [c for c in m.calls if c[0] == 'timer_remove'] and lbs(m, 'timer') and lbs(m, 'pages') == 1, 'the ListenBrainz page goes, the Library page is still up: the timer stays')
-    event(m, 'm1plus_library', EVT_DESTROY)
+    event(m, 'm1plus_scrobbling', EVT_DESTROY)
     expect([c for c in m.calls if c[0] == 'timer_remove'] == [('timer_remove', 0x777)] and lbs(m, 'timer') == 0 and lbs(m, 'pages') == 0, 'the Library page goes: the timer is removed')
     expect(tick(m) == O['RET_OK'] and SU.busy(m) == 1, 'a stray tick with no page polls nothing')   # noqa: F821
     work(m)
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     expect(SU.busy(m) == 0 and [(c[1], c[2]) for c in m.opened if c[0] == 'timer_add'] == [(PSYMS['lb_tick'], TICK_MS)] and not toasts(m, m.opened), 'the page opens again: the finished upload is polled, its toast is due')   # noqa: F821
     expect(tick(m) == O['RET_OK'] and toasts(m) == ['Scrobbles sent: 3'], f'and comes at the first tick ({toasts(m)})')   # noqa: F821
     # ... or at an Upload Scrobbles tap, which then starts nothing
     m = library(name='rob', log=log_text(3))
-    start_upload(m); event(m, 'm1plus_library', EVT_DESTROY); work(m)
+    start_upload(m); event(m, 'm1plus_scrobbling', EVT_DESTROY); work(m)
     m.fs[LOG] = log_text(1).encode()
-    open_page(m, P.LIBRARY_PAGE)
+    open_page(m, P.SCROBBLING_PAGE)
     t = start_upload(m)
     expect(t == ['Scrobbles sent: 3'] and m.thread is None, f'a tap before that tick shows the result and starts nothing ({t})')
     # opening a page with nothing running arms nothing; coming back in front with a job arms the timer again
@@ -518,12 +570,12 @@ def owner_tests(ctx):
     start_upload(m)
     expect(lbs(m, 'timer') == 0 and lbs(m, 'job') == 1, '(a timer that could not be added)')
     m.timer_fail = False
-    event(m, 'm1plus_library', EVT_FG)
+    event(m, 'm1plus_scrobbling', EVT_FG)
     expect(timers(m) == [(PSYMS['lb_tick'], TICK_MS)], 'the page back in front: the timer is armed for the job that runs')   # noqa: F821
 
 
 def auto_tests(ctx):
-    """The Auto Upload switch (the Library page's last card, for both services): off by default, a tap saves it; it starts nothing and says nothing. Its Settings Files row."""
+    """The Auto Upload switch (the Scrobbling page's second card, for both services): off by default, a tap saves it; it starts nothing and says nothing. Its Settings Files row."""
     expect = ctx.expect
 
     def images(m, calls): return [undo(c[2]) if isinstance(c[2], str) else c[2] for c in calls if c[0] == 'image_base_set_image' and c[1] == m.widgets[f'pod_switch{R_AUTO}']]   # noqa: F821
@@ -535,7 +587,7 @@ def auto_tests(ctx):
     calls = click(m, R_AUTO)
     expect(images(m, calls) == ['sset_off'] and m.fs.get(AUTO_FILE) == b'0\n', 'again: off, saved as "0"')
     m = machine(name='rob'); m.fs[AUTO_FILE] = b'1\n'
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     expect(images(m, m.opened)[-1:] == ['sset_on'], 'the page opens with the saved state')
     m = lbpage(token=None)
     calls = click(m, R_AUTO)
@@ -568,7 +620,7 @@ def lfpage(lib=True, **kw):
     svc = kw.pop('svc', None)
     m = machine(token=None, **kw)
     m.lf = m.site.answers = svc or SU.Lastfm()
-    if lib: m.opened = open_page(m, P.LIBRARY_PAGE)
+    if lib: m.opened = open_page(m, P.SCROBBLING_PAGE)
     m.opened = open_page(m, P.LF_PAGE)
     return m
 
@@ -615,7 +667,7 @@ def lastfm_tests(ctx):
     expect(value(m, R_ACCT) == 'rob' and lf_state(m) == SU.LF_IN, 'and signed in')
     # both accounts unconfirmed: the page's own first, Last.fm after the ListenBrainz check
     m = machine(token=None, raw=SU.ini() + SU.lf_ini()); m.site.answers = SU.Lastfm(lb=SU.answer('bob'))
-    m.opened = open_page(m, P.LIBRARY_PAGE)
+    m.opened = open_page(m, P.SCROBBLING_PAGE)
     expect(m.job is not None and SU.kind(m) == SU.CHECK, 'the Library page, a token without a name and Last.fm not asked: the ListenBrainz check first')
     work(m); tick(m)
     expect(value(m, R_LB) == 'bob' and m.job is not None and SU.kind(m) == SU.LFCHECK and lbs(m, 'timer') != 0, 'its result is shown and the Last.fm check follows')
@@ -632,15 +684,15 @@ def lastfm_tests(ctx):
     m = lfpage(raw=both)
     work(m); tick(m)
     expect(not SU.wrote(m), 'the pages write nothing to the card')
-    event(m, 'm1plus_lastfm', EVT_DESTROY); event(m, 'm1plus_library', EVT_DESTROY)
+    event(m, 'm1plus_lastfm', EVT_DESTROY); event(m, 'm1plus_scrobbling', EVT_DESTROY)
     m.fs[INI] = SU.ini(name='bob').encode()
-    open_page(m, P.LIBRARY_PAGE); open_page(m, P.LF_PAGE)
+    open_page(m, P.SCROBBLING_PAGE); open_page(m, P.LF_PAGE)
     expect((value(m, R_LF), value(m, R_ACCT)) == ('Not Set', 'Not Set') and value(m, R_LB) == 'bob', 'the section taken out of the file on a computer: Not Set when the pages open again (that is the sign-out)')
     del m.fs[INI]
-    event(m, 'm1plus_lastfm', EVT_DESTROY); event(m, 'm1plus_library', EVT_DESTROY)
-    open_page(m, P.LIBRARY_PAGE); open_page(m, P.LB_PAGE)
+    event(m, 'm1plus_lastfm', EVT_DESTROY); event(m, 'm1plus_scrobbling', EVT_DESTROY)
+    open_page(m, P.SCROBBLING_PAGE); open_page(m, P.LB_PAGE)
     expect((value(m, R_LB), value(m, R_ACCT), value(m, R_LF)) == ('Not Set', 'Not Set', 'Not Set'), 'the file deleted: both accounts Not Set')
     expect(start_upload(m) == ['Set up an account first'], 'Upload Scrobbles then: Set up an account first')
 
 
-SECTIONS = [pages_tests, strings_tests, value_tests, open_tests, upload_tests, owner_tests, auto_tests, lastfm_tests]   # tools/check.py runs each as its own task
+SECTIONS = [library_tests, front_tests, pages_tests, strings_tests, value_tests, open_tests, upload_tests, owner_tests, auto_tests, lastfm_tests]   # tools/check.py runs each as its own task

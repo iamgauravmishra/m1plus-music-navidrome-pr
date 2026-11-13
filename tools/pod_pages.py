@@ -117,6 +117,7 @@ ACT_CHGLIM = 80     # value row (Settings > System > Battery): Charge Limit, the
 ACT_CHGLIMSET = 81  # picker row (Charge Limit): choose the limit (arg = 80, 85, 90, 95 or 100, no limit); a check shows on the chosen row (patch/charging.c chg_set)
 ACT_IDLE = 82       # value row (Settings > Now Playing > Idle Display): where Now Playing goes after ten seconds, Off, Album Cover, Cassette, Vinyl or Lyrics (the payload shows stock's Cover mode byte and the saved destination); opens its picker page (arg = the page index; patch/bigcover.c idle_choice)
 ACT_LYRSIZE = 135   # value row (Settings > Now Playing > Lyrics Text Size): Small, Medium or Large (the saved file nowplaying-lyrics-size); opens its picker page (arg = the page index; patch/lyrics.c ly_size)
+ACT_SCROBPAGE = 139 # value row (Settings > Library): Scrobbling, On or Off as the switch on its page; opens the Scrobbling page (arg = its page index; patch/scrobble.c scrobble_setting)
 ACT_LYRSIZESET = 136 # picker row (Lyrics Text Size): choose Small (arg 0), Medium (1) or Large (2); a check shows on the chosen row (patch/lyrics.c ly_size_set)
 ACT_IDLESET = 83    # picker row (Idle Display): choose Off (arg 0), Album Cover (1), Cassette (2), Vinyl (3) or Lyrics (4); a check shows on the chosen row (patch/bigcover.c idle_set)
 ACT_LOCKWP = 84     # link row (Settings > Lock Screen): Wallpaper, our own picker page (patch/lockscreen.c lkwp_open).
@@ -166,10 +167,10 @@ _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
 SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_SCROBBLE, ACT_LBAUTO, ACT_GAPLESS, ACT_FOLDERSKIP, ACT_DIGITAL, ACT_FOLDERCOVER, ACT_BOOTMEM)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
-VALUE_ACTIONS = (ACT_PCDIR, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_LYRSIZE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
+VALUE_ACTIONS = (ACT_PCDIR, ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_LYRSIZE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN, ACT_LB, ACT_LF, ACT_SCROBPAGE, ACT_PLAYMODE, ACT_MEMPLAY, ACT_GAIN, ACT_REPLAYGAIN, ACT_DSD, ACT_USBVOL, ACT_MAXVOL, ACT_BOOTVOL, ACT_BALANCE)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_PCDIRSET, ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_LYRSIZESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_PLAYMODESET, ACT_MEMPLAYSET, ACT_GAINSET, ACT_RGSET, ACT_FILTERSET, ACT_DSDSET, ACT_USBVOLSET)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
 ACTION_ACTIONS = NO_CHEVRON_ACTIONS + (ACT_SHOT, ACT_REBUILD, ACT_AREBUILD, ACT_CLEARCACHE, ACT_CLEARDUR, ACT_SFDELALL, ACT_RESETALL, ACT_GRID, ACT_NDACT, ACT_SCROBUP)   # rows that act in place on a settings page: no chevron (Update Library, an ACT_HOME row, is one too: row_kind)
-VALUE_INIT = {ACT_PCDIR: 'Apple Podcasts', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_LYRSIZE: 'Large', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0'}   # what the asset's value label says before the payload sets it
+VALUE_INIT = {ACT_PCDIR: 'Apple Podcasts', ACT_CTHEME: 'Normal', ACT_VREC: 'Black', ACT_VTHEME: 'Graphite', ACT_BG: 'Black', ACT_ACCENT: 'Neutral', ACT_REGION: 'Automatic', ACT_CHGLIM: '100%', ACT_LOCKSTYLE: 'Large Cover', ACT_IDLE: 'Album Cover', ACT_LYRSIZE: 'Large', ACT_NEXTALBUM: 'Off', ACT_NDVALUE: '', ACT_LIGHT: '30s', ACT_LED: 'Off', ACT_KEYLOCK: 'Off', ACT_SHUTDOWN: 'Off', ACT_LB: 'Not Set', ACT_LF: 'Not Set', ACT_SCROBPAGE: 'Off', ACT_PLAYMODE: 'Repeat All', ACT_MEMPLAY: 'Location', ACT_GAIN: 'Low', ACT_REPLAYGAIN: 'Off', ACT_DSD: 'D2P', ACT_USBVOL: 'Variable', ACT_MAXVOL: '100', ACT_BOOTVOL: 'Memory', ACT_BALANCE: '0'}   # what the asset's value label says before the payload sets it
 # The stock pages ACT_STOCK opens: (the name navigator_to takes = ui/<name>.bin, the value the row shows at the right: the payload reads the stock state, patch/m1plus.c VK_*, or None).
 # Each is a plain navigator_to(name) with no context in stock (docs/modules/settings.md "Stock pages"): the Settings list's rows, the Wi-Fi hub's two; Back returns to our page.
 # (The EQ row is ACT_PEQ: our Equalizer page, docs/modules/peq.md; stock's playset/equalizer_page is retired: its one caller opens the 10-Band editor, tools/pod.py EQ_ROW.)
@@ -342,6 +343,7 @@ PAGE_ORDER = [   # every page, in the order of its number: this table alone deci
     'm1plus_pcfind',
     'm1plus_listenbrainz',
     'm1plus_lastfm',
+    'm1plus_scrobbling',
     'm1plus_playset',
     'm1plus_psmode',
     'm1plus_psmem',
@@ -443,8 +445,9 @@ KEYSPOWER_PAGE_INDEX = page_index('m1plus_keyspower')   # Settings > System > Bu
 KEYLOCK_PAGE_INDEX = page_index('m1plus_keylock')
 SHUTDOWN_PAGE_INDEX = page_index('m1plus_shutdown')
 PCFIND_PAGE_INDEX = page_index('m1plus_pcfind')   # the Podcasts page's search inside one show
-LB_PAGE_INDEX = page_index('m1plus_listenbrainz')   # Settings > Library > ListenBrainz
-LF_PAGE_INDEX = page_index('m1plus_lastfm')   # Settings > Library > Last.fm
+LB_PAGE_INDEX = page_index('m1plus_listenbrainz')   # Settings > Library > Scrobbling > ListenBrainz
+LF_PAGE_INDEX = page_index('m1plus_lastfm')   # Settings > Library > Scrobbling > Last.fm
+SCROBBLING_PAGE_INDEX = page_index('m1plus_scrobbling')   # Settings > Library > Scrobbling
 PLAYSET_PAGE_INDEX = page_index('m1plus_playset')   # Settings > Playback Settings, then its seven pickers (Play Mode, Memory Playback, Gain, ReplayGain, Digital Filter, DSD Output Mode, USB Volume)
 PSMODE_PAGE_INDEX = page_index('m1plus_psmode')
 PSMEM_PAGE_INDEX = page_index('m1plus_psmem')
@@ -787,8 +790,7 @@ EXTRASCFG_PAGE = Page('m1plus_extrascfg', 'm1plus_extrascfg_page', 'Extras', kin
 
 # Settings > Library: one card of Update Library (the stock page, as the Update Library item), Rebuild Covers (the stock confirm dialog, then Home's cover build extracts every
 # cover again), then the List Navigation card (Index Rail and Section Headers, the A-Z lists of patch/azlist.c), Cover Flow's Landscape switch (the album order is the Albums "..." card's),
-# Podcast Discover and Podcast Region, and the Scrobbling card: the switch (patch/scrobble.c), the ListenBrainz account row and Upload Scrobbles (patch/scrobpage.c).
-LB_AUTO_NOTE = 'Uploads on Wi-Fi while music plays.'
+# Podcast Discover and Podcast Region, and the Scrobbling row (On or Off), which opens the Scrobbling page.
 LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Rebuild Covers', ACT_REBUILD),
@@ -808,13 +810,7 @@ LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Directory', ACT_PCDIR, PCDIR_PAGE_INDEX),
     Row('Podcast Region', ACT_REGION, REGION_PAGE_INDEX),
     Note('Search words go to the chosen directory.', lines=2),
-    Row('Scrobbling', ACT_SCROBBLE),   # a card of its own (after a note): the listens to the card's .scrobbler.log (patch/scrobble.c), off by default
-    Row('ListenBrainz', ACT_LB, LB_PAGE_INDEX),   # the account: its user name; opens the ListenBrainz page
-    Row('Last.fm', ACT_LF, LF_PAGE_INDEX),   # the same for Last.fm
-    Row('Upload Scrobbles', ACT_SCROBUP),   # sends the log now, to every service that is set up (patch/scrobpage.c)
-    Note('Saved to .scrobbler.log on the card.'),
-    Row('Auto Upload', ACT_LBAUTO),   # a card of its own: the automatic upload, for both services (patch/scrobble.c)
-    Note(LB_AUTO_NOTE),
+    Row('Scrobbling', ACT_SCROBPAGE, SCROBBLING_PAGE_INDEX),   # a card of its own (after a note): On or Off; opens the Scrobbling page
 ])
 # The album page (patch/albumpage.c, docs/modules/album-page.md): an album's tracks under the glass controls; opened by cc_open_album, never from a menu row.
 ALBUM_PAGE = Page('m1plus_album', 'm1plus_album_page', 'Album', kind='album')
@@ -1178,14 +1174,28 @@ NDSERVER_PAGE.layout = [Row('URL', ACT_NDVALUE, 0), Row('Username', ACT_NDVALUE,
 # The Navidrome Sign In page (patch/ndserver.c nl_open, tools/pod_ndserver.py build_login): the Server page's three login rows with our keyboard embedded, as the Join Wi-Fi Network page.
 NDLOGIN_PAGE = Page('m1plus_ndlogin', 'm1plus_ndlogin_page', 'Sign In', kind='ndlogin')
 
-# Settings > Library > ListenBrainz (patch/scrobpage.c, docs/modules/scrobble.md "Settings"): one card of one row, Account (Not Set, or the user name the service gave; no tap), and the note under it (the token is set in the card's scrobble.ini, never here;
-# there is no Sign Out: the user takes the token out of the file). The Auto Upload switch is on the Library page (both services share it).
+# Settings > Library > Scrobbling (patch/scrobble.c, patch/scrobpage.c, docs/modules/scrobble.md "Settings"): three cards: the Scrobbling switch with its note; the ListenBrainz and Last.fm account rows (value rows opening their pages);
+# Auto Upload (switch) and Upload Scrobbles (action) with their note. Nothing is dimmed while Scrobbling is off: a log already on the card can still be uploaded.
+LB_AUTO_NOTE = 'Uploads on Wi-Fi while music plays.'
+SCROBBLING_PAGE = Page('m1plus_scrobbling', 'm1plus_scrobbling_page', 'Scrobbling', layout=[
+    Row('Scrobbling', ACT_SCROBBLE),   # the listens to the card's .scrobbler.log (patch/scrobble.c), off by default
+    Note('Saved to .scrobbler.log on the card.'),
+    Row('ListenBrainz', ACT_LB, LB_PAGE_INDEX),   # the account: its user name; opens the ListenBrainz page
+    Row('Last.fm', ACT_LF, LF_PAGE_INDEX),   # the same for Last.fm
+    GAP,
+    Row('Auto Upload', ACT_LBAUTO),   # the automatic upload, for both services (patch/scrobble.c)
+    Row('Upload Scrobbles', ACT_SCROBUP),   # sends the log now, to every service that is set up (patch/scrobpage.c)
+    Note(LB_AUTO_NOTE),
+])
+
+# Settings > Library > Scrobbling > ListenBrainz (patch/scrobpage.c, docs/modules/scrobble.md "Settings"): one card of one row, Account (Not Set, or the user name the service gave; no tap), and the note under it (the token is set in the card's scrobble.ini, never here;
+# there is no Sign Out: the user takes the token out of the file). The Auto Upload switch is on the Scrobbling page (both services share it).
 LB_NOTE = 'Put your token from listenbrainz.org in scrobble.ini on the card.'
 LB_PAGE = Page('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz', layout=[
     Row('Account', ACT_INFO, INFO_LBACCT),
     Note(LB_NOTE, lines=3),
 ])
-# Settings > Library > Last.fm: the same page for the [LASTFM] section (Account: Not Set, Checking…, the user name, Sign-in Failed).
+# Settings > Library > Scrobbling > Last.fm: the same page for the [LASTFM] section (Account: Not Set, Checking…, the user name, Sign-in Failed).
 LF_NOTE = 'Put USER, PASSWORD, API_KEY and API_SECRET under [LASTFM] in scrobble.ini on the card. Get an API key at last.fm/api.'
 LF_PAGE = Page('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm', layout=[
     Row('Account', ACT_INFO, INFO_LFACCT),

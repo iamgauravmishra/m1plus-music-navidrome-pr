@@ -14,7 +14,7 @@ void scrobble_started(const char *info, const char *path);
 int scrobble_setting(void);
 int scrobble_toggle(void);
 
-/* The automatic upload (Settings > Library > Auto Upload, SCROBBLE_AUTO_FILE, off by default): the switch's state and a flip of it, as above. While it is on,
+/* The automatic upload (Settings > Library > Scrobbling > Auto Upload, SCROBBLE_AUTO_FILE, off by default): the switch's state and a flip of it, as above. While it is on,
  * scrobble_note starts an upload (patch/scrobup.c, owner SCROBUP_AUTO) once listens logged this boot have waited SA_WAIT, with a token and the Wi-Fi connected, and collects
  * its result; nothing is ever shown.
  * scrobble_auto_collect: an automatic upload that is over is polled and its result applied, silently (nothing happens while it runs, or for somebody else's job). The

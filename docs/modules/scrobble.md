@@ -2,7 +2,7 @@
 
 Listens are appended to `/mnt/mmc/.scrobbler.log`, Rockbox's AudioScrobbler portable-player 1.1
 format, so any `.scrobbler.log` uploader can send them to Last.fm or ListenBrainz once the card is in
-a computer. The device can send them to ListenBrainz itself ([Upload](#upload), from [Settings](#settings): the account and a manual Upload Scrobbles; with the Auto Upload switch on, also [by itself](#automatic-upload) while music plays on Wi-Fi). **Settings > Library > Scrobbling** (a switch row, first of a card of its own after the Podcasts card, with the note "Saved to .scrobbler.log on the card." under the card) switches the logging on; it is off by
+a computer. The device can send them to ListenBrainz itself ([Upload](#upload), from [Settings](#settings): the account and a manual Upload Scrobbles; with the Auto Upload switch on, also [by itself](#automatic-upload) while music plays on Wi-Fi). **Settings > Library > Scrobbling** (a value row, On or Off, on the Library page; it opens the Scrobbling page, whose first card is the **Scrobbling** switch with the note "Saved to .scrobbler.log on the card.") switches the logging on; it is off by
 default (`/mnt/data/m1plus/scrobbling`: `1` or `1` and a newline on, missing or anything else off, read by `set_read`; `scrobble_setting`,
 `scrobble_toggle`, saved with `home_write_atomic`). About 100 bytes a listen.
 
@@ -231,7 +231,7 @@ The RAM copy (`sa`: state, token, name) is refreshed, with one read of the file 
 | The poll of a check's `SCROBUP_OK`, and of any `SCROBUP_AUTH` | `scrobup_poll` (is the token still the one that was asked about?) |
 | The poll of any job that Last.fm took part in | `scrobup_poll` (the session, or the refusal, is kept only for the credentials the file still has) |
 | By the write of a check's name, and by the next look after it | `su_ini_set` |
-| The Library page, the ListenBrainz page or the Last.fm page opens | `lb_opened` → `scrobup_forget` |
+| The Scrobbling page, the ListenBrainz page or the Last.fm page opens | `lb_opened` → `scrobup_forget` |
 | An Upload Scrobbles tap | `lb_upload_tap` → `scrobup_forget` |
 | The automatic upload's look, once it has got past every other condition | `sa_tick` → `scrobup_forget` ([Automatic upload](#automatic-upload)) |
 
@@ -331,7 +331,7 @@ there.
 
 ### Automatic upload
 
-**Settings > Library > Auto Upload** (a switch, off by default;
+**Settings > Library > Scrobbling > Auto Upload** (a switch, off by default;
 `/mnt/data/m1plus/scrobble-auto`: `1` on, read once and kept in RAM like the Scrobbling switch;
 `scrobble_auto_setting`, `scrobble_auto_toggle`). While it is on, the log is uploaded by itself
 while music plays on Wi-Fi. Code: `sa_*` and the state `sau` in `patch/scrobble.c`; constants
@@ -571,7 +571,17 @@ Settings pages of `patch/m1plus.c`; rows and pages in `tools/pod_pages.py` (`LIB
 upload without a tap unless Auto Upload is on ([Automatic upload](#automatic-upload)). The pages
 show the accounts and change nothing of them: no entry and no sign-out on the device.
 
-**Settings > Library, the Scrobbling card**: the Scrobbling switch, then
+**Settings > Library > Scrobbling** is a cards page of its own (`SCROBBLING_PAGE`, `m1plus_scrobbling`, page key placed after `m1plus_lastfm` in `PAGE_ORDER`, macro `POD_SCROBBLING_PAGE`).
+The Library page has one row for it, **Scrobbling** (`ACT_SCROBPAGE` 139, a value row with the chevron and the Lucide `list-music` glyph, `VK_SCROB`: On or Off from
+`scrobble_setting`; no payload code runs when it opens: the row is read again like every value row when the Library page is back in front). The page's cards:
+
+1. the **Scrobbling** switch (`ACT_SCROBBLE` 96) and the note "Saved to .scrobbler.log on the card.";
+2. **ListenBrainz** and **Last.fm**, below;
+3. **Auto Upload** (`ACT_LBAUTO` 112) and **Upload Scrobbles**, and the note "Uploads on Wi-Fi while music plays."
+
+Nothing on the page is dimmed while Scrobbling is off: the accounts, Auto Upload and Upload Scrobbles keep working, so a log already on the card can still be uploaded.
+The page is `lb_opened` page 0 (the timer's `pages` bit 0) and its `EVT_WINDOW_TO_FG` calls `lb_on_front`; the Library page does neither (it shows no account, so it needs no
+`scrobble.ini` watch). The rows:
 
 - **ListenBrainz** (`ACT_LB` 108, a value row with the chevron, `lb_row_text`): the user name; "Not Set" with no
   token; "Invalid Token" after the service refused the token; nothing for a token no check has
@@ -621,7 +631,7 @@ and so is signing out (`ACT_LBTOKEN` 110 and `ACT_LBOUT` 111 are gone, their ids
   Get an API key at last.fm/api." (five).
 
 **The card's `scrobble.ini`** is read again (`lb_opened`: `scrobup_forget`, then `scrobup_account`)
-when the Library page, the ListenBrainz page or the Last.fm page opens, and at an Upload Scrobbles tap; never from
+when the Scrobbling page, the ListenBrainz page or the Last.fm page opens, and at an Upload Scrobbles tap; never from
 the timer, at boot or when a page comes back in front. The rows are read again when the account
 differs from what they showed. A token no check has confirmed (no `USER`: written on a computer,
 or the Wi-Fi was down) that is not Invalid Token is checked then (`lb_check`: `scrobup_check_start`), when the Wi-Fi is connected
@@ -637,7 +647,7 @@ token in the file (written on a computer), a valid check,
 and an upload that had listens taken. The token is kept (the file is the user's to correct).
 Nothing of it is in a file.
 
-**The timer** (`lb_tick`, `LB_TICK_MS` 500 ms) exists only while the Library page or one of
+**The timer** (`lb_tick`, `LB_TICK_MS` 500 ms) exists only while the Scrobbling page or one of
 the two account pages is up and a job runs or a polled result is not shown yet; it is added at a
 start, when a page opens or comes back in front with a job in flight, and removed when the last
 of the pages is destroyed or at its last tick. Each tick: an automatic upload that is over is
@@ -660,25 +670,26 @@ Not run yet. Record the build tag with each result.
 
 | Check | Steps | Expect |
 |---|---|---|
-| SCROB-UP-01 | With no `scrobble.ini` on the card open Settings > Library > ListenBrainz. Then, on a computer, write `scrobble.ini` at the card's root (`[LISTENBRAINZ]`, `TOKEN=<token>`), put the card back and open the page again (Wi-Fi connected) | First: the page has Account (Not Set), the note naming `scrobble.ini`, and Auto Upload; no Token row, nothing opens a keyboard. Then: Account reads Checking… and then the user name; the Library row shows the name |
-| SCROB-UP-02 | Delete `scrobble.ini`; on a computer write `scrobble.ini` at the card's root (`[LISTENBRAINZ]`, `TOKEN=<token>`, Windows line ends, a `[LASTFM]` section and a comment beside it); put the card back, open Settings > Library (Wi-Fi connected) | No toast; the row shows the user name after the check; on the computer the file has `USER=<name>` behind the `TOKEN` line and every other byte as written; no reboot was needed |
-| SCROB-UP-03 | With a checked token, restart; open Settings > Library | The row shows the user name without a new check (no network needed): it is `USER=` in `scrobble.ini`; nothing of the account is in `/mnt/data/m1plus` |
-| SCROB-UP-20 | After SCROB-UP-01 read `scrobble.ini` on a computer; then delete the `TOKEN` line there and open Settings > Library | First: `[LISTENBRAINZ]`, `TOKEN=<the token>` as written, and `USER=<name>` added behind it. After: both ListenBrainz rows read Not Set (that is the sign-out); the device wrote nothing |
+| SCROB-UP-01 | With no `scrobble.ini` on the card open Settings > Library > Scrobbling > ListenBrainz. Then, on a computer, write `scrobble.ini` at the card's root (`[LISTENBRAINZ]`, `TOKEN=<token>`), put the card back and open the page again (Wi-Fi connected) | First: the page has Account (Not Set), the note naming `scrobble.ini`, and Auto Upload; no Token row, nothing opens a keyboard. Then: Account reads Checking… and then the user name; the ListenBrainz row shows the name |
+| SCROB-UP-02 | Delete `scrobble.ini`; on a computer write `scrobble.ini` at the card's root (`[LISTENBRAINZ]`, `TOKEN=<token>`, Windows line ends, a `[LASTFM]` section and a comment beside it); put the card back, open Settings > Library > Scrobbling (Wi-Fi connected) | No toast; the row shows the user name after the check; on the computer the file has `USER=<name>` behind the `TOKEN` line and every other byte as written; no reboot was needed |
+| SCROB-UP-03 | With a checked token, restart; open Settings > Library > Scrobbling | The row shows the user name without a new check (no network needed): it is `USER=` in `scrobble.ini`; nothing of the account is in `/mnt/data/m1plus` |
+| SCROB-UP-20 | After SCROB-UP-01 read `scrobble.ini` on a computer; then delete the `TOKEN` line there and open Settings > Library > Scrobbling | First: `[LISTENBRAINZ]`, `TOKEN=<the token>` as written, and `USER=<name>` added behind it. After: both ListenBrainz rows read Not Set (that is the sign-out); the device wrote nothing |
 | SCROB-UP-21 | Auto Upload on, no token; play until a listen is ten minutes old; connect USB (storage mode), write `scrobble.ini` with the token, disconnect, play on with Wi-Fi | Within about a minute of playback the log is uploaded with the file's token; no reboot, no toast |
-| SCROB-UP-22 | With a checked token, remove the card; open Settings > Library and the ListenBrainz page; tap Upload Scrobbles | Both pages read Not Set; "Storage unavailable"; with the card back, the next page that opens shows the name again |
+| SCROB-UP-22 | With a checked token, remove the card; open Settings > Library > Scrobbling and the ListenBrainz page; tap Upload Scrobbles | Both pages read Not Set; "Storage unavailable"; with the card back, the next page that opens shows the name again |
 | SCROB-UP-04 | Play a few songs with Scrobbling on, then Upload Scrobbles | "Uploading scrobbles", then "Scrobbles sent: N"; the listens are on listenbrainz.org with the right times; `.scrobbler.log` holds only its header, `.scrobbler.log.sent` the lines |
 | SCROB-UP-05 | Upload Scrobbles again | "Nothing to upload" |
 | SCROB-UP-06 | Wi-Fi off (and once with Wi-Fi on but not connected): Upload Scrobbles | "Connect to Wi-Fi first"; the log is untouched |
-| SCROB-UP-07 | Write a wrong token (a changed character) into `scrobble.ini` on a computer, open Settings > Library with Wi-Fi on; then Upload Scrobbles | Account and the Library row read Invalid Token; the upload toasts "ListenBrainz: Invalid Token" and the log is untouched; the right token written into the file shows the name again when a page opens |
+| SCROB-UP-07 | Write a wrong token (a changed character) into `scrobble.ini` on a computer, open Settings > Library > Scrobbling with Wi-Fi on; then Upload Scrobbles | Account and the ListenBrainz row read Invalid Token; the upload toasts "ListenBrainz: Invalid Token" and the log is untouched; the right token written into the file shows the name again when a page opens |
 | SCROB-UP-08 | Start an upload of a long log (a few hundred lines) while a song passes its scrobble point | The new listen is in `.scrobbler.log` after the upload; nothing is lost or torn |
 | SCROB-UP-09 | Start an upload and let the screen go dark; wake it after a minute | The final toast shows when the screen is lit; the device did not go to standby mid-upload |
-| SCROB-UP-10 | Start an upload, leave Settings at once; come back to Settings > Library later | The result's toast shows shortly after the page opens; a new upload can start |
-| SCROB-UP-11 | With `[LASTFM]` complete in the file (Wi-Fi connected) open Settings > Library, then the Last.fm page; then once with a wrong `PASSWORD` | The Last.fm row shows `USER`; the page's Account shows Checking… and then the name, no toast. Wrong password: both read Sign-in Failed; the right one written into the file is checked when a page opens again |
+| SCROB-UP-10 | Start an upload, leave Settings at once; come back to Settings > Library > Scrobbling later | The result's toast shows shortly after the page opens; a new upload can start |
+| SCROB-UP-11 | With `[LASTFM]` complete in the file (Wi-Fi connected) open Settings > Library > Scrobbling, then the Last.fm page; then once with a wrong `PASSWORD` | The Last.fm row shows `USER`; the page's Account shows Checking… and then the name, no toast. Wrong password: both read Sign-in Failed; the right one written into the file is checked when a page opens again |
 | SCROB-UP-12 | Connect USB (storage mode), then try to reach Upload Scrobbles | The USB page is in front; if the row can be reached: "Not available in USB mode" (or "Storage unavailable"), nothing is written to the card |
 | SCROB-UP-13 | Scrobbling and Auto Upload on, a checked token, Wi-Fi connected: play an album from Now Playing for 20 minutes without touching Settings | About ten minutes after the first listen was logged the listens so far are on listenbrainz.org and in `.scrobbler.log.sent`; `.scrobbler.log` holds only what was logged since. No toast at any time |
 | SCROB-UP-14 | Auto Upload on, Wi-Fi off: play for 20 minutes; then connect Wi-Fi and keep playing | Nothing is uploaded and the Wi-Fi is not switched on while it is off; within about a minute of the connection the whole log is uploaded. No toast |
-| SCROB-UP-15 | Auto Upload on, a wrong token in `scrobble.ini` and no settings page opened since (so it is not checked), Wi-Fi connected, play for 15 minutes; then open Settings > Library | The row and the Account row read Invalid Token; no toast was shown; the log is untouched and nothing more is tried. The right token written into the file: the name shows when a page opens, and the log is uploaded while music plays |
-| SCROB-UP-16 | Auto Upload on, a long log (a few hundred lines): open Settings > Library while the automatic upload runs (about ten minutes into playing) and tap Upload Scrobbles | "Already uploading"; no toast when the automatic upload ends; a second tap after that starts the user's own upload with its own toast ("Nothing to upload") |
+| SCROB-UP-15 | Auto Upload on, a wrong token in `scrobble.ini` and no settings page opened since (so it is not checked), Wi-Fi connected, play for 15 minutes; then open Settings > Library > Scrobbling | The row and the Account row read Invalid Token; no toast was shown; the log is untouched and nothing more is tried. The right token written into the file: the name shows when a page opens, and the log is uploaded while music plays |
+| SCROB-UP-16 | Auto Upload on, a long log (a few hundred lines): open Settings > Library > Scrobbling while the automatic upload runs (about ten minutes into playing) and tap Upload Scrobbles | "Already uploading"; no toast when the automatic upload ends; a second tap after that starts the user's own upload with its own toast ("Nothing to upload") |
+| SCROB-UP-30 | Open Settings > Library; open its Scrobbling row, turn the switch on, go back; then off and back again; with Scrobbling off tap Upload Scrobbles on the page (a log on the card, an account set up, Wi-Fi) | The Library row says Off, then On, then Off, each time right after the page is back (not before); with it off the account rows, Auto Upload and Upload Scrobbles are not dimmed and the upload starts |
 | SCROB-UP-17 | Auto Upload on: play for 12 minutes, let the screen go dark and keep playing through three more songs | The uploads go on with the screen dark (the log empties about every ten minutes of new listens); no toast when the screen is lit again |
 | SCROB-UP-18 | Auto Upload on: start playing, pause after the first listen is logged and let the device go to standby before ten minutes pass; wake it and play on | The upload happens within about a minute of playback resuming, once the listen is ten minutes old (a run that standby cut off in the middle of a request is tried again half an hour later); nothing is lost from the log |
 | SCROB-UP-19 | On a computer, add to `.scrobbler.log`, between good lines, one line whose time is a year in the future (ListenBrainz is expected to refuse it with a 400; if it takes it the check is void), then Upload Scrobbles | "N sent, 1 rejected": only that line is in `.scrobbler.log.rejected`, the others of its batch are on listenbrainz.org and in `.scrobbler.log.sent` |
