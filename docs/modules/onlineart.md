@@ -33,7 +33,7 @@ Preview: `uv run python -I tools/preview/preview_onlineart.py work/mod-release o
   | certificate | lock | Certificate problem | The server's certificate was not accepted. | yes |
   | no certificates | lock | Certificates missing | This device has no certificate bundle. | no |
   | server error | info | Server error | The server could not answer. Try again later. | yes |
-  | no Wi-Fi | wifi-low | No Wi-Fi | Turn on Wi-Fi to search online. | yes |
+  | no Wi-Fi | wifi-off | No Wi-Fi | Turn on Wi-Fi to search online. | yes |
   | no date | calendar | Set the date first | Secure connections need the right date. | yes |
   | no card | memory-stick | Storage unavailable | The SD card could not be used. | yes |
   | no memory | hard-drive | Not enough memory | There is not enough memory to search. | yes |

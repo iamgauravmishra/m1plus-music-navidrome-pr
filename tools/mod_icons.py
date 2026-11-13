@@ -165,7 +165,7 @@ SWATCH_PX = 20
 SWATCHES = [f'pod_sw{i}' for i in range(7)]
 CARD_IMAGES = sorted({card_name(g) for g in CARD_GLYPHS.values()}) + [CARD_CHEVRON[0], CARD_CHECK[0]] + CARD_PIECE_IMAGES + CARD_TALL_IMAGES + SWATCHES + ['pod_sl_thumb']
 # Find Cover & Lyrics' empty and failed states (docs/modules/onlineart.md): a muted grey glyph, ES_PX px, stroke 2, over the state's title (tools/pod_ui.py oa_es_icon; patch/onlineart.c names them)
-ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'image', 'pod_es_wifi': 'wifi-low', 'pod_es_calendar': 'calendar', 'pod_es_lock': 'lock', 'pod_es_plug': 'plug',
+ES_ICONS = {'pod_es_timer': 'timer', 'pod_es_music': 'music', 'pod_es_image': 'image', 'pod_es_wifi': 'wifi-off', 'pod_es_calendar': 'calendar', 'pod_es_lock': 'lock', 'pod_es_plug': 'plug',
             'pod_es_info': 'info', 'pod_es_card': 'memory-stick', 'pod_es_drive': 'hard-drive', 'pod_es_download': 'download', 'pod_es_check': 'badge-check'}
 ES_PX, ES_RGB = 40, (0x8E, 0x8E, 0x93)
 # The Wi-Fi page's network rows (patch/wifipage.c, docs/modules/wifi.md): a Wi-Fi fan signal glyph (wf_sig0..3: Lucide's wifi drawn whole in the dim grey, the level's arcs white over it: 3 wifi, 2 wifi-high, 1 wifi-low, 0 all dim; 20 x 16), the lock (16 px) and info (22 px)
