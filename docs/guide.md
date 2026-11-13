@@ -64,7 +64,8 @@ later, open that artist's page, or use **Settings → Library → Rebuild Artist
 every artist again in the background.
 
 No picture on the card? Open the artist's page, tap **…** → **Find Artist Photo** (needs Wi-Fi): it
-shows up to six photos from Deezer, those under that exact name first. Tap one, then **Use This Photo**. A photo picked this
+shows up to six photos from Deezer and NetEase Cloud Music, those under that exact name first. Tap one, then **Use This Photo**.
+A photo picked this
 way stays until you pick another: Rebuild Artist Photos and an `artist.jpg` added later do not
 replace it.
 

@@ -28,6 +28,8 @@ ITUNES = 'https://itunes.apple.com/search?media=music&entity=album&limit=8&term=
 DEEZER = 'https://api.deezer.com/search/album?limit=8&q='
 LRCLIB = 'https://lrclib.net/api/'
 JPG = open(os.path.join(SEARCH_DATA, 'art100.jpg'), 'rb').read()
+DEFS = {**cdefs.defines(os.path.join(ROOT, 'patch', 'artistphoto.h'), strings=True), **cdefs.defines(os.path.join(ROOT, 'patch', 'pcnet.h'), strings=True)}
+PN_SRC = dict(ITUNES=0, DEEZER=1, NETEASE=2)   # patch/pcnet.h PN_SRC_*
 
 
 def data(name): return open(os.path.join(DATA, name), 'rb').read()
@@ -137,7 +139,8 @@ class Site:
         if url.startswith(DEEZER): return {'body': data('deezer_album.json')}
         if url.startswith(LRCLIB + 'get?'): return {'body': data('lrclib_get.json')}
         if url.startswith(LRCLIB + 'search?'): return {'body': data('lrclib_search.json')}
-        if 'mzstatic' in url or 'dzcdn' in url: return {'body': JPG, 'chunk': 5500}
+        if url.startswith(NETEASE_ARTIST): return {'body': NETEASE_NONE}
+        if 'mzstatic' in url or 'dzcdn' in url or 'music.126.net' in url: return {'body': JPG, 'chunk': 5500}
         return {'rc': 22, 'code': 404}
 
     def urls(self): return [u for u, _ in self.reqs]
@@ -648,10 +651,12 @@ def busy_tests(ctx):
 
 DEEZER_ARTIST = 'https://api.deezer.com/search/artist?limit=25&q='
 AP = '/mnt/mmc/.m1plus/artists'
+NETEASE_ARTIST = 'https://music.163.com/api/search/get?type=100&limit=10&s='
+NETEASE_NONE = b'{"result":{"hasMore":false,"artistCount":0},"code":200}'   # NetEase's answer when it finds nothing: the scripted server's, unless a test says otherwise
 
 
 def artist_tests(ctx):
-    """Find Artist Photo (pn_artist, pn_artist_pick, pj_deezer_artists, ap_pick; docs/modules/onlineart.md "Artist photos"): Deezer's artist search alone, the artists that have a picture of their own with the most followed
+    """Find Artist Photo (pn_artist, pn_artist_pick, pj_deezer_artists, ap_pick; docs/modules/onlineart.md "Artist photos"): Deezer's artist search (NetEase finds nothing here; both services: source_tests), the artists that have a picture of their own with the most followed
     first, and the picked picture as the artist's photo in the artists cache with its .pick marker."""
     expect = ctx.expect
     raw = data('deezer_artist.json')
@@ -675,7 +680,7 @@ def artist_tests(ctx):
     expect(call('pj_deezer_artists', data('itunes_album.json'))[0] == -1 and call('pj_deezer_artists', b'{"data":[],"total":0}')[0] == 0, 'the store\'s answer is not one; an empty "data" is 0 artists')
     expect([g[1] for g in call('pj_deezer_artists', data('deezer_album.json'))[1]] == [], 'an album answer has no artist names at its top level: nothing is kept')
 
-    # the job: one request, the artists with a picture, the most followed first
+    # the job: Deezer's request (NetEase's finds nothing), the artists with a picture, the most followed first
     def site_for(**over):
         return Site(**{DEEZER_ARTIST: {'body': raw}, **over})
 
@@ -702,7 +707,7 @@ def artist_tests(ctx):
     st = state(m)
     urls = site.urls()
     want = [d[0], d[1], d[4]]   # the entry of the very name (178 followers), then the others: 8879 twice (the service's order between them); the blank, the repeated picture and the null one are not offered
-    expect(urls[0] == DEEZER_ARTIST + enc('陈奕迅') and urls[1:] == [r['picture_medium'] for r in want], f'one request, Deezer\'s artist search with the name URL-encoded, then the thumbnails of the artists offered: {urls}')
+    expect(urls[:2] == [DEEZER_ARTIST + enc('陈奕迅'), NETEASE_ARTIST + enc('陈奕迅')] and urls[2:] == [r['picture_medium'] for r in want], f'Deezer\'s artist search with the name URL-encoded, NetEase\'s, then the thumbnails of the artists offered: {urls}')
     expect(not [u for u in urls if u.startswith((ITUNES, LRCLIB, DEEZER))], 'no album search and no lyrics request')
     expect(st['state'] == 3 and st['code'] == 0 and st['count'] == 3 and st['busy'] == 0, f'three photos: an artist with the service\'s blank picture (an empty picture id), a picture already offered and a null picture are left out ({st})')
     expect([info(m, i) for i in range(3)] == [(r['name'], '', 1) for r in want], f'the very name first, then the most followed, equal counts in the service\'s order; the name, no second line, the source Deezer: {[info(m, i)[0] for i in range(3)]}')
@@ -794,12 +799,12 @@ def artist_tests(ctx):
     site = Site(**{DEEZER_ARTIST: {'body': b'{"data":[],"total":0}'}})
     m = machine(site=site)
     r, th = begin(m, 'Nobody'); PCN.work(m, th)
-    expect(state(m)['state'] == 3 and state(m)['code'] == 0 and state(m)['count'] == 0 and len(site.reqs) == 1, 'no artist: OK with no photos, one request')
+    expect(state(m)['state'] == 3 and state(m)['code'] == 0 and state(m)['count'] == 0 and len(site.reqs) == 2, 'no artist: OK with no photos, a request to each service')
     for label, bad, code in (('a busy service', {'rc': 22, 'code': 503}, PN['OVERLOAD']), ('an answer that is not the service\'s', {'body': b'<html>'}, PN['HTTP']), ('no connection', {'rc': 7}, PN['NET'])):
-        site = Site(**{DEEZER_ARTIST: bad})
+        site = Site(**{DEEZER_ARTIST: bad, NETEASE_ARTIST: bad})
         m = machine(site=site)
         r, th = begin(m); PCN.work(m, th)
-        expect(state(m)['state'] == 3 and state(m)['code'] == code and state(m)['count'] == 0 and len(site.reqs) == 1, f'{label}: code {code} from one request ({state(m)["code"]})')
+        expect(state(m)['state'] == 3 and state(m)['code'] == code and state(m)['count'] == 0 and len(site.reqs) == 2, f'{label} (both services): code {code} ({state(m)["code"]})')
     # the name is URL-encoded like any query field
     site = site_for()
     m = machine(site=site)
@@ -807,4 +812,98 @@ def artist_tests(ctx):
     expect(site.urls()[0] == DEEZER_ARTIST + 'Sigur%20R%C3%B3s%20%26%20Co', f'space, accent and & are escaped: {site.urls()[0]}')
 
 
-SECTIONS = [json_tests, job_tests, lyrics_tests, failure_tests, busy_tests, cancel_tests, pick_tests, rebuild_tests, artist_tests]
+def source_tests(ctx):
+    """Find Artist Photo's two services (pj_netease_artists, pn_artist; docs/modules/onlineart.md "Artist photos"): NetEase's answer, and what is offered from Deezer and NetEase together and when one of them fails."""
+    expect = ctx.expect
+    THUMB, BLANK = DEFS['PN_NETEASE_THUMB'], 'https://p1.music.126.net/6y-UleORITEDbvrOLV0Q8A==' + DEFS['PN_NETEASE_BLANK']
+    expect(NETEASE_ARTIST == DEFS['PN_ART_NETEASE_ARTIST'] and DEFS['PN_ARTIST_NETEASE'] == 2 and DEFS['PN_NETEASE_MAX'] == 10,
+           'NetEase\'s artist search; at most two of NetEase\'s ten are offered')
+    # the extractor against json.loads
+    raw = data('netease_artist.json')
+    d = json.loads(raw)['result']['artists']
+    m = Machine()
+    for base in (0x30000000, 0x30100000): m.u.mem_map(base, 0x40000)
+
+    def call(text, mx=10):
+        src, dst = 0x30000000 + 0x40000 - len(text), 0x30100000
+        m.u.mem_write(src, text)
+        n = fn(m, 'pj_netease_artists', src, len(text), dst, mx)
+        n = n - (1 << 32) if n >= 1 << 31 else n
+        return n, Rec.parse(bytes(m.u.mem_read(dst, mx * Rec.SIZE)), max(n, 0))
+    n, got = call(raw)
+    expect(n == len(d) == 10 and got == [(r['fansSize'], r['name'], '', r['name'], r['img1v1Url']) for r in d], f'NetEase\'s answer: fansSize as the id, the name (in the feed field too), no author, img1v1Url ({n})')
+    expect(got[0][1] == 'The Beatles' and len([g for g in got if g[4].endswith(DEFS['PN_NETEASE_BLANK'])]) == 5 and [r['picUrl'] for r in d].count(None) == 5, 'the fixture has artists with the service\'s blank picture and a null picUrl')
+    expect(call(raw, 3)[0] == 3, 'no more than asked for')
+    expect(call(b'{"result":{"hasMore":false,"artistCount":0},"code":200}')[0] == 0, 'a "result" with no "artists" (nothing found): 0 artists')
+    expect(call(b'{"code":-460,"msg":"Cheating"}')[0] == -1 and call(data('deezer_artist.json'))[0] == -1 and call(b'<html>')[0] == -1, 'an error answer, Deezer\'s answer and a page are not one')
+    expect(call(b'{"artists":[{"name":"x"}],"result":{"artists":[{"name":"y"}]}}')[1][0][1] == 'y', 'the "artists" of "result", not one beside it')
+    long = [{'name': nm, 'fansSize': 1, 'img1v1Url': None} for nm in ('n' * 80, '汉' * 27, 'n' * 320)]
+    lgot = call(json.dumps({'result': {'artists': long}}).encode())[1]
+    expect([(g[1], g[3]) for g in lgot] == [('n' * 79, 'n' * 80), ('汉' * 26, '汉' * 27)], f'a long name: cut as the name, whole beside it, as Deezer\'s ({len(lgot)})')
+
+    # the job
+    def dz(names):
+        return json.dumps({'data': [{'name': nm, 'nb_fan': fans, 'picture_medium': f'https://cdn-images.dzcdn.net/images/artist/{i:032x}/250x250-000000-80-0-0.jpg'} for i, (nm, fans) in enumerate(names)]}).encode()
+
+    def ne(names):
+        """(name, picture or None for the service's blank[, picUrl])"""
+        rows = []
+        for i, t in enumerate(names):
+            rows.append({'id': i, 'name': t[0], 'img1v1Url': BLANK if t[1] is None else t[1], 'picUrl': t[2] if len(t) > 2 else None, 'fansSize': 100 - i})
+        return json.dumps({'result': {'artists': rows, 'artistCount': len(rows)}, 'code': 200}).encode()
+
+    def pic(k, host='https'): return f'{host}://p1.music.126.net/k{k}==/{1000 + k}.jpg'
+
+    def run(asked, dzr, ner):
+        """The lookup for asked with the two services' answers (bytes, or a reply dict): the machine, the site."""
+        site = Site(**{DEEZER_ARTIST: dzr if isinstance(dzr, dict) else {'body': dzr}, NETEASE_ARTIST: ner if isinstance(ner, dict) else {'body': ner}})
+        mm = machine(site=site)
+        mm.thread = None
+        fn(mm, 'pn_artist', mm.cstr(asked)); PCN.work(mm, mm.thread)
+        return mm, site
+
+    def offered(mm): return [(info(mm, i)[0], info(mm, i)[2]) for i in range(state(mm)['count'])]
+    D, N = PN_SRC['DEEZER'], PN_SRC['NETEASE']
+    loose = [(f'Tribute {i}', 9000 - i) for i in range(6)]
+    mm, site = run('The Beatles', dz(loose[:2] + [('The Beatles', 5), ('beatles', 9)] + loose[2:]), ne([('The Beatles', pic(1)), ('Paul', pic(2)), ('the beatles', pic(3)), ('THE BEATLES', pic(4))]))
+    urls = site.urls()
+    expect(urls[:2] == [DEEZER_ARTIST + enc('The Beatles'), NETEASE_ARTIST + enc('The Beatles')], f'both services: Deezer\'s artist search, then NetEase\'s, the name URL-encoded: {urls[:2]}')
+    got = offered(mm)
+    expect(got == [('beatles', D), ('The Beatles', D), ('The Beatles', N), ('the beatles', N)] + [(nm, D) for nm, _ in loose[:2]],
+           f'Deezer\'s of the very name, NetEase\'s of the very name (two at most, in its order), then Deezer\'s others, six in all: {got}')
+    expect(urls[4:6] == [pic(1) + THUMB, pic(3) + THUMB] and len(urls) == 8, f'NetEase\'s thumbnail is the square picture at 250 px: {urls[4:6]}')
+    expect(state(mm)['code'] == 0 and [thumb_path(mm, i) for i in range(6)] == [f'{ART_DIR}/a{i}.jpg' for i in range(6)], 'OK; every photo has its thumbnail')
+    mm.thread = None
+    fn(mm, 'pn_art_fetch', 2); PCN.work(mm, mm.thread)
+    expect(site.urls()[-1] == pic(1) + '?param=500y500' and fn(mm, 'pn_pick_code') == 0, f'NetEase\'s larger picture is the 500 px one: {site.urls()[-1]}')
+    # NetEase has no entry of the very name: its first one alone
+    mm, site = run('BTS', dz([('BTS', 9)]), ne([('BTS (防弹少年团)', pic(1)), ('Jung Kook', pic(2)), ('SUGA', pic(3))]))
+    expect(offered(mm) == [('BTS', D), ('BTS (防弹少年团)', N)], f'no NetEase entry of the very name: its first one (the best match), not the people after it: {offered(mm)}')
+    mm, site = run('BTS', dz([('BTS', 9)]), ne([('BTS (防弹少年团)', None), ('Jung Kook', pic(2))]))
+    expect(offered(mm) == [('BTS', D)], f'... and none when the first has the service\'s blank picture: {offered(mm)}')
+    mm, site = run('Mayday', dz([]), ne([('Mayday', None, pic(7)), ('mayday', None), ('MAYDAY', pic(8, 'http'))]))
+    expect(offered(mm) == [('Mayday', N), ('MAYDAY', N)] and site.urls()[2:] == [pic(7) + THUMB, pic(8, 'http') + THUMB],
+           f'a blank square picture: the other picture (picUrl) is used; an entry with neither is left out; an http address is taken: {offered(mm)}')
+    # room is kept for NetEase's; with none of its own, Deezer's fill the page
+    six = [('The Beatles', 50 - i) for i in range(8)]
+    mm, site = run('Beatles', dz(six), ne([('Beatles', pic(1)), ('The Beatles', pic(2))]))
+    expect(offered(mm) == [('The Beatles', D)] * 4 + [('Beatles', N), ('The Beatles', N)], f'eight Deezer entries of the very name: four of them, then NetEase\'s two: {offered(mm)}')
+    mm, site = run('Beatles', dz(six), ne([]))
+    expect(offered(mm) == [('The Beatles', D)] * 6 and state(mm)['code'] == 0, 'NetEase finds nothing: Deezer\'s six')
+    # one service fails: the other's photos, no error
+    for label, bad in (('busy', {'rc': 22, 'code': 503}), ('not its answer', {'body': b'{"code":-460,"msg":"Cheating"}'}), ('unreachable', {'rc': 7})):
+        mm, site = run('The Beatles', dz([('The Beatles', 5)]), bad)
+        expect(offered(mm) == [('The Beatles', D)] and state(mm)['code'] == 0 and len(site.reqs) == 3, f'NetEase {label}: Deezer\'s photos, OK ({state(mm)["code"]})')
+        mm, site = run('The Beatles', bad if 'rc' in bad else {'body': b'<html>'}, ne([('The Beatles', pic(1))]))
+        expect(offered(mm) == [('The Beatles', N)] and state(mm)['code'] == 0 and len(site.reqs) == 3, f'Deezer {label}: NetEase\'s photo, OK ({state(mm)["code"]})')
+    mm, site = run('The Beatles', {'rc': 22, 'code': 503}, {'rc': 7})
+    expect(state(mm)['code'] == PN['OVERLOAD'] and state(mm)['count'] == 0 and len(site.reqs) == 2, f'both fail: the first failure\'s code ({state(mm)["code"]})')
+    mm, site = run('Nobody', dz([]), {'rc': 7})
+    expect(state(mm)['code'] == 0 and state(mm)['count'] == 0, 'Deezer answers with no artist and NetEase fails: OK with no photos')
+    for u, o in site.reqs:
+        expect(o[10065] == PCN.CA and o[52] == 1 and o[10018].startswith('M1PlusMusic/'), 'NetEase is asked as the other services: the CA bundle, verification on, the app\'s user agent')
+    # the real answer
+    mm, site = run('The Beatles', dz([]), raw)
+    expect(offered(mm) == [('The Beatles', N)] and site.urls()[2] == d[0]['img1v1Url'] + THUMB, f'the fixture: the one entry of the very name: {offered(mm)}')
+
+SECTIONS = [json_tests, job_tests, lyrics_tests, failure_tests, busy_tests, cancel_tests, pick_tests, rebuild_tests, artist_tests, source_tests]

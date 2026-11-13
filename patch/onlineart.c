@@ -235,7 +235,7 @@ static void oa_es_fail(oa_es_t *s, int code, int lyr) {
         s->glyph = "pod_es_timer";
         s->title = lyr ? TR("Lyrics Service Busy") : oa.ar ? TR("Photo Service Busy") : TR("Cover Service Busy");
         s->text = lyr     ? TR("LRCLIB is under heavy load. Try again in a moment.")
-                  : oa.ar ? TR("Deezer is busy. Try again in a moment.")
+                  : oa.ar ? TR("The photo service is busy. Try again in a moment.")
                           : TR("iTunes and Deezer are busy. Try again in a moment.");
         break;
     case PN_NOWIFI:
@@ -295,7 +295,7 @@ static int oa_es_state(oa_es_t *s) {
         }
         if (pn_art_count() > 0) return 0;
         s->glyph = "pod_es_image", s->title = oa.ar ? TR("No Photos Found") : TR("No Covers Found"),
-        s->text = oa.ar ? TR("Nothing on Deezer for this artist.") : TR("Nothing on iTunes or Deezer for this album.");
+        s->text = oa.ar ? TR("No photos online for this artist.") : TR("Nothing on iTunes or Deezer for this album.");
         return 1;
     }
     if ((oa.want & PN_PART_LYRICS) || pn_lyr_state() == 0) {
@@ -525,7 +525,10 @@ static void oa_cover_open(int i) {
     oa.replace = oa.ar ? ap_picked(oa.akey) : oa_has_pick();
     widget_set_text_utf8(oa.l_name, name);
     widget_set_text_utf8(oa.l_artist, artist);
-    widget_set_text_utf8(oa.l_source, pn_art_source(i) == PN_SRC_DEEZER ? "Deezer" : "iTunes");
+    if (pn_art_source(i) == PN_SRC_NETEASE)
+        widget_set_tr_text(oa.l_source, "NetEase");
+    else
+        widget_set_text_utf8(oa.l_source, pn_art_source(i) == PN_SRC_DEEZER ? "Deezer" : "iTunes");
     m1_show(oa.pill, 0);
     m1_show(oa.l_hint, 0);
     grid_drop(&oa.gd);
@@ -1100,6 +1103,13 @@ static void oa_badge_width(void) {
     oa.bw = w + 2 * OA_BADGE_PAD;
 }
 
+/* The line under the artist's name: the services asked. */
+static void oa_ar_sub(void) {
+    char text[96];
+    snprintf(text, sizeof text, "Deezer, %s", TR("NetEase"));
+    widget_set_text_utf8(oa.l_sub, text);
+}
+
 /* The page for what oa holds (the playing track's fields, or oa.ar and the artist). 0 once it is up; -1 when it could not open (nothing is left of it). */
 static int oa_open(void) {
     oa.win = window_open("m1plus_onlineart");
@@ -1154,7 +1164,7 @@ static int oa_open(void) {
         void *title = widget_lookup(oa.win, "label_title", 1);
         if (title) widget_set_text_utf8(title, TR("Artist Photo"));
         widget_set_text_utf8(oa.l_head, oa.artist);
-        widget_set_text_utf8(oa.l_sub, "Deezer");
+        oa_ar_sub();
         oa.g.person = oa.gd.person = 1;
     }
     widget_on(oa.view, EVT_POINTER_DOWN, oa_on_down, (void *)0);

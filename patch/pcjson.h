@@ -64,6 +64,9 @@ int pj_episodes(const char *json, unsigned n, pj_ep_t *out, int max);
 int pj_deezer(const char *json, unsigned n, pj_result_t *out, int max);
 /* The same for Deezer's artist search (https://api.deezer.com/search/artist): name as name and, not cut, as feed ("" for one longer than the field: the match of a name is made on it), picture_medium (250 px) as art and nb_fan (the artist's followers) as id; author is "". -1: no "data" array. */
 int pj_deezer_artists(const char *json, unsigned n, pj_result_t *out, int max);
+/* The same for NetEase Cloud Music's artist search (https://music.163.com/api/search/get?type=100, not a documented service): the objects of the "artists" array of the top-level "result" object, with name as name and feed
+ * (as Deezer's artist), img1v1Url (the square picture) as art, picUrl as art6 and fansSize as id. 0 for a "result" with no "artists" (the answer when nothing is found); -1: no "result" object (an error answer). */
+int pj_netease_artists(const char *json, unsigned n, pj_result_t *out, int max);
 
 typedef struct {
     char title[PJ_NAME], artist[PJ_AUTHOR], album[PJ_NAME]; /* trackName, artistName, albumName */

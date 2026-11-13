@@ -219,7 +219,9 @@ void pn_chart_clean(void); /* remove the artwork files and forget that any was t
 #define PN_ART_MAX 12 /* covers offered: iTunes' first (at most PN_ART_ITUNES_MAX), Deezer's after them */
 #define PN_ART_ITUNES_MAX 6
 #define PN_ARTIST_MAX 6 /* photos offered for an artist: those under the very name first */
-#define PN_ARTIST_OTHER 4 /* of them, at most this many under another name */
+#define PN_ARTIST_OTHER 4 /* of them, at most this many of Deezer's under another name */
+#define PN_ARTIST_NETEASE 2 /* ... and at most this many of NetEase's */
+#define PN_NETEASE_MAX 10 /* NetEase's artists read (the request asks for 10) */
 #define PN_ART_Q \
     96 /* a query field (artist, album, title), UTF-8 bytes with the NUL; longer is cut on a character boundary */
 #define PN_LYR_MAX 20 /* lyrics candidates kept: the exact match, then LRCLIB's search results */
@@ -231,9 +233,12 @@ void pn_chart_clean(void); /* remove the artwork files and forget that any was t
 #define PN_ART_DEEZER "https://api.deezer.com/search/album?limit=8&q="
 #define PN_ART_LRCLIB "https://lrclib.net/api/"
 #define PN_ART_DEEZER_ARTIST "https://api.deezer.com/search/artist?limit=25&q="
+#define PN_ART_NETEASE_ARTIST "https://music.163.com/api/search/get?type=100&limit=10&s="
+#define PN_NETEASE_BLANK "/5639395138885805.jpg" /* the picture NetEase gives an artist that has none */
+#define PN_NETEASE_THUMB "?param=250y250" /* NetEase's picture at 250 px (pn_art_full asks for 500y500) */
 
 enum { PN_A_IDLE = 0, PN_A_COVERS = 1, PN_A_THUMBS = 2, PN_A_DONE = 3 };
-enum { PN_SRC_ITUNES = 0, PN_SRC_DEEZER = 1 };
+enum { PN_SRC_ITUNES = 0, PN_SRC_DEEZER = 1, PN_SRC_NETEASE = 2 };
 
 /* A lyrics candidate (LRCLIB record with lyrics): the texts are UTF-8, cut on a character boundary. */
 typedef struct {
@@ -286,9 +291,10 @@ int pn_lyr_save(int i, const char *path);
  * honours) and, when dir is not empty, put the original JPEG into that folder as the folder picture stock's Now Playing reads. The larger picture is the one pn_art_fetch downloaded for i, else it is
  * downloaded now. 0 when the worker runs; PN_BUSY, or a guard's code. */
 int pn_art_pick(int i, const char *dir, unsigned key0, unsigned key1);
-/* Find Artist Photo (docs/modules/onlineart.md "Artist photos"): the same lookup for an artist's name alone. The covers part is Deezer's artist search (the artists that have a picture, those under the very name
- * first, then at most PN_ARTIST_OTHER others, the most followed first in each, up to PN_ARTIST_MAX; pn_art_name is the artist, pn_art_artist "", the source PN_SRC_DEEZER); there is no lyrics part (pn_art_again takes PN_PART_COVERS only). Thumbnails, pn_art_fetch and the
- * larger picture as for a cover. Same returns as pn_art. */
+/* Find Artist Photo (docs/modules/onlineart.md "Artist photos"): the same lookup for an artist's name alone. The covers part is the artist search of Deezer, then NetEase's: Deezer's artists
+ * under the very name, then NetEase's (those of the very name, else its first; at most PN_ARTIST_NETEASE), then at most PN_ARTIST_OTHER of Deezer's others, the most followed first in each, PN_ARTIST_MAX in all, each with a picture
+ * of its own; pn_art_name is the artist, pn_art_artist "", the source PN_SRC_DEEZER or PN_SRC_NETEASE. A service that fails while the other answers is left out without a word. There is no lyrics part (pn_art_again takes
+ * PN_PART_COVERS only). Thumbnails, pn_art_fetch and the larger picture as for a cover. Same returns as pn_art. */
 int pn_artist(const char *name);
 /* Make picture i the photo of the artist with this key (patch/artistphoto.c ap_key, ap_pick: both cache files and the .pick marker). 0 when the worker runs; PN_BUSY, or a guard's code. The result is pn_pick_state /
  * pn_pick_code (PN_STORAGE: the files could not be made). */

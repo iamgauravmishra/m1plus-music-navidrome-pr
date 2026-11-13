@@ -1670,12 +1670,13 @@ int pn_art_full_path(int i, char *path, unsigned size) {
 }
 
 int pn_art_full(const char *thumb, char *out, unsigned size) {
-    static const char *const from[2] = {"100x100bb", "250x250-"}, *const to[2] = {"600x600bb", "500x500-"};
+    static const char *const from[3] = {"100x100bb", "250x250-", "250y250"},
+                             *const to[3] = {"600x600bb", "500x500-", "500y500"}; /* iTunes, Deezer, NetEase */
     unsigned n = strlen(thumb), i;
     int k;
     if (n + 1 > size) return 0;
     memcpy(out, thumb, n + 1);
-    for (k = 0; k < 2; ++k)
+    for (k = 0; k < 3; ++k)
         for (i = 0; i < n; ++i)
             if (pn_starts(thumb + i, from[k])) {
                 memcpy(out + i, to[k], strlen(to[k])); /* the same length: the address is changed in place */
@@ -1746,21 +1747,67 @@ static int pn_has(const char *s, const char *part) {
     return 0;
 }
 
-/* Deezer's artists for the name in pn.aq[0] into pn.ares: those that have a picture of their own (an artist without one is given the service's blank, whose address has an empty picture id: ".../artist//250x250..."), the
- * most followed first (the service lists a name's duplicates, most of them empty shells, in no useful order), a picture once. The search is a loose one (other artists with a like name, the more followed of them
- * above the one asked for), so the artists of that very name (ap_key of the whole names, before either is cut: the case, a leading "The ") come first, then at most PN_ARTIST_OTHER of the others (the same artist under another spelling or script is among
- * them), PN_ARTIST_MAX in all. The code as pn_art_covers. */
+/* The artist search at base for the name in pn.aq[0]: the answer into buf, *got bytes. The code as pn_fetch_json_api's, a 404 PN_HTTP. */
+static int pn_artist_ask(char *url, const char *base, char *buf, unsigned *got) {
+    int c;
+    url[0] = 0;
+    if (!pn_cat(url, PN_ART_URL, base) || !pn_urlenc(url, PN_ART_URL, pn.aq[0])) return PN_MEM;
+    c = pn_fetch_json_api(url, buf, got);
+    return c == PN_GONE ? PN_HTTP : c;
+}
+
+/* NetEase's artists (nt, m of them, in the service's order: the best match first) that are offered, into ne (PN_ARTIST_NETEASE): those of the very name that have a picture of their own (an artist without one is
+ * given PN_NETEASE_BLANK), else the first one (the name in another script or with a suffix, "BTS (...)"; the ones after it are other people). art becomes the square picture's address at 250 px. Returns how many. */
+static int pn_netease_take(pj_result_t *nt, int m, pj_result_t *ne) {
+    unsigned key = pn.akey;
+    int n = 0, i, pass;
+    for (pass = 0; pass < 2 && !n; ++pass)
+        for (i = 0; i < (pass ? m > 0 : m) && n < PN_ARTIST_NETEASE; ++i) {
+            pj_result_t *r = &nt[i];
+            const char *pic = r->art[0] && !pn_has(r->art, PN_NETEASE_BLANK)
+                                  ? r->art
+                                  : r->art6; /* (the square one, else the other) */
+            if (!pass && !(key && ap_key(r->feed) == key)) continue;
+            if ((!pn_starts(pic, "https://") && !pn_starts(pic, "http://")) || pn_has(pic, PN_NETEASE_BLANK)) continue;
+            if (pic != r->art) memcpy(r->art, pic, PJ_ART);
+            if (!pn_cat(r->art, PJ_ART, PN_NETEASE_THUMB)) continue;
+            memcpy(&ne[n++], r, sizeof *r);
+        }
+    return n;
+}
+
+/* The artists for the name in pn.aq[0] into pn.ares, from Deezer's answer, then NetEase's.
+ * Deezer's: those that have a picture of their own (an artist without one is given the service's blank, whose address has an empty picture id: ".../artist//250x250..."), the most followed first (the service lists a
+ * name's duplicates, most of them empty shells, in no useful order), a picture once. The search is a loose one (other artists with a like name, the more followed of them above the one asked for), so the artists of
+ * that very name (ap_key of the whole names, before either is cut: the case, a leading "The ") come first, then NetEase's (pn_netease_take), then at most PN_ARTIST_OTHER of Deezer's others (the same artist under another
+ * spelling or script is among them), PN_ARTIST_MAX in all. The code is PN_OK when a service answered (even with no artist); else the first failure. */
 static int pn_artist_covers(char *buf) {
     char *url = calloc(PN_ART_URL, 1);
-    pj_result_t *tmp = calloc(PJ_MAX, sizeof *tmp);
+    pj_result_t *tmp = calloc(PJ_MAX + PN_NETEASE_MAX + PN_ARTIST_NETEASE, sizeof *tmp), *nt = tmp + PJ_MAX,
+                *ne = nt + PN_NETEASE_MAX;
     unsigned char ord[PJ_MAX], same[PJ_MAX];
     unsigned got = 0, key = pn.akey;
-    int n = 0, m = 0, others = 0, i, j, c = PN_MEM;
+    int n = 0, m = 0, nn = 0, others = 0, ok = 0, bad = 0, i, j, c, pass;
     pn.an = 0;
-    if (url && tmp && pn_cat(url, PN_ART_URL, PN_ART_DEEZER_ARTIST) && pn_urlenc(url, PN_ART_URL, pn.aq[0])) {
-        c = pn_fetch_json_api(url, buf, &got);
-        if (c == PN_GONE) c = PN_HTTP;
-        if (c == PN_OK && (m = pj_deezer_artists(buf, got, tmp, PJ_MAX)) < 0) c = PN_HTTP, m = 0;
+    if (!url || !tmp) {
+        free(url);
+        free(tmp);
+        return PN_MEM;
+    }
+    c = pn_artist_ask(url, PN_ART_DEEZER_ARTIST, buf, &got);
+    if (c == PN_OK && (m = pj_deezer_artists(buf, got, tmp, PJ_MAX)) < 0) c = PN_HTTP, m = 0;
+    if (c == PN_OK)
+        ok = 1;
+    else
+        bad = c;
+    if (!pn.cancel) {
+        int k = 0;
+        c = pn_artist_ask(url, PN_ART_NETEASE_ARTIST, buf, &got);
+        if (c == PN_OK && (k = pj_netease_artists(buf, got, nt, PN_NETEASE_MAX)) < 0) c = PN_HTTP, k = 0;
+        if (c == PN_OK)
+            ok = 1, nn = pn_netease_take(nt, k, ne);
+        else if (!bad)
+            bad = c;
     }
     for (i = 0; i < m; ++i) { /* (stable: equal counts keep the service's order) */
         same[i] = key && ap_key(tmp[i].feed) == key; /* (the whole name: name is cut at PJ_NAME) */
@@ -1771,20 +1818,30 @@ static int pn_artist_covers(char *buf) {
         }
         ord[j] = (unsigned char)i;
     }
-    for (i = 0; i < m && n < PN_ARTIST_MAX; ++i) {
-        const pj_result_t *r = &tmp[ord[i]];
-        if (!pn_starts(r->art, "https://") || pn_has(r->art, "/artist//")) continue;
-        for (j = 0; j < n && strcmp(pn.ares[j].art, r->art); ++j);
-        if (j < n) continue;
-        if (!same[ord[i]] && others++ >= PN_ARTIST_OTHER) break;
-        memcpy(&pn.ares[n], r, sizeof pn.ares[n]);
-        pn.asrc[n] = PN_SRC_DEEZER;
-        ++n;
+    for (pass = 0; pass < 2;
+         ++pass) { /* Deezer's of the very name (room is kept for NetEase's), NetEase's, Deezer's others */
+        for (i = 0; i < m && n < PN_ARTIST_MAX - (pass ? 0 : nn); ++i) {
+            const pj_result_t *r = &tmp[ord[i]];
+            if (same[ord[i]] == pass) continue;
+            if (!pn_starts(r->art, "https://") || pn_has(r->art, "/artist//")) continue;
+            for (j = 0; j < n && strcmp(pn.ares[j].art, r->art); ++j);
+            if (j < n) continue;
+            if (pass && others++ >= PN_ARTIST_OTHER) break;
+            memcpy(&pn.ares[n], r, sizeof pn.ares[n]);
+            pn.asrc[n] = PN_SRC_DEEZER;
+            ++n;
+        }
+        for (i = 0; !pass && i < nn && n < PN_ARTIST_MAX; ++i) {
+            memcpy(&pn.ares[n], &ne[i], sizeof pn.ares[n]);
+            pn.asrc[n] = PN_SRC_NETEASE;
+            ++n;
+        }
     }
     free(url);
     free(tmp);
     pn.an = n;
-    return pn.cancel ? PN_CANCELLED : c;
+    if (pn.cancel) return PN_CANCELLED;
+    return ok ? PN_OK : bad ? bad : PN_OK;
 }
 
 /* Cover i's thumbnail into PN_ART_DIR/a<i>.jpg|png, when the answer is a picture the page can decode; else none (the placeholder stays). */

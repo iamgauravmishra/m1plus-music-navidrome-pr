@@ -37,6 +37,7 @@ SAME_AS_ENGLISH |= {'Enhanced Open', 'WEP', 'WPA/WPA2', 'WPA2/WPA3', 'WPA3', 'En
 SAME_AS_ENGLISH |= {'Volume', 'Auto-Standby'}    # Buttons & Power: Volume in French and Italian, Auto-Standby in German (the hyphenated Standby is the German word too)
 SAME_AS_ENGLISH |= {'Password'}    # the password page's label: Password in Italian
 SAME_AS_ENGLISH |= {'Name'}    # the Other Network page's label: Name in German
+SAME_AS_ENGLISH |= {'NetEase'}    # the service's name outside Chinese (Find Artist Photo's services line and source)
 SAME_AS_ENGLISH |= {'Photos'}    # the Cache page's Artist Photos count: Photos in French
 SAME_AS_ENGLISH |= {'Codec', 'Bitrate', 'Source'}    # Station Info: Codec in French, German and Italian, Bitrate in German and Italian, Source in French
 

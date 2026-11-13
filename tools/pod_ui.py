@@ -1585,8 +1585,8 @@ OA_ES_STATES = {
     'covers busy': ('pod_es_timer', 'Cover Service Busy', 'iTunes and Deezer are busy. Try again in a moment.', True),
     'no lyrics': ('pod_es_music', 'No Lyrics Found', 'LRCLIB has no lyrics for this song.', False),
     'no covers': ('pod_es_image', 'No Covers Found', 'Nothing on iTunes or Deezer for this album.', False),
-    'photos busy': ('pod_es_timer', 'Photo Service Busy', 'Deezer is busy. Try again in a moment.', True),   # Find Artist Photo (onlineart_open_artist): the two states of its own; the others are shared
-    'no photos': ('pod_es_image', 'No Photos Found', 'Nothing on Deezer for this artist.', False),
+    'photos busy': ('pod_es_timer', 'Photo Service Busy', 'The photo service is busy. Try again in a moment.', True),   # Find Artist Photo (onlineart_open_artist): the two states of its own; the others are shared
+    'no photos': ('pod_es_image', 'No Photos Found', 'No photos online for this artist.', False),
     'no connection': ('pod_es_plug', "Can't connect", 'Check your Wi-Fi connection.', True),
     'certificate': ('pod_es_lock', 'Certificate problem', "The server's certificate was not accepted.", True),
     'no certificates': ('pod_es_lock', 'Certificates missing', 'This device has no certificate bundle.', False),
