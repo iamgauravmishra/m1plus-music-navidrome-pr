@@ -288,6 +288,7 @@ class Machine:
         for sym, nm in (('stock_setmode_trampoline', 'stock_setmode'), ('stock_loadplaylist_trampoline', 'stock_loadplaylist')):   # the Shuffle hooks' way back into stock (patch/shuffle.c)
             if sym in PSYMS: self.handlers[PSYMS[sym]] = nm
         if 'album_open' in PSYMS: self.handlers[PSYMS['album_open']] = 'album_open'
+        self.handlers[PSYMS['lib_deque_swap']] = 'lib_deque_swap'   # patch/libload.c: the model's deques are lists by handle, so the exchange is modelled (test/pod/libload.py runs the real one)
         # Cover Flow's shelf commits and moves (noinline in patch/coverflow.c): ('set_value', album), ('set_offset', off)
         self.watch = Traps(self)
         self.watch.update({PSYMS[n]: n for n in ('set_value', 'set_offset') if n in PSYMS})
@@ -1223,6 +1224,10 @@ class Machine:
         elif name == 'deque_assign':
             self.deques[a0] = list(self.deques.get(a1, []))
             self.calls.append(('deque_assign', len(self.deques[a0])))
+        elif name == 'lib_deque_swap':   # both handles keep their place, the records change sides; refused (0) while swap_fail is set
+            ret = 0 if getattr(self, 'swap_fail', False) or a0 not in self.deques or a1 not in self.deques or a0 == a1 else 1
+            if ret: self.deques[a0], self.deques[a1] = self.deques[a1], self.deques[a0]
+            self.calls.append(('lib_deque_swap', len(self.deques.get(a0, [])), ret))
         elif name == 'deque_size':
             ret = len(self.deques.get(a0, []))
         elif name == 'deque_at':

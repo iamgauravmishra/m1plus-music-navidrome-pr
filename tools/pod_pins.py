@@ -727,6 +727,30 @@ FILETIME_PINS = (   # (address, stock word, what it proves)
     (0x5e4b44, 0x9050ac7c, 'toolsGetFileCreateTime: lbu s0, 0xa0ac7c (the format byte)'), (0x5e4b48, 0x8fa20068, 'toolsGetFileCreateTime: lw v0, st_ctime (sp+0x68)'),
     (0x5e4b58, 0x0070100b, 'toolsGetFileCreateTime: movn v0, v1, s0 (exFAT / NTFS take the access time)'),
 )
+# Library list hand-over (patch/libload.c, docs/modules/payload.md hook 29, docs/modules/libload.md): loadLocalClassList (0x4ee504) runs the class's query into *tools_pdeq_directory ($s0) and ends,
+# for every class, in one tail at 0x4ee638: deque_clear(*dst); deque_assign(*dst, *tmp); deque_clear(*tmp); return deque_size(*dst), with dst ($s1) = &pdeq_showlist (0x4ee5b8, 0x4ee7a0),
+# &pdeq_playlist (0x4ee634, class 0xf00b) or 0xa05fb4 (0x4ee7c8, the online classes 0xff23 and get_hifi_download_end). deque_assign copies every record and its strings while the query's rows
+# are still held. The prologue becomes `j ll_load` (the old list of a local class is freed before the query); the `jalr deque_assign` becomes `jal ll_assign` (the two deque structs are exchanged,
+# as libcstl's deque_swap does: CSTL_SWAP below). The jump tables (rodata, $gp-relative words) prove which classes end at the show list: LCL_TABLES.
+LCL, LCL_PROLOGUE = 0x4ee504, (0x3c1c0051, 0x279c59cc, 0x0399e021)
+LCL_ASSIGN_SITE = 0x4ee650
+LCL_PINS = (   # (address, stock word, what it proves)
+    (LCL + 12, 0x27bdffd8, 'loadLocalClassList: addiu sp, sp, -0x28 (the trampoline resumes here)'), (0x4ee530, 0x8f90b7d8, 'loadLocalClassList: lw s0, GOT tools_pdeq_directory'),
+    (0x4ee5b8, 0x8f91ac08, 'loadLocalClassList: lw s1, GOT pdeq_showlist (an unknown class)'), (0x4ee7a0, 0x8f91ac08, 'loadLocalClassList: lw s1, GOT pdeq_showlist (the local classes)'),
+    (0x4ee7c8, 0x8f91abfc, 'loadLocalClassList: lw s1, GOT 0xa05fb4 (the online classes)'), (0x4ee634, 0x8f91baa0, 'loadLocalClassList: lw s1, GOT pdeq_playlist (class 0xf00b)'),
+    (0x4ee638, 0x8f99f494, 'loadLocalClassList tail: lw t9, GOT deque_clear'), (0x4ee63c, 0x0320f809, 'loadLocalClassList tail: jalr deque_clear'), (0x4ee640, 0x8e240000, 'loadLocalClassList tail: lw a0, (s1) (the destination)'),
+    (0x4ee644, 0x8fbc0010, 'loadLocalClassList tail: lw gp'), (0x4ee648, 0x8e050000, 'loadLocalClassList tail: lw a1, (s0) (the query\'s rows)'), (0x4ee64c, 0x8f99f718, 'loadLocalClassList tail: lw t9, GOT deque_assign'),
+    (LCL_ASSIGN_SITE, 0x0320f809, 'loadLocalClassList tail: jalr deque_assign (the site)'), (0x4ee654, 0x8e240000, 'loadLocalClassList tail: lw a0, (s1) (the delay slot)'), (0x4ee658, 0x8fbc0010, 'loadLocalClassList tail: lw gp (after the call)'),
+    (0x4ee65c, 0x8f99f494, 'loadLocalClassList tail: lw t9, GOT deque_clear'), (0x4ee660, 0x0320f809, 'loadLocalClassList tail: jalr deque_clear'), (0x4ee664, 0x8e040000, 'loadLocalClassList tail: lw a0, (s0) (the rows are cleared)'),
+)
+# The two jump tables of loadLocalClassList as case addresses (word + $gp): classes 0xf002.. at 0x74c5b8 and 0xff01.. at 0x74c5e0. 0xf001 is the fall-through at 0x4ee5bc (getAllMusic).
+# Every case but 0xf00b (0x4ee614: the playlists), 0xff23 (0x4ee7b4) and the unknown ones (0x4ee5a8) reaches 0x4ee79c / 0x4ee7a0, whose destination is the show list.
+LCL_TABLES = (
+    (0x74c5b8, (0x4ee5e4, 0x4ee6d0, 0x4ee6e8, 0x4ee714, 0x4ee72c, 0x4ee6a0, 0x4ee688, 0x4ee6b8, 0x4ee5fc, 0x4ee614)),
+    (0x74c5e0, (0x4ee7cc, 0x4ee810) + (0x4ee5a8,) * 6 + (0x4ee760,) + (0x4ee5a8,) * 6 + (0x4ee83c, 0x4ee858, 0x4ee8b8, 0x4ee744, 0x4ee890) + (0x4ee5a8,) * 11 + (0x4ee78c, 0x4ee7a4, 0x4ee7ac, 0x4ee7b4, 0x4ee7ac)),
+)
+# The classes whose old list ll_load frees before the query: the local ones that end at the show list (LCL_TABLES). patch/libload.c ll_local names the same set.
+LCL_LOCAL = tuple(range(0xf001, 0xf00b)) + (0xff01, 0xff02, 0xff09, 0xff10, 0xff11, 0xff12, 0xff13, 0xff14)
 # Stock's slider page (docs/modules/peq.md "10-Band EQ"): its one caller is the All Playback Settings Equalizer row, a case of on_playsetback_onclick (`lw a0 "playset/equalizer_page"; b 0x4a0064` into the shared navigator_to
 # call). The case's first two words become `j pod_eq_site; nop`: the stub opens our Equalizer page and resumes at the function's epilogue (0x4a0070). Not reachable at boot (a list click).
 EQ_ROW = 0x4a0210

@@ -499,9 +499,12 @@ static void ar_load(int keep);
 static int ar_local_changed(void) {
     void *list = loadLocalClassList(ar.cls) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0;
     unsigned n = list ? deque_size(list) : 0;
+    int changed;
     if (!n && !ar.count) return 0;
     if (n > MAX_ARTISTS) n = MAX_ARTISTS;
-    return !(n && ar.artists && ar.count == n && ls_same_list(ar.artists, n, list, n));
+    changed = !(n && ar.artists && ar.count == n && ls_same_list(ar.artists, n, list, n));
+    if (list) deque_clear(list); /* (read for the comparison alone: the page has its own rows) */
+    return changed;
 }
 
 static int ar_on_fg(void *ctx, void *e) {
@@ -582,9 +585,8 @@ static void ar_load(int keep) {
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
         if (ar.count) ar_sort();
     } else if ((list = loadLocalClassList(ar.cls) > 0 ? *(void **)PDEQ_SHOWLIST : (void *)0) && deque_size(list) &&
-               (ar.artists = _create_deque("stSongInfo"))) {
-        deque_init(ar.artists);
-        deque_assign(ar.artists, list);
+               (ar.artists = lib_take_list(
+                    list))) { /* (the rows are the page's now, not copied: *pdeq_showlist is left empty) */
         ar.count = deque_size(ar.artists);
         if (ar.count > MAX_ARTISTS) ar.count = MAX_ARTISTS;
         ar_sort(); /* Genres and Composers stay in stock's order (toolsQueryDbTable's in-memory title sort) unless Z-A */

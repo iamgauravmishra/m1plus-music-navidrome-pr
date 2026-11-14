@@ -208,6 +208,16 @@ Screen state: exported byte `backlight_status` at `0x97cae4` is pinned in `tools
 | `widget_t` fields | `+8` w, `+0xc` h, `+0x44` parent | `widget_resize` `lw v0, 8(s0)` @`0x66d194`, `lw v1, 0xc(s0)` @`0x66d1a0`; `widget_set_visible` hands `lw a0, 0x44(s0)` @`0x66c428` to `widget_set_need_relayout_children` `0x66c338` |
 | the gauge | `/sys/class/power_supply/battery/capacity` | AXP2101 (`axp2101_charger`), an integer 0..100 and a newline (read 100 on a charged device); stock never opens it |
 
+## Library list hand-over (patch/libload.c, `LCL_PINS` / `LCL_TABLES` in tools/pod_pins.py; docs/modules/libload.md)
+
+| What | Address | Evidence |
+|---|---|---|
+| `loadLocalClassList(cls)` | `0x4ee504` (size `0x3d4`) | prologue `(0x3c1c0051, 0x279c59cc, 0x0399e021)`, `addiu sp, sp, -0x28` `0x27bdffd8` @`0x4ee510`; `lw s0, GOT tools_pdeq_directory` `0x8f90b7d8` @`0x4ee530`; `0xf001` falls through to `getAllMusic` @`0x4ee5bc`; jump tables `0x74c5b8` (`0xf002`..`0xf00b`) and `0x74c5e0` (`0xff01`..`0xff24`), `$gp`-relative words |
+| the tail | `0x4ee638`..`0x4ee684` | `deque_clear(*s1)` (`lw t9` `0x8f99f494`, `jalr`, `lw a0, (s1)` `0x8e240000`), `lw a1, (s0)` `0x8e050000` @`0x4ee648`, `lw t9, GOT deque_assign` `0x8f99f718`, `jalr` @`0x4ee650` (the site, now `jal ll_assign`), `deque_clear(*s0)` @`0x4ee660`, tail call `deque_size(*s1)` |
+| the destinations (`s1`) | `0x4ee5b8`, `0x4ee7a0` / `0x4ee634` / `0x4ee7c8` | `&pdeq_showlist` `0xa045d8` (`0x8f91ac08`) / `&pdeq_playlist` `0xa045d0` (`0x8f91baa0`, class `0xf00b`) / `0xa05fb4` (`0x8f91abfc`, class `0xff23` and `get_hifi_download_end`) |
+| libcstl `deque_swap` | lib `0x3ac1c` (size `0x148`) | `deque_equal` first (equal lists: nothing done); then 0x14c bytes each way through a stack copy and `sw s1, 0x124(s1)`, `sw s1, 0x140(s1)`, `sw s0, 0x140(s0)`, `sw s0, 0x124(s0)`; `_create_deque_auxiliary` `0x3dae0` and `deque_init_n` `0x39320` set the same two fields to the deque |
+| libcstl allocator | lib `0x2d670`..`0x2d6b0` | `_alloc_init` is `jr ra`; `_alloc_allocate` tail-calls `_alloc_malloc(n * size)`, `_alloc_deallocate` tail-calls `_alloc_free`: no pool, no state in the deque |
+
 ## Song dates (patch/filetime.c, `FILETIME_PINS` in tools/pod.py; docs/modules/songs.md "Recently Added dates")
 
 | What | Address | Evidence |

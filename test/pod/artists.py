@@ -314,7 +314,8 @@ def page_tests(expect, cover_asset):
     m = artists_machine()
     expect(m.call(open_, count=5000000) == 0, 'artists_open returns 0')
     opened = list(m.calls)
-    expect(('loadLocalClassList', O['CLASS_ARTISTS']) in opened and 'deque_assign' in [c[0] for c in opened], 'the list is the stock Artists query, copied')
+    expect(('loadLocalClassList', O['CLASS_ARTISTS']) in opened and [c[2] for c in opened if c[0] == 'lib_deque_swap'] == [1] and 'deque_assign' not in [c[0] for c in opened]
+           and m.deques[m.word(pod.DATA['PDEQ_SHOWLIST'][0])] == [], 'the list is the stock Artists query, taken and not copied: *pdeq_showlist is left empty')
     expect(not [c for c in opened if c[0] in ('list_item_create', 'hscroll_label_create', 'image_create', 'image_base_set_image')],
            'no widget is made per artist: the content view paints the rows')
     mod = Model(['Miles Davis', 'Nina Simone', 'Unknown Artist'])
@@ -2322,7 +2323,12 @@ def reread_tests(ctx):
     expect(names(m) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'], f'three artists at open ({names(m)})')
     m.calls = []
     fired(m, 'ar_on_fg')
-    expect(not [c for c in m.calls if c[0] == 'deque_assign'], 'the same list at foreground is not copied again')
+    fg = list(m.calls)   # (names() paints: the calls of the foreground event are kept first)
+    expect(not [c for c in fg if c[0] in ('deque_assign', 'lib_deque_swap')] and names(m) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'], 'the same list at foreground is not taken or copied again')
+    expect(('deque_clear', m.word(pod.DATA['PDEQ_SHOWLIST'][0])) in fg and m.deques[m.word(pod.DATA['PDEQ_SHOWLIST'][0])] == [], 'and the list read for the comparison is freed')
+    mf = artists_machine(); mf.swap_fail = True; mf.call(open_, a0=0, count=20000000); op = list(mf.calls)
+    expect(names(mf) == ['Miles Davis', 'Nina Simone', 'Unknown Artist'] and [c[0] for c in op if c[0] in ('lib_deque_swap', 'deque_assign')] == ['lib_deque_swap', 'deque_assign']
+           and len(mf.deques[mf.word(pod.DATA['PDEQ_SHOWLIST'][0])]) == 3, 'an exchange that is refused: the list is copied as before and the page shows the same rows')
     m.class_lists[O['CLASS_ARTISTS']] = m.class_lists[O['CLASS_ARTISTS']][:1] + m.class_lists[O['CLASS_ARTISTS']][2:]   # Nina Simone's songs were all removed
     fired(m, 'ar_on_fg')
     expect(names(m) == ['Miles Davis', 'Unknown Artist'], f'an artist with no songs left is gone at foreground ({names(m)})')

@@ -77,6 +77,12 @@ int vinyl_record_set(int rec); /* choose it, saved atomically; the colour or -1 
 int vinyl_theme(void); /* the saved plinth theme, 0 Graphite (the default), 1 White */
 int vinyl_theme_set(int theme); /* choose it, saved atomically; the theme or -1 */
 
+/* patch/libload.c (docs/modules/libload.md) */
+int lib_deque_swap(void *a, void *b); /* two deques' contents exchanged in place; 0 when refused (nothing changed) */
+void *lib_take_list(
+    void *
+        list); /* a deque of our own that takes the stock list's records (the list is left empty); a copy when refused */
+
 /* patch/filetime.c */
 int ft_statx(int dirfd, const char *path, int flags, unsigned mask,
              void *buf); /* the statx syscall (demo imports none) */

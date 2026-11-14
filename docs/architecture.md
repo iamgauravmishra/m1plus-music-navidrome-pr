@@ -15,6 +15,7 @@ for commands, [UI](ui.md) for layout/assets, and [history](history.md) for recor
 | [Pipeline](modules/pipeline.md) | Build stages, ordering and package validation |
 | [Payload](modules/payload.md) | Segment layout, trampolines, stock calls and hooks |
 | [Addresses](modules/addresses.md) | Stock symbols, offsets and record layouts |
+| [Library list loading](modules/libload.md) | List ownership transfer and memory peaks |
 | [Home and boot guard](modules/home-guard.md) | Startup marker, grid entry, window stack and fallback |
 | [Settings](modules/settings.md) | Settings pages and persisted choices |
 | [Display](modules/display.md) | Settings > System > Display: brightness, Screen Timeout, LED Light, Follow Screen (stock's state) |
