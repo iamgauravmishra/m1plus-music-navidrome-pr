@@ -18,7 +18,7 @@ SC_YOFF = O['SC_YOFF']
 DATA = SU.DATA_DC
 CHART, LOOKUP, SDIR = SU.CHART, SU.LOOKUP, SU.SDIR
 REGION_FILE = pcregion.FILE
-NAME, AUTHOR, ART = 80, 56, 160
+NAME, AUTHOR, ART = 80, 56, 320
 ID = 16
 REC = ID + NAME + AUTHOR + ART + ID   # (pj_chart_t: the episode's own id last)
 REGION, SIZE = 0x30000000, 0x40000
@@ -127,7 +127,7 @@ def json_tests(ctx):
     expect(res[0][1] == 'last', 'a member given twice: the last one')
     n, res = P.run(doc(o(id='1', name='n', genres=[{'name': 'Politics', 'url': 'https://itunes.apple.com/us/genre/id1324', 'genreId': '1324'}], kind='podcasts', url='https://itunes.apple.com/x')))
     expect(res == [('1', 'n', '', '')], 'nested members (genres with their own name and url) are not the row\'s')
-    n, res = P.run(doc(o(id='1', name='n', artworkUrl100='https://x/' + 'y' * 200)))
+    n, res = P.run(doc(o(id='1', name='n', artworkUrl100='https://x/' + 'y' * 310)))
     expect(res[0][3] == '', 'an artwork address that does not fit is none')
     n, res = P.run(doc(o(id='1', name='é' * 60, artistName='中' * 30)))
     expect(len(res[0][1].encode()) <= NAME - 1 and res[0][1] == 'é' * 39 and len(res[0][2].encode()) <= AUTHOR - 1 and res[0][2] == '中' * 18, 'names are cut on a character boundary')

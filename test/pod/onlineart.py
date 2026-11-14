@@ -42,7 +42,7 @@ def enc(s):
 
 class Rec:
     """pj_result_t as the payload lays it out."""
-    NAME, AUTHOR, URL, ART = 80, 56, 320, 160
+    NAME, AUTHOR, URL, ART = 80, 56, 320, 320
     SIZE = 4 + NAME + AUTHOR + URL + 2 * ART
 
     @classmethod

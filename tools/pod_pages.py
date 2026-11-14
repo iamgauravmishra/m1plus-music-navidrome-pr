@@ -357,6 +357,7 @@ PAGE_ORDER = [   # every page, in the order of its number: this table alone deci
     'm1plus_psbal',
     'm1plus_lyrsize',
     'm1plus_idlelyrics',
+    'm1plus_podcastsettings',
     'm1plus_podcastdirectory',
 ]
 _PAGE_NUMBER = {k: i for i, k in enumerate(PAGE_ORDER)}
@@ -460,6 +461,7 @@ PSMAXVOL_PAGE_INDEX = page_index('m1plus_psmaxvol')   # ... and the three loudne
 PSBOOTVOL_PAGE_INDEX = page_index('m1plus_psbootvol')
 PSBAL_PAGE_INDEX = page_index('m1plus_psbal')
 LYRSIZE_PAGE_INDEX = page_index('m1plus_lyrsize')   # the Lyrics Text Size picker
+PCSET_PAGE_INDEX = page_index('m1plus_podcastsettings')   # Settings > Library > Podcasts
 PCDIR_PAGE_INDEX = page_index('m1plus_podcastdirectory')   # Settings > Library > Podcasts > Podcast Directory picker
 ITEMS = [   # item id = index; the default order, essentials first (iPod classic style)
     Row('Now Playing', ACT_PLAYER),
@@ -790,7 +792,7 @@ EXTRASCFG_PAGE = Page('m1plus_extrascfg', 'm1plus_extrascfg_page', 'Extras', kin
 
 # Settings > Library: one card of Update Library (the stock page, as the Update Library item), Rebuild Covers (the stock confirm dialog, then Home's cover build extracts every
 # cover again), then the List Navigation card (Index Rail and Section Headers, the A-Z lists of patch/azlist.c), Cover Flow's Landscape switch (the album order is the Albums "..." card's),
-# Podcast Discover and Podcast Region, and the Scrobbling row (On or Off), which opens the Scrobbling page.
+# and the last card of two rows: Podcasts (opens the Podcasts page) and Scrobbling (On or Off), which opens the Scrobbling page.
 LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Update Library', ACT_HOME, HOME_UPDATE),
     Row('Rebuild Covers', ACT_REBUILD),
@@ -805,12 +807,8 @@ LIBRARY_PAGE = Page('m1plus_library', 'm1plus_library_page', 'Library', layout=[
     Row('Landscape', ACT_LANDSCAPE),
     Row('Volume Buttons', ACT_VOLKEYS),
     Note('In Cover Flow, the volume buttons move between albums.', lines=2),
-    Hdr('Podcasts'),
-    Row('Podcast Discover', ACT_PCSEARCH),
-    Row('Directory', ACT_PCDIR, PCDIR_PAGE_INDEX),
-    Row('Podcast Region', ACT_REGION, REGION_PAGE_INDEX),
-    Note('Search words go to the chosen directory.', lines=2),
-    Row('Scrobbling', ACT_SCROBPAGE, SCROBBLING_PAGE_INDEX),   # a card of its own (after a note): On or Off; opens the Scrobbling page
+    Row('Podcasts', ACT_PAGE, PCSET_PAGE_INDEX),   # the last card (after a note): a plain page link (ACT_PAGE), no value
+    Row('Scrobbling', ACT_SCROBPAGE, SCROBBLING_PAGE_INDEX),   # On or Off; opens the Scrobbling page
 ])
 # The album page (patch/albumpage.c, docs/modules/album-page.md): an album's tracks under the glass controls; opened by cc_open_album, never from a menu row.
 ALBUM_PAGE = Page('m1plus_album', 'm1plus_album_page', 'Album', kind='album')
@@ -1043,6 +1041,15 @@ PSUSB_PAGE = Page('m1plus_psusb', 'm1plus_psusb_page', 'USB Volume', layout=[Row
 PSMAXVOL_PAGE = Page('m1plus_psmaxvol', 'm1plus_psmaxvol_page', 'Max Volume', layout=[VolCard('maxvol', 'value'), GAP, VolCard('maxvol', 'slider')])
 PSBOOTVOL_PAGE = Page('m1plus_psbootvol', 'm1plus_psbootvol_page', 'Default Volume', layout=[Row('Volume Memory', ACT_BOOTMEM), GAP, VolCard('bootvol', 'value'), GAP, VolCard('bootvol', 'slider')])
 PSBAL_PAGE = Page('m1plus_psbal', 'm1plus_psbal_page', 'Channel Balance', layout=[VolCard('balance', 'value'), GAP, VolCard('balance', 'slider')])
+# Settings > Library > Podcasts (docs/modules/settings.md, docs/modules/podcasts.md): the Podcast Discover switch in a card of its own; Directory (dimmed and inert while Discover is off) and Podcast Region in the next,
+# and the note under it. (Not PODCASTS, the Podcasts browser: this is the settings page.)
+PCSET_PAGE = Page('m1plus_podcastsettings', 'm1plus_podcastsettings_page', 'Podcasts', layout=[
+    Row('Podcast Discover', ACT_PCSEARCH),
+    GAP,
+    Row('Directory', ACT_PCDIR, PCDIR_PAGE_INDEX),
+    Row('Podcast Region', ACT_REGION, REGION_PAGE_INDEX),
+    Note('Search words go to the chosen directory.', lines=2),
+])
 # Settings > Library > Podcasts > Podcast Directory (patch/podcasts.c pcdir_setting, docs/modules/podcasts.md "Podcast Directory"): Apple Podcasts or Podcast Index, a check on the chosen one; the names are the same in every language.
 PCDIR_PAGE = Page('m1plus_podcastdirectory', 'm1plus_podcastdirectory_page', 'Podcast Directory', layout=[Row('Apple Podcasts', ACT_PCDIRSET, 0), Row('Podcast Index', ACT_PCDIRSET, 1)])
 NEXTALBUM_PAGE = Page('m1plus_nextalbum', 'm1plus_nextalbum_page', 'Continue Playing', layout=[Row('Off', ACT_NASET, 0), Row('Next Albums', ACT_NASET, 1),

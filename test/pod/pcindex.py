@@ -81,6 +81,52 @@ def index_tests(ctx):
     expect(PCS.fn(m, 'pn_search', m.cstr('中' * 200)) == PN['MEM'] and state(m)['busy'] == 0, 'a term too long to encode into the request buffer: PN_MEM, nothing started')
 
 
+def thumbs_tests(ctx):
+    """A Podcast Index result's artwork is the feed's own picture (a long address, often 3000 x 3000 and hundreds of KB): fetched up to PN_INDEX_THUMB_CAP (2 MiB) and shrunk to 192 px as a show's cover is.
+    The store's artwork keeps its 256 KB cap and is never shrunk."""
+    expect = ctx.expect
+    import io
+    from PIL import Image
+
+    def pic(size, fmt='JPEG', pad=0, **kw):
+        b = io.BytesIO(); Image.new('RGB', size, (200, 30, 30)).save(b, fmt, **kw)
+        return b.getvalue() + bytes(pad)   # (bytes after the end of the picture: only the size of the download)
+    LONG = 'https://image.example/' + 'a' * 220 + '.jpg'   # 246 bytes: over the former 160-byte field
+    pics = {LONG: pic((3000, 3000)), 'https://i.example/pad.jpg': pic((1400, 1400), pad=600000), 'https://i.example/big.png': pic((1500, 1000), 'PNG'),
+            'https://i.example/small.jpg': PCS.ART, 'https://i.example/prog.jpg': pic((1700, 1400), progressive=True), 'https://i.example/over.jpg': pic((1400, 1400), pad=2200000),
+            'https://i.example/' + 'b' * 310 + '.jpg': PCS.ART, 'https://i.example/text.jpg': b'<html>not a picture</html>'}
+    rows = [rec(20 + i, f'Show {i}', f'https://feeds.example/{i}', u) for i, u in enumerate(pics)]
+    reqs = []
+
+    def site(u, o):
+        reqs.append(u)
+        if u.startswith((SEARCH, IDX_SEARCH)): return {'body': doc(*rows)}
+        return {'body': pics[u], 'chunk': 65536} if u in pics else {'rc': 22, 'code': 404}
+
+    def run(choice):
+        reqs.clear()
+        m = machine(site=site)
+        if choice: m.fs[DIR_FILE] = choice
+        r, th = start_search(m, 'x')
+        PCN.work(m, th)
+        return m, [PCS.thumb(m, i) for i in range(len(rows))]
+    m, th = run(b'1\n')
+    size = lambda p: p and PCS.Image_size(m.fs[p])   # noqa: E731
+    expect(result(m, 0)[4] == LONG and reqs[1] == LONG, 'an artwork address of 246 bytes is kept and asked for')
+    expect(th[0] == f'{PCS.SDIR}/t0.jpg' and size(th[0]) == (192, 192) and len(m.fs[th[0]]) < 30000, f'a 3000 x 3000 JPEG is shrunk to 192 px ({size(th[0])})')
+    expect(size(th[1]) == (192, 192), 'a picture of over 256 KB is taken (up to 2 MiB) and shrunk')
+    expect(th[2] == f'{PCS.SDIR}/t2.jpg' and size(th[2]) == (192, 128), f'a PNG is shrunk to a JPEG, its aspect kept ({size(th[2])})')
+    expect(th[3] == f'{PCS.SDIR}/t3.jpg' and m.fs[th[3]] == PCS.ART, 'a picture already small is kept as it is')
+    expect(th[4] is None, 'a progressive JPEG of over 2.1 MP has the placeholder')
+    expect(th[5] is None, 'a picture of over 2 MiB is refused')
+    expect(result(m, 6)[4] == '' and th[6] is None, 'an address of 320 bytes or more is no address')
+    expect(th[7] is None, 'an answer that is not a picture has the placeholder')
+    expect(PCS.state(m)['state'] == 3 and not m.curl and not [p for p in m.fs if p.endswith(('.src', '.tmp'))], 'the worker ends; no handle, download or temporary file is left')
+    # the store's artwork: the 256 KB cap, never shrunk
+    m, th = run(None)
+    expect(th[3] == f'{PCS.SDIR}/t3.jpg' and m.fs[th[3]] == PCS.ART and th[1] is None and th[0] is None, 'Apple Podcasts chosen: a small picture as it is; one over 256 KB or over 2.1 MP is refused, as before')
+
+
 def lookup_tests(ctx):
     expect = ctx.expect
     WSJ = PCN.feed_bytes('wsj-3items.xml')
@@ -138,4 +184,4 @@ def charts_tests(ctx):
         expect(r == 0 and reqs and all('marketingtools.apple.com' in u or u.startswith('https://is') for u in reqs) and not [u for u in reqs if 'podcastindex' in u], f'the shows chart (choice {choice!r}): only the store\'s address ({reqs[:2]})')
 
 
-SECTIONS = [apple_tests, index_tests, lookup_tests, charts_tests]
+SECTIONS = [apple_tests, index_tests, thumbs_tests, lookup_tests, charts_tests]

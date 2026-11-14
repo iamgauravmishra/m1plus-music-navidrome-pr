@@ -50,7 +50,7 @@ enum {
     ACT_INFO = 33,
     ACT_PCSEARCH = 34,
     ACT_PCDIR =
-        137, /* Settings > Library > Podcasts: Podcast Directory, a value row opening its picker; dimmed and inert while Podcast Discover is off */
+        137, /* Settings > Library > Podcasts > Directory: a value row opening its picker; dimmed and inert while Podcast Discover is off (as Podcast Region) */
     ACT_PCDIRSET = 138, /* the Podcast Directory picker's rows (arg = PCDIR_APPLE or PCDIR_INDEX) */
     ACT_BATTPCT = 36,
     ACT_FOLDERS = 37,
@@ -598,13 +598,12 @@ static void switch_show(void *img, int on) {
 static void *regen_row __attribute__((section(".scratch"))), *regen_note __attribute__((section(".scratch")));
 #define KB_EN_DIM 153 /* 60 %: Settings > Keyboards > English, always on and not switchable */
 
-/* Settings > Library > Podcasts: the Podcast Directory row is dimmed and takes no tap while Podcast Discover is off (there is then no search to ask). */
-static void *pcdir_row __attribute__((section(".scratch")));
+/* Settings > Library > Podcasts: the Directory and Podcast Region rows are dimmed and take no tap while Podcast Discover is off (there is then no search to ask and no Discover to show). */
+static void *pcdir_row __attribute__((section(".scratch"))), *pcreg_row __attribute__((section(".scratch")));
 static void pcdir_show(void) {
     int on = pcsearch_setting();
-    if (!pcdir_row) return;
-    widget_set_opacity(pcdir_row, on ? 255 : KB_EN_DIM);
-    widget_set_sensitive(pcdir_row, on);
+    if (pcdir_row) widget_set_opacity(pcdir_row, on ? 255 : KB_EN_DIM), widget_set_sensitive(pcdir_row, on);
+    if (pcreg_row) widget_set_opacity(pcreg_row, on ? 255 : KB_EN_DIM), widget_set_sensitive(pcreg_row, on);
 }
 
 static void regen_show(void) {
@@ -882,6 +881,8 @@ static void page_refresh(void *win, const struct pod_page *page) {
         const struct pod_row *row = &page->rows[i];
         void *w;
         int kind = row_value(row);
+        if (row->action == ACT_PCDIR)
+            pcdir_show(); /* Podcast Discover's state, each time the Podcasts page is back in front */
         if (row->action ==
             ACT_GAIN) { /* stock greys the Gain row and ignores its click while Line Out is on (the Line Out byte) */
             void *item = widget_lookup(win, row->name, 1);
@@ -980,8 +981,12 @@ static int on_page_fg(void *ctx, void *e) {
 
 static int on_page_gone(void *ctx, void *e) {
     long i = (long)ctx;
+    int k;
     (void)e;
     pod_fg[i] = (void *)0;
+    for (k = 0; k < POD_PAGES[i].count; k++)
+        if (POD_PAGES[i].rows[k].action == ACT_PCDIR)
+            pcdir_row = pcreg_row = (void *)0; /* the Podcasts page: its rows go with the window */
     return RET_OK;
 }
 
@@ -990,11 +995,14 @@ static int on_page_gone(void *ctx, void *e) {
 static int open_page(int index, int as_home) {
     const struct pod_page *page;
     void *win;
-    int i, refresh = 0;
+    int i, refresh = 0, pcrows = 0;
     if (index < 0 || index >= POD_PAGE_COUNT) return -1;
     page = &POD_PAGES[index];
     win = window_open(page->asset);
     if (!win) return -1;
+    for (i = 0; i < page->count; i++)
+        if (page->rows[i].action == ACT_PCDIR)
+            pcdir_row = pcreg_row = (void *)0; /* the rows of its last window are gone */
     if (index == POD_FILES_PAGE) setfiles_open(); /* the files, read once as the page opens */
     for (i = 0; i < 32; i++)
         if (page->wrap_notes >> i & 1) { /* a note of more than one line is a plain label: its wrap is on at run time */
@@ -1020,13 +1028,15 @@ static int open_page(int index, int as_home) {
                 row->action == ACT_SFOLD || row_value(row) || is_pick(row))
                 refresh = 1;
         }
-        if (row->action == ACT_PCDIR) pcdir_row = widget_lookup(win, row->name, 1), pcdir_show();
+        if (row->action == ACT_PCDIR) pcdir_row = widget_lookup(win, row->name, 1), pcrows = 1;
+        if (row->action == ACT_REGION) pcreg_row = widget_lookup(win, row->name, 1), pcrows = 1;
         if (row->action == ACT_REGEN) {
             regen_row = widget_lookup(win, row->name, 1);
             regen_note = widget_lookup(win, "pod_note3", 1);
             regen_show();
         }
     }
+    if (pcrows) pcdir_show(); /* once both rows are this window's: never through a row of the page's last window */
     if (index >= POD_PSMAXVOL_PAGE && index <= POD_PSBAL_PAGE)
         refresh = 1; /* the loudness pages follow stock's words when they are back in front */
     if (index == POD_SCROBBLING_PAGE || index == POD_LB_PAGE || index == POD_LF_PAGE)

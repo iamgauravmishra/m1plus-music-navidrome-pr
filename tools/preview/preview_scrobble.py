@@ -22,8 +22,8 @@ SROWS = [r.label for r in P.SCROBBLING_PAGE.rows]
 
 
 def library_state():
-    sw = {f'pod_switch{ROWS.index(n)}': on for n, on in (('Index Rail', True), ('Section Headers', True), ('Landscape', False), ('Volume Buttons', False), ('Podcast Discover', True))}
-    return {'switches': sw, 'values': {f'pod_value{ROWS.index("Podcast Region")}': 'Automatic', f'pod_value{ROWS.index("Scrobbling")}': 'On'}}
+    sw = {f'pod_switch{ROWS.index(n)}': on for n, on in (('Index Rail', True), ('Section Headers', True), ('Landscape', False), ('Volume Buttons', False))}
+    return {'switches': sw, 'values': {f'pod_value{ROWS.index("Scrobbling")}': 'On'}}
 
 
 def scrobbling_state(value):

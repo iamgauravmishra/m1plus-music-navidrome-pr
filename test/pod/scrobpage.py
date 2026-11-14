@@ -128,11 +128,11 @@ def pages_tests(ctx):
            and (B.key, B.name, B.title) == ('m1plus_listenbrainz', 'm1plus_listenbrainz_page', 'ListenBrainz') and (F.key, F.name, F.title) == ('m1plus_lastfm', 'm1plus_lastfm_page', 'Last.fm')
            and (S.key, S.name, S.title) == ('m1plus_scrobbling', 'm1plus_scrobbling_page', 'Scrobbling'), 'the Scrobbling, ListenBrainz and Last.fm pages are in the page table under their keys')
     lay = [x.label if isinstance(x, P.Row) else x.text if isinstance(x, P.Note) else x for x in L.layout]
-    expect(lay[-2:] == ['Search words go to the chosen directory.', 'Scrobbling'],
-           f'the Library page ends with one Scrobbling row after the Podcasts note ({lay[-2:]})')
+    expect(lay[-2:] == ['Podcasts', 'Scrobbling'],
+           f'the Library page ends with a card of two rows, Podcasts and Scrobbling ({lay[-2:]})')
     expect([(r.label, r.action, r.arg, P.row_kind(r)) for r in L.rows[-1:]] == [('Scrobbling', P.ACT_SCROBPAGE, P.SCROBBLING_PAGE_INDEX, 'value')] and P.ACT_SCROBPAGE in P.VALUE_ACTIONS and P.VALUE_INIT[P.ACT_SCROBPAGE] == 'Off'
-           and not {P.ACT_SCROBBLE, P.ACT_LB, P.ACT_LF, P.ACT_LBAUTO, P.ACT_SCROBUP} & {r.action for r in L.rows} and len(L.rows) == 12 and ST.pieces(L.layout)[-1] == 'single',
-           'a value row (Off at rest) opening the Scrobbling page, in a card of its own; no account, upload or switch rows left on the Library page')
+           and not {P.ACT_SCROBBLE, P.ACT_LB, P.ACT_LF, P.ACT_LBAUTO, P.ACT_SCROBUP} & {r.action for r in L.rows} and len(L.rows) == 10 and ST.pieces(L.layout)[-2:] == ['top', 'bot'],
+           'a value row (Off at rest) opening the Scrobbling page, the second row of the last card (under Podcasts); no account, upload or switch rows left on the Library page')
     slay = [x.label if isinstance(x, P.Row) else x.text if isinstance(x, P.Note) else x for x in S.layout]
     expect(slay == ['Scrobbling', 'Saved to .scrobbler.log on the card.', 'ListenBrainz', 'Last.fm', P.GAP, 'Auto Upload', 'Upload Scrobbles', P.LB_AUTO_NOTE] and ST.pieces(S.layout) == ['single', 'top', 'bot', 'top', 'bot'],
            f'the Scrobbling page: the switch and its note, the two accounts, Auto Upload and Upload Scrobbles with their note ({slay})')

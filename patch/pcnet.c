@@ -1236,6 +1236,7 @@ void pn_search_clean(void) {
         if (pn_thumb_path(i, "jpg", path, sizeof path)) unlink(path);
         if (pn_thumb_path(i, "png", path, sizeof path)) unlink(path);
         if (pn_thumb_path(i, "src", path, sizeof path)) unlink(path);
+        if (pn_thumb_path(i, "tmp", path, sizeof path)) unlink(path);
         pn.sthumb[i] = pn.sext[i] = 0;
     }
     pn.sn = 0;
@@ -1329,11 +1330,21 @@ static int pn_spawn(void *(*fn)(void *), int kind) {
 static void pn_thumb(int i) {
     char src[PN_PATH], dst[PN_PATH];
     unsigned w, h, sof;
-    int kind;
+    int kind, index = pn_starts(pn.surl, PN_INDEX_SEARCH_URL); /* the directory this job asked, not the setting now */
     const char *url = pn.sres[i].art;
     if ((pn_starts(url, "http://") || pn_starts(url, "https://")) && pn_thumb_path(i, "src", src, sizeof src) &&
-        pn_fetch_file(url, src, PN_THUMB_CAP)) {
+        pn_fetch_file(url, src, index ? PN_INDEX_THUMB_CAP : PN_THUMB_CAP)) {
         kind = pc_pic_info(src, &w, &h, &sof);
+        if (index && kind && (w > PV_SIZE || h > PV_SIZE)) { /* the feed's own picture: shrunk as a show's cover is */
+            int r = !pn_thumb_path(i, "tmp", dst, sizeof dst) ? 0
+                    : kind == 1                               ? pv_shrink(src, dst)
+                                                              : pv_shrink_png(src, dst);
+            if (r > 0 && !rename(dst, src))
+                kind = 1; /* src is the small JPEG now */
+            else if (r >= 0)
+                kind = 0; /* (r < 0, an interlaced PNG: kept as it is when it is small enough, below) */
+            unlink(dst);
+        }
         if (kind && pc_cover_ok(src) && pn_thumb_path(i, kind == 2 ? "png" : "jpg", dst, sizeof dst) &&
             !rename(src, dst)) {
             pn.sext[i] = (unsigned char)kind;

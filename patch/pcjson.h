@@ -11,7 +11,8 @@
 #define PJ_MAX 25 /* results kept (the request asks for 25) */
 #define PJ_NAME 80 /* a show's name, UTF-8 bytes with the NUL (cut before a continuation byte) */
 #define PJ_AUTHOR 56
-#define PJ_ART 160 /* the artwork url; one that does not fit is no url ("") */
+#define PJ_ART \
+    320 /* the artwork url; one that does not fit is no url (""). Podcast Index names the feed's own picture, whose address is often 230 to 250 bytes */
 #define PJ_DEPTH 32 /* nesting skipped; a deeper value ends the walk */
 
 typedef struct {

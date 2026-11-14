@@ -161,6 +161,8 @@ unsigned pn_dl_listed(int n, char *dir, char *file, int *code);
 int pcdir_index(void); /* patch/podcasts.c: 1 when the chosen directory is Podcast Index */
 #define PN_JSON_CAP 98304u /* a search or lookup answer over 96 KB is cut there (25 results are about 44 KB) */
 #define PN_THUMB_CAP 262144u /* a result's artwork (about 5 KB) over this is refused */
+#define PN_INDEX_THUMB_CAP \
+    2097152u /* the same for a Podcast Index result: its artwork is the feed's own picture (often 3000 x 3000, 100 KB to 2 MB), shrunk after the download */
 #define PN_SEARCH_DIR \
     "/mnt/mmc/.m1plus/podcasts/search" /* the thumbnails t<n>.jpg|png and the preview's cover preview.jpg: scratch, made again by every search */
 #define PN_PREVIEW_COVER PN_SEARCH_DIR "/preview.jpg"

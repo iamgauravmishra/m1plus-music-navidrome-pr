@@ -48,7 +48,7 @@ def state(m):
 def result(m, i):
     p = fn(m, 'pn_search_result', i)
     if not p: return None
-    raw = bytes(m.u.mem_read(p, 4 + 80 + 56 + 320 + 160))
+    raw = bytes(m.u.mem_read(p, 4 + 80 + 56 + 320 + 320))   # id, name, author, feed (PC_URL), art (PJ_ART)
     cs = lambda b: b.split(b'\0')[0].decode('utf-8')
     return (int.from_bytes(raw[:4], 'little'), cs(raw[4:84]), cs(raw[84:140]), cs(raw[140:460]), cs(raw[460:]))
 
