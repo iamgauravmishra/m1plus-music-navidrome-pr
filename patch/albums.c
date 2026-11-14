@@ -155,6 +155,7 @@ static struct {
      * rk: the re-check of this artist (patch/artistphoto.c ap_recheck) 0 not made, 1 running on the page's set, 2 done (a source's page: 2 = the server has no picture for the artist); rk_ep: ap_epoch() when it started */
     int circ, rk;
     unsigned rk_ep;
+    int finding; /* Find Artist Photo is open over this page (the "..." card's row): al_on_fg looks at the photo again when it comes back */
     ls_cpoll_t
         cp; /* the shared cover poll (patch/libsrc.c ls_cover_poll): asks again and turns the cover spinners while a tile's cover is on its way */
     grid_t
@@ -408,6 +409,14 @@ static int al_head_url(char *url) {
     return st == AP_PHOTO || st == AP_LEAD;
 }
 
+/* An artist's page of the library (not a composer's, a source's or Unknown Artist's): the "..." card has Find Artist Photo. */
+static int al_can_find(void) {
+    const char *name;
+    if (!al.head || al.src || al.scope != CLASS_ARTISTS || !al.artist_row) return 0;
+    name = cc_str(deque_at(al.artist_row, 0), REC_TITLE);
+    return I(deque_at(al.artist_row, 0), REC_ID) != -1 && ap_key(name) && ap_key(name) != ap_key("Unknown Artist");
+}
+
 /* Is there a photo for this artist now? */
 static int al_has_photo(void) {
     char url[80];
@@ -640,6 +649,10 @@ static int al_on_fg(void *ctx, void *e) {
                 al_reload_with(fresh, fresh ? deque_size(fresh) : 0, (unsigned *)0,
                                (unsigned *)0); /* (a failed read keeps the grid) */
         }
+    }
+    if (al.finding) { /* back from Find Artist Photo: a photo that was picked shows at once */
+        al.finding = 0;
+        if (ap_epoch() != al.rk_ep) al_recheck_done();
     }
     al_kick();
     al_build_later();
@@ -1002,7 +1015,10 @@ static int al_on_item(void *ctx, void *e) {
     (void)e;
     if (!al.view) return RET_OK;
     vs_menu(&al.vs, 0, al.sort, al.rev, al.list);
-    if (k == VS_SEARCH) {
+    if (k == VS_SEARCH && al_can_find()) {
+        al.rk_ep = ap_epoch(); /* (what the page shows now: al_on_fg looks again when the Find page closes) */
+        al.finding = onlineart_open_artist(cc_str(deque_at(al.artist_row, 0), REC_TITLE)) == 0;
+    } else if (k == VS_SEARCH) {
         if (al.src)
             search_open_src_in(al.src, SEARCH_ALBUMS); /* the server's search, not the card's */
         else if (search_open_in(SEARCH_ALBUMS) < 0)
@@ -1090,6 +1106,11 @@ static void al_empty(void) {
     if (al.src && !al.count && al.src->state)
         st = al.src->state(al.src, LS_ALBUMS, al.artist_row ? deque_at(al.artist_row, 0) : (void *)0);
     m1_show(al.view, al.src != (const lib_src_t *)0 && !al.count);
+    ls_room(al.status, al.spin,
+            LS_ROOM_NAV + (!al.src || al.count ? 0
+                           : al.head
+                               ? AL_HEAD_END - al_gone()
+                               : SG_TITLE_H)); /* (under the title, or the artist's header, the source's page keeps) */
     m1_show(al.status, !(st == LS_ST_LOADING && al.spin));
     ls_spin(al.spin, st == LS_ST_LOADING && al.spin != (void *)0);
     if (al.az_ok) m1_show(al.az.rail, 0), m1_show(al.az.bubble, 0); /* (nothing to index) */
@@ -1237,11 +1258,16 @@ static int al_open(int list, void *artist_row, unsigned scope, const lib_src_t *
     if (vs_bind(
             &al.vs, al.win, al_on_item, al_on_scrim,
             (artist_row ? VS_ALL_SORTS & ~(1u << CC_SORT_ARTIST) : VS_ALL_SORTS) | VS_WITH_VIEWS |
-                (!artist_row && (ls_caps(al.src) & LS_CAP_SEARCH)
+                ((artist_row ? al_can_find() : ls_caps(al.src) & LS_CAP_SEARCH)
                      ? VS_WITH_SEARCH
-                     : 0))) { /* (one artist's albums: no Artist row, and no Search row: it searched the whole library's albums; a source without Search: no row) */
+                     : 0))) { /* (one artist's albums: no Artist row, and no Search row: it searched the whole library's albums; a source without Search: no row. A library artist's page has Find Artist Photo in the Search row's slot) */
         navigator_back(); /* an asset that is not ours */
         return -2;
+    }
+    if (artist_row && al_can_find()) { /* the slot's own text and glyph */
+        widget_set_tr_text(al.vs.label[VS_SEARCH], "Find Artist Photo");
+        if (al.vs.glyph[VS_SEARCH - VS_SORTS])
+            image_base_set_image(al.vs.glyph[VS_SEARCH - VS_SORTS], "pod_ic_vsphoto");
     }
     al.sort = artist_row ? cc_scoped_sort() : cc_sort_mode();
     al.rev = cc_sort_rev();

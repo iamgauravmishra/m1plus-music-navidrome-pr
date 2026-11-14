@@ -529,6 +529,31 @@
 #define LY_DELAY_MS 50
 #define LY_SNAP_LINES 4
 #define LY_OFF_MAX 976
+/* The idle lyrics page (patch/idlelyrics.c, docs/modules/idlelyrics.md; tools/pod_ui.py build_idlelyrics_page reads these): a fullscreen 320 x 480 window (no status bar). Header IL_HEAD_H high: the cover IL_ART px at
+ * (IL_ART_X, IL_ART_Y) with IL_ART_R px corners (the mini bar's mb_art_* machinery at another size), the title (IL_TITLE_PX) and the artist (IL_ARTIST_PX) IL_TEXT_W wide from IL_TEXT_X, centred on the cover
+ * with a 23 px line pitch (a size up from the mini bar's 17 / 16 px at 21). The lyrics view np-lyrics-like: IL_BOX_X, IL_BOX_Y, LY_W x IL_BOX_H (the engine's anchor is 0.35 of it, ly_retarget); the hint IL_HINT_PX px
+ * when there are no lyrics. IL_TICK_MS: the page timer; IL_FIRST_MS: its first tick. */
+#define IL_W 320
+#define IL_H 480
+#define IL_HEAD_H 88
+#define IL_ART 56
+#define IL_ART_R 8
+#define IL_ART_X 28
+#define IL_ART_Y 20
+#define IL_TEXT_X 96
+#define IL_TEXT_W 196
+#define IL_TITLE_Y 25
+#define IL_TITLE_H 24
+#define IL_TITLE_PX 19
+#define IL_ARTIST_Y 49
+#define IL_ARTIST_H 22
+#define IL_ARTIST_PX 17
+#define IL_BOX_X 28
+#define IL_BOX_Y 96
+#define IL_BOX_H 372
+#define IL_HINT_PX 20
+#define IL_TICK_MS 500
+#define IL_FIRST_MS 50
 #define LY_IDLE_MS 3000
 #define LY_TAP_PX 10
 #define LY_COAST_MS 200
@@ -671,6 +696,36 @@
 #define RC_TICK_MS 30
 #define RC_TAP_PX 10
 #define RC_RESOLVE_MS 5000   /* the menu's to-foreground resolves an album's cover key (loads the stock album list) only this long after the menu opened */
+
+/* Scrobbling (patch/scrobble.c, docs/modules/scrobble.md): a listen is LISTEN_MAX_S heard, or half the length, of a track longer than LISTEN_MIN_S (q2-pod's play counts, Last.fm's rule) */
+#define SC_MIN_S 30
+#define SC_MAX_S 240
+#define SC_POLL_MS 500       /* the player is asked at most this often (a caller may tick faster: the iPod page's animation timer, a main-loop poll) */
+#define SC_SLACK_S 2         /* a position step counts when it is at most the wall time since the last look plus this: seeks add nothing, pauses add nothing */
+#define SC_CLOCK_MIN 1577836800u   /* 2020-01-01 UTC: a clock before it was never set, and nothing is logged */
+#define SC_STR 256           /* artist, album (the id3 struct's fields) */
+#define SC_TITLE 512         /* title (the id3 struct's field) */
+#define SC_LINE 1200         /* one log line, the header with it */
+/* The upload (patch/scrobup.c) */
+#define SU_BATCH 50          /* listens a request (ListenBrainz takes more; Last.fm's limit is 50) */
+#define SU_LINE 2560         /* a longer log line is junk (Rockbox's own scrobbler writes up to about 2.2 KB; ours are under SC_LINE) */
+#define SU_RAW 16384         /* log bytes a request holds at most: the body is then under SU_BODY whatever the escaping (JSON: 6 bytes a byte at worst; Last.fm's form: 9, a byte that is not UTF-8 as %EF%BF%BD) */
+#define SU_BODY 196608       /* the request body, and Last.fm's answer to a batch (it repeats every tag) */
+#define SU_WIN 65536         /* the log is read, and copied, this much at a time */
+#define SU_TOKEN 128         /* the longest token (ListenBrainz's is a UUID, 36 bytes) */
+#define SU_TIME_MIN 1033430400u   /* 2002-10-01 UTC: ListenBrainz refuses a listen before it, and with it the whole request */
+#define SU_CONNECT_S 15
+#define SU_TOTAL_S 60
+#define SU_NAME 64           /* the account's user name as kept and shown, bytes with the NUL (cut on a character boundary) */
+#define SU_ANS 2048          /* the validate-token answer (about 80 bytes); a longer one ends the transfer */
+#define SU_LF_PASS 128       /* the longest Last.fm password, bytes */
+#define SU_LF_KEY 64         /* the longest Last.fm API key or secret (they are 32 hex digits), and the longest session key */
+#define SU_REJ 128           /* runs of refused listens (HTTP 400) one upload remembers; listens refused in a row (whole batches too) are one run, and one more run ends the upload */
+#define SU_INI_MAX 4096      /* the card's scrobble.ini: a longer file is never rewritten (a token typed on the device, a user name and Sign Out are refused), and only the whole lines of its first 4096 bytes are read */
+/* The automatic upload (patch/scrobble.c sa_*): seconds */
+#define SA_EVAL 60            /* the conditions are looked at once a minute at most */
+#define SA_WAIT 600           /* the oldest listen not uploaded yet must be this old: one upload for a run of tracks, not one a track */
+#define SA_RETRY 1800         /* after an upload that failed (or could not start) the next one waits this long */
 
 
 /* ---------------------------------------------------------------------------
@@ -1527,7 +1582,7 @@
 #define VS_VIEWS 2
 #define VS_SEARCH (VS_SORTS + VS_VIEWS) /* slot 6: the optional Search row, the card's first (a glyph, no tick) */
 #define VS_SELECT (VS_SEARCH + 1) /* slot 7: the optional Select row, second in the card (a check-circle glyph, no tick) */
-#define VS_ACT2 (VS_SELECT + 1) /* slot 8: an optional third action row (only the Playlists asset has it: New Playlist, Import, Export, Delete Playlists are slots 6..9), a glyph, no tick */
+#define VS_ACT2 (VS_SELECT + 1) /* slot 8: an optional third action row (the Songs asset has it for a playlist's Clean Up Playlist; the Playlists asset has it and slot 9: New Playlist, Import, Export, Delete Playlists are slots 6..9), a glyph, no tick */
 #define VS_ACT3 (VS_ACT2 + 1) /* slot 9: the fourth */
 #define VS_ROWS (VS_ACT3 + 1)
 #define VS_ALL_SORTS ((1u << VS_SORTS) - 1)

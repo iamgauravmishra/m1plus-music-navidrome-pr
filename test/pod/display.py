@@ -1,4 +1,4 @@
-"""Settings > System > Display (patch/display.c, docs/modules/settings.md "Display"): our page in place of stock's Display list and its four pages. The brightness card (stock's own slider
+"""Settings > System > Display (patch/display.c, docs/modules/display.md): our page in place of stock's Display list and its four pages. The brightness card (stock's own slider
 handlers bound to our slider), Screen Timeout (stock's backlight time), LED Light and Follow Screen (stock's lamp mode and switch): each state is stock's and is written the way stock's
 own page writes it, which the tests check by running stock's handlers under the emulator on the same state."""
 import os
@@ -177,7 +177,7 @@ def settings_tests(ctx):
     V, D, L, E = P.SETTINGS_PAGE, P.DISPLAY_PAGE, P.LIGHTTIME_PAGE, P.LED_PAGE
     labels = [r.label for r in V.rows]
     di = labels.index('Display')
-    expect(V.rows[di].action == P.ACT_PAGE and V.rows[di].arg == P.DISPLAY_PAGE_INDEX == 70 and P.row_kind(V.rows[di]) == 'link' and labels[di + 1] == 'Buttons & Power',
+    expect(V.rows[di].action == P.ACT_PAGE and V.rows[di].arg == P.DISPLAY_PAGE_INDEX and P.PAGES[P.DISPLAY_PAGE_INDEX] is P.DISPLAY_PAGE and P.row_kind(V.rows[di]) == 'link' and labels[di + 1] == 'Buttons & Power',
            'Settings > System > Display opens our page')
     lay = [x.label if isinstance(x, P.Row) else x for x in V.layout]
     expect(lay[-4:] == ['About', P.GAP, 'All System Settings', 'Developer'], f'the last card: All System Settings, then Developer ({lay[-4:]})')

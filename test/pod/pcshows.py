@@ -186,7 +186,7 @@ def layout_tests(ctx):
         DL = sibling('pcdl')
         DL.poke_slot(mm, 0, 'Sub One', 'a.mp3', 2, seq=1)
         mm.setword(DL.pn_at(DL.DKEY), DL.key_of('Sub One', 'a.mp3')); mm.setword(DL.pn_at(DL.DGOT), 420000); mm.setword(DL.pn_at(DL.DTOTAL), 1000000)
-        mm.setword(DL.pn_at(DL.KIND), 2); mm.setword(DL.pn_at(0), 1); mm.setword(DL.pn_at(DL.DSEQ), 10)
+        mm.setword(DL.pn_at(DL.DBUSY), 1); mm.setword(DL.pn_at(DL.DSEQ), 10)
         refg(mm)
         return mm
     m = full()
@@ -365,7 +365,7 @@ def line_tests(ctx):
     PCP.click(m, 'btn_more')
     rows_ = sibling('pcshow').sheet_state(m)[0]
     expect(rows_ == ['refresh', 'import'] and m.props.get((m.widgets['pg_sh_card'], 'style:normal:bg_image')) == 'pc_sheet2', f'with something to import: Refresh All first, then Import from Card ({rows_})')
-    # downloads pause for the refresh, it starts when their thread has stopped
+    # a download runs: the refresh starts at once beside it and the line never says Waiting
     DL = sibling('pcdl')
     m = opened(lambda mm: mm.put(f'{RP}/Sub One/a.mp3.part', b'x' * 1000))
     m.curl_site = DL.server(DL.DATA)
@@ -374,12 +374,10 @@ def line_tests(ctx):
     PCP.click(m, 'btn_return')
     m.calls = []; m.thread = None
     PCP.refresh_all(m)
-    expect(m.word(DL.pn_at(DL.DPAUSE)) == 1 and m.thread is None and m.props.get((m.widgets['pod_pd_scrim'], 'visible'), 0) == 0 and line(m) == 'Waiting',
-           'a tap while a download runs: the downloads are asked to pause, no refresh thread and no dialog yet, the line says Waiting')
+    expect(m.thread and m.thread[0] == PSYMS['pn_main'] and DL.fn(m, 'pn_dl_running') == 1 and DL.fn(m, 'pn_busy') == 1 and DL.fn(m, 'pn_dl_waiting') == 1 and flags(m, 'pod_pd_scrim') == (1, 1) and line(m) != 'Waiting' and not line(m).startswith('Waiting'),
+           'a tap while a download runs: the refresh thread and the dialog start at once, the download thread keeps running with its queue, the line does not say Waiting')
     DL.work(m, th)
-    m.calls = []
-    tick(m)
-    expect(m.thread and m.thread[0] == PSYMS['pn_main'] and flags(m, 'pod_pd_scrim') == (1, 1), 'the page\'s tick starts the refresh and opens the dialog once the download thread has stopped')
+    expect(DL.fn(m, 'pn_dl_running') == 0 and DL.fn(m, 'pn_dl_count') == 0 and DL.fn(m, 'pn_busy') == 1, 'the download thread ends by itself, the refresh is still its own')
 
 
 def cont_tests(ctx):
@@ -546,7 +544,7 @@ def library_tests(ctx):
     tick(m)
     expect(lib(m)[0] == ('Downloaded', '2 waiting') and m.props.get((m.sv, 'virtual_h')) == L['h'], 'two queued, none running: "2 waiting" (the page is not made again for it)')
     DL.poke_slot(m, 0, 'Sub One', 'a.mp3', 2, seq=1); m.setword(DL.pn_at(DL.DKEY), DL.key_of('Sub One', 'a.mp3')); m.setword(DL.pn_at(DL.DGOT), 100000); m.setword(DL.pn_at(DL.DTOTAL), 1000000)
-    m.setword(DL.pn_at(DL.KIND), 2); m.setword(DL.pn_at(0), 1); m.setword(DL.pn_at(DL.DGEN), 9)
+    m.setword(DL.pn_at(DL.DBUSY), 1); m.setword(DL.pn_at(DL.DGEN), 9)
     tick(m)
     expect(lib(m)[0] == ('Downloaded', 'Downloading 9%'), f'one running: "Downloading 9%" ({lib(m)})')
     m.setword(DL.pn_at(DL.DGOT), 420000); m.setword(DL.pn_at(DL.DGEN), 10)
