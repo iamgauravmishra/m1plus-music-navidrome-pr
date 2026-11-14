@@ -804,7 +804,7 @@ DISPLAY_PAGE = Page('m1plus_display', 'm1plus_display_page', 'Display', layout=[
 LED_VALUES = ('Off', 'Green', 'Blue', 'Sample Rate')
 LED_PAGE = Page('m1plus_ledlight', 'm1plus_ledlight_page', 'LED Light', layout=[Row(v, ACT_LEDSET, i) for i, v in enumerate(LED_VALUES)])
 RGB_THEME_PAGE = Page('m1plus_rgbtheme', 'm1plus_rgbtheme_page', 'Sample Rate Theme', layout=[
-    Row(name, ACT_RGBTHEME, i) for i, name in enumerate(('Reference', 'Gentle Breathe', 'Candle', 'Ocean Wave', 'Forest', 'Nebula', 'Heartbeat', 'Focus'))
+    Row(name, ACT_RGBTHEME, i) for i, name in enumerate(('Reference', 'Gentle Breathe', 'Candle', 'Ocean Wave', 'Forest', 'Nebula', 'Heartbeat', 'Focus', 'Lighthouse', 'Ember Fade'))
 ] + [GAP, Row('Lighting Reminders', ACT_RGBWARNING)])
 LIGHTTIME_PAGE = Page('m1plus_lighttime', 'm1plus_lighttime_page', 'Screen Timeout', layout=[Row(v, ACT_LIGHTSET, i) for i, v in enumerate(LIGHTTIME_VALUES)])
 # Settings > System > Buttons & Power (patch/keyspower.c, docs/modules/keyspower.md): Button Lock (a value row and its picker, stock's switch and three choices merged: Off, or one of the three modes) with its note,

@@ -1561,7 +1561,7 @@ import pod_pages
 BRANDS = ('M1+ Music', 'Tidal', 'Pod') + pod_pages.GUARD_FILES + (pod_pages.FOLDER_LABEL,) + pod_pages.SETTING_FILES + pod_pages.pcregion.NAMES + pod_pages.GRAPH_TEXTS + pod_pages.SLIDER_TEXTS + ('Q',) + tuple(f'{p}%' for p in pod_pages.CHGLIMIT_VALUES) + pod_pages.LIGHTTIME_VALUES[1:] + pod_pages.SHUTDOWN_VALUES[1:]   # shown as they are, no key (the Settings Files labels are file names)
 
 for _rgb_label in ('Sample Rate', 'Sample Rate Theme', 'Reference', 'Gentle Breathe', 'Candle', 'Ocean Wave',
-                   'Forest', 'Nebula', 'Heartbeat', 'Focus', 'Lighting Reminders'):
+                   'Forest', 'Nebula', 'Heartbeat', 'Focus', 'Lighthouse', 'Ember Fade', 'Lighting Reminders'):
     TEXT.setdefault(_rgb_label, {locale: _rgb_label for locale in LOCALES})
 KEYS = sorted(TEXT)
 

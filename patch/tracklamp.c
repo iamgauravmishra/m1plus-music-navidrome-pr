@@ -133,8 +133,8 @@ static const unsigned char tl_palettes[10][10][3] = {{{65, 10, 25},
 /* The user selects a complete visual personality, rather than independently
  * combining an effect and palette. The stored values remain the compact
  * effect/palette pair used by the renderer. */
-static const unsigned char tl_theme_effect[8] = {0, 1, 2, 3, 9, 10, 12, 14};
-static const unsigned char tl_theme_palette[8] = {0, 3, 1, 2, 6, 8, 4, 7};
+static const unsigned char tl_theme_effect[10] = {0, 1, 2, 3, 9, 10, 12, 14, 13, 11};
+static const unsigned char tl_theme_palette[10] = {0, 3, 1, 2, 6, 8, 4, 7, 0, 1};
 
 static void tl_options(void) {
     char text[5] = {0};
@@ -154,7 +154,7 @@ static void tl_options(void) {
     if (n == 4 && effect >= 0 && text[1] >= '0' && text[1] <= '9' && (text[2] == '0' || text[2] == '1') &&
         text[3] == '\n') {
         unsigned i;
-        for (i = 0; i < 8; ++i)
+        for (i = 0; i < 10; ++i)
             if (effect == tl_theme_effect[i] && text[1] - '0' == tl_theme_palette[i]) {
                 tl.effect = effect;
                 tl.theme = text[1] - '0';
@@ -167,7 +167,7 @@ static void tl_options(void) {
 int formatlamp_theme(void) {
     unsigned i;
     tl_options();
-    for (i = 0; i < 8; ++i)
+    for (i = 0; i < 10; ++i)
         if (tl.effect == tl_theme_effect[i] && tl.theme == tl_theme_palette[i]) return (int)i;
     return 0;
 }
@@ -190,7 +190,7 @@ static int tl_option_save(int effect, int theme, int warning) {
 
 int formatlamp_select_theme(int theme) {
     tl_options();
-    if (theme < 0 || theme >= 8 || tl_option_save(tl_theme_effect[theme], tl_theme_palette[theme], tl.warning))
+    if (theme < 0 || theme >= 10 || tl_option_save(tl_theme_effect[theme], tl_theme_palette[theme], tl.warning))
         return -1;
     tl.effect_elapsed = 0;
     tl.effect_last = time_now_ms();
@@ -385,6 +385,13 @@ static unsigned tl_ambient(unsigned elapsed) {
         segment = (elapsed / 60000u) % 5u;
         return tl_blend(nebula[segment], nebula[(segment + 1u) % 5u], tl_smooth(elapsed % 60000u, 60000), 1000);
     }
+    if (tl.effect == 11) {
+        static const unsigned ember[5] = {0x643c10, 0x641e05, 0x500c00, 0x400005, 0x1e0528};
+        position = elapsed % 90000u;
+        segment = position / 22500u;
+        if (segment >= 4) segment = 3;
+        return tl_blend(ember[segment], ember[segment + 1u], tl_smooth(position - segment * 22500u, 22500), 1000);
+    }
     /* Focus Fade reaches warm amber after 25 minutes and holds it until stopped
      * or explicitly selected again. Playback pause and transient alerts suspend its clock. */
     position = elapsed > 1500000u ? 1500000u : elapsed;
@@ -474,6 +481,16 @@ static int tl_animate(const void *unused) {
         else
             scale = 0;
         scale /= 10u;
+    } else if (tl.effect == 13) {
+        phase = tl.effect_elapsed % 6000u;
+        if (phase < 2000u)
+            scale = tl_smooth(phase, 2000) * 65u / 1000u;
+        else if (phase < 2200u)
+            scale = 65u + tl_smooth(phase - 2000u, 200) * 35u / 1000u;
+        else if (phase < 5000u)
+            scale = (1000u - tl_smooth(phase - 2200u, 2800)) / 10u;
+        else
+            scale = 0;
     } else if (tl.effect >= 6) {
         mix = tl_ambient(tl.effect_elapsed);
         unsigned intensity = tl_volume_intensity(*(volatile int *)G_VOLUME);
@@ -482,6 +499,10 @@ static int tl_animate(const void *unused) {
         blue = tl_scale_channel(intensity, mix & 255u);
         mix = tl_rgb(red, green, blue);
         if (tl.effect == 9) scale = 70u + tl_sine(tl.effect_elapsed, 11000) * 30u / 100u;
+        if (tl.effect == 11) {
+            phase = tl.effect_elapsed % 90000u;
+            scale = phase < 2000u ? tl_smooth(phase, 2000) / 10u : 100u - phase * 85u / 90000u;
+        }
     }
     tl_output(((mix >> 16) & 255u) * scale / 100u, ((mix >> 8) & 255u) * scale / 100u, (mix & 255u) * scale / 100u);
     return RET_REPEAT;
