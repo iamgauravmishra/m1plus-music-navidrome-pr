@@ -4,8 +4,8 @@
 #define MINIBAR_H
 #include "offsets.inc"
 
-/* The cover: an MB_ART px RGBA bitmap whose four MB_ART_R px corners are rounded in its own alpha. A bigger one (the idle lyrics page's 48 px, radius 7) sets size and r before its first picture (mb_art_size); zero is the bar's. */
-#define MB_ART_RMAX 7
+/* The cover: an MB_ART px RGBA bitmap whose four MB_ART_R px corners are rounded in its own alpha. A bigger one (the idle lyrics page's 56 px, radius 8) sets size and r before its first picture (mb_art_size); zero is the bar's. */
+#define MB_ART_RMAX 8
 typedef struct {
     void *bmp; /* NULL until the first picture (or when it could not be made) */
     unsigned char size, r; /* the picture's side and corner radius in px; 0: MB_ART / MB_ART_R */

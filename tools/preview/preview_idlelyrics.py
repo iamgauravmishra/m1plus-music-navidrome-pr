@@ -4,7 +4,7 @@ over the synchronized lyrics, on the Now Playing cover tint with the lyrics scri
 
   preview_idlelyrics.py OUTDIR [--tree RAW_TREE_ROOT]
 
-writes idlelyrics-*.png (fullscreen 320 x 480 windows, no status bar, 2x the pixels in the sheets): baseline (88 px header, 48 px cover), large header (112 / 72), CJK with a
+writes idlelyrics-*.png (fullscreen 320 x 480 windows, no status bar, 2x the pixels in the sheets): baseline (88 px header, 56 px cover), large header (104 / 72), the first design beside the baseline (header), CJK with a
 long title, the three lyric sizes 22 / 26 / 30, no lyrics. The cover is the mini bar's (preview_minibar.rounded_cover: corners rounded in the alpha, drawn 4x and
 reduced; the radius scaled with the cover, 5 / 36), the title and artist its sizes and colours (pod_ui MB_*); the lyric lines are preview_lyrics.render
 (patch/offsets.inc LY_*, the page's own wrap, opacities and edge fade) in a view of another height. The background is the page's tint (mod_nowplaying tone,
@@ -20,15 +20,16 @@ from awtk_text import Ttf
 from stb_raster import StbFont
 
 W, H = 320, U.OFFSETS['IL_H']      # fullscreen: 320 x 480, no status bar (patch/offsets.inc IL_*)
-TOP = U.OFFSETS['IL_ART_Y']        # the cover top: 28, the side margin
+TOP = U.OFFSETS['IL_ART_Y']        # the cover top: 20 (the side margin is 28)
 MARGIN = 28                       # the lyric view's left margin (LY_W 264): the cover's left edge is the same
 GAP_TEXT = 12                     # cover to text
 BOTTOM = 12                       # the view ends this far above the window's bottom
 HINT_RGB = (0xAA, 0xAA, 0xAA)     # pod_roles HINT_RGB; empty-state hint 20 px
 ARTIST_RGB = tuple(int(U.MB_ARTIST_RGB[i:i + 2], 16) for i in (1, 3, 5))
 
-# header: (cover px, title px, artist px); the header is TOP above the cover and 12 px under it (88 px at 48)
-BASE = (48, U.MB_TITLE_PX, U.MB_ARTIST_PX)
+# header: (cover px, title px, artist px); the header is TOP above the cover and 12 px under it (88 px at 56)
+BASE = (U.OFFSETS['IL_ART'], U.OFFSETS['IL_TITLE_PX'], U.OFFSETS['IL_ARTIST_PX'])
+FIRST = (48, U.MB_TITLE_PX, U.MB_ARTIST_PX)   # the first design (the mini bar's sizes, cover top 28); the lyrics view was at the same y 96
 LARGE = (72, 20, 17)
 
 def lyric_params(font):
@@ -60,11 +61,11 @@ def clip(f, text, px, room):
     while f.width(text, px) > room and len(text) > 1: text = text[:-2] + '…' if text.endswith('…') else text[:-1] + '…'
     return text
 
-def page(fonts, title, artist, rgb, lines, cur, head=BASE, lyric_px=30, hint=None, tint_rgb=None):
+def page(fonts, title, artist, rgb, lines, cur, head=BASE, lyric_px=30, hint=None, tint_rgb=None, art_y=TOP):
     """One 320 x 480 window. lines=None draws the hint (centred, grey) in the lyric area."""
-    cs, tpx, apx = head; hh = TOP + cs + 12
+    cs, tpx, apx = head; hh = art_y + cs + 12
     im = background(tint_rgb or rgb); df = fonts['default'][0]
-    cy = TOP
+    cy = art_y
     im.alpha_composite(cover(rgb, cs), (MARGIN, cy))
     x = MARGIN + cs + GAP_TEXT; room = W - MARGIN - x; mid = cy + cs / 2
     off = (tpx + apx) / 2 * 0.64   # half the line pitch: 10.5 at the mini bar's 17 / 16 (title centre 18, artist 39 in a 56 px pill)
@@ -100,10 +101,12 @@ def main():
     os.makedirs(a.outdir, exist_ok=True); o = lambda n: os.path.join(a.outdir, n)
     warm, cool = (200, 120, 60), (70, 110, 190)
     T, A, LN = 'Walking Down the Street', 'The Midnight Drivers', L.LATIN_A
-    sheet([label(page(fonts, T, A, warm, LN, 2), 'baseline: 88 px header, 48 px cover'),
+    sheet([label(page(fonts, T, A, warm, LN, 2), 'baseline: 88 px header, 56 px cover'),
            label(page(fonts, T, A, cool, L.LATIN_B, 1), 'baseline: cool cover, long lines')], o('idlelyrics-baseline.png'))
-    sheet([label(page(fonts, T, A, warm, LN, 2, head=LARGE), 'large: 112 px header, 72 px cover'),
+    sheet([label(page(fonts, T, A, warm, LN, 2, head=LARGE), 'large: 104 px header, 72 px cover'),
            label(page(fonts, T, A, warm, LN, 2), 'baseline (for comparison)')], o('idlelyrics-large.png'))
+    sheet([label(page(fonts, T, A, warm, LN, 2, head=FIRST, art_y=28), 'first design: cover 48 at y 28, title 17, artist 16'),
+           label(page(fonts, T, A, warm, LN, 2), 'baseline: cover 56 at y 20, title 19, artist 17')], o('idlelyrics-header.png'))
     sheet([label(page(fonts, '夜晚的风轻轻吹过我的窗前，我想要的只是和你在一起', '周杰伦 / 林俊杰', cool, L.CJK, 1), 'CJK, long title cut'),
            label(page(fonts, '夜に駆ける', 'YOASOBI', warm, L.CJK, 6), 'kana / Latin lines')], o('idlelyrics-cjk.png'))
     sheet([label(page(fonts, T, A, warm, LN, 2, lyric_px=px), f'lyrics {px} px') for px in (22, 26, 30)], o('idlelyrics-sizes.png'))

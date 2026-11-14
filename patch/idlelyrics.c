@@ -4,7 +4,7 @@
  * Copyright (c) 2026 Xin. MIT licence (see LICENSE).
  *
  * The page is ui/m1plus_idlelyrics.bin (tools/pod_ui.py build_idlelyrics_page): a fullscreen 320 x 480 window (no status bar) with Now Playing's theme, the cover tint and the lyrics scrim as insensitive images, il_view (the
- * touch target over the window, which paints the rounded cover in its own EVT_AFTER_PAINT: the mini bar's mb_art_* machinery at 48 px, patch/minibar.c), the title and the artist (hscroll_labels that
+ * touch target over the window, which paints the rounded cover in its own EVT_AFTER_PAINT: the mini bar's mb_art_* machinery at 56 px, patch/minibar.c), the title and the artist (hscroll_labels that
  * end in an ellipsis), il_lyrics (the engine's view) and the hint "No Lyrics Found". Like the Cassette page (patch/tape.c): no hook, one page-scoped timer set in place with timer_modify, an
  * EVT_DESTROY handler that gives everything back, nothing at boot; every failure of the open leaves nothing behind (-1). The lines are Now Playing's stock rows, which stock keeps building under
  * another window; Now Playing's own lyrics pane is parked by ly_retarget and comes back at ly_release (the destroy, or Now Playing in front again: ly_refresh).

@@ -135,13 +135,14 @@ def asset_tests(ctx):
     expect([c.name for c in tree.children if c.name] == ['img_il_tint', 'img_il_scrim', 'il_view', 'il_title', 'il_artist', 'il_lyrics', 'il_hint', 'label_title'], 'tint, scrim, the touch view, the header texts, the lyrics view, the hint, the hidden title')
     g = lambda n: (by[n].x, by[n].y, by[n].w, by[n].h)
     expect(g('il_view') == (0, 0, 320, 480) and g('img_il_tint') == (0, 0, 320, 480) and g('img_il_scrim') == (0, 0, 320, 480), 'the view, the tint and the scrim cover the window')
-    expect(g('il_title') == (O['IL_TEXT_X'], O['IL_TITLE_Y'], O['IL_TEXT_W'], O['IL_TITLE_H']) == (88, 31, 204, 22) and g('il_artist') == (88, 53, 204, 20),
-           f'the title (88, 31, 204 x 22) and the artist (88, 53, 204 x 20): 21 px between their centres like the mini bar, centred on the 48 px cover at y 28 ({g("il_title")}, {g("il_artist")})')
+    expect(g('il_title') == (O['IL_TEXT_X'], O['IL_TITLE_Y'], O['IL_TEXT_W'], O['IL_TITLE_H']) == (96, 25, 196, 24) and g('il_artist') == (96, 49, 196, 22)
+           and (25 + 12) + (49 + 11) == 2 * (20 + 28) + 1 and 96 == 28 + 56 + 12 and 96 + 196 == 320 - 28,
+           f'the title (96, 25, 196 x 24) and the artist (96, 49, 196 x 22): 23 px between their centres, centred on the 56 px cover at y 20 (within 1 px), 12 px right of it, ending at the lyrics\' right edge ({g("il_title")}, {g("il_artist")})')
     expect(by['il_title'].type == by['il_artist'].type == 'hscroll_label' and by['il_title'].get('ellipses') == 'true' and by['il_title'].get('sensitive') == 'false'
-           and by['il_title'].get('style:normal:font_size') == '17' and by['il_artist'].get('style:normal:font_size') == '16' and by['il_title'].get('style:normal:text_color').lower() == '#ffffff'
-           and by['il_artist'].get('style:normal:text_color').lower() == '#d0d0d0', 'one line each, cut with an ellipsis, 17 px white and 16 px #D0D0D0 (the mini bar\'s)')
-    expect(g('il_lyrics') == (28, 96, 264, 372) and by['il_lyrics'].type == 'scroll_view' and 96 + 372 == 468 and O['IL_ART_X'] == 28 and O['IL_ART'] == 48 and O['IL_ART_Y'] == 28 and O['IL_ART_R'] == 7 and O['IL_HEAD_H'] == 88,
-           'the lyrics view is 264 x 372 at (28, 96); the header 88 px with the cover 48 px at (28, 28), radius 7')
+           and by['il_title'].get('style:normal:font_size') == '19' and by['il_artist'].get('style:normal:font_size') == '17' and by['il_title'].get('style:normal:text_color').lower() == '#ffffff'
+           and by['il_artist'].get('style:normal:text_color').lower() == '#d0d0d0', 'one line each, cut with an ellipsis, 19 px white and 17 px #D0D0D0 (the mini bar\'s colours, a size up)')
+    expect(g('il_lyrics') == (28, 96, 264, 372) and by['il_lyrics'].type == 'scroll_view' and 96 + 372 == 468 and O['IL_ART_X'] == 28 and O['IL_ART'] == 56 and O['IL_ART_Y'] == 20 and O['IL_ART_R'] == 8 and O['IL_HEAD_H'] == 88 == 20 + 56 + 12,
+           'the lyrics view is 264 x 372 at (28, 96); the header 88 px with the cover 56 px at (28, 20), radius 8, 12 px above the header\'s end')
     h = by['il_hint']
     expect(h.get('visible') == 'false' and h.get('sensitive') == 'false' and h.get('tr_text') == 'No Lyrics Found' and h.get('style:normal:font_size') == '20' and h.get('style:normal:text_color').lower() == '#aaaaaa'
            and h.get('style:normal:text_align_h') == 'center' and g('il_hint') == g('il_lyrics'), 'the hint: hidden and insensitive, "No Lyrics Found" 20 px #AAAAAA centred in the lyrics view')
@@ -181,13 +182,13 @@ def open_tests(ctx):
     S = O['IL_ART']
     b = next(iter(m.bitmaps)); data, bw, bh = m.bitmaps[b]
     px = bytes(m.u.mem_read(data, S * S * 4))
-    alpha = [struct.unpack_from('<I', px, 4 * (y * S + x))[0] >> 24 for y in range(7) for x in range(7)]
+    alpha = [struct.unpack_from('<I', px, 4 * (y * S + x))[0] >> 24 for y in range(8) for x in range(8)]
     corners = [struct.unpack_from('<I', px, 4 * (y * S + x))[0] >> 24 for x, y in ((0, 0), (S - 1, 0), (0, S - 1), (S - 1, S - 1))]
-    expect((bw, bh) == (48, 48) and len(m.bitmaps) == 1 and alpha == [255 - c for c in mb.corner_coverage(7)] and corners == [0, 0, 0, 0] and struct.unpack_from('<I', px, 4 * (S // 2))[0] >> 24 == 255,
-           'one 48 px cover bitmap with the mini bar\'s anti-aliased corners at radius 7')
+    expect((bw, bh) == (56, 56) and len(m.bitmaps) == 1 and alpha == [255 - c for c in mb.corner_coverage(8)] and corners == [0, 0, 0, 0] and struct.unpack_from('<I', px, 4 * (S // 2))[0] >> 24 == 255,
+           'one 56 px cover bitmap with the mini bar\'s anti-aliased corners at radius 8')
     pe = m.alloc(0x40); m.u.mem_write(pe, bytes(0x40)); m.setword(pe + O['EVENT_PAINT_CANVAS'], 0x22220000)
     m.blits = []; m.call(PSYMS['il_on_paint'], a0=0, a1=pe, count=2000000)
-    expect(m.blits == [(b, (0, 0, 48, 48), (28, 28, 48, 48))], f'the paint draws the resident cover at (28, 28), 48 x 48 ({m.blits})')
+    expect(m.blits == [(b, (0, 0, 56, 56), (28, 20, 56, 56))], f'the paint draws the resident cover at (28, 20), 56 x 56 ({m.blits})')
     expect((m.iwin, 'normal:bg_color', O['NP_NEUTRAL']) in m.styles, 'the window takes Now Playing\'s colour')
     s = m.shown()
     expect(s['Line two'][0] == ANC == 130 and s['Line two'][1] == 255, f'the lyrics are laid out in the page\'s view, the current line at 130 ({s})')

@@ -15,15 +15,16 @@ reference: header, large header, CJK, the three sizes, no lyrics; its lyric pitc
 `m1plus_idlelyrics_page`: a fullscreen 320 x 480 window (`fullscreen`, no status bar, as the Vinyl page) taking Now Playing's theme (`theme=playing_page`, for the
 engine's `np_lyric_style[_m|_s]` / `np_lyric_cjk_style[_m|_s]`). Children in order: `img_il_tint` (`np_tint_idle`: Now Playing's gradient over 480 rows) and `img_il_scrim`
 (`np_scrim_idle`, 320 x 480, the lyrics scrim's alpha 68 with 44-row smoothstep edges at the window's top and bottom), both insensitive;
-`il_view` (the transparent touch target over the window; paints the cover); `il_title` (17 px white) and `il_artist` (16 px `#D0D0D0`),
-`hscroll_label`s 204 px wide at x 88 that end in an ellipsis and never scroll (y 31 and 53: the mini bar's 21 px line pitch, centred
-on the cover); `il_lyrics` (a `scroll_view`, 28, 96, 264 x 372: the engine's view, 12 px above the window's bottom); `il_hint` ("No Lyrics Found", 20 px `#AAAAAA`,
+`il_view` (the transparent touch target over the window; paints the cover); `il_title` (19 px white) and `il_artist` (17 px `#D0D0D0`),
+`hscroll_label`s 196 px wide at x 96 that end in an ellipsis and never scroll (y 25 and 49: a 23 px line pitch, centred
+on the cover; the mini bar's colours, its 17 / 16 px a size up); `il_lyrics` (a `scroll_view`, 28, 96, 264 x 372: the engine's view, 12 px above the window's bottom); `il_hint` ("No Lyrics Found", 20 px `#AAAAAA`,
 centred over the lyrics view, hidden and insensitive); `label_title` (hidden, "Lyrics"). Neutral colours only; the window colour is
 Now Playing's (`np_idle_color`, a color_t word) and follows the track.
 
-The cover is the mini bar's `mb_art_*` at another size (`mb_art_size(48, 7)`: a 48 px bitmap, radius 7 anti-aliased corners in its own alpha, the same
+The cover is the mini bar's `mb_art_*` at another size (`mb_art_size(56, 8)`: a 56 px bitmap, radius 8 anti-aliased corners in its own alpha, the same
 album-cache / `/tmp` file / placeholder-disc source and settle ticks as the Home bar and the lock bar); `il_view`'s `EVT_AFTER_PAINT` blits it at
-(28, 28) (`mb_art_paint_at`). Nothing is decoded in the paint.
+(28, 20) (`mb_art_paint_at`), so the cover ends 20 px above the lyrics view. Nothing is decoded in the paint. The header was first the mini bar's size (a 48 px cover at y 28,
+17 / 16 px text); the user asked for a slightly larger cover and name, closer to the top (2026-11-14). The lyrics view did not move.
 
 ## Behaviour
 
@@ -67,7 +68,7 @@ behaviour. Hidden widgets are also insensitive. The page does not stop the stock
 
 Verified by the emulation tests: the asset and its hit map, open / close / reopen, the engine's hand-over and return, the layout numbers at the three sizes in the 372 px
 view, track change, no lyrics, taps and drags, every failure path. Not verified without a device: that stock really rebuilds the rows under the page (above), the
-look (the preview is the reference), AWTK's wrap and baseline at 22 / 26 px, the cover's decode time on a big embedded picture, the header's top margin (28 px, the side margin; the Vinyl status line sits at y 12),
+look (the preview is the reference), AWTK's wrap and baseline at 22 / 26 px, the cover's decode time on a big embedded picture, the header's top margin (20 px; the side margin is 28; the Vinyl status line sits at y 12),
 and the behaviour with the screen going dark and waking under the page.
 
 - **Closing.** `il_close` closes the page's own window (`window_close(il.win)`), never `navigator_back`: when another page's Now Playing button brings the player forward, `np_on_foreground` gives the engine back and the tick closes the page while Now Playing is the top window.
