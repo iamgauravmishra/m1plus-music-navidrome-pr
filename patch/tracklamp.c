@@ -25,7 +25,7 @@ static struct {
     unsigned timer, last_poll, pause_at, alert_at, battery_at, battery_next;
     unsigned mix, random, flame_brightness, flame_green;
     unsigned effect_elapsed, effect_last;
-    int options_loaded, effect, theme, warning;
+    int options_loaded, effect, theme, warning, volume_brightness;
     int paused, battery_seen, battery_level;
 } tl __attribute__((section(".scratch")));
 
@@ -144,6 +144,7 @@ static void tl_options(void) {
     tl.effect = tl_theme_effect[0];
     tl.theme = tl_theme_palette[0];
     tl.warning = 0;
+    tl.volume_brightness = 1;
     fd = open("/mnt/data/m1plus/sample-rate-rgb-options", 0, 0);
     if (fd < 0) return;
     n = read(fd, text, sizeof text);
@@ -151,14 +152,15 @@ static void tl_options(void) {
     int effect = text[0] >= '0' && text[0] <= '9'   ? text[0] - '0'
                  : text[0] >= 'A' && text[0] <= 'E' ? text[0] - 'A' + 10
                                                     : -1;
-    if (n == 4 && effect >= 0 && text[1] >= '0' && text[1] <= '9' && (text[2] == '0' || text[2] == '1') &&
-        text[3] == '\n') {
+    if ((n == 4 || n == 5) && effect >= 0 && text[1] >= '0' && text[1] <= '9' && (text[2] == '0' || text[2] == '1') &&
+        (n == 4 || text[3] == '0' || text[3] == '1') && text[n - 1] == '\n') {
         unsigned i;
         for (i = 0; i < 10; ++i)
             if (effect == tl_theme_effect[i] && text[1] - '0' == tl_theme_palette[i]) {
                 tl.effect = effect;
                 tl.theme = text[1] - '0';
                 tl.warning = text[2] - '0';
+                if (n == 5) tl.volume_brightness = text[3] - '0';
                 break;
             }
     }
@@ -175,22 +177,32 @@ int formatlamp_warning(void) {
     tl_options();
     return tl.warning;
 }
+int formatlamp_volume_brightness(void) {
+    tl_options();
+    return tl.volume_brightness;
+}
 
-static int tl_option_save(int effect, int theme, int warning) {
-    char text[5] = {(char)(effect < 10 ? '0' + effect : 'A' + effect - 10), (char)('0' + theme), (char)('0' + warning),
-                    '\n', 0};
+static int tl_option_save(int effect, int theme, int warning, int volume_brightness) {
+    char text[6] = {(char)(effect < 10 ? '0' + effect : 'A' + effect - 10),
+                    (char)('0' + theme),
+                    (char)('0' + warning),
+                    (char)('0' + !!volume_brightness),
+                    '\n',
+                    0};
     if (home_write_atomic("/mnt/data/m1plus/sample-rate-rgb-options", "/mnt/data/m1plus/sample-rate-rgb-options.tmp",
                           text))
         return -1;
     tl.effect = effect;
     tl.theme = theme;
     tl.warning = warning;
+    tl.volume_brightness = !!volume_brightness;
     return 0;
 }
 
 int formatlamp_select_theme(int theme) {
     tl_options();
-    if (theme < 0 || theme >= 10 || tl_option_save(tl_theme_effect[theme], tl_theme_palette[theme], tl.warning))
+    if (theme < 0 || theme >= 10 ||
+        tl_option_save(tl_theme_effect[theme], tl_theme_palette[theme], tl.warning, tl.volume_brightness))
         return -1;
     tl.effect_elapsed = 0;
     tl.effect_last = time_now_ms();
@@ -198,8 +210,13 @@ int formatlamp_select_theme(int theme) {
 }
 int formatlamp_set_warning(int enabled) {
     tl_options();
-    if (tl_option_save(tl.effect, tl.theme, !!enabled)) return -1;
+    if (tl_option_save(tl.effect, tl.theme, !!enabled, tl.volume_brightness)) return -1;
     if (!enabled) tl.alert_at = 0;
+    return !!enabled;
+}
+int formatlamp_set_volume_brightness(int enabled) {
+    tl_options();
+    if (tl_option_save(tl.effect, tl.theme, tl.warning, !!enabled)) return -1;
     return !!enabled;
 }
 
@@ -277,6 +294,8 @@ static unsigned tl_classify(void *record, const unsigned info[13]) {
 }
 
 static unsigned tl_volume_intensity(int volume) {
+    tl_options();
+    if (!tl.volume_brightness) return TL_INTENSITY;
     if (volume <= 0) return 0;
     if (volume >= TL_VOLUME_FULL_INTENSITY) return TL_INTENSITY;
     return ((unsigned)volume + 4u) / 5u; /* 1-5 -> 1, 6-10 -> 2, ... 81-85 -> 17. */

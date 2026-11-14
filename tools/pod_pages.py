@@ -134,9 +134,10 @@ ACT_SHUTDOWN = 106    # value row (Buttons & Power): Auto-Shutdown, stock's save
 ACT_SHUTDOWNSET = 107 # picker row (Auto-Shutdown): choose the word (arg = stock's savepowermode, 0 off .. 4 10min); a check shows on the chosen row (patch/keyspower.c kp_shutdown_set)
 ACT_RGBTHEME = 108    # Sample Rate RGB ready-made theme
 ACT_RGBWARNING = 109  # volume and battery reminders switch
+ACT_RGBVOLUME = 110   # scale Sample Rate RGB brightness with player volume
 _ACTS = [v for k, v in globals().items() if k.startswith('ACT_')]
 assert len(set(_ACTS)) == len(_ACTS), 'two ACT_* share an id (patch/m1plus.c mirrors them)'
-SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_RGBWARNING)
+SWITCH_ACTIONS = (ACT_TAPWAKE, ACT_STANDBY, ACT_STARTUP, ACT_LANDSCAPE, ACT_SHELF, ACT_DAILY, ACT_KB_EN, ACT_KB_ZH, ACT_PCSEARCH, ACT_BATTPCT, ACT_PEQ_SWITCH, ACT_AZRAIL, ACT_AZHEAD, ACT_LOCKON, ACT_LOCKTIME, ACT_VOLKEYS, ACT_LEDFOLLOW, ACT_RGBWARNING, ACT_RGBVOLUME)
 NO_CHEVRON_ACTIONS = (ACT_PLAYER, ACT_SHUFFLE, ACT_REGEN)   # rows that play or act in place (a switch or a value row has none either)
 VALUE_ACTIONS = (ACT_CTHEME, ACT_VREC, ACT_VTHEME, ACT_CCLIST, ACT_SFOLD, ACT_BG, ACT_ACCENT, ACT_REGION, ACT_PEQ, ACT_PEQ_PRESETS, ACT_PEQ_TENBAND, ACT_CHGLIM, ACT_LOCKSTYLE, ACT_IDLE, ACT_NEXTALBUM, ACT_NDVALUE, ACT_LIGHT, ACT_LED, ACT_KEYLOCK, ACT_SHUTDOWN)    # rows with a grey value at the right, left of the chevron (the widget pod_value<row>); they open a picker page (arg = its page index)
 CHECK_ACTIONS = (ACT_THEMESET, ACT_RECSET, ACT_VTHSET, ACT_BGSET, ACT_ACCENTSET, ACT_LOCKSET, ACT_REGIONSET, ACT_CHGLIMSET, ACT_PEQ_PICK, ACT_PEQ_CPICK, ACT_PEQ_PAUTO, ACT_PEQ_PVAL, ACT_IDLESET, ACT_NASET, ACT_LIGHTSET, ACT_LEDSET, ACT_KEYLOCKSET, ACT_SHUTDOWNSET, ACT_RGBTHEME)   # picker rows: a check at the right of the chosen one (the image pod_check<row>), no icon
@@ -805,7 +806,11 @@ LED_VALUES = ('Off', 'Green', 'Blue', 'Sample Rate')
 LED_PAGE = Page('m1plus_ledlight', 'm1plus_ledlight_page', 'LED Light', layout=[Row(v, ACT_LEDSET, i) for i, v in enumerate(LED_VALUES)])
 RGB_THEME_PAGE = Page('m1plus_rgbtheme', 'm1plus_rgbtheme_page', 'Sample Rate Theme', layout=[
     Row(name, ACT_RGBTHEME, i) for i, name in enumerate(('Reference', 'Gentle Breathe', 'Candle', 'Ocean Wave', 'Forest', 'Nebula', 'Heartbeat', 'Focus', 'Lighthouse', 'Ember Fade'))
-] + [GAP, Row('Lighting Reminders', ACT_RGBWARNING)])
+] + [GAP,
+     Row('Volume-based Brightness', ACT_RGBVOLUME),
+     Note('Off keeps the lamp at maximum brightness.', lines=2),
+     Row('Lighting Reminders', ACT_RGBWARNING),
+     Note('Yellow above 75; amber at battery 20/10/5.', lines=2)])
 LIGHTTIME_PAGE = Page('m1plus_lighttime', 'm1plus_lighttime_page', 'Screen Timeout', layout=[Row(v, ACT_LIGHTSET, i) for i, v in enumerate(LIGHTTIME_VALUES)])
 # Settings > System > Buttons & Power (patch/keyspower.c, docs/modules/keyspower.md): Button Lock (a value row and its picker, stock's switch and three choices merged: Off, or one of the three modes) with its note,
 # Tap to Wake (stock's switch) in a card, and Auto-Standby (stock's switch) with Auto-Shutdown (a value row and its picker: stock's switch and four durations merged, Off or the duration) in a card. Every state is stock's own.

@@ -105,6 +105,7 @@ enum {
         107, /* the Auto-Shutdown picker's rows (arg = stock's word: 0 off, 1 .. 4 = 1, 3, 5, 10 minutes) */
     ACT_RGBTHEME = 108,
     ACT_RGBWARNING = 109,
+    ACT_RGBVOLUME = 110,
     ACT_AREBUILD =
         92, /* Settings > Library: Rebuild Artist Photos, an action row (a confirm, then the request file Home's pass acts on) */
     ACT_SUBSONIC = 93 /* the Navidrome root page (tools/pod_pages.py); ids 93 .. 95 are the Navidrome rows */
@@ -538,6 +539,7 @@ static void regen_show(void) {
  * state, -1: not saved, unchanged). A new switch is one line here. */
 static int sw_always(void) { return 1; } /* Keyboards > English: always on, and its row takes no tap */
 static int rgb_warning_toggle(void) { return formatlamp_set_warning(!formatlamp_warning()); }
+static int rgb_volume_toggle(void) { return formatlamp_set_volume_brightness(!formatlamp_volume_brightness()); }
 static const struct pod_switch {
     int action;
     int (*state)(void), (*toggle)(void);
@@ -559,6 +561,7 @@ static const struct pod_switch {
     {ACT_TAPWAKE, kp_tap, kp_tap_toggle},
     {ACT_STANDBY, kp_standby, kp_standby_toggle},
     {ACT_RGBWARNING, formatlamp_warning, rgb_warning_toggle},
+    {ACT_RGBVOLUME, formatlamp_volume_brightness, rgb_volume_toggle},
 };
 #define SW_N ((int)(sizeof sw_tab / sizeof *sw_tab))
 struct swctx {
