@@ -943,6 +943,23 @@ def wrap_tests(ctx):
     m = LyMachine(SONG); m.init()
     expect(sum(c[0] == 'label_set_line_wrap' and c[2] == 1 for c in m.calls) == POOL + 1 and sum(c[0] == 'widget_set_prop_bool' and c[2] == 'word_wrap' and c[3] == 1 for c in m.calls) == POOL + 1,
            'every label wraps (line_wrap and word_wrap)')
+    # leading blanks are not drawn (stock keeps what follows the time stamp's ']', so "[00:12.34] text" is " text"): the line is measured, broken and set without them;
+    # blanks inside and at the end stay
+    one, two = 'Be what you want', 'one two three four five six seven eight'
+    for lead in (' ', '   ', '\t', '\xa0', '\u2003', '\u200b', '\u202f', '\u3000', '\ufeff', ' \u3000\t\xa0 '):
+        for body in (one, two, '你好，世界', 'Keep  inner '):
+            m = LyMachine([(0, 'a'), (1, lead + body), (2, 'b')]); measured = []
+            probe = lambda: [c[2].encode('latin-1').decode('utf-8') for c in m.calls if c[0] == 'widget_set_text_utf8' and c[1] not in m.pool()]
+            m.init(); measured += probe(); m.at(1); measured += probe(); m.frame(10000)   # (a frame clears the calls: the measures are taken before it)
+            labs =[m.label_text(h) for h in m.pool() if h in m.texts and m.props.get((h, 'visible'))]
+            want_text = '\n'.join(break_rows(body, m.measure_fn))
+            expect(want_text in labs and all(t in ('a', 'b', want_text) for t in labs) and (body != two or '\n' in want_text),
+                   f'{lead + body!r}: the label text is {want_text!r} ({labs})')
+            # (' ' alone is ly_break's measure of a space's width, made for a line of more than one row)
+            expect(body in measured and lead + body not in measured and not any(s != ' ' and s.startswith(tuple(lead)) for s in measured),
+                   f'{lead + body!r}: the line is measured without its leading blanks ({measured})')
+    m = LyMachine([(0, 'a'), (1, ' \u3000 '), (2, 'b')]); m.init(); m.at(1); m.frame(10000)
+    expect(all(m.label_text(h) in ('a', 'b', '') for h in m.pool() if h in m.texts and m.props.get((h, 'visible'))), 'a line of blanks only is an empty line')
 
 
 def tall_tests(ctx):

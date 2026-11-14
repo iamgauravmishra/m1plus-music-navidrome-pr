@@ -150,15 +150,39 @@ static int ly_time(int i) {
     return c ? widget_get_prop_int(c, "lrc_time", 0x7fffffff) : 0x7fffffff;
 }
 
-/* The text of stock row i into buf (LY_BUF bytes); 0 when the row or its text is missing. */
+/* The bytes of blank characters s starts with: space, tab, U+00A0, U+2000..U+200B, U+202F, U+3000 and U+FEFF. */
+static int ly_lead(const char *s) {
+    const unsigned char *u = (const unsigned char *)s;
+    int p = 0;
+    for (;;) {
+        if (u[p] == ' ' || u[p] == '\t')
+            p += 1;
+        else if (u[p] == 0xc2 && u[p + 1] == 0xa0)
+            p += 2;
+        else if (u[p] == 0xe2 && u[p + 1] == 0x80 && ((u[p + 2] >= 0x80 && u[p + 2] <= 0x8b) || u[p + 2] == 0xaf))
+            p += 3;
+        else if (u[p] == 0xe3 && u[p + 1] == 0x80 && u[p + 2] == 0x80)
+            p += 3;
+        else if (u[p] == 0xef && u[p + 1] == 0xbb && u[p + 2] == 0xbf)
+            p += 3;
+        else
+            return p;
+    }
+}
+
+/* The text of stock row i into buf (LY_BUF bytes), without its leading blanks (ly_lead); 0 when the row or its text is missing. Stock's loader keeps everything after
+ * the time stamp's ']' (0x5d3f28), so a file written "[00:12.34] text" gave every line a space: its first row was indented and the rows we break were not. */
 static int ly_text(int i, char *buf) {
     void *c = widget_get_child(ly.src, (unsigned)i);
+    int p, k = 0;
     buf[0] = 0;
     /* (a line over LY_BUF - 1 bytes is cut: at most LY_LINES_MAX rows of it are drawn anyway) */
     if (!c || m1_text_utf8(c, buf, LY_BUF) < 0) {
         buf[0] = 0;
         return 0;
     }
+    if ((p = ly_lead(buf)) != 0)
+        while ((buf[k] = buf[p + k]) != 0) ++k;
     return 1;
 }
 

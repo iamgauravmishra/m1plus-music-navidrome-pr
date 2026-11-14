@@ -31,6 +31,7 @@ tick calls `ly_tick`, and `np_stop` calls `ly_stop`. A row signature (count,
 first and last handles and times) detects replacement lyrics; at most 400 rows are read.
 
 A row's text is read with `m1_text_utf8` (`patch/common.c`) into `LY_BUF` (256) bytes: a longer line is cut at a character, and at most `LY_LINES_MAX` (6) rows of it are drawn anyway.
+Leading blanks are then dropped (`ly_lead`: space, tab, U+00A0, U+2000..U+200B, U+202F, U+3000, U+FEFF); blanks inside and at the end stay. Why: stock's loader keeps everything after the time stamp's `]` (`0x5d3f28`), so a file written `[00:12.34] text` (LRCLIB's form) gave every line a leading space: the first row was indented by a space and the rows the page breaks were not.
 Stock `widget_get_text_utf8` ignores its size for a wide text and wrote a ~350 byte line over this stack buffer (the player rebooted; see [payload](payload.md)), so the payload never calls it.
 
 ## Layout and appearance
