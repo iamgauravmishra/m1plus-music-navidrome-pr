@@ -15,6 +15,7 @@
 /* Stock Display-page helpers, retained as the implementation for Off/Green/Blue. */
 int disp_led(void);
 int disp_led_set(int mode);
+int disp_follow(void);
 
 enum { TL_INTENSITY = 0x11, TL_RATIO_SCALE = 100, TL_VOLUME_FULL_INTENSITY = 85 };
 
@@ -605,6 +606,14 @@ int tl_play_status(void) {
         tl.alert_at = 0;
         tl.battery_at = 0;
         tl.volume_seen = 0;
+        tl_restore();
+        return status;
+    }
+    /* Follow Screen is stock's saved preference.  Use its own verified
+     * backlight state rather than waking or touching display power: while
+     * dark, release the transient RGB state (stock LED mode is Off in Sample
+     * Rate mode), cancel animation work and resume on the next lit status. */
+    if (disp_follow() && !m1_screen_lit()) {
         tl_restore();
         return status;
     }
